@@ -1,0 +1,8 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/qrcode", "destination": "/qrcode.html" },
+    { "source": "/menu", "destination": "/index.html" }
+  ]
+}

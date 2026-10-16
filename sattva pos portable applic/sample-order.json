@@ -1,0 +1,15 @@
+{
+  "id": "103",
+  "tableNumber": "T-1",
+  "serviceMode": "dine-in",
+  "paymentMethod": "cash",
+  "customerName": "",
+  "customerPhone": "",
+  "specialInstructions": "Less spicy sambar",
+  "total": 240,
+  "items": [
+    { "name": "Masala Dosa", "qty": 1, "price": 60 },
+    { "name": "Idly (4 pcs)", "qty": 2, "price": 60 },
+    { "name": "Wada (2 pcs)", "qty": 1, "price": 60 }
+  ]
+}
