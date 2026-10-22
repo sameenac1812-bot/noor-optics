@@ -192,24 +192,140 @@ function updateOrdersNavBadge() {
   }
 }
 
-function printOrderToPOS(order) {
-  if (!order) return;
-  fetch('http://127.0.0.1:5001/api/print', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(order)
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.status === 'ok') {
-      const tok = order.tokenId || order.id || '';
-      const tokStr = /^\d+$/.test(String(tok)) ? String(tok).padStart(2, '0') : tok;
-      showAdminToast(`🖨️ Bill printed for Token #${tokStr}`, 'success');
+let isPosDaemonOnline = false;
+let currentPosPrinterName = 'POS-80';
+
+function updatePosDaemonPill(online, printerName) {
+  isPosDaemonOnline = Boolean(online);
+  if (printerName) currentPosPrinterName = printerName;
+
+  const badge = $('pos-daemon-status-badge');
+  const dot = $('pos-daemon-status-dot');
+  const text = $('pos-daemon-status-text');
+  if (!badge || !dot || !text) return;
+
+  if (state === true || state === 'online') {
+    isPosDaemonOnline = true;
+    if (printerName) currentPosPrinterName = printerName;
+    badge.style.background = '#ecfdf5';
+    badge.style.color = '#065f46';
+    badge.style.borderColor = '#a7f3d0';
+    dot.style.background = '#10b981';
+    text.textContent = `POS: Local (${currentPosPrinterName})`;
+    badge.title = `POS Thermal Print Daemon is connected locally on "${currentPosPrinterName}".`;
+  } else if (state === 'cloud' || window.supabaseService) {
+    isPosDaemonOnline = true;
+    badge.style.background = '#eff6ff';
+    badge.style.color = '#1e40af';
+    badge.style.borderColor = '#bfdbfe';
+    dot.style.background = '#3b82f6';
+    text.textContent = 'POS: Cloud Relay (Ready)';
+    badge.title = 'Remote POS mode: Orders & prints are automatically routed to your POS Laptop over Cloud Sync.';
+  } else {
+    isPosDaemonOnline = false;
+    badge.style.background = '#fef2f2';
+    badge.style.color = '#991b1b';
+    badge.style.borderColor = '#fecaca';
+    dot.style.background = '#ef4444';
+    text.textContent = 'POS: Offline';
+    badge.title = 'POS Print Daemon offline. Run start-pos.bat on POS PC to enable thermal printing.';
+  }
+}
+window.updatePosDaemonPill = updatePosDaemonPill;
+
+function checkPosDaemonStatus() {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+  fetch('http://127.0.0.1:5001/api/status', { method: 'GET', signal: controller.signal })
+    .then(r => r.json())
+    .then(d => {
+      clearTimeout(timeoutId);
+      if (d.status === 'online') {
+        updatePosDaemonPill('online', d.printer || 'POS-80');
+      } else {
+        updatePosDaemonPill('cloud');
+      }
+    })
+    .catch(() => {
+      clearTimeout(timeoutId);
+      updatePosDaemonPill('cloud');
+    });
+}
+window.checkPosDaemonStatus = checkPosDaemonStatus;
+
+async function printOrderToPOS(order, options = {}) {
+  if (!order) return false;
+  const tok = order.tokenId || order.id || '';
+  const tokStr = /^\d+$/.test(String(tok)) ? String(tok).padStart(2, '0') : tok;
+  const isAuto = Boolean(options.auto);
+  const isManual = Boolean(options.manualReprint || (!isAuto && options.force));
+
+  // Generate unique print job ID only for explicit human manual reprints
+  const printJobId = isManual ? `${order.id}-P${Date.now().toString().slice(-4)}` : order.id;
+
+  const payload = {
+    ...order,
+    id: printJobId,
+    originalId: order.id,
+    restaurantId: 'restroiq',
+    restaurant_id: 'restroiq',
+    manualReprint: isManual,
+    auto: isAuto
+  };
+
+  let localSent = false;
+  // 1. Try local port 5001 if the browser happens to be running on the POS laptop itself
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
+
+    const res = await fetch('http://127.0.0.1:5001/api/print', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      localSent = true;
+      updatePosDaemonPill('online', 'POS-80');
     }
-  })
-  .catch(err => {
-    console.warn('[Printer] Could not connect to local print daemon:', err);
-  });
+  } catch (err) {}
+
+  // 2. Broadcast via Cloud Relay ONLY for explicit human manual prints/reprints.
+  // For automatic live orders, the cloud broadcast was already triggered when the order was placed!
+  let cloudSent = false;
+  if (!isAuto && window.supabaseService && typeof window.supabaseService.pushToCloud === 'function') {
+    try {
+      const tbl = order.tableNumber || '-';
+      cloudSent = await window.supabaseService.pushToCloud(window.supabaseService.cloudTopic, {
+        type: 'print_order',
+        directive: 'print_order',
+        restaurant_id: 'restroiq',
+        restaurantId: 'restroiq',
+        order: payload,
+        manualReprint: true,
+        timestamp: Date.now()
+      }, {
+        'Title': `Print Order Token #${tokStr}: Table ${tbl}`,
+        'Priority': '5',
+        'Tags': 'printer,receipt'
+      });
+    } catch (e) {
+      console.warn('[Admin] Cloud print push error:', e);
+    }
+  }
+
+  if (localSent || cloudSent) {
+    if (!isAuto) showAdminToast(`🖨️ Sent to POS Printer: Token #${tokStr}`, 'success');
+    return true;
+  }
+
+  if (!isAuto) {
+    showAdminToast(`⚠️ Could not reach POS Printer. Please check connection.`, 'warning');
+  }
+  return false;
 }
 window.printOrderToPOS = printOrderToPOS;
 
@@ -316,12 +432,18 @@ function initOrderSync() {
       if (typeof savePermanentOrders === 'function') {
         savePermanentOrders(DATA.orders);
       }
-      // ONLY trigger chime, toast for genuine live orders (POS Daemon prints directly from cloud stream)
+      // Trigger chime, toast, and direct POS Daemon to print new live order
       if (isLive) {
         playOrderChime();
         const tok = order.tokenId || order.id || '';
         const tokStr = /^\d+$/.test(String(tok)) ? String(tok).padStart(2, '0') : tok;
         showAdminToast(`🔔 New Order! Token #${tokStr} · Table: ${order.tableNumber || '—'}`, 'success');
+
+        const isAutoPrint = DATA.store?.autoPrintOrders !== false;
+        if (isAutoPrint) {
+          console.log(`[Admin] Directing POS Daemon to auto-print live order Token #${tokStr}...`);
+          printOrderToPOS(order, { auto: true });
+        }
       }
       updateOrdersNavBadge();
       if (currentPage === 'dashboard') renderDashboard();
@@ -430,11 +552,29 @@ function showApp() {
   $('sidebar-store-name').textContent = DATA.store.name || 'Restaurant';
   updateOrdersNavBadge();
   initOrderSync();
+  checkPosDaemonStatus();
+  setInterval(checkPosDaemonStatus, 10000);
   navigateTo('dashboard');
 }
 
 // ── App-level listeners ──────────────────────────────────────
 function setupAppListeners() {
+  // POS Daemon Status badge click
+  const posBadge = $('pos-daemon-status-badge');
+  if (posBadge) {
+    posBadge.addEventListener('click', () => {
+      showAdminToast('🔍 Checking POS Print Daemon connection...', 'info');
+      checkPosDaemonStatus();
+      setTimeout(() => {
+        if (isPosDaemonOnline) {
+          showAdminToast(`🟢 POS Daemon is active and ready on ${currentPosPrinterName}`, 'success');
+        } else {
+          showAdminToast(`⚠️ POS Daemon is offline. Please run start-pos.bat on your POS laptop.`, 'warning');
+        }
+      }, 600);
+    });
+  }
+
   // Logout
   $('logout-btn').addEventListener('click', () => {
     sessionStorage.removeItem(SESSION_KEY);
@@ -536,6 +676,14 @@ function setupAppListeners() {
     });
   }
 
+  const reportCategoryFilter = $('report-filter-category');
+  if (reportCategoryFilter) {
+    reportCategoryFilter.addEventListener('change', e => {
+      currentReportCategory = e.target.value || 'all';
+      renderCustomerReport();
+    });
+  }
+
   const reportDateFilter = $('report-filter-date');
   if (reportDateFilter) {
     reportDateFilter.addEventListener('change', e => {
@@ -584,7 +732,7 @@ function setupAppListeners() {
   if (viewBillPrint) {
     viewBillPrint.addEventListener('click', () => {
       if (currentPreviewOrder) {
-        printOrderToPOS(currentPreviewOrder);
+        printOrderToPOS(currentPreviewOrder, { force: true });
       }
     });
   }
@@ -1382,6 +1530,8 @@ function renderOrders() {
       return;
     }
 
+    const autoPrint = DATA.store?.autoPrintOrders !== false;
+
     content.innerHTML = `
       <!-- Top Action Bar -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
@@ -1389,6 +1539,12 @@ function renderOrders() {
           <span>🍽️ Orders (${totalCount})</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm ${autoPrint ? 'btn-success' : 'btn-outline'}" id="btn-toggle-auto-print" style="display:inline-flex;align-items:center;gap:6px;font-weight:800;${autoPrint ? 'background:#059669;color:#ffffff;border-color:#059669;' : 'border-color:#94a3b8;'}" title="Click to toggle automatic printing for new customer orders">
+            🖨️ Auto-Print: ${autoPrint ? 'ON' : 'OFF'}
+          </button>
+          <button class="btn btn-sm btn-outline" id="btn-test-pos-daemon" style="display:inline-flex;align-items:center;gap:6px;font-weight:700" title="Send a test print command to POS Printer">
+            ⚡ Test Printer
+          </button>
           <button class="btn btn-sm btn-outline" id="orders-backup-vault-btn" style="display:inline-flex;align-items:center;gap:6px;font-weight:700" title="Permanent Orders Vault: Backup & Restore">
             📦 Backup & Restore
           </button>
@@ -1507,13 +1663,48 @@ function renderOrders() {
       });
     });
 
+    // Auto-Print Toggle listener
+    const toggleAutoPrintBtn = $('btn-toggle-auto-print');
+    if (toggleAutoPrintBtn) {
+      toggleAutoPrintBtn.addEventListener('click', () => {
+        DATA.store = DATA.store || {};
+        DATA.store.autoPrintOrders = !(DATA.store.autoPrintOrders !== false);
+        saveData(DATA);
+        const newState = DATA.store.autoPrintOrders;
+        showAdminToast(`🖨️ Auto-Print is now ${newState ? 'ENABLED' : 'DISABLED'}`, newState ? 'success' : 'info');
+        renderOrders();
+      });
+    }
+
+    // Test POS Daemon button listener
+    const testPosBtn = $('btn-test-pos-daemon');
+    if (testPosBtn) {
+      testPosBtn.addEventListener('click', () => {
+        const testOrder = {
+          id: 'TEST-' + Date.now(),
+          tokenId: '99',
+          tableNumber: 'POS-TEST',
+          serviceMode: 'dine-in',
+          paymentMethod: 'cash',
+          total: 120,
+          timestamp: new Date().toISOString(),
+          items: [
+            { name: 'POS Printer Connection Test', qty: 1, price: 60 },
+            { name: 'Pure Ghee Masala Dosa', qty: 1, price: 60 }
+          ]
+        };
+        showAdminToast('⚡ Dispatching test print to POS Daemon...', 'info');
+        printOrderToPOS(testOrder, { force: true });
+      });
+    }
+
     // Print single order button listeners
     $$('.btn-clean-print, .btn-print-order').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const ord = (DATA.orders || []).find(o => o && String(o.id) === String(btn.dataset.orderId));
         if (ord) {
-          printOrderToPOS(ord);
+          printOrderToPOS(ord, { force: true });
         }
       });
     });
@@ -1651,6 +1842,78 @@ function renderOrders() {
 let currentReportSort = 'token-asc';
 let currentReportFilter = 'all';
 let currentReportDate = '';
+let currentReportCategory = 'all';
+
+const REPORT_CATEGORY_CONFIG = {
+  all: { id: 'all', name: 'All Categories (Overview)', icon: '📊' },
+  tiffins: { id: 'tiffins', name: 'Idli, Dosa, Vada & Bonda', icon: '🥞' },
+  cold_drinks: { id: 'cold_drinks', name: 'Cold Drinks', icon: '🥤' },
+  juices_shakes: { id: 'juices_shakes', name: 'Fresh Juices & Milkshakes', icon: '🍹' },
+  chaat: { id: 'chaat', name: 'Chaat Items', icon: '🥟' }
+};
+
+function classifyItemCategory(item) {
+  if (!item) return 'tiffins';
+  const name = String(item.name || '').toLowerCase();
+
+  // Resolve category from DATA.items / DEFAULT_DATA.items if possible
+  let catId = item.categoryId || '';
+  let catName = '';
+  if (window.DATA && Array.isArray(window.DATA.items)) {
+    const match = window.DATA.items.find(i => i && (i.id === item.id || (i.name && i.name.trim().toLowerCase() === name.trim())));
+    if (match && match.categoryId) catId = match.categoryId;
+  }
+  if (!catId && window.DEFAULT_DATA && Array.isArray(window.DEFAULT_DATA.items)) {
+    const matchDef = window.DEFAULT_DATA.items.find(i => i && (i.id === item.id || (i.name && i.name.trim().toLowerCase() === name.trim())));
+    if (matchDef && matchDef.categoryId) catId = matchDef.categoryId;
+  }
+  if (catId && window.DATA && Array.isArray(window.DATA.categories)) {
+    const cObj = window.DATA.categories.find(c => c && c.id === catId);
+    if (cObj && cObj.name) catName = cObj.name.toLowerCase();
+  }
+
+  // 1. Fresh Juices & Milkshakes
+  if (
+    catName.includes('juice') || catName.includes('shake') || catName.includes('mocktail') ||
+    name.includes('juice') || name.includes('shake') || name.includes('smoothie') ||
+    name.includes('lassi') || name.includes('cold coffee') || name.includes('badam milk') ||
+    name.includes('fruit punch') || name.includes('lime soda') || name.includes('jaljeera')
+  ) {
+    return 'juices_shakes';
+  }
+
+  // 2. Chaat Items
+  if (
+    catName.includes('chaat') || catName.includes('chat') ||
+    name.includes('chaat') || name.includes('chat') || name.includes('puri') ||
+    name.includes('bhel') || name.includes('samosa') || name.includes('tikki') ||
+    name.includes('papdi') || name.includes('kachori') || name.includes('chatpat')
+  ) {
+    return 'chaat';
+  }
+
+  // 3. Cold Drinks
+  if (
+    catId === 'cat-3' || catName.includes('cool') || catName.includes('cold') || catName.includes('beverage') ||
+    name.includes('water') || name.includes('bottle') || name.includes('monster') ||
+    name.includes('redbull') || name.includes('fanta') || name.includes('thumbs') ||
+    name.includes('thumps') || name.includes('sprite') || name.includes('coca') ||
+    name.includes('coke') || name.includes('pepsi') || name.includes('soft drink')
+  ) {
+    return 'cold_drinks';
+  }
+
+  // 4. Idli, Dosa, Vada & Bonda (Default tiffins)
+  return 'tiffins';
+}
+
+function selectReportCategory(catKey) {
+  currentReportCategory = catKey || 'all';
+  const sel = $('report-filter-category');
+  if (sel) sel.value = currentReportCategory;
+  renderCustomerReport();
+}
+window.selectReportCategory = selectReportCategory;
 
 function getOrderLocalDateStr(o) {
   if (!o) return '';
@@ -1697,7 +1960,11 @@ function getReportFilename(ext = 'pdf') {
     const todayParts = getTodayLocalDateStr().split('-');
     fileDatePart = `All_${todayParts[2]}-${todayParts[1]}-${todayParts[0]}`;
   }
-  return `Orders_Report_${fileDatePart}.${ext}`;
+  let catPart = '';
+  if (currentReportCategory && currentReportCategory !== 'all') {
+    catPart = `_${currentReportCategory.toUpperCase()}`;
+  }
+  return `Orders_Report${catPart}_${fileDatePart}.${ext}`;
 }
 
 function clearReportDateFilter() {
@@ -1708,13 +1975,20 @@ function clearReportDateFilter() {
 }
 window.clearReportDateFilter = clearReportDateFilter;
 
-function openCustomerReportModal(dateParam) {
+function openCustomerReportModal(dateParam, categoryParam) {
   if (typeof dateParam === 'string') {
     currentReportDate = dateParam;
+  }
+  if (typeof categoryParam === 'string') {
+    currentReportCategory = categoryParam;
   }
   const dateInput = $('report-filter-date');
   if (dateInput) {
     dateInput.value = currentReportDate || '';
+  }
+  const catSelect = $('report-filter-category');
+  if (catSelect) {
+    catSelect.value = currentReportCategory || 'all';
   }
   openModal('report-modal');
   renderCustomerReport();
@@ -1809,13 +2083,21 @@ function renderCustomerReport() {
     return 0;
   });
 
-  // Calculate stats
+  // Calculate overall stats & category breakdown across all filtered orders
   const totalOrdersCount = filtered.length;
   let totalRevenue = 0;
   let cashTotal = 0;
   let cashCount = 0;
   let upiTotal = 0;
   let upiCount = 0;
+  let totalItemsSoldAll = 0;
+
+  const categoryBreakdown = {
+    tiffins: { ...REPORT_CATEGORY_CONFIG.tiffins, sales: 0, qty: 0, orderCount: 0, itemsMap: {} },
+    cold_drinks: { ...REPORT_CATEGORY_CONFIG.cold_drinks, sales: 0, qty: 0, orderCount: 0, itemsMap: {} },
+    juices_shakes: { ...REPORT_CATEGORY_CONFIG.juices_shakes, sales: 0, qty: 0, orderCount: 0, itemsMap: {} },
+    chaat: { ...REPORT_CATEGORY_CONFIG.chaat, sales: 0, qty: 0, orderCount: 0, itemsMap: {} }
+  };
 
   filtered.forEach(o => {
     const amt = Number(o.total || o.subtotal || 0);
@@ -1828,7 +2110,48 @@ function renderCustomerReport() {
       cashTotal += amt;
       cashCount++;
     }
+
+    const items = parseOrderItems(o.items);
+    const seenCatsInOrder = new Set();
+
+    items.forEach(it => {
+      const q = Number(it.qty || it.quantity || 1);
+      const p = Number(it.price || 0);
+      const itemTotal = q * p;
+      totalItemsSoldAll += q;
+
+      const catKey = classifyItemCategory(it);
+      if (categoryBreakdown[catKey]) {
+        categoryBreakdown[catKey].sales += itemTotal;
+        categoryBreakdown[catKey].qty += q;
+        seenCatsInOrder.add(catKey);
+
+        const itName = String(it.name || 'Item').toUpperCase().trim();
+        if (!categoryBreakdown[catKey].itemsMap[itName]) {
+          categoryBreakdown[catKey].itemsMap[itName] = { name: itName, price: p, qty: 0, sales: 0 };
+        }
+        categoryBreakdown[catKey].itemsMap[itName].qty += q;
+        categoryBreakdown[catKey].itemsMap[itName].sales += itemTotal;
+      }
+    });
+
+    seenCatsInOrder.forEach(ck => {
+      categoryBreakdown[ck].orderCount++;
+    });
   });
+
+  const isSpecificCat = currentReportCategory !== 'all';
+  const selectedCat = isSpecificCat ? categoryBreakdown[currentReportCategory] : null;
+  const selectedCatConfig = REPORT_CATEGORY_CONFIG[currentReportCategory] || REPORT_CATEGORY_CONFIG.all;
+
+  // If a specific category is selected, filter orders to only those containing this category
+  let displayOrders = filtered;
+  if (isSpecificCat) {
+    displayOrders = filtered.filter(o => {
+      const items = parseOrderItems(o.items);
+      return items.some(it => classifyItemCategory(it) === currentReportCategory);
+    });
+  }
 
   const nowStr = new Date().toLocaleString([], { 
     dateStyle: 'medium', 
@@ -1837,93 +2160,273 @@ function renderCustomerReport() {
   const storeName = DATA.store.name || 'SATTVA TIFFINS';
   const reportDateFormatted = formatDisplayDate(currentReportDate);
 
+  // Build Category Summary KPI block
+  let summaryKpisHtml = '';
+  if (isSpecificCat && selectedCat) {
+    const catPercent = totalRevenue > 0 ? ((selectedCat.sales / totalRevenue) * 100).toFixed(1) : '0';
+    summaryKpisHtml = `
+      <div class="bw-summary-cards" style="grid-template-columns:repeat(4, 1fr);border:2px solid #000;background:#f8fafc">
+        <div class="bw-summary-card">
+          <div class="bw-summary-val" style="font-size:1.35rem;color:#000">₹${selectedCat.sales}</div>
+          <div class="bw-summary-lbl" style="font-weight:900;color:#000">${selectedCat.icon} ${escHtml(selectedCat.name)} Sales</div>
+        </div>
+        <div class="bw-summary-card">
+          <div class="bw-summary-val">${selectedCat.qty} pcs</div>
+          <div class="bw-summary-lbl">Items Sold</div>
+        </div>
+        <div class="bw-summary-card">
+          <div class="bw-summary-val">${displayOrders.length}</div>
+          <div class="bw-summary-lbl">Orders with this Category</div>
+        </div>
+        <div class="bw-summary-card">
+          <div class="bw-summary-val">${catPercent}%</div>
+          <div class="bw-summary-lbl">Share of Total Revenue (₹${totalRevenue})</div>
+        </div>
+      </div>
+    `;
+  } else {
+    summaryKpisHtml = `
+      <div class="bw-summary-cards">
+        <div class="bw-summary-card">
+          <div class="bw-summary-val">${totalOrdersCount}</div>
+          <div class="bw-summary-lbl">Total Orders</div>
+        </div>
+        <div class="bw-summary-card">
+          <div class="bw-summary-val">₹${cashTotal}</div>
+          <div class="bw-summary-lbl">Cash (${cashCount})</div>
+        </div>
+        <div class="bw-summary-card">
+          <div class="bw-summary-val">₹${upiTotal}</div>
+          <div class="bw-summary-lbl">UPI (${upiCount})</div>
+        </div>
+        <div class="bw-summary-card">
+          <div class="bw-summary-val">₹${totalRevenue}</div>
+          <div class="bw-summary-lbl">Total Store Revenue</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Category Sales Matrix or Item Sales Breakdown Table
+  let categorySectionHtml = '';
+  if (isSpecificCat && selectedCat) {
+    const itemsList = Object.values(selectedCat.itemsMap).sort((a, b) => b.sales - a.sales);
+    categorySectionHtml = `
+      <div style="border:1.5px solid #000;background:#fafafa;padding:12px;margin-bottom:16px;border-radius:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid #000;padding-bottom:6px;margin-bottom:8px">
+          <span style="font-weight:900;font-size:0.88rem;text-transform:uppercase;letter-spacing:0.5px">
+            ${selectedCat.icon} ${escHtml(selectedCat.name)} · Item-by-Item Sales Breakdown
+          </span>
+          <span style="font-weight:900;font-size:0.85rem">Total Category Sales: ₹${selectedCat.sales} (${selectedCat.qty} pcs)</span>
+        </div>
+        ${itemsList.length === 0 ? `
+          <div style="padding:15px;text-align:center;color:#666;font-size:0.85rem">No items sold in this category for the selected filter.</div>
+        ` : `
+          <table class="bw-report-table" style="margin-top:4px">
+            <thead>
+              <tr>
+                <th style="width:30px;text-align:center">#</th>
+                <th>Item Name</th>
+                <th style="width:90px;text-align:center">Unit Price</th>
+                <th style="width:100px;text-align:center">Quantity Sold</th>
+                <th style="width:110px;text-align:right">Total Sales</th>
+                <th style="width:85px;text-align:right">% of Cat</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsList.map((it, idx) => {
+                const pct = selectedCat.sales > 0 ? ((it.sales / selectedCat.sales) * 100).toFixed(1) : '0';
+                return `
+                  <tr>
+                    <td style="text-align:center;color:#555">${idx + 1}</td>
+                    <td style="font-weight:700">${escHtml(it.name)}</td>
+                    <td style="text-align:center">₹${it.price}</td>
+                    <td style="text-align:center;font-weight:800">${it.qty}</td>
+                    <td style="text-align:right;font-weight:800">₹${it.sales}</td>
+                    <td style="text-align:right;color:#333">${pct}%</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+            <tfoot>
+              <tr style="background:#eee;font-weight:900;border-top:1.5px solid #000">
+                <td colspan="3" style="text-align:right">CATEGORY TOTAL:</td>
+                <td style="text-align:center">${selectedCat.qty} pcs</td>
+                <td style="text-align:right;font-size:0.95rem">₹${selectedCat.sales}</td>
+                <td style="text-align:right">100%</td>
+              </tr>
+            </tfoot>
+          </table>
+        `}
+      </div>
+    `;
+  } else {
+    // Overview of all 4 categories
+    const catKeys = ['tiffins', 'cold_drinks', 'juices_shakes', 'chaat'];
+    categorySectionHtml = `
+      <div style="border:1.5px solid #000;background:#fafafa;padding:12px;margin-bottom:16px;border-radius:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid #000;padding-bottom:6px;margin-bottom:8px">
+          <span style="font-weight:900;font-size:0.88rem;text-transform:uppercase;letter-spacing:0.5px">
+            📊 Sales by Item Category (Overview)
+          </span>
+          <span style="font-size:0.75rem;color:#444;font-weight:600">Select any category in dropdown above to isolate details</span>
+        </div>
+        <table class="bw-report-table" style="margin-top:4px">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th style="width:110px;text-align:center">Items Sold</th>
+              <th style="width:110px;text-align:center">Orders Count</th>
+              <th style="width:130px;text-align:right">Total Sales (₹)</th>
+              <th style="width:95px;text-align:right">% Revenue</th>
+              <th style="width:80px;text-align:center;background:#e5e7eb">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${catKeys.map(k => {
+              const c = categoryBreakdown[k];
+              const pct = totalRevenue > 0 ? ((c.sales / totalRevenue) * 100).toFixed(1) : '0';
+              return `
+                <tr>
+                  <td style="font-weight:700">
+                    <span style="font-size:1.05rem;margin-right:4px">${c.icon}</span> ${escHtml(c.name)}
+                  </td>
+                  <td style="text-align:center;font-weight:700">${c.qty} pcs</td>
+                  <td style="text-align:center">${c.orderCount} orders</td>
+                  <td style="text-align:right;font-weight:900;font-size:0.92rem">₹${c.sales}</td>
+                  <td style="text-align:right;font-weight:700">${pct}%</td>
+                  <td style="text-align:center">
+                    <button class="btn btn-sm" onclick="selectReportCategory('${c.id}')" style="background:#000;color:#fff;border:none;padding:2px 8px;font-size:0.72rem;border-radius:4px;cursor:pointer;font-weight:700">View</button>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="background:#eee;font-weight:900;border-top:1.5px solid #000">
+              <td>ALL CATEGORIES TOTAL:</td>
+              <td style="text-align:center">${totalItemsSoldAll} pcs</td>
+              <td style="text-align:center">${totalOrdersCount} orders</td>
+              <td style="text-align:right;font-size:0.95rem">₹${totalRevenue}</td>
+              <td style="text-align:right">100%</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    `;
+  }
+
+  // Orders Table
+  let ordersTableHtml = '';
+  if (displayOrders.length === 0) {
+    ordersTableHtml = `
+      <div style="text-align:center;padding:30px 20px;border:1px dashed #666;border-radius:6px;background:#fcfcfc">
+        <p style="margin:0 0 10px 0;font-weight:700">No orders contain items from ${selectedCatConfig.icon} ${escHtml(selectedCatConfig.name)}.</p>
+        <button class="btn btn-sm" onclick="selectReportCategory('all')" style="background:#000;color:#fff;padding:5px 12px;border:none;border-radius:4px;cursor:pointer">Show All Categories</button>
+      </div>
+    `;
+  } else {
+    ordersTableHtml = `
+      <table class="bw-report-table">
+        <thead>
+          <tr>
+            <th style="width:70px;text-align:center">Token #</th>
+            <th style="width:115px">Date / Time</th>
+            <th style="width:130px">Table / Service</th>
+            <th>What Was Ordered ${isSpecificCat ? `(${selectedCatConfig.name} highlighted)` : ''}</th>
+            <th style="width:80px;text-align:center">Payment</th>
+            <th style="width:95px;text-align:right">${isSpecificCat ? `${selectedCatConfig.name} Sales` : 'Paid Total'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${displayOrders.map(o => {
+            const items = parseOrderItems(o.items);
+            const time = o.timestamp ? new Date(o.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+            const tableText = escHtml(o.tableNumber || '—');
+            const serviceText = o.serviceMode === 'takeaway' ? 'Takeaway' : (o.serviceMode === 'delivery' ? 'Delivery' : 'Dine-in');
+            const payMode = (o.paymentMethod || 'cash').toUpperCase();
+            const orderTotal = Number(o.total || o.subtotal || 0);
+            const tok = o.tokenId || o.id || '';
+            const tokStr = /^\d+$/.test(String(tok)) ? String(tok).padStart(2, '0') : tok;
+
+            let catSubtotalInOrder = 0;
+            const itemsText = items.map(it => {
+              const q = Number(it.qty || it.quantity || 1);
+              const p = Number(it.price || 0);
+              const itemTotal = q * p;
+              const itCat = classifyItemCategory(it);
+              const isMatch = isSpecificCat && itCat === currentReportCategory;
+              if (isMatch) catSubtotalInOrder += itemTotal;
+
+              if (isMatch) {
+                return `<span style="font-weight:800;color:#000;background:#fef08a;padding:1px 4px;border-radius:3px;border:1px solid #ca8a04">• <strong>${q}×</strong> ${escHtml(it.name || 'Item')} (@ ₹${p}) = ₹${itemTotal}</span>`;
+              } else if (isSpecificCat) {
+                return `<span style="color:#777">• ${q}× ${escHtml(it.name || 'Item')} (@ ₹${p})</span>`;
+              }
+              return `• ${q}× ${escHtml(it.name || 'Item')} (@ ₹${p}) = ₹${itemTotal}`;
+            }).join('<br>');
+
+            const displayAmount = isSpecificCat ? catSubtotalInOrder : orderTotal;
+            const subtext = isSpecificCat ? `<div style="font-size:0.7rem;color:#666;font-weight:normal">Bill Total: ₹${orderTotal}</div>` : '';
+
+            return `
+              <tr>
+                <td style="text-align:center;font-weight:900;font-size:1.05rem;color:#000">#${escHtml(tokStr)}</td>
+                <td style="font-size:0.75rem">${time}</td>
+                <td><strong>Table: ${tableText}</strong><br><span style="font-size:0.72rem;color:#444">${serviceText}</span></td>
+                <td style="font-size:0.78rem;line-height:1.45">${itemsText || '—'}</td>
+                <td style="text-align:center">
+                  <strong style="font-size:0.82rem">${payMode}</strong>
+                </td>
+                <td style="text-align:right;font-weight:800;font-size:0.9rem">
+                  ₹${displayAmount}
+                  ${subtext}
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="background:#f0f0f0;font-weight:900;border-top:2px solid #000">
+            <td colspan="4" style="text-align:right;padding:8px">
+              ${isSpecificCat ? `${selectedCatConfig.name.toUpperCase()} TOTAL (${displayOrders.length} Orders):` : `GRAND TOTAL (${totalOrdersCount} Orders):`}
+            </td>
+            <td style="text-align:center;font-size:0.75rem">Cash: ₹${cashTotal}<br>UPI: ₹${upiTotal}</td>
+            <td style="text-align:right;font-size:1rem;padding:8px">
+              ₹${isSpecificCat ? selectedCat.sales : totalRevenue}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
+  }
+
   container.innerHTML = `
     <!-- Report Header (Black & White) -->
     <div style="border-bottom:2px solid #000;padding-bottom:12px;margin-bottom:14px;text-align:center">
       <h1 style="margin:0 0 4px 0;font-size:1.35rem;font-weight:900;text-transform:uppercase;letter-spacing:0.5px">${escHtml(storeName)}</h1>
-      <h2 style="margin:0 0 6px 0;font-size:0.95rem;font-weight:700;text-transform:uppercase">ORDERS & PAYMENT REPORT</h2>
-      <div style="font-size:0.75rem;color:#333;display:flex;justify-content:center;gap:16px;flex-wrap:wrap">
+      <h2 style="margin:0 0 6px 0;font-size:0.95rem;font-weight:700;text-transform:uppercase">
+        ORDERS & PAYMENT REPORT ${isSpecificCat ? `· ${escHtml(selectedCatConfig.name.toUpperCase())}` : ''}
+      </h2>
+      <div style="font-size:0.75rem;color:#333;display:flex;justify-content:center;gap:14px;flex-wrap:wrap;align-items:center">
         <span><strong>Report Date:</strong> ${escHtml(reportDateFormatted)}</span>
         <span><strong>Generated:</strong> ${nowStr}</span>
-        <span><strong>Total Orders:</strong> ${totalOrdersCount}</span>
+        <span><strong>Category:</strong> <span style="background:#000;color:#fff;padding:2px 7px;border-radius:4px;font-weight:700">${escHtml(selectedCatConfig.icon + ' ' + selectedCatConfig.name)}</span></span>
+        <span><strong>Total Orders:</strong> ${displayOrders.length}</span>
         <span><strong>Sorting:</strong> ${getSortLabel(currentReportSort)}</span>
       </div>
     </div>
 
-    <!-- Black & White Summary KPIs -->
-    <div class="bw-summary-cards">
-      <div class="bw-summary-card">
-        <div class="bw-summary-val">${totalOrdersCount}</div>
-        <div class="bw-summary-lbl">Total Orders</div>
-      </div>
-      <div class="bw-summary-card">
-        <div class="bw-summary-val">₹${cashTotal}</div>
-        <div class="bw-summary-lbl">Cash (${cashCount})</div>
-      </div>
-      <div class="bw-summary-card">
-        <div class="bw-summary-val">₹${upiTotal}</div>
-        <div class="bw-summary-lbl">UPI (${upiCount})</div>
-      </div>
-      <div class="bw-summary-card">
-        <div class="bw-summary-val">₹${totalRevenue}</div>
-        <div class="bw-summary-lbl">Total Revenue</div>
-      </div>
-    </div>
+    <!-- Summary KPIs -->
+    ${summaryKpisHtml}
+
+    <!-- Category Sales Breakdown -->
+    ${categorySectionHtml}
 
     <!-- Orders Table -->
-    <table class="bw-report-table">
-      <thead>
-        <tr>
-          <th style="width:70px;text-align:center">Token #</th>
-          <th style="width:115px">Date / Time</th>
-          <th style="width:130px">Table / Service</th>
-          <th>What Was Ordered</th>
-          <th style="width:80px;text-align:center">Payment</th>
-          <th style="width:85px;text-align:right">Paid</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${filtered.map((o, idx) => {
-          const items = parseOrderItems(o.items);
-          const time = o.timestamp ? new Date(o.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
-          const tableText = escHtml(o.tableNumber || '—');
-          const serviceText = o.serviceMode === 'takeaway' ? 'Takeaway' : (o.serviceMode === 'delivery' ? 'Delivery' : 'Dine-in');
-          const payMode = (o.paymentMethod || 'cash').toUpperCase();
-          const amt = Number(o.total || o.subtotal || 0);
-          const tok = o.tokenId || o.id || '';
-          const tokStr = /^\d+$/.test(String(tok)) ? String(tok).padStart(2, '0') : tok;
+    ${ordersTableHtml}
 
-          const itemsText = items.map(it => {
-            const q = Number(it.qty || it.quantity || 1);
-            const p = Number(it.price || 0);
-            return `• ${q}× ${escHtml(it.name || 'Item')} (@ ₹${p}) = ₹${p * q}`;
-          }).join('<br>');
-
-          return `
-            <tr>
-              <td style="text-align:center;font-weight:900;font-size:1.05rem;color:#000">#${escHtml(tokStr)}</td>
-              <td style="font-size:0.75rem">${time}</td>
-              <td><strong>Table: ${tableText}</strong><br><span style="font-size:0.72rem;color:#444">${serviceText}</span></td>
-              <td style="font-size:0.78rem;line-height:1.4">${itemsText || '—'}</td>
-              <td style="text-align:center">
-                <strong style="font-size:0.82rem">${payMode}</strong>
-              </td>
-              <td style="text-align:right;font-weight:800;font-size:0.9rem">₹${amt}</td>
-            </tr>
-          `;
-        }).join('')}
-      </tbody>
-      <tfoot>
-        <tr style="background:#f0f0f0;font-weight:900;border-top:2px solid #000">
-          <td colspan="4" style="text-align:right;padding:8px">GRAND TOTAL (${totalOrdersCount} Orders):</td>
-          <td style="text-align:center;font-size:0.75rem">Cash: ₹${cashTotal}<br>UPI: ₹${upiTotal}</td>
-          <td style="text-align:right;font-size:1rem;padding:8px">₹${totalRevenue}</td>
-        </tr>
-      </tfoot>
-    </table>
-
-    <div style="margin-top:16px;text-align:center;font-size:0.72rem;color:#555;border-top:1px dashed #ccc;padding-top:8px">
-      Sattva Tiffins POS & Order Management System · Official Orders & Payment Report
     </div>
   `;
 }

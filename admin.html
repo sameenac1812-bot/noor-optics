@@ -89,7 +89,11 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
       <h1 class="admin-page-title" id="admin-page-title">Dashboard</h1>
-      <div class="topbar-actions">
+      <div class="topbar-actions" style="display:flex;align-items:center;gap:10px">
+        <div id="pos-daemon-status-badge" style="display:inline-flex;align-items:center;gap:6px;font-size:0.75rem;font-weight:700;padding:4px 10px;border-radius:20px;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;cursor:pointer;user-select:none" title="POS Thermal Print Daemon status. Click to test printer or view connection guide.">
+          <span id="pos-daemon-status-dot" style="width:7px;height:7px;border-radius:50%;background:#ef4444;display:inline-block"></span>
+          <span id="pos-daemon-status-text">POS: Offline</span>
+        </div>
         <button class="btn btn-primary btn-sm" id="topbar-add-btn" style="display:none">+ Add Item</button>
       </div>
     </header>
@@ -268,6 +272,15 @@
             <option value="upi">📱 UPI Only</option>
           </select>
 
+          <label style="font-size:0.82rem;font-weight:700;color:#333;margin-left:4px">📂 Category:</label>
+          <select id="report-filter-category" class="form-input" style="padding:6px 10px;font-size:0.84rem;border-radius:6px;width:auto;font-weight:700;background:#ffffff;border:1.5px solid #111" title="Select category to view sales breakdown">
+            <option value="all">📊 All Categories (Overview)</option>
+            <option value="tiffins">🥞 Idli, Dosa, Vada & Bonda</option>
+            <option value="cold_drinks">🥤 Cold Drinks</option>
+            <option value="juices_shakes">🍹 Fresh Juices & Milkshakes</option>
+            <option value="chaat">🥟 Chaat Items</option>
+          </select>
+
           <label style="font-size:0.82rem;font-weight:700;color:#333;margin-left:4px">📅 Date:</label>
           <div style="display:inline-flex;align-items:center;gap:6px">
             <input type="date" id="report-filter-date" class="form-input" style="padding:5px 9px;font-size:0.84rem;border-radius:6px;width:auto;cursor:pointer;font-family:inherit" title="Select date from dropdown calendar" />
@@ -390,8 +403,8 @@
 <div class="toast-container" id="admin-toast-container" style="bottom:24px" aria-live="polite"></div>
 
 <script src="html2pdf.bundle.min.js"></script>
-<script src="data.js?v=22"></script>
-<script src="supabase.js?v=22"></script>
-<script src="admin.js?v=23"></script>
+<script src="data.js?v=31"></script>
+<script src="supabase.js?v=31"></script>
+<script src="admin.js?v=36"></script>
 </body>
 </html>
