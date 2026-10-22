@@ -103,12 +103,38 @@ function getCustomizations(item) {
 window.getCustomizations = getCustomizations;
 
 function parseOrderItems(items) {
-  if (Array.isArray(items)) return items;
+  if (!items) return [];
+  if (Array.isArray(items)) return items.filter(Boolean);
   if (typeof items === 'string') {
-    try {
-      const parsed = JSON.parse(items);
-      if (Array.isArray(parsed)) return parsed;
-    } catch (e) {}
+    const trimmed = items.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+        if (parsed && typeof parsed === 'object') {
+          if (Array.isArray(parsed.items)) return parsed.items.filter(Boolean);
+          if (Array.isArray(parsed.data)) return parsed.data.filter(Boolean);
+          if (Array.isArray(parsed.list)) return parsed.list.filter(Boolean);
+          return Object.values(parsed).filter(Boolean);
+        }
+      } catch (e) {}
+    }
+    // Handle comma-separated text lines like '2x Masala Dosa, 1x Idly'
+    return trimmed.split(',').map(part => {
+      const pTrim = part.trim();
+      const match = pTrim.match(/^(\d+)\s*[x×*]\s*(.+)$/i) || pTrim.match(/^(.+?)\s*\([x×*]?\s*(\d+)\s*(?:pcs?|pc)?\)$/i);
+      if (match) {
+        return { name: match[2].trim(), qty: parseInt(match[1], 10) || 1, price: 0 };
+      }
+      return { name: pTrim, qty: 1, price: 0 };
+    }).filter(it => it.name);
+  }
+  if (typeof items === 'object') {
+    if (Array.isArray(items.items)) return items.items.filter(Boolean);
+    if (Array.isArray(items.data)) return items.data.filter(Boolean);
+    if (Array.isArray(items.list)) return items.list.filter(Boolean);
+    return Object.values(items).filter(Boolean);
   }
   return [];
 }
@@ -1845,66 +1871,171 @@ let currentReportDate = '';
 let currentReportCategory = 'all';
 
 const REPORT_CATEGORY_CONFIG = {
-  all: { id: 'all', name: 'All Categories (Overview)', icon: '📊' },
+  all: { id: 'all', name: 'All Categories (Complete Store)', icon: '📊' },
   tiffins: { id: 'tiffins', name: 'Idli, Dosa, Vada & Bonda', icon: '🥞' },
   cold_drinks: { id: 'cold_drinks', name: 'Cold Drinks', icon: '🥤' },
   juices_shakes: { id: 'juices_shakes', name: 'Fresh Juices & Milkshakes', icon: '🍹' },
-  chaat: { id: 'chaat', name: 'Chaat Items', icon: '🥟' }
+  chaat: { id: 'chaat', name: 'Chaat Items', icon: '🥟' },
+  other: { id: 'other', name: 'Other Menu Items', icon: '🍽️' }
 };
 
 function classifyItemCategory(item) {
   if (!item) return 'tiffins';
-  const name = String(item.name || '').toLowerCase();
+  const name = String(item.name || item.itemName || item.title || '').toLowerCase().trim();
 
-  // Resolve category from DATA.items / DEFAULT_DATA.items if possible
+  // 1. Resolve category from DATA.items / DEFAULT_DATA.items if possible
   let catId = item.categoryId || '';
   let catName = '';
+  let catalogItem = null;
   if (window.DATA && Array.isArray(window.DATA.items)) {
-    const match = window.DATA.items.find(i => i && (i.id === item.id || (i.name && i.name.trim().toLowerCase() === name.trim())));
-    if (match && match.categoryId) catId = match.categoryId;
+    catalogItem = window.DATA.items.find(i => i && (i.id === item.id || (i.name && i.name.trim().toLowerCase() === name)));
+    if (!catalogItem && name) {
+      catalogItem = window.DATA.items.find(i => i && i.name && (i.name.toLowerCase().includes(name) || name.includes(i.name.toLowerCase())));
+    }
   }
-  if (!catId && window.DEFAULT_DATA && Array.isArray(window.DEFAULT_DATA.items)) {
-    const matchDef = window.DEFAULT_DATA.items.find(i => i && (i.id === item.id || (i.name && i.name.trim().toLowerCase() === name.trim())));
-    if (matchDef && matchDef.categoryId) catId = matchDef.categoryId;
+  if (!catalogItem && window.DEFAULT_DATA && Array.isArray(window.DEFAULT_DATA.items)) {
+    catalogItem = window.DEFAULT_DATA.items.find(i => i && (i.id === item.id || (i.name && i.name.trim().toLowerCase() === name)));
+    if (!catalogItem && name) {
+      catalogItem = window.DEFAULT_DATA.items.find(i => i && i.name && (i.name.toLowerCase().includes(name) || name.includes(i.name.toLowerCase())));
+    }
+  }
+  if (catalogItem && catalogItem.categoryId) {
+    catId = catalogItem.categoryId;
   }
   if (catId && window.DATA && Array.isArray(window.DATA.categories)) {
     const cObj = window.DATA.categories.find(c => c && c.id === catId);
     if (cObj && cObj.name) catName = cObj.name.toLowerCase();
   }
 
-  // 1. Fresh Juices & Milkshakes
+  // Fast check by Category ID if configured
+  if (catId === 'cat-1' || catId === 'cat-2') return 'tiffins';
+  if (catId === 'cat-3') return 'cold_drinks';
+
+  // 2. Fresh Juices & Milkshakes (Check before water to prevent watermelon matching water)
   if (
-    catName.includes('juice') || catName.includes('shake') || catName.includes('mocktail') ||
+    catName.includes('juice') || catName.includes('shake') || catName.includes('mocktail') || catName.includes('smoothie') || catName.includes('fruit') ||
     name.includes('juice') || name.includes('shake') || name.includes('smoothie') ||
-    name.includes('lassi') || name.includes('cold coffee') || name.includes('badam milk') ||
-    name.includes('fruit punch') || name.includes('lime soda') || name.includes('jaljeera')
+    name.includes('lassi') || name.includes('cold coffee') || name.includes('iced coffee') ||
+    name.includes('badam milk') || name.includes('rose milk') || name.includes('pista milk') ||
+    name.includes('falooda') || name.includes('faluda') || name.includes('crush') || name.includes('mojito') ||
+    name.includes('lime soda') || name.includes('lemon soda') || name.includes('fresh lime') || name.includes('nimbu') ||
+    name.includes('watermelon') || name.includes('mosambi') || name.includes('pineapple') ||
+    name.includes('pomegranate') || name.includes('anar') || name.includes('chikoo') || name.includes('sapota') ||
+    name.includes('fruit salad') || name.includes('fruit bowl') || name.includes('fruit punch') ||
+    name.includes('sweet lime') || name.includes('grape') || name.includes('orange') ||
+    name.includes('apple') || name.includes('mango') || name.includes('banana') ||
+    name.includes('strawberry') || name.includes('avocado') || name.includes('butter fruit') ||
+    name.includes('dragon fruit') || name.includes('sugarcane') || name.includes('jaljeera')
   ) {
     return 'juices_shakes';
   }
 
-  // 2. Chaat Items
+  // 3. Chaat Items
   if (
     catName.includes('chaat') || catName.includes('chat') ||
-    name.includes('chaat') || name.includes('chat') || name.includes('puri') ||
-    name.includes('bhel') || name.includes('samosa') || name.includes('tikki') ||
-    name.includes('papdi') || name.includes('kachori') || name.includes('chatpat')
+    name.includes('chaat') || name.includes('chat') ||
+    name.includes('pani puri') || name.includes('panipuri') || name.includes('golgappa') || name.includes('puchka') ||
+    name.includes('sev puri') || name.includes('sevpuri') || name.includes('dahi puri') || name.includes('dahipuri') ||
+    name.includes('bhel') || name.includes('bhelpuri') || name.includes('masala puri') || name.includes('masalapuri') ||
+    name.includes('samosa') || name.includes('kachori') || name.includes('papdi') || name.includes('papadi') ||
+    name.includes('tikki') || name.includes('aloo tikki') || name.includes('ragda') ||
+    name.includes('pav bhaji') || name.includes('pavbhaji') || name.includes('vada pav') || name.includes('vadapav') ||
+    name.includes('dabeli') || name.includes('chana chaat') || name.includes('corn chaat') || name.includes('dahi bhalla')
   ) {
     return 'chaat';
   }
 
-  // 3. Cold Drinks
+  // 4. Cold Drinks
   if (
-    catId === 'cat-3' || catName.includes('cool') || catName.includes('cold') || catName.includes('beverage') ||
-    name.includes('water') || name.includes('bottle') || name.includes('monster') ||
-    name.includes('redbull') || name.includes('fanta') || name.includes('thumbs') ||
-    name.includes('thumps') || name.includes('sprite') || name.includes('coca') ||
-    name.includes('coke') || name.includes('pepsi') || name.includes('soft drink')
+    catName.includes('cool') || catName.includes('cold') || catName.includes('beverage') || catName.includes('soft drink') ||
+    name.includes('thums up') || name.includes('thumbs up') || name.includes('thumps up') || name.includes('thumsup') || name.includes('thumbsup') ||
+    name.includes('coca cola') || name.includes('cocacola') || name.includes('coke') || name.includes('diet coke') ||
+    name.includes('sprite') || name.includes('fanta') || name.includes('pepsi') || name.includes('mirinda') ||
+    name.includes('limca') || name.includes('maaza') || name.includes('slice') || name.includes('frooti') ||
+    name.includes('7up') || name.includes('seven up') || name.includes('sting') || name.includes('mountain dew') || name.includes(' dew') ||
+    name.includes('redbull') || name.includes('red bull') || name.includes('monster') || name.includes('hell energy') ||
+    name.includes('energy drink') || name.includes('soft drink') || name.includes('cool drink') || name.includes('cold drink') ||
+    name.includes('mineral water') || name.includes('packaged drinking water') || name.includes('packaged water') ||
+    name.includes('kinley') || name.includes('aquafina') || name.includes('bisleri') || name.includes('bailley') ||
+    name.includes('water bottle') || name.includes('soda can') || name.includes('pet bottle') ||
+    (name.includes('water') && !name.includes('watermelon')) ||
+    (name.includes('bottle') && !name.includes('gourd'))
   ) {
     return 'cold_drinks';
   }
 
-  // 4. Idli, Dosa, Vada & Bonda (Default tiffins)
+  // 5. Idli, Dosa, Vada & Bonda (Tiffins)
+  if (
+    catName.includes('idli') || catName.includes('idly') || catName.includes('dosa') || catName.includes('wada') || catName.includes('vada') || catName.includes('bonda') || catName.includes('tiffin') ||
+    name.includes('idli') || name.includes('idly') || name.includes('dosa') || name.includes('dose') || name.includes('dosai') ||
+    name.includes('vada') || name.includes('wada') || name.includes('bonda') || name.includes('upma') ||
+    name.includes('uttapam') || name.includes('uthappam') || name.includes('oothappam') || name.includes('pesarattu') ||
+    name.includes('poori') || name.includes('puri') || name.includes('parota') || name.includes('paratha') || name.includes('chapathi') || name.includes('roti') ||
+    name.includes('pongal') || name.includes('khichdi') || name.includes('tava') || name.includes('guntur') || name.includes('button') ||
+    name.includes('sambhar idly') || name.includes('sambhar wada') || name.includes('sambar')
+  ) {
+    return 'tiffins';
+  }
+
+  if (name.includes('coffee') || name.includes('tea') || name.includes('meal') || name.includes('rice') || name.includes('biryani') || name.includes('pulao')) {
+    return 'other';
+  }
+
   return 'tiffins';
+}
+
+function resolveOrderItem(it, order) {
+  const qty = Number(it.qty || it.quantity || it.count || it.q || it.units || 1) || 1;
+  let unitPrice = Number(it.price || it.rate || it.unitPrice || it.itemPrice || 0);
+  let total = Number(it.total || it.amount || it.itemTotal || 0);
+
+  if (unitPrice > 0 && total <= 0) {
+    total = unitPrice * qty;
+  }
+  if (total > 0 && unitPrice <= 0) {
+    unitPrice = Math.round(total / qty);
+  }
+
+  // Catalog lookup if price or total is 0
+  if (unitPrice <= 0 || total <= 0) {
+    const itName = String(it.name || it.itemName || it.title || '').trim().toLowerCase();
+    const itId = it.id || '';
+    let found = null;
+    if (window.DATA && Array.isArray(window.DATA.items)) {
+      found = window.DATA.items.find(i => i && (i.id === itId || (i.name && i.name.trim().toLowerCase() === itName)));
+      if (!found && itName) {
+        found = window.DATA.items.find(i => i && i.name && (i.name.toLowerCase().includes(itName) || itName.includes(i.name.toLowerCase())));
+      }
+    }
+    if (!found && window.DEFAULT_DATA && Array.isArray(window.DEFAULT_DATA.items)) {
+      found = window.DEFAULT_DATA.items.find(i => i && (i.id === itId || (i.name && i.name.trim().toLowerCase() === itName)));
+      if (!found && itName) {
+        found = window.DEFAULT_DATA.items.find(i => i && i.name && (i.name.toLowerCase().includes(itName) || itName.includes(i.name.toLowerCase())));
+      }
+    }
+    if (found && Number(found.price) > 0) {
+      if (unitPrice <= 0) unitPrice = Number(found.price);
+      if (total <= 0) total = unitPrice * qty;
+    }
+  }
+
+  // Order fallback if still 0
+  if (total <= 0 && order && Number(order.total || order.subtotal) > 0) {
+    const orderItems = parseOrderItems(order.items);
+    total = Math.round(Number(order.total || order.subtotal) / Math.max(1, orderItems.length));
+    unitPrice = Math.round(total / qty);
+  }
+
+  const name = String(it.name || it.itemName || it.title || 'Item').trim();
+  const categoryKey = classifyItemCategory({ ...it, name });
+
+  return {
+    name,
+    qty,
+    unitPrice,
+    total,
+    categoryKey
+  };
 }
 
 function selectReportCategory(catKey) {
@@ -2096,60 +2227,129 @@ function renderCustomerReport() {
     tiffins: { ...REPORT_CATEGORY_CONFIG.tiffins, sales: 0, qty: 0, orderCount: 0, itemsMap: {} },
     cold_drinks: { ...REPORT_CATEGORY_CONFIG.cold_drinks, sales: 0, qty: 0, orderCount: 0, itemsMap: {} },
     juices_shakes: { ...REPORT_CATEGORY_CONFIG.juices_shakes, sales: 0, qty: 0, orderCount: 0, itemsMap: {} },
-    chaat: { ...REPORT_CATEGORY_CONFIG.chaat, sales: 0, qty: 0, orderCount: 0, itemsMap: {} }
+    chaat: { ...REPORT_CATEGORY_CONFIG.chaat, sales: 0, qty: 0, orderCount: 0, itemsMap: {} },
+    other: { ...REPORT_CATEGORY_CONFIG.other, sales: 0, qty: 0, orderCount: 0, itemsMap: {} }
   };
 
+  // Global map of all items sold across the entire store
+  const allItemsSoldMap = {};
+
+  // Process every single order with exact totals reconciliation
   filtered.forEach(o => {
-    const amt = Number(o.total || o.subtotal || 0);
-    totalRevenue += amt;
+    let orderAmt = Number(o.total || o.subtotal || 0);
     const pm = (o.paymentMethod || 'cash').toLowerCase();
+
+    const rawItems = parseOrderItems(o.items);
+    let resolvedItems = rawItems.map(it => resolveOrderItem(it, o));
+
+    // Fallback if order had no item list but has an amount
+    if (resolvedItems.length === 0 && orderAmt > 0) {
+      resolvedItems = [{
+        name: 'General Bill Item',
+        qty: 1,
+        unitPrice: orderAmt,
+        total: orderAmt,
+        categoryKey: 'other'
+      }];
+    }
+
+    const itemsSum = resolvedItems.reduce((s, it) => s + (it.total || 0), 0);
+
+    // If order had 0 stored total but items had prices, use items sum
+    if (orderAmt <= 0 && itemsSum > 0) {
+      orderAmt = itemsSum;
+    }
+
+    // Reconcile item totals to exactly match order billed total if there's any discrepancy
+    if (orderAmt > 0 && itemsSum > 0 && itemsSum !== orderAmt) {
+      const scale = orderAmt / itemsSum;
+      let runningSum = 0;
+      resolvedItems.forEach((it, idx) => {
+        if (idx === resolvedItems.length - 1) {
+          it.total = Math.max(0, orderAmt - runningSum);
+        } else {
+          it.total = Math.round(it.total * scale);
+          runningSum += it.total;
+        }
+        if (it.qty > 0) {
+          it.unitPrice = Math.round(it.total / it.qty);
+        }
+      });
+    }
+
+    totalRevenue += orderAmt;
     if (pm === 'upi') {
-      upiTotal += amt;
+      upiTotal += orderAmt;
       upiCount++;
     } else {
-      cashTotal += amt;
+      cashTotal += orderAmt;
       cashCount++;
     }
 
-    const items = parseOrderItems(o.items);
     const seenCatsInOrder = new Set();
 
-    items.forEach(it => {
-      const q = Number(it.qty || it.quantity || 1);
-      const p = Number(it.price || 0);
-      const itemTotal = q * p;
-      totalItemsSoldAll += q;
+    resolvedItems.forEach(it => {
+      totalItemsSoldAll += it.qty;
+      const catKey = it.categoryKey in categoryBreakdown ? it.categoryKey : 'other';
+      const catObj = categoryBreakdown[catKey];
 
-      const catKey = classifyItemCategory(it);
-      if (categoryBreakdown[catKey]) {
-        categoryBreakdown[catKey].sales += itemTotal;
-        categoryBreakdown[catKey].qty += q;
-        seenCatsInOrder.add(catKey);
+      catObj.sales += it.total;
+      catObj.qty += it.qty;
+      seenCatsInOrder.add(catKey);
 
-        const itName = String(it.name || 'Item').toUpperCase().trim();
-        if (!categoryBreakdown[catKey].itemsMap[itName]) {
-          categoryBreakdown[catKey].itemsMap[itName] = { name: itName, price: p, qty: 0, sales: 0 };
-        }
-        categoryBreakdown[catKey].itemsMap[itName].qty += q;
-        categoryBreakdown[catKey].itemsMap[itName].sales += itemTotal;
+      // Add to category item map
+      const itKey = String(it.name || 'Item').trim().toUpperCase();
+      if (!catObj.itemsMap[itKey]) {
+        catObj.itemsMap[itKey] = {
+          name: it.name,
+          categoryKey: catKey,
+          categoryName: catObj.name,
+          qty: 0,
+          sales: 0,
+          ordersCount: 0
+        };
       }
+      catObj.itemsMap[itKey].qty += it.qty;
+      catObj.itemsMap[itKey].sales += it.total;
+      catObj.itemsMap[itKey].ordersCount++;
+
+      // Add to global items map
+      if (!allItemsSoldMap[itKey]) {
+        allItemsSoldMap[itKey] = {
+          name: it.name,
+          categoryKey: catKey,
+          categoryName: catObj.name,
+          icon: catObj.icon,
+          qty: 0,
+          sales: 0,
+          ordersCount: 0
+        };
+      }
+      allItemsSoldMap[itKey].qty += it.qty;
+      allItemsSoldMap[itKey].sales += it.total;
+      allItemsSoldMap[itKey].ordersCount++;
     });
 
     seenCatsInOrder.forEach(ck => {
-      categoryBreakdown[ck].orderCount++;
+      if (categoryBreakdown[ck]) {
+        categoryBreakdown[ck].orderCount++;
+      }
     });
+
+    // Store reconciled items on order object temporarily for rendering
+    o._resolvedItems = resolvedItems;
   });
 
   const isSpecificCat = currentReportCategory !== 'all';
-  const selectedCat = isSpecificCat ? categoryBreakdown[currentReportCategory] : null;
+  const selectedCat = isSpecificCat ? (categoryBreakdown[currentReportCategory] || categoryBreakdown.tiffins) : null;
   const selectedCatConfig = REPORT_CATEGORY_CONFIG[currentReportCategory] || REPORT_CATEGORY_CONFIG.all;
 
   // If a specific category is selected, filter orders to only those containing this category
   let displayOrders = filtered;
   if (isSpecificCat) {
     displayOrders = filtered.filter(o => {
-      const items = parseOrderItems(o.items);
-      return items.some(it => classifyItemCategory(it) === currentReportCategory);
+      const items = o._resolvedItems || parseOrderItems(o.items).map(it => resolveOrderItem(it, o));
+      return items.some(it => it.categoryKey === currentReportCategory);
     });
   }
 
@@ -2207,7 +2407,7 @@ function renderCustomerReport() {
     `;
   }
 
-  // Category Sales Matrix or Item Sales Breakdown Table
+  // Category Sales Matrix & Item Sales Breakdown Section
   let categorySectionHtml = '';
   if (isSpecificCat && selectedCat) {
     const itemsList = Object.values(selectedCat.itemsMap).sort((a, b) => b.sales - a.sales);
@@ -2225,23 +2425,24 @@ function renderCustomerReport() {
           <table class="bw-report-table" style="margin-top:4px">
             <thead>
               <tr>
-                <th style="width:30px;text-align:center">#</th>
+                <th style="width:32px;text-align:center">#</th>
                 <th>Item Name</th>
-                <th style="width:90px;text-align:center">Unit Price</th>
-                <th style="width:100px;text-align:center">Quantity Sold</th>
-                <th style="width:110px;text-align:right">Total Sales</th>
-                <th style="width:85px;text-align:right">% of Cat</th>
+                <th style="width:95px;text-align:center">Avg Unit Price</th>
+                <th style="width:105px;text-align:center">Quantity Sold</th>
+                <th style="width:115px;text-align:right">Total Sales</th>
+                <th style="width:90px;text-align:right">% of Cat</th>
               </tr>
             </thead>
             <tbody>
               ${itemsList.map((it, idx) => {
+                const avgPrice = it.qty > 0 ? Math.round(it.sales / it.qty) : 0;
                 const pct = selectedCat.sales > 0 ? ((it.sales / selectedCat.sales) * 100).toFixed(1) : '0';
                 return `
                   <tr>
                     <td style="text-align:center;color:#555">${idx + 1}</td>
                     <td style="font-weight:700">${escHtml(it.name)}</td>
-                    <td style="text-align:center">₹${it.price}</td>
-                    <td style="text-align:center;font-weight:800">${it.qty}</td>
+                    <td style="text-align:center">₹${avgPrice}</td>
+                    <td style="text-align:center;font-weight:800">${it.qty} pcs</td>
                     <td style="text-align:right;font-weight:800">₹${it.sales}</td>
                     <td style="text-align:right;color:#333">${pct}%</td>
                   </tr>
@@ -2250,7 +2451,7 @@ function renderCustomerReport() {
             </tbody>
             <tfoot>
               <tr style="background:#eee;font-weight:900;border-top:1.5px solid #000">
-                <td colspan="3" style="text-align:right">CATEGORY TOTAL:</td>
+                <td colspan="3" style="text-align:right">CATEGORY TOTAL (${itemsList.length} Items):</td>
                 <td style="text-align:center">${selectedCat.qty} pcs</td>
                 <td style="text-align:right;font-size:0.95rem">₹${selectedCat.sales}</td>
                 <td style="text-align:right">100%</td>
@@ -2261,15 +2462,22 @@ function renderCustomerReport() {
       </div>
     `;
   } else {
-    // Overview of all 4 categories
-    const catKeys = ['tiffins', 'cold_drinks', 'juices_shakes', 'chaat'];
+    // Overview of categories PLUS complete item-by-item sales across the entire restaurant!
+    const activeCatKeys = ['tiffins', 'cold_drinks', 'juices_shakes', 'chaat'];
+    if (categoryBreakdown.other.sales > 0 || categoryBreakdown.other.qty > 0) {
+      activeCatKeys.push('other');
+    }
+
+    const allItemsList = Object.values(allItemsSoldMap).sort((a, b) => b.sales - a.sales);
+
     categorySectionHtml = `
+      <!-- Category Sales Summary Cards -->
       <div style="border:1.5px solid #000;background:#fafafa;padding:12px;margin-bottom:16px;border-radius:4px">
         <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid #000;padding-bottom:6px;margin-bottom:8px">
           <span style="font-weight:900;font-size:0.88rem;text-transform:uppercase;letter-spacing:0.5px">
             📊 Sales by Item Category (Overview)
           </span>
-          <span style="font-size:0.75rem;color:#444;font-weight:600">Select any category in dropdown above to isolate details</span>
+          <span style="font-size:0.75rem;color:#444;font-weight:600">Select any category in dropdown to isolate details</span>
         </div>
         <table class="bw-report-table" style="margin-top:4px">
           <thead>
@@ -2283,7 +2491,7 @@ function renderCustomerReport() {
             </tr>
           </thead>
           <tbody>
-            ${catKeys.map(k => {
+            ${activeCatKeys.map(k => {
               const c = categoryBreakdown[k];
               const pct = totalRevenue > 0 ? ((c.sales / totalRevenue) * 100).toFixed(1) : '0';
               return `
@@ -2314,6 +2522,58 @@ function renderCustomerReport() {
           </tfoot>
         </table>
       </div>
+
+      <!-- Complete Item-by-Item Sales Breakdown across All Categories -->
+      <div style="border:1.5px solid #000;background:#ffffff;padding:12px;margin-bottom:16px;border-radius:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid #000;padding-bottom:6px;margin-bottom:8px">
+          <span style="font-weight:900;font-size:0.88rem;text-transform:uppercase;letter-spacing:0.5px">
+            📋 Complete Item-by-Item Sales Breakdown (${allItemsList.length} Unique Items Sold)
+          </span>
+          <span style="font-weight:900;font-size:0.85rem">Total Items Sold: ${totalItemsSoldAll} pcs · ₹${totalRevenue}</span>
+        </div>
+        ${allItemsList.length === 0 ? `
+          <div style="padding:15px;text-align:center;color:#666;font-size:0.85rem">No items recorded.</div>
+        ` : `
+          <table class="bw-report-table" style="margin-top:4px">
+            <thead>
+              <tr>
+                <th style="width:32px;text-align:center">#</th>
+                <th>Item Name</th>
+                <th style="width:160px">Category</th>
+                <th style="width:95px;text-align:center">Avg Unit Price</th>
+                <th style="width:105px;text-align:center">Quantity Sold</th>
+                <th style="width:115px;text-align:right">Total Sales</th>
+                <th style="width:90px;text-align:right">% Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allItemsList.map((it, idx) => {
+                const avgPrice = it.qty > 0 ? Math.round(it.sales / it.qty) : 0;
+                const pct = totalRevenue > 0 ? ((it.sales / totalRevenue) * 100).toFixed(1) : '0';
+                return `
+                  <tr>
+                    <td style="text-align:center;color:#555">${idx + 1}</td>
+                    <td style="font-weight:700">${escHtml(it.name)}</td>
+                    <td style="font-size:0.75rem"><span style="background:#eee;padding:1px 6px;border-radius:3px;font-weight:600">${escHtml(it.icon || '')} ${escHtml(it.categoryName || '')}</span></td>
+                    <td style="text-align:center">₹${avgPrice}</td>
+                    <td style="text-align:center;font-weight:800">${it.qty} pcs</td>
+                    <td style="text-align:right;font-weight:800">₹${it.sales}</td>
+                    <td style="text-align:right;color:#333">${pct}%</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+            <tfoot>
+              <tr style="background:#eee;font-weight:900;border-top:1.5px solid #000">
+                <td colspan="4" style="text-align:right">TOTAL (${allItemsList.length} Items):</td>
+                <td style="text-align:center">${totalItemsSoldAll} pcs</td>
+                <td style="text-align:right;font-size:0.95rem">₹${totalRevenue}</td>
+                <td style="text-align:right">100%</td>
+              </tr>
+            </tfoot>
+          </table>
+        `}
+      </div>
     `;
   }
 
@@ -2341,7 +2601,7 @@ function renderCustomerReport() {
         </thead>
         <tbody>
           ${displayOrders.map(o => {
-            const items = parseOrderItems(o.items);
+            const items = o._resolvedItems || parseOrderItems(o.items).map(it => resolveOrderItem(it, o));
             const time = o.timestamp ? new Date(o.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
             const tableText = escHtml(o.tableNumber || '—');
             const serviceText = o.serviceMode === 'takeaway' ? 'Takeaway' : (o.serviceMode === 'delivery' ? 'Delivery' : 'Dine-in');
@@ -2352,10 +2612,10 @@ function renderCustomerReport() {
 
             let catSubtotalInOrder = 0;
             const itemsText = items.map(it => {
-              const q = Number(it.qty || it.quantity || 1);
-              const p = Number(it.price || 0);
-              const itemTotal = q * p;
-              const itCat = classifyItemCategory(it);
+              const q = it.qty;
+              const p = it.unitPrice;
+              const itemTotal = it.total;
+              const itCat = it.categoryKey;
               const isMatch = isSpecificCat && itCat === currentReportCategory;
               if (isMatch) catSubtotalInOrder += itemTotal;
 
@@ -2427,9 +2687,14 @@ function renderCustomerReport() {
     <!-- Orders Table -->
     ${ordersTableHtml}
 
+    <div style="margin-top:16px;text-align:center;font-size:0.72rem;color:#555;border-top:1px dashed #ccc;padding-top:8px">
+      Sattva Tiffins POS & Order Management System · Official Orders & Payment Report
     </div>
   `;
 }
+window.renderCustomerReport = renderCustomerReport;
+window.classifyItemCategory = classifyItemCategory;
+window.resolveOrderItem = resolveOrderItem;
 
 function printReportWindow() {
   const printable = $('report-printable-area');

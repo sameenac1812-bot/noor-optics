@@ -926,12 +926,38 @@ function escHtml(str) {
 if (typeof window !== 'undefined') window.escHtml = escHtml;
 
 function parseOrderItems(items) {
-  if (Array.isArray(items)) return items;
+  if (!items) return [];
+  if (Array.isArray(items)) return items.filter(Boolean);
   if (typeof items === 'string') {
-    try {
-      const parsed = JSON.parse(items);
-      if (Array.isArray(parsed)) return parsed;
-    } catch (e) {}
+    const trimmed = items.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+        if (parsed && typeof parsed === 'object') {
+          if (Array.isArray(parsed.items)) return parsed.items.filter(Boolean);
+          if (Array.isArray(parsed.data)) return parsed.data.filter(Boolean);
+          if (Array.isArray(parsed.list)) return parsed.list.filter(Boolean);
+          return Object.values(parsed).filter(Boolean);
+        }
+      } catch (e) {}
+    }
+    // Handle comma-separated text lines like '2x Masala Dosa, 1x Idly'
+    return trimmed.split(',').map(part => {
+      const pTrim = part.trim();
+      const match = pTrim.match(/^(\d+)\s*[x×*]\s*(.+)$/i) || pTrim.match(/^(.+?)\s*\([x×*]?\s*(\d+)\s*(?:pcs?|pc)?\)$/i);
+      if (match) {
+        return { name: match[2].trim(), qty: parseInt(match[1], 10) || 1, price: 0 };
+      }
+      return { name: pTrim, qty: 1, price: 0 };
+    }).filter(it => it.name);
+  }
+  if (typeof items === 'object') {
+    if (Array.isArray(items.items)) return items.items.filter(Boolean);
+    if (Array.isArray(items.data)) return items.data.filter(Boolean);
+    if (Array.isArray(items.list)) return items.list.filter(Boolean);
+    return Object.values(items).filter(Boolean);
   }
   return [];
 }

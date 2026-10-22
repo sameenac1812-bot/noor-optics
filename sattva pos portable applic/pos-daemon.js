@@ -14,19 +14,27 @@ const fs = require('fs');
 
 const PORT = 5001;
 const PRINTER_NAME = 'POS-80';
-const CLOUD_TOPIC = 'subfresh_orders_live_v4_78637e1f';
-const CLOUD_HOSTS = ['https://ntfy.adminforge.de', 'https://ntfy.tedomum.fr'];
+const CLOUD_TOPIC = 'restroiq_orders_live_sec786';
+const CLOUD_TOPIC_ALT = 'subfresh_orders_live_v4_78637e1f';
+const CLOUD_HOSTS = ['https://ntfy.adminforge.de', 'https://ntfy.sh', 'https://ntfy.tedomum.fr'];
 let currentHostIdx = 0;
 
 const CACHE_FILE = path.join(__dirname, '.printed_orders.json');
 const printedOrders = new Set();
+const printTimestamps = new Map();
 
 try {
   if (fs.existsSync(CACHE_FILE)) {
     const raw = fs.readFileSync(CACHE_FILE, 'utf8');
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      parsed.forEach(id => printedOrders.add(id));
+      parsed.forEach(id => {
+        if (id) {
+          const base = String(id).replace(/-P\d{4,}$/, '').trim();
+          printedOrders.add(base);
+          printedOrders.add(String(id).trim());
+        }
+      });
       console.log(`[Cache] Loaded ${printedOrders.size} previously printed order records from disk.`);
     }
   }
@@ -130,31 +138,53 @@ initWorker();
 
 // Auto-heal Windows print spooler on startup
 try {
-  const cleanCmd = `Get-PrintJob -PrinterName "${PRINTER_NAME}" -ErrorAction SilentlyContinue | Where-Object { $_.JobStatus -match "Error|Retained|UserIntervention" } | Remove-PrintJob -ErrorAction SilentlyContinue`;
+  const cleanCmd = `Get-PrintJob -PrinterName "${PRINTER_NAME}" -ErrorAction SilentlyContinue | Where-Object { $_.JobStatus -match "Error|Retained|UserIntervention" -or ($_.SubmittedTime -and ((Get-Date) - $_.SubmittedTime).TotalHours -gt 1) } | Remove-PrintJob -ErrorAction SilentlyContinue`;
   spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command', cleanCmd], { windowsHide: true });
 } catch (e) {}
 
-function printOrder(order) {
-  if (!order || !order.id) {
-    console.warn('[Printer] Invalid order payload');
+function printOrder(order, options = {}) {
+  if (!order) {
+    console.warn('[Printer] Invalid order payload: empty');
     return Promise.reject(new Error('Invalid order payload'));
   }
 
-  // Skip stale replayed orders older than 60 minutes
-  if (order.timestamp) {
-    const ageSec = (Date.now() - new Date(order.timestamp).getTime()) / 1000;
+  const rawId = String(order.id || '').trim();
+  const baseId = String(order.originalId || rawId).replace(/-P\d{4,}$/, '').trim();
+
+  if (!baseId) {
+    console.warn('[Printer] Invalid order payload: missing order ID');
+    return Promise.reject(new Error('Invalid order payload: missing order ID'));
+  }
+
+  const isManualReprint = Boolean(options.manualReprint || order.manualReprint);
+  const now = Date.now();
+  const lastPrinted = printTimestamps.get(baseId) || 0;
+
+  // STRICT DEDUPLICATION:
+  // 1. If this order was already printed and is not an explicit human manual reprint, DROP IT!
+  if (printedOrders.has(baseId) && !isManualReprint) {
+    console.log(`[Printer] 🛑 Order ${baseId} already printed (${Math.round((now - lastPrinted) / 1000)}s ago). Duplicate blocked.`);
+    return Promise.resolve({ skipped: true, id: baseId, reason: 'duplicate' });
+  }
+
+  // 2. Anti-spam throttle: never allow ANY print for the same order within 5 seconds (even on rapid double click)
+  if (lastPrinted && (now - lastPrinted < 5000)) {
+    console.log(`[Printer] 🛑 Order ${baseId} printed just ${Math.round((now - lastPrinted) / 1000)}s ago. Throttle blocked.`);
+    return Promise.resolve({ skipped: true, id: baseId, reason: 'throttled' });
+  }
+
+  // 3. Skip stale replayed orders older than 60 minutes UNLESS manual reprint
+  if (!isManualReprint && order.timestamp) {
+    const ageSec = (now - new Date(order.timestamp).getTime()) / 1000;
     if (ageSec > 3600) {
-      console.log(`[Printer] Skipping older order ${order.id} (${Math.round(ageSec)}s old).`);
-      return Promise.resolve({ skipped: true, id: order.id, reason: 'stale' });
+      console.log(`[Printer] Skipping older order ${baseId} (${Math.round(ageSec)}s old).`);
+      return Promise.resolve({ skipped: true, id: baseId, reason: 'stale' });
     }
   }
 
-  if (printedOrders.has(order.id)) {
-    console.log(`[Printer] Order ${order.id} already printed. Skipping duplicate.`);
-    return Promise.resolve({ skipped: true, id: order.id });
-  }
-
-  printedOrders.add(order.id);
+  printedOrders.add(baseId);
+  printedOrders.add(rawId);
+  printTimestamps.set(baseId, now);
   persistPrintedOrders();
   printCount++;
 
@@ -199,7 +229,8 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       try {
         const order = JSON.parse(body);
-        const result = await printOrder(order);
+        const manualReprint = Boolean(order.manualReprint);
+        const result = await printOrder(order, { manualReprint });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', result }));
       } catch (err) {
@@ -224,6 +255,15 @@ const server = http.createServer((req, res) => {
 
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Not found' }));
+});
+
+server.on('error', err => {
+  if (err.code === 'EADDRINUSE') {
+    console.warn(`[Local Server] Notice: Port ${PORT} is in use by another instance.`);
+    console.log(`[CloudSync] Cloud real-time order listener is unaffected and running normally!`);
+  } else {
+    console.error(`[Server Error]:`, err.message);
+  }
 });
 
 server.listen(PORT, '0.0.0.0', () => {
@@ -256,7 +296,7 @@ let sseReq = null;
 
 function connectCloudStream() {
   const host = CLOUD_HOSTS[currentHostIdx];
-  const streamUrl = `${host}/${CLOUD_TOPIC}/sse`;
+  const streamUrl = `${host}/${CLOUD_TOPIC},${CLOUD_TOPIC_ALT}/sse`;
   console.log(`[CloudSync] Connecting to live order stream: ${streamUrl}`);
 
   try {
@@ -288,11 +328,12 @@ function connectCloudStream() {
             const envelope = JSON.parse(jsonStr);
             if (envelope.event === 'message' && envelope.message) {
               const msg = JSON.parse(envelope.message);
-              if (msg.type === 'new_order' && msg.order) {
+              if ((msg.type === 'new_order' || msg.type === 'print_order') && msg.order) {
                 const tok = msg.order.tokenId || msg.order.id;
                 const tokStr = /^\d+$/.test(String(tok)) ? String(tok).padStart(2, '0') : tok;
-                console.log(`[CloudSync] 🔔 Received order from mobile/web: Token #${tokStr}`);
-                printOrder(msg.order).catch(err => {
+                const isManual = Boolean(msg.manualReprint || msg.order.manualReprint);
+                console.log(`[CloudSync] 🔔 Order received: Token #${tokStr} (Type: ${msg.type}${isManual ? ', manual reprint' : ''})`);
+                printOrder(msg.order, { manualReprint: isManual }).catch(err => {
                   console.error('[CloudSync] Automatic print error:', err.message);
                 });
               }

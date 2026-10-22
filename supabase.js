@@ -7,7 +7,8 @@
 'use strict';
 
 const SUPABASE_STORAGE_KEY = 'restaurant_supabase_config';
-const CLOUD_SYNC_TOPIC = 'subfresh_orders_live_v4_78637e1f';
+const CLOUD_SYNC_TOPIC = 'restroiq_orders_live_sec786';
+const CLOUD_SYNC_TOPIC_ALT = 'subfresh_orders_live_v4_78637e1f';
 const CLOUD_SYNC_HOST = 'https://ntfy.adminforge.de';
 const CLOUD_SYNC_HOST_BACKUP = 'https://ntfy.tedomum.fr';
 
@@ -141,27 +142,59 @@ class SupabaseService {
   // ── Helper to publish to Cloud with fallback ────────────────
   async pushToCloud(topic, bodyObj, headers = {}) {
     const jsonBody = JSON.stringify(bodyObj);
-    try {
-      const res = await fetch(`${CLOUD_SYNC_HOST}/${topic}`, {
-        method: 'POST',
-        headers: headers,
-        body: jsonBody
-      });
-      if (res.ok) return true;
-    } catch (e) {}
 
-    // Fallback host
+    // Sanitize all header values to pure ASCII ByteString (avoids TypeError on non-ASCII characters like em-dash or emojis)
+    const cleanHeaders = {};
+    for (const [k, v] of Object.entries(headers || {})) {
+      cleanHeaders[k] = String(v).replace(/[^\x20-\x7E]/g, '-');
+    }
+
+    const targetTopic = topic || this.cloudTopic || CLOUD_SYNC_TOPIC;
+
+    let success = false;
     try {
-      const res2 = await fetch(`${CLOUD_SYNC_HOST_BACKUP}/${topic}`, {
+      const res = await fetch(`${CLOUD_SYNC_HOST}/${targetTopic}`, {
         method: 'POST',
-        headers: headers,
+        headers: cleanHeaders,
         body: jsonBody
       });
-      return res2.ok;
+      if (res.ok) success = true;
     } catch (e) {
-      console.warn('[CloudSync] Publish failed on both hosts:', e);
-      return false;
+      console.warn('[CloudSync] Host 1 push error:', e.message);
     }
+
+    if (!success) {
+      // Fallback host
+      try {
+        const res2 = await fetch(`${CLOUD_SYNC_HOST_BACKUP}/${targetTopic}`, {
+          method: 'POST',
+          headers: cleanHeaders,
+          body: jsonBody
+        });
+        success = res2.ok;
+      } catch (e) {
+        console.warn('[CloudSync] Publish failed on both hosts:', e.message);
+      }
+    }
+
+    if (!success) {
+      // Mirror to secondary topic and global ntfy.sh fallback ONLY if primary host failed
+      const altTopic = targetTopic === CLOUD_SYNC_TOPIC ? CLOUD_SYNC_TOPIC_ALT : CLOUD_SYNC_TOPIC;
+      try {
+        fetch(`${CLOUD_SYNC_HOST}/${altTopic}`, {
+          method: 'POST',
+          headers: cleanHeaders,
+          body: jsonBody
+        }).catch(() => {});
+        fetch(`https://ntfy.sh/${targetTopic}`, {
+          method: 'POST',
+          headers: cleanHeaders,
+          body: jsonBody
+        }).catch(() => {});
+      } catch (e) {}
+    }
+
+    return success;
   }
 
   // ── Universal Cross-Device Cloud Sync (Real-time SSE) ───────
@@ -173,7 +206,7 @@ class SupabaseService {
         this.eventSource.close();
       }
 
-      this.eventSource = new EventSource(`${CLOUD_SYNC_HOST}/${this.cloudTopic}/sse`);
+      this.eventSource = new EventSource(`${CLOUD_SYNC_HOST}/${CLOUD_SYNC_TOPIC},${CLOUD_SYNC_TOPIC_ALT}/sse`);
 
       this.eventSource.onmessage = (event) => {
         try {
@@ -357,14 +390,25 @@ class SupabaseService {
     try {
       const tok = order.tokenId || order.id || '';
       const tokStr = /^\d+$/.test(String(tok)) ? String(tok).padStart(2, '0') : tok;
+      const tbl = order.tableNumber || '-';
 
-      // Trigger thermal print on POS daemon
+      // If browser is running on the POS laptop, attempt instant local print (0ms)
+      fetch('http://127.0.0.1:5001/api/print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...order, manualReprint: false, auto: true })
+      }).catch(() => {});
+
+      // Trigger thermal print on remote POS daemon via Cloud
       this.pushToCloud(this.cloudTopic, {
         type: 'new_order',
-        order: order,
+        restaurant_id: 'restroiq',
+        restaurantId: 'restroiq',
+        order: { ...order, restaurantId: 'restroiq', restaurant_id: 'restroiq', manualReprint: false, auto: true },
+        manualReprint: false,
         timestamp: Date.now()
       }, {
-        'Title': `New Order Token #${tokStr}: Table ${order.tableNumber || '—'}`,
+        'Title': `New Order Token #${tokStr}: Table ${tbl}`,
         'Priority': '4',
         'Tags': 'bell,fork_and_knife'
       });

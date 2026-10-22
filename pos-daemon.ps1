@@ -5,7 +5,7 @@
 # ==============================================================================
 param(
     [string]$PrinterName = "",
-    [string]$CloudTopic = "subfresh_orders_live_v4_78637e1f"
+    [string]$CloudTopic = "restroiq_orders_live_sec786"
 )
 
 try {
@@ -112,7 +112,10 @@ if (-not $PrinterName -or ($availablePrinters.Count -gt 0 -and $availablePrinter
 
 # Auto-heal: Check and clear any stalled/errored print jobs in queue on startup
 try {
-    $stalledJobs = Get-PrintJob -PrinterName $PrinterName -ErrorAction SilentlyContinue | Where-Object { $_.JobStatus -match "Error|Retained|UserIntervention" }
+    $stalledJobs = Get-PrintJob -PrinterName $PrinterName -ErrorAction SilentlyContinue | Where-Object { 
+        $_.JobStatus -match "Error|Retained|UserIntervention" -or 
+        ($_.SubmittedTime -and ((Get-Date) - $_.SubmittedTime).TotalHours -gt 1)
+    }
     if ($stalledJobs) {
         $stalledJobs | Remove-PrintJob -ErrorAction SilentlyContinue
     }
@@ -342,28 +345,48 @@ function Save-PrintedIds {
     } catch {}
 }
 
-function ProcessOrder($order) {
-    if (-not $order -or -not $order.id) { return }
-    $oid = [string]$order.id
-    if ($printedIds.Contains($oid)) {
-        Write-Host "[Printer] Order #$oid was already printed. Skipping duplicate." -ForegroundColor DarkGray
+$printedTimes = @{}
+
+function ProcessOrder($order, [bool]$Force = $false) {
+    if (-not $order) { return }
+    $rawId = [string](if ($order.id) { $order.id } else { "" })
+    $baseId = [string](if ($order.originalId) { $order.originalId } else { $rawId })
+    $baseId = $baseId -replace '-P\d{4,}$', ''
+    if (-not $baseId) { return }
+
+    $isManualReprint = [bool]$order.manualReprint
+    $now = [DateTime]::UtcNow
+
+    # Strict deduplication: If already printed and not an explicit human manual reprint, DROP IT
+    if ($printedIds.Contains($baseId) -and -not $isManualReprint) {
+        Write-Host "[Printer] 🛑 Order #$baseId was already printed. Duplicate blocked." -ForegroundColor DarkYellow
         return
     }
 
+    # Anti-spam throttle: prevent double printing within 5 seconds even if clicked twice
+    if ($printedTimes.ContainsKey($baseId)) {
+        $lastPrint = $printedTimes[$baseId]
+        if (($now - $lastPrint).TotalSeconds -lt 5) {
+            Write-Host "[Printer] 🛑 Order #$baseId printed just $([int]($now - $lastPrint).TotalSeconds)s ago. Throttle blocked." -ForegroundColor DarkYellow
+            return
+        }
+    }
 
-    # Stale order protection (ignore any replayed orders older than 60 minutes)
-    if ($order.timestamp) {
+    # Stale order protection (ignore any replayed orders older than 60 minutes UNLESS manual reprint)
+    if (-not $isManualReprint -and $order.timestamp) {
         try {
             $dt = [DateTime]::Parse($order.timestamp)
-            $ageSec = ([DateTime]::UtcNow - $dt.ToUniversalTime()).TotalSeconds
+            $ageSec = ($now - $dt.ToUniversalTime()).TotalSeconds
             if ($ageSec -gt 3600) {
-                Write-Host "[Printer] Skipping old backlog order #$oid ($([int]$ageSec)s old)." -ForegroundColor DarkGray
+                Write-Host "[Printer] Skipping old backlog order #$baseId ($([int]$ageSec)s old)." -ForegroundColor DarkGray
                 return
             }
         } catch {}
     }
 
-    $printedIds.Add($oid) | Out-Null
+    $printedIds.Add($baseId) | Out-Null
+    $printedIds.Add($rawId) | Out-Null
+    $printedTimes[$baseId] = $now
     Save-PrintedIds
 
     $cust = if ($order.customerName) { $order.customerName } else { "Guest" }
@@ -373,7 +396,7 @@ function ProcessOrder($order) {
     $table = if ($order.tableNumber) { $order.tableNumber } else { "T-1" }
     $mode = if ($order.serviceMode) { $order.serviceMode.ToUpper() } else { "DINE-IN" }
 
-    $tokenNo = if ($order.tokenId) { [string]$order.tokenId } elseif ($order.id) { [string]$order.id } else { $oid }
+    $tokenNo = if ($order.tokenId) { [string]$order.tokenId } elseif ($order.id) { [string]$order.id } else { $baseId }
     if ($tokenNo -match '^\d+$') {
         $tokenNo = ("{0:D2}" -f [int]$tokenNo)
     }
@@ -395,15 +418,17 @@ function ProcessOrder($order) {
         }
     } catch {
         Write-Host "[Printer] ❌ Print error: $($_.Exception.Message)" -ForegroundColor Red
-        $printedIds.Remove($oid) | Out-Null
+        $printedIds.Remove($baseId) | Out-Null
+        $printedIds.Remove($rawId) | Out-Null
+        $printedTimes.Remove($baseId) | Out-Null
         Save-PrintedIds
     }
 }
 
 # ── 5. Cloud Real-Time Listener ───────────────────────────────────────────────
 while ($true) {
-    # Real-time stream (Strictly live orders only - no historical backlog)
-    $streamUrl = "$ActiveHost/$CloudTopic/json"
+    # Real-time stream (Strictly live orders only - listens to both active and mirror topics)
+    $streamUrl = "$ActiveHost/restroiq_orders_live_sec786,subfresh_orders_live_v4_78637e1f/json"
 
     try {
         Write-Host "[CloudSync] Connecting to real-time order stream ($ActiveHost)..." -ForegroundColor Cyan
@@ -425,8 +450,12 @@ while ($true) {
                 $entry = $line | ConvertFrom-Json
                 if ($entry.event -eq "message" -and $entry.message) {
                     $msg = $entry.message | ConvertFrom-Json
-                    if ($msg.type -eq "new_order" -and $msg.order) {
-                        ProcessOrder $msg.order
+                    if (($msg.type -eq "new_order" -or $msg.type -eq "print_order") -and $msg.order) {
+                        $isManual = [bool]$msg.manualReprint -or [bool]$msg.order.manualReprint
+                        if ($isManual) {
+                            $msg.order | Add-Member -MemberType NoteProperty -Name "manualReprint" -Value $true -Force
+                        }
+                        ProcessOrder -order $msg.order -Force $isManual
                     }
                 }
             } catch {
