@@ -1000,6 +1000,30 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
 // 10. GOOGLE PAY / UPI PAYMENT VERIFICATION (MANUAL DESK)
 // ==============================================================================
 
+router.get('/payments', authenticateToken, requirePermission('payments:verify'), (req, res) => {
+  const { status, limit = 100 } = req.query;
+  let query = `
+    SELECT p.*, o.order_number, o.token_number, o.customer_name, o.customer_phone, o.channel
+    FROM payments p
+    JOIN orders o ON p.order_id = o.id
+  `;
+  const params = [];
+  if (status) {
+    query += ' WHERE p.status = ? ';
+    params.push(status);
+  }
+  query += ' ORDER BY p.created_at DESC LIMIT ?';
+  params.push(parseInt(limit, 10));
+
+  const rows = db.prepare(query).all(...params);
+  res.json({
+    items: rows.map(r => ({
+      ...r,
+      amount_inr: r.amount_paise / 100
+    }))
+  });
+});
+
 router.get('/payments/pending', authenticateToken, requirePermission('payments:verify'), (req, res) => {
   const rows = db.prepare(`
     SELECT p.*, o.order_number, o.token_number, o.customer_name, o.customer_phone, o.channel
