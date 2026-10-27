@@ -10,9 +10,8 @@
   // ── 1. Configuration Sources ───────────────────────────────────────────────
   // Default config can be set here, injected via window, or set via localStorage
   const DEFAULT_CONFIG = {
-    // You can paste your Supabase credentials here or use localStorage
-    url: window.NOOR_SUPABASE_URL || "",
-    anonKey: window.NOOR_SUPABASE_KEY || ""
+    url: window.NOOR_SUPABASE_URL || "https://czajxtgwsxbrrymrhauz.supabase.co",
+    anonKey: window.NOOR_SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk"
   };
 
   function getActiveConfig() {
@@ -127,20 +126,19 @@
     }
 
     try {
-      const { data, error } = await supabaseClient
+      const { error } = await supabaseClient
         .from('newsletter_subscribers')
-        .insert([{ email: email.trim().toLowerCase() }])
-        .select();
+        .insert([{ email: email.trim().toLowerCase() }]);
 
       if (error) {
-        // If already subscribed
+        // If already subscribed (unique violation)
         if (error.code === '23505') {
           return { success: true, message: 'You are already subscribed to Noor Journal.' };
         }
         return { success: false, error: error.message };
       }
 
-      return { success: true, cloud: true, data };
+      return { success: true, cloud: true };
     } catch (err) {
       return { success: false, error: err.message };
     }
