@@ -9,7 +9,11 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'noor_optics.db');
+const isVercel = Boolean(process.env.VERCEL);
+const SOURCE_DB = path.join(__dirname, '..', 'data', 'noor_optics.db');
+const DB_PATH = isVercel
+  ? path.join('/tmp', 'noor_optics.db')
+  : SOURCE_DB;
 
 // Ensure data folder exists
 const dataDir = path.dirname(DB_PATH);
@@ -17,10 +21,24 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
+// On Vercel, copy pre-seeded database if available, or create fresh
+if (isVercel && !fs.existsSync(DB_PATH) && fs.existsSync(SOURCE_DB)) {
+  try {
+    fs.copyFileSync(SOURCE_DB, DB_PATH);
+  } catch (copyErr) {
+    console.warn('Could not copy initial db file to /tmp:', copyErr);
+  }
+}
+
 const db = new Database(DB_PATH);
 
 // Enable high-performance Write-Ahead Logging & Foreign Key enforcement
-db.pragma('journal_mode = WAL');
+try {
+  db.pragma('journal_mode = WAL');
+} catch (e) {
+  // In some cloud environments, fallback to DELETE journal mode
+  db.pragma('journal_mode = DELETE');
+}
 db.pragma('foreign_keys = ON');
 db.pragma('synchronous = NORMAL');
 
@@ -436,6 +454,16 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
     CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
   `);
+
+  const userRow = db.prepare('SELECT count(*) as c FROM users').get();
+  if (!userRow || userRow.c === 0) {
+    try {
+      const { seedDatabase } = require('./seed');
+      seedDatabase();
+    } catch (seedErr) {
+      console.warn('Auto-seed note:', seedErr.message);
+    }
+  }
 }
 
 initializeDatabase();
