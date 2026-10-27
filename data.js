@@ -1,975 +1,498 @@
-// ── Default Restaurant Data ────────────────────────────────────────────────
-// Updated with Sattva Tiffins authentic South Indian menu & Cool Drinks
-const DATA_VERSION = 11;
+/**
+ * data.js – Noor Optics Brand & Product Catalog
+ * Scandinavian-inspired luxury eyewear collection with 18 curated frames.
+ */
 
-const DEFAULT_DATA = {
-  _version: DATA_VERSION,
-  store: {
-    name: "Sattva Tiffins",
-    tagline: "Pure Taste · Freshly Made · Always",
-    logo: "images/sattva_logo.png",
-    address: "Sattva Tiffins, Main Road",
-    phone: "+91 98765 43210",
-    email: "contact@sattvatiffins.com",
-    primaryColor: "#021f4d",
-    secondaryColor: "#009743",
-    accentColor: "#FFC107",
-    tableNumber: "T-1",
-    gstNumber: "36AAAAA0000A1Z5",
-    currency: "₹",
-    openTime: "07:00",
-    closeTime: "22:30",
-    isOpen: true,
-    vegFilterEnabled: false,
-    searchEnabled: true,
-    bannerImage: "images/banner.jpg",
-    socialProof: "⭐ 4.9 (Pure Veg & Authentic)",
-    announcement: "✨ Pure Taste · Freshly Made Always · Good Food Brings People Together ✨"
-  },
-  categories: [
-    { 
-      id: "cat-1", 
-      name: "Idly, Wada & Bonda", 
-      icon: "🥞", 
-      image: "images/idly_plate.jpg", 
-      position: 0, 
-      description: "Steamed soft idlis, crunchy wadas, and golden bondas served with chutneys & sambar" 
-    },
-    { 
-      id: "cat-2", 
-      name: "Dosa", 
-      icon: "🫓", 
-      image: "images/masala_dosa.jpg", 
-      position: 1, 
-      description: "Crisp golden dosas, butter roasts, spicy karam, cheese and chef specials" 
-    },
-    { 
-      id: "cat-3", 
-      name: "Cool Drinks", 
-      icon: "🥤", 
-      image: "images/cool_drinks.png", 
-      position: 2, 
-      description: "Chilled soft drinks, energy drinks, soda cans & bottled mineral water" 
-    }
-  ],
-  items: [
-    // ── IDLY, WADA & BONDA (Items 1 to 16) ───────────────────────────────────
-    {
-      id: "item-1",
-      categoryId: "cat-1",
-      name: "IDLY (4 PCS)",
-      description: "Four pieces of steaming hot, ultra-soft and fluffy rice idlis served with coconut chutney and piping hot sambhar.",
-      price: 60,
-      image: "images/idly_plate.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 0,
-      tags: ["popular", "breakfast"],
-    },
-    {
-      id: "item-2",
-      categoryId: "cat-1",
-      name: "WADA (2 PCS)",
-      description: "Two crispy, golden deep-fried medu vadas made from spiced lentil batter, served with chutneys and hot sambhar.",
-      price: 60,
-      image: "images/medu_vada.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 1,
-      tags: ["crispy", "snack"],
-    },
-    {
-      id: "item-3",
-      categoryId: "cat-1",
-      name: "BONDA (4 PCS)",
-      description: "Four golden-crisp Mysore bondas with soft, airy interiors seasoned with cumin, ginger, and green chilies.",
-      price: 50,
-      image: "images/mysore_bonda.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 2,
-      tags: ["hot", "snack"],
-    },
-    {
-      id: "item-4",
-      categoryId: "cat-1",
-      name: "IDLY (2 PCS) + WADA (1 PC)",
-      description: "Classic popular combo featuring two soft idlis and one crispy medu vada with fresh coconut chutney and sambhar.",
-      price: 60,
-      image: "images/idli_vada_plate.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 3,
-      tags: ["combo", "bestseller"],
-    },
-    {
-      id: "item-5",
-      categoryId: "cat-1",
-      name: "IDLY (2 PCS) + BONDA (2 PCS)",
-      description: "Balanced tiffin combo of two soft steamed idlis paired with two freshly fried golden bondas.",
-      price: 60,
-      image: "images/idly_bonda.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 4,
-      tags: ["combo"],
-    },
-    {
-      id: "item-6",
-      categoryId: "cat-1",
-      name: "IDLY (1 PC) + WADA (1 PC) + BONDA (1 PC)",
-      description: "The ultimate trio plate! One soft idli, one crispy medu vada, and one hot bonda served with all dips.",
-      price: 60,
-      image: "images/idli_vada_trio.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 5,
-      tags: ["trio-combo", "popular"],
-    },
-    {
-      id: "item-7",
-      categoryId: "cat-1",
-      name: "GHEE IDLY",
-      description: "Steamed hot idlis generously drizzled with aromatic pure desi ghee, served with chutney and sambhar.",
-      price: 80,
-      image: "images/ghee_idly.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 6,
-      tags: ["desi-ghee", "special"],
-    },
-    {
-      id: "item-8",
-      categoryId: "cat-1",
-      name: "GUNTUR IDLY – BUTTON IDLY WITH GHEE (10 PCS)",
-      description: "Ten bite-sized button idlis tossed in spicy Andhra Guntur karam podi and drenched with pure fragrant ghee.",
-      price: 100,
-      image: "images/podi_idly.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 7,
-      tags: ["spicy", "guntur-special"],
-    },
-    {
-      id: "item-9",
-      categoryId: "cat-1",
-      name: "BUTTON IDLY (8 PCS)",
-      description: "Eight cute mini button idlis, steamed light and fluffy, served with traditional accompaniments.",
-      price: 60,
-      image: "images/idly_plate.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 8,
-      tags: ["mini-idli"],
-    },
-    {
-      id: "item-10",
-      categoryId: "cat-1",
-      name: "TAVA IDLY",
-      description: "Idlis pan-sautéed on a hot tawa with butter, mustard seeds, onions, curry leaves, and special tiffin spices.",
-      price: 80,
-      image: "images/ghee_idly.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: true,
-      position: 9,
-      tags: ["tava-special"],
-    },
-    {
-      id: "item-11",
-      categoryId: "cat-1",
-      name: "TAVA WADA",
-      description: "Crispy medu wadas freshly spiced and pan-tossed on hot tava with fragrant herbs and roasted masala.",
-      price: 90,
-      image: "images/tava_wada.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: true,
-      position: 10,
-      tags: ["tava-special"],
-    },
-    {
-      id: "item-12",
-      categoryId: "cat-1",
-      name: "TAVA BONDA",
-      description: "Crispy bondas spiced on tawa with chopped chilies, onions, and curry leaves for extra crunch and zest.",
-      price: 80,
-      image: "images/tava_bonda.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: true,
-      position: 11,
-      tags: ["tava-special"],
-    },
-    {
-      id: "item-13",
-      categoryId: "cat-1",
-      name: "SAMBHAR IDLY (2 PCS)",
-      description: "Two steaming hot idlis immersed and soaked deeply in a bowl of aromatic, slow-simmered vegetable sambhar.",
-      price: 60,
-      image: "images/sambhar_idly.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 12,
-      tags: ["comfort-food", "sambar-dip"],
-    },
-    {
-      id: "item-14",
-      categoryId: "cat-1",
-      name: "BUTTON SAMBHAR IDLY (6 PCS)",
-      description: "Six mini button idlis fully dipped and served in a bowl of piping hot spiced sambhar.",
-      price: 60,
-      image: "images/button_sambhar_idly.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 13,
-      tags: ["sambar-dip"],
-    },
-    {
-      id: "item-15",
-      categoryId: "cat-1",
-      name: "SAMBHAR WADA (1 PC)",
-      description: "Crisp medu vada submerged in hot sambhar, softening to a delicious melt-in-mouth texture.",
-      price: 60,
-      image: "images/sambhar_wada.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 14,
-      tags: ["sambar-dip"],
-    },
-    {
-      id: "item-16",
-      categoryId: "cat-1",
-      name: "BUTTON GHEE IDLY (8 PCS)",
-      description: "Eight bite-sized button idlis served with a rich pour of pure cow ghee, coconut chutney, and sambhar.",
-      price: 90,
-      image: "images/podi_idly.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 15,
-      tags: ["ghee-special"],
-    },
+'use strict';
 
-    // ── DOSA (Items 17 to 38) ────────────────────────────────────────────────
-    {
-      id: "item-17",
-      categoryId: "cat-2",
-      name: "PLAIN DOSA",
-      description: "Golden brown, ultra-thin and crispy fermented rice crepe roasted to perfection on cast iron.",
-      price: 40,
-      image: "images/plain_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 16,
-      tags: ["classic", "crispy"],
-    },
-    {
-      id: "item-18",
-      categoryId: "cat-2",
-      name: "BUTTER PLAIN DOSA",
-      description: "Crispy plain dosa roasted generously with fresh creamy butter for rich flavor and aroma.",
-      price: 60,
-      image: "images/butter_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 17,
-      tags: ["butter", "crispy"],
-    },
-    {
-      id: "item-19",
-      categoryId: "cat-2",
-      name: "MASALA DOSA",
-      description: "Crispy golden dosa folded around our signature spiced potato onion masala, served with 3 chutneys & sambhar.",
-      price: 60,
-      image: "images/masala_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 18,
-      tags: ["bestseller", "signature"],
-    },
-    {
-      id: "item-20",
-      categoryId: "cat-2",
-      name: "ONION DOSA",
-      description: "Crisp dosa topped with finely chopped caramelized red onions and fresh green chilies.",
-      price: 70,
-      image: "images/onion_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 19,
-      tags: ["crunchy", "onion"],
-    },
-    {
-      id: "item-21",
-      categoryId: "cat-2",
-      name: "UPMA MASALA DOSA",
-      description: "Unique Andhra style dosa stuffed with seasoned soft semolina upma and spiced potato filling.",
-      price: 60,
-      image: "images/upma_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 20,
-      tags: ["special", "filling"],
-    },
-    {
-      id: "item-22",
-      categoryId: "cat-2",
-      name: "UPMA BUTTER MASALA DOSA",
-      description: "Generous butter roasted dosa packed with savory upma and flavorful potato masala.",
-      price: 80,
-      image: "images/upma_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 21,
-      tags: ["butter", "upma"],
-    },
-    {
-      id: "item-23",
-      categoryId: "cat-2",
-      name: "ALOO MASALA DOSA",
-      description: "Hearty traditional dosa layered with spiced cumin tempered aloo sabzi and roasted golden.",
-      price: 60,
-      image: "images/masala_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 22,
-      tags: ["classic"],
-    },
-    {
-      id: "item-24",
-      categoryId: "cat-2",
-      name: "ALOO BUTTER MASALA DOSA",
-      description: "Aloo masala dosa loaded with creamy yellow butter melting right across the hot crepe.",
-      price: 80,
-      image: "images/butter_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 23,
-      tags: ["butter", "aloo"],
-    },
-    {
-      id: "item-25",
-      categoryId: "cat-2",
-      name: "GHEE KARAM DOSA – PLAIN",
-      description: "Coated with famous spicy red chilli garlic karam podi and roasted purely in fragrant desi ghee.",
-      price: 90,
-      image: "images/butter_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 24,
-      tags: ["spicy", "ghee-roast"],
-    },
-    {
-      id: "item-26",
-      categoryId: "cat-2",
-      name: "GHEE KARAM MASALA DOSA",
-      description: "Fiery spicy garlic karam podi smeared inside with potato masala and finished with rich ghee roast.",
-      price: 110,
-      image: "images/masala_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 25,
-      tags: ["bestseller", "spicy", "ghee"],
-    },
-    {
-      id: "item-27",
-      categoryId: "cat-2",
-      name: "BUTTER MASALA DOSA",
-      description: "Crispy dosa filled with potato bhaji, fried and basted in rich dollops of dairy butter.",
-      price: 80,
-      image: "images/butter_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 26,
-      tags: ["butter", "popular"],
-    },
-    {
-      id: "item-28",
-      categoryId: "cat-2",
-      name: "BUTTER MASALA CHEESE DOSA",
-      description: "Indulgent dosa roasted with butter, filled with potato masala, and blanketed with melted mozzarella cheese.",
-      price: 100,
-      image: "images/cheese_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 27,
-      tags: ["cheese", "cheesy"],
-    },
-    {
-      id: "item-29",
-      categoryId: "cat-2",
-      name: "BUTTER MASALA PANEER DOSA",
-      description: "Delicious butter roasted dosa filled with soft crumbled paneer cottage cheese and spiced potato filling.",
-      price: 100,
-      image: "images/cheese_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 28,
-      tags: ["paneer", "rich"],
-    },
-    {
-      id: "item-30",
-      categoryId: "cat-2",
-      name: "BUTTER MASALA CHEESE PANEER DOSA",
-      description: "Super loaded luxury dosa with both grated melting cheese and soft spiced paneer over buttery potato masala.",
-      price: 120,
-      image: "images/jini_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 29,
-      tags: ["chef-special", "cheese-paneer"],
-    },
-    {
-      id: "item-31",
-      categoryId: "cat-2",
-      name: "BUTTER CRÈME DOSA",
-      description: "Silky smooth crème blended with butter and roasted on a crispy crepe for a creamy, golden treat.",
-      price: 90,
-      image: "images/butter_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: true,
-      position: 30,
-      tags: ["creamy", "new"],
-    },
-    {
-      id: "item-32",
-      categoryId: "cat-2",
-      name: "SCHEZWAN MASALA DOSA",
-      description: "Zesty Indo-Chinese fusion dosa smeared with hot tangy Schezwan sauce, cabbage, capsicum, and potato filling.",
-      price: 80,
-      image: "images/schezwan_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 31,
-      tags: ["fusion", "spicy"],
-    },
-    {
-      id: "item-33",
-      categoryId: "cat-2",
-      name: "SCHEZWAN CHEESE DOSA",
-      description: "Fiery Schezwan sauce topped with abundant grated melting cheese on a crispy wafer-thin dosa.",
-      price: 100,
-      image: "images/cheese_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 32,
-      tags: ["fusion", "cheese"],
-    },
-    {
-      id: "item-34",
-      categoryId: "cat-2",
-      name: "SCHEZWAN BUTTER CHEESE DOSA",
-      description: "Rich dairy butter tossed with fiery Schezwan spices and oozy cheese, delivering mouth-watering crunch.",
-      price: 120,
-      image: "images/jini_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 33,
-      tags: ["fusion", "butter-cheese"],
-    },
-    {
-      id: "item-35",
-      categoryId: "cat-2",
-      name: "SCHEZWAN BUTTER PANEER DOSA",
-      description: "Savory paneer chunks tossed in spicy Schezwan butter masala, folded into a crisp crepe.",
-      price: 120,
-      image: "images/cheese_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 34,
-      tags: ["paneer", "schezwan"],
-    },
-    {
-      id: "item-36",
-      categoryId: "cat-2",
-      name: "SCHEZWAN BUTTER CHEESE PANEER DOSA",
-      description: "The complete fusion supreme: Schezwan gravy, butter, abundant grated cheese, and cottage cheese paneer.",
-      price: 140,
-      image: "images/jini_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 35,
-      tags: ["supreme", "loaded"],
-    },
-    {
-      id: "item-37",
-      categoryId: "cat-2",
-      name: "PIZZA DOSA",
-      description: "Fusion sensation cut into slices: Italian pizza sauce, diced bell peppers, sweet corn, onions, and baked mozzarella.",
-      price: 180,
-      image: "images/jini_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: true,
-      position: 36,
-      tags: ["pizza-fusion", "kids-favorite"],
-    },
-    {
-      id: "item-38",
-      categoryId: "cat-2",
-      name: "SATTVA SPECIAL DOSA",
-      description: "Grand master delicacy! Signature 3-fold roasted dosa packed with butter, cashew dry fruits, paneer, cheese, and chef special masala.",
-      price: 220,
-      image: "images/butter_dosa.jpg",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 37,
-      tags: ["grand-special", "chef-signature"],
-    },
-
-    // ── COOL DRINKS (Items 39 to 47) ─────────────────────────────────────────
-    {
-      id: "item-39",
-      categoryId: "cat-3",
-      name: "WATER BOTTLE",
-      description: "Sattva Fine Dining chilled packaged drinking water (500 ml), pure and refreshing.",
-      price: 10,
-      image: "images/water_bottle.png",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 38,
-      tags: ["water", "bottle", "sattva", "mineral-water", "chilled", "packaged-drinking-water"],
-    },
-    {
-      id: "item-40",
-      categoryId: "cat-3",
-      name: "MONSTER",
-      description: "Original Monster Energy drink can (350 ml) loaded with taurine, L-carnitine, and an intense energy boost.",
-      price: 125,
-      image: "images/monster_energy.png",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 39,
-      tags: ["monster", "energy-drink", "caffeine", "chilled", "can"],
-    },
-    {
-      id: "item-41",
-      categoryId: "cat-3",
-      name: "FANTA PET",
-      description: "Vibrant and refreshing orange fruit-flavored sparkling soda served ice-cold in a convenient PET bottle.",
-      price: 20,
-      image: "images/fanta_pet.png",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 40,
-      tags: ["fanta", "orange", "soda", "pet", "bottle", "chilled"],
-    },
-    {
-      id: "item-42",
-      categoryId: "cat-3",
-      name: "REDBULL PINK",
-      description: "Red Bull Pink Edition energy drink can featuring delicious wild berries flavour, served chilled.",
-      price: 125,
-      image: "images/redbull_pink.png",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: true,
-      position: 41,
-      tags: ["redbull", "pink", "berries", "energy-drink", "can", "red bull"],
-    },
-    {
-      id: "item-43",
-      categoryId: "cat-3",
-      name: "REDBULL ORIGINAL",
-      description: "The world-famous Red Bull Energy Drink can that vitalizes body and mind with taurine and B-vitamins.",
-      price: 125,
-      image: "images/redbull_original.png",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 42,
-      tags: ["redbull", "original", "energy-drink", "can", "red bull"],
-    },
-    {
-      id: "item-44",
-      categoryId: "cat-3",
-      name: "THUMBS UP CAN",
-      description: "Iconic fizzy, strong, and spicy cola in an ice-cold 300 ml aluminum can. Taste the thunder!",
-      price: 40,
-      image: "images/thums_up_can.png",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 43,
-      tags: ["thumbs-up", "thums-up", "cola", "can", "thunder", "soda"],
-    },
-    {
-      id: "item-45",
-      categoryId: "cat-3",
-      name: "THUMPS UP PET BOTTLE",
-      description: "Classic strong carbonated Thums Up cola served chilled in an easy-to-carry 250 ml PET bottle.",
-      price: 20,
-      image: "images/thums_up_pet.png",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 44,
-      tags: ["thumps-up", "thumbs-up", "thums-up", "cola", "pet", "bottle", "soda"],
-    },
-    {
-      id: "item-46",
-      categoryId: "cat-3",
-      name: "SPRITE CAN",
-      description: "Crisp, clean, and refreshing lemon-lime sparkling soft drink in an ice-cold 300 ml can.",
-      price: 40,
-      image: "images/sprite_can.png",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: false,
-      isNew: false,
-      position: 45,
-      tags: ["sprite", "lemon-lime", "can", "soda", "chilled"],
-    },
-    {
-      id: "item-47",
-      categoryId: "cat-3",
-      name: "COCACOLA CAN",
-      description: "Original crisp and classic Coca-Cola taste, perfectly carbonated and served chilled in a 300 ml can.",
-      price: 40,
-      image: "images/cocacola_can.png",
-      isVeg: true,
-      isAvailable: true,
-      isBestseller: true,
-      isNew: false,
-      position: 46,
-      tags: ["cocacola", "coca-cola", "coke", "can", "cola", "chilled"],
-    }
-  ]
+const NOOR_BRAND = {
+  name: "Noor Optics",
+  descriptor: "EYEGLASSES",
+  tagline: "Curated Scandinavian Eyewear & Precision Lenses",
+  founded: "2024",
+  currency: "₹",
+  freeShippingThreshold: 1999,
+  contactPhone: "+91 98765 43210",
+  contactEmail: "concierge@nooroptics.com",
+  storeAddress: "Noor Optics Flagship Boutique, Indiranagar, Bengaluru",
+  workingHours: "10:00 AM – 09:00 PM (Daily)",
+  warrantyText: "2-Year Comprehensive Frame & Coating Warranty",
+  shippingText: "Free Express Delivery on orders above ₹1,999"
 };
 
-// ── Permanent Orders Storage Vault ─────────────────────────────────────────
-const ORDERS_VAULT_KEY = 'sattva_permanent_orders_vault';
-const ORDERS_BACKUP_KEY = 'sattva_orders_backup_archive';
+const LENS_PACKAGES = [
+  {
+    id: "lens-bluecut",
+    name: "Blue-Light Filter (Computer & Screen)",
+    tag: "Standard",
+    price: 0,
+    description: "Blocks 99% harmful HEV blue light with zero color distortion."
+  },
+  {
+    id: "lens-antiglare",
+    name: "1.60 High-Index Anti-Reflective",
+    tag: "Popular",
+    price: 699,
+    description: "Ultra-thin, hydrophobic, smudge & scratch resistant multi-coat."
+  },
+  {
+    id: "lens-progressive",
+    name: "Digital Free-Form Progressive",
+    tag: "Precision",
+    price: 1499,
+    description: "Seamless corridor transition from reading to distance vision."
+  },
+  {
+    id: "lens-photochromic",
+    name: "Adaptive Photochromic Transition",
+    tag: "All-Day",
+    price: 1199,
+    description: "Rapidly darkens into grey sunglasses outdoors in UV sunlight."
+  }
+];
 
-function isDummyOrder(o) {
-  if (!o) return true;
-  const name = String(o.customerName || '').toLowerCase().trim();
-  if (name === 'noname' || name === 'dummy' || name === 'test order' || name === 'test') return true;
-  if (String(o.id || '').startsWith('ORD-TEST-') || String(o.id || '').startsWith('ORD-E2E-')) return true;
-  return false;
-}
-if (typeof window !== 'undefined') window.isDummyOrder = isDummyOrder;
+const EYEWEAR_CATALOG = [
+  {
+    id: "noor-01",
+    name: "The Stockholm Noir",
+    collection: "Nordic Minimalist",
+    price: 3499,
+    originalPrice: 4299,
+    badge: "Bestseller",
+    shape: "Rectangular",
+    material: "Japanese Titanium",
+    fit: "Regular",
+    category: "Optical",
+    rating: 4.9,
+    reviewsCount: 142,
+    image: "images/stockholm_noir.jpg",
+    colors: [
+      { name: "Matte Black", hex: "#1A1A1A" },
+      { name: "Gunmetal", hex: "#4A4D52" },
+      { name: "Brushed Silver", hex: "#D1D5DB" }
+    ],
+    dimensions: { lens: "52mm", bridge: "18mm", temple: "145mm", weight: "14g" },
+    description: "An architectural masterpiece engineered from aerospace-grade Japanese titanium. Featherweight rectangular profile with custom barrel hinges and medical-grade silicone nose pads for effortless all-day wear."
+  },
+  {
+    id: "noor-02",
+    name: "The Copenhagen Round",
+    collection: "Atelier Heritage",
+    price: 3899,
+    originalPrice: 4799,
+    badge: "New Arrival",
+    shape: "Round",
+    material: "Italian Bio-Acetate",
+    fit: "Narrow",
+    category: "Optical",
+    rating: 5.0,
+    reviewsCount: 88,
+    image: "images/copenhagen_round.jpg",
+    colors: [
+      { name: "Dark Havana", hex: "#5C3A21" },
+      { name: "Classic Tortoise", hex: "#8A5A36" },
+      { name: "Onyx Black", hex: "#151515" }
+    ],
+    dimensions: { lens: "48mm", bridge: "21mm", temple: "142mm", weight: "19g" },
+    description: "Timeless mid-century round silhouette featuring hand-beveled Italian bio-acetate and our signature keyhole bridge. Finished with hand-riveted hinges and wire-core temple detailing."
+  },
+  {
+    id: "noor-03",
+    name: "The Oslo Crystal",
+    collection: "Clear Architectural",
+    price: 3699,
+    originalPrice: 4499,
+    badge: "Trending",
+    shape: "Square",
+    material: "Crystal Bio-Acetate",
+    fit: "Regular",
+    category: "Blue-Light",
+    rating: 4.8,
+    reviewsCount: 104,
+    image: "images/oslo_crystal.jpg",
+    colors: [
+      { name: "Champagne Crystal", hex: "#F3EDE2" },
+      { name: "Pure Clear", hex: "#E8EAEF" },
+      { name: "Smoky Quartz", hex: "#8E8882" }
+    ],
+    dimensions: { lens: "51mm", bridge: "19mm", temple: "145mm", weight: "21g" },
+    description: "Exquisite hand-polished translucent bio-acetate revealing an intricately engraved golden titanium core wire. The square silhouette flatters round and oval face profiles with effortless poise."
+  },
+  {
+    id: "noor-04",
+    name: "The Kyoto Havana",
+    collection: "Atelier Heritage",
+    price: 4199,
+    originalPrice: 5199,
+    badge: "Handcrafted",
+    shape: "Round",
+    material: "Italian Bio-Acetate",
+    fit: "Regular",
+    category: "Optical",
+    rating: 4.9,
+    reviewsCount: 167,
+    image: "images/kyoto_havana.jpg",
+    colors: [
+      { name: "Honey Tortoise", hex: "#C68239" },
+      { name: "Deep Amber", hex: "#8E4B17" },
+      { name: "Chestnut", hex: "#4B2810" }
+    ],
+    dimensions: { lens: "49mm", bridge: "20mm", temple: "144mm", weight: "22g" },
+    description: "Mazzucchelli acetate cured for 90 days before precision cutting and hand tumbling for 72 hours. Rich amber marbling with dual dot-rivets on each endpiece."
+  },
+  {
+    id: "noor-05",
+    name: "The Milan Aureum",
+    collection: "Titanium Wire",
+    price: 4599,
+    originalPrice: 5499,
+    badge: "Luxury Edition",
+    shape: "Aviator",
+    material: "Japanese Titanium",
+    fit: "Wide",
+    category: "Sun Optical",
+    rating: 5.0,
+    reviewsCount: 76,
+    image: "images/milan_aureum.jpg",
+    colors: [
+      { name: "Champagne Gold", hex: "#D4AF37" },
+      { name: "Rose Gold", hex: "#B76E79" },
+      { name: "Brushed Platinum", hex: "#E5E4E2" }
+    ],
+    dimensions: { lens: "56mm", bridge: "16mm", temple: "145mm", weight: "13g" },
+    description: "A refined reinterpretation of the classic double-bridge pilot frame. Milled from single-sheet beta-titanium with hand-engraved filigree motifs along the eyewire and temples."
+  },
+  {
+    id: "noor-06",
+    name: "The Zurich Titanium",
+    collection: "Titanium Wire",
+    price: 4299,
+    originalPrice: 5199,
+    badge: "Ultralight",
+    shape: "Rectangular",
+    material: "Japanese Titanium",
+    fit: "Regular",
+    category: "Optical",
+    rating: 4.8,
+    reviewsCount: 92,
+    image: "images/zurich_titanium.jpg",
+    colors: [
+      { name: "Matte Silver", hex: "#C0C0C0" },
+      { name: "Titanium Grey", hex: "#63666A" },
+      { name: "Satin Black", hex: "#222222" }
+    ],
+    dimensions: { lens: "53mm", bridge: "18mm", temple: "148mm", weight: "12g" },
+    description: "Weighing only 12 grams, the Zurich embodies Swiss reductionist principles. Features an innovative hinge with zero screws, eliminating mechanical wear and looseness forever."
+  },
+  {
+    id: "noor-07",
+    name: "The Berlin Hex",
+    collection: "Geometric Series",
+    price: 3799,
+    originalPrice: 4599,
+    badge: "Design Award",
+    shape: "Geometric",
+    material: "Stainless Steel",
+    fit: "Regular",
+    category: "Optical",
+    rating: 4.9,
+    reviewsCount: 115,
+    image: "images/berlin_hex.jpg",
+    colors: [
+      { name: "Gunmetal Steel", hex: "#3A3D40" },
+      { name: "Matte Gold", hex: "#CFB53B" },
+      { name: "Raw Silver", hex: "#DCDCDC" }
+    ],
+    dimensions: { lens: "50mm", bridge: "20mm", temple: "145mm", weight: "16g" },
+    description: "Bauhaus-inspired hexagonal geometry that sharpens facial contours. Crafted from cold-rolled German medical stainless steel for incredible structural resilience with thin elegance."
+  },
+  {
+    id: "noor-08",
+    name: "The Helsinki Quad",
+    collection: "Nordic Minimalist",
+    price: 3999,
+    originalPrice: 4899,
+    badge: "Bestseller",
+    shape: "Square",
+    material: "Italian Bio-Acetate",
+    fit: "Wide",
+    category: "Optical",
+    rating: 4.9,
+    reviewsCount: 138,
+    image: "images/helsinki_quad.jpg",
+    colors: [
+      { name: "Forest Olive", hex: "#4B5320" },
+      { name: "Matte Black", hex: "#181818" },
+      { name: "Deep Cognac", hex: "#7B3F00" }
+    ],
+    dimensions: { lens: "53mm", bridge: "19mm", temple: "146mm", weight: "24g" },
+    description: "Commanding architectural square frame cut from 8mm thick Italian bio-acetate with sculpted inner bevels that reduce weight while preserving a bold, confident silhouette."
+  },
+  {
+    id: "noor-09",
+    name: "The Reykjavik Pilot",
+    collection: "Titanium Wire",
+    price: 4399,
+    originalPrice: 5299,
+    badge: "New Arrival",
+    shape: "Aviator",
+    material: "Japanese Titanium",
+    fit: "Regular",
+    category: "Sun Optical",
+    rating: 4.7,
+    reviewsCount: 64,
+    image: "images/reykjavik_pilot.jpg",
+    colors: [
+      { name: "Graphite", hex: "#41424C" },
+      { name: "Brushed Gold", hex: "#D4AF37" },
+      { name: "Pure Titanium", hex: "#A8A9AD" }
+    ],
+    dimensions: { lens: "55mm", bridge: "17mm", temple: "145mm", weight: "14g" },
+    description: "Subtle teardrop contours paired with an ultra-slim top stabilization bar. Perfect balance between retro aviator heritage and futuristic Nordic clarity."
+  },
+  {
+    id: "noor-10",
+    name: "The Vienna Silhouette",
+    collection: "Atelier Heritage",
+    price: 4199,
+    originalPrice: 4999,
+    badge: "Signature",
+    shape: "Cat-Eye",
+    material: "Italian Bio-Acetate",
+    fit: "Narrow",
+    category: "Optical",
+    rating: 5.0,
+    reviewsCount: 112,
+    image: "images/vienna_silhouette.jpg",
+    colors: [
+      { name: "Burgundy Wine", hex: "#5C1D24" },
+      { name: "Midnight Black", hex: "#111111" },
+      { name: "Milky Tortoise", hex: "#9E7B5A" }
+    ],
+    dimensions: { lens: "51mm", bridge: "18mm", temple: "140mm", weight: "20g" },
+    description: "Softly uplifted cat-eye brow line that adds gentle lift to the face without dramatic excess. Milled in northern Italy with 5-barrel German OBE hinges."
+  },
+  {
+    id: "noor-11",
+    name: "The Amber Arch",
+    collection: "Clear Architectural",
+    price: 3599,
+    originalPrice: 4399,
+    badge: "Trending",
+    shape: "Round",
+    material: "Crystal Bio-Acetate",
+    fit: "Regular",
+    category: "Optical",
+    rating: 4.8,
+    reviewsCount: 89,
+    image: "images/amber_arch.jpg",
+    colors: [
+      { name: "Honey Amber", hex: "#D68A36" },
+      { name: "Caramel Clear", hex: "#B87333" },
+      { name: "Crystal Ice", hex: "#E5E9EC" }
+    ],
+    dimensions: { lens: "49mm", bridge: "20mm", temple: "145mm", weight: "20g" },
+    description: "Glowing honey-amber translucent acetate that catches the light like molten glass. Features balanced round proportions that harmonize effortlessly with casual and formal attire."
+  },
+  {
+    id: "noor-12",
+    name: "The Tokyo Steel",
+    collection: "Titanium Wire",
+    price: 4499,
+    originalPrice: 5499,
+    badge: "Ultralight",
+    shape: "Round",
+    material: "Japanese Titanium",
+    fit: "Narrow",
+    category: "Blue-Light",
+    rating: 4.9,
+    reviewsCount: 147,
+    image: "images/tokyo_steel.jpg",
+    colors: [
+      { name: "Satin Black", hex: "#1C1C1C" },
+      { name: "Antique Bronze", hex: "#6E4D25" },
+      { name: "Polished Silver", hex: "#C5C6C7" }
+    ],
+    dimensions: { lens: "47mm", bridge: "21mm", temple: "145mm", weight: "11g" },
+    description: "Handcrafted in Sabae, Japan — the optical capital of the world. Pure Japanese beta-titanium wire rim with flexible temple tips that naturally curve behind the ears without pressure points."
+  },
+  {
+    id: "noor-13",
+    name: "The Geneva Feather",
+    collection: "Titanium Wire",
+    price: 4699,
+    originalPrice: 5699,
+    badge: "Ultralight",
+    shape: "Oval",
+    material: "Japanese Titanium",
+    fit: "Narrow",
+    category: "Optical",
+    rating: 4.8,
+    reviewsCount: 53,
+    image: "images/zurich_titanium.jpg",
+    colors: [
+      { name: "Frosted Titanium", hex: "#A0A2A6" },
+      { name: "Matte Gold", hex: "#D8C078" },
+      { name: "Midnight Navy", hex: "#1E2A3A" }
+    ],
+    dimensions: { lens: "49mm", bridge: "19mm", temple: "145mm", weight: "10g" },
+    description: "An ethereal 10-gram oval rimless-inspired design. Engineered for professionals seeking an invisible optical presence paired with uncompromising optical clarity."
+  },
+  {
+    id: "noor-14",
+    name: "The Malmö Olive",
+    collection: "Nordic Minimalist",
+    price: 3699,
+    originalPrice: 4399,
+    badge: "Handcrafted",
+    shape: "Square",
+    material: "Italian Bio-Acetate",
+    fit: "Regular",
+    category: "Optical",
+    rating: 4.9,
+    reviewsCount: 79,
+    image: "images/helsinki_quad.jpg",
+    colors: [
+      { name: "Muted Olive", hex: "#556B2F" },
+      { name: "Charcoal Slate", hex: "#2F4F4F" },
+      { name: "Black Sand", hex: "#232B2B" }
+    ],
+    dimensions: { lens: "51mm", bridge: "20mm", temple: "145mm", weight: "22g" },
+    description: "Understated square proportions rendered in custom-cast matte olive bio-acetate. Designed in Sweden with clean lines and comfortable saddle bridge distribution."
+  },
+  {
+    id: "noor-15",
+    name: "The Paris Oval",
+    collection: "Atelier Heritage",
+    price: 3899,
+    originalPrice: 4699,
+    badge: "New Arrival",
+    shape: "Oval",
+    material: "Stainless Steel",
+    fit: "Narrow",
+    category: "Optical",
+    rating: 4.7,
+    reviewsCount: 42,
+    image: "images/copenhagen_round.jpg",
+    colors: [
+      { name: "Rose Bronze", hex: "#8C584A" },
+      { name: "Champagne", hex: "#E6D5AC" },
+      { name: "Matte Black", hex: "#1A1A1A" }
+    ],
+    dimensions: { lens: "48mm", bridge: "20mm", temple: "142mm", weight: "15g" },
+    description: "Chic Parisian silhouette blending soft oval curves with sharp structural bridge architecture. Perfect for smaller facial profiles seeking refined intellectual flair."
+  },
+  {
+    id: "noor-16",
+    name: "The Arctic Mist",
+    collection: "Clear Architectural",
+    price: 3799,
+    originalPrice: 4599,
+    badge: "Trending",
+    shape: "Rectangular",
+    material: "Crystal Bio-Acetate",
+    fit: "Regular",
+    category: "Blue-Light",
+    rating: 4.9,
+    reviewsCount: 97,
+    image: "images/oslo_crystal.jpg",
+    colors: [
+      { name: "Frosted Smoke", hex: "#708090" },
+      { name: "Crystal Clear", hex: "#F5F5F7" },
+      { name: "Pale Sage", hex: "#9CAF88" }
+    ],
+    dimensions: { lens: "52mm", bridge: "18mm", temple: "146mm", weight: "20g" },
+    description: "Frosted semi-matte crystal acetate mimicking ice formations in the northern fjords. Fitted with premium zero-power Blue-Light Shield lenses for screen protection."
+  },
+  {
+    id: "noor-17",
+    name: "The Bergen Dual",
+    collection: "Nordic Minimalist",
+    price: 4299,
+    originalPrice: 5199,
+    badge: "Limited Edition",
+    shape: "Square",
+    material: "Japanese Titanium",
+    fit: "Wide",
+    category: "Optical",
+    rating: 5.0,
+    reviewsCount: 68,
+    image: "images/stockholm_noir.jpg",
+    colors: [
+      { name: "Matte Black & Gold", hex: "#222222" },
+      { name: "Silver & Navy", hex: "#3A4D6B" },
+      { name: "Titanium & Havana", hex: "#634731" }
+    ],
+    dimensions: { lens: "54mm", bridge: "19mm", temple: "148mm", weight: "17g" },
+    description: "A dual-material combination frame fusing lightweight titanium rim inserts with sculpted matte bio-acetate brows. Contemporary luxury with extraordinary structural strength."
+  },
+  {
+    id: "noor-18",
+    name: "The Bordeaux Edge",
+    collection: "Atelier Heritage",
+    price: 4099,
+    originalPrice: 4899,
+    badge: "Signature",
+    shape: "Cat-Eye",
+    material: "Italian Bio-Acetate",
+    fit: "Regular",
+    category: "Sun Optical",
+    rating: 4.8,
+    reviewsCount: 81,
+    image: "images/vienna_silhouette.jpg",
+    colors: [
+      { name: "Bordeaux Merlot", hex: "#4A1521" },
+      { name: "Espresso", hex: "#2B1B17" },
+      { name: "Tiger Tortoise", hex: "#8B5A2B" }
+    ],
+    dimensions: { lens: "52mm", bridge: "19mm", temple: "142mm", weight: "21g" },
+    description: "Deep burgundy hues polished to a mirror gloss. Sculpted bevels catch ambient light across the cheekbones, providing a tailored European optical look."
+  }
+];
 
-function loadPermanentOrders() {
-  const ordersMap = new Map();
-  // 1. Vault key
-  try {
-    const raw = localStorage.getItem(ORDERS_VAULT_KEY);
-    if (raw) {
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) {
-        arr.forEach(o => { if (o && (o.id || o.tokenId) && !isDummyOrder(o)) ordersMap.set(String(o.id || o.tokenId), o); });
-      }
-    }
-  } catch (e) {}
-  // 2. Backup archive
-  try {
-    const raw = localStorage.getItem(ORDERS_BACKUP_KEY);
-    if (raw) {
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) {
-        arr.forEach(o => { if (o && (o.id || o.tokenId) && !isDummyOrder(o) && !ordersMap.has(String(o.id || o.tokenId))) ordersMap.set(String(o.id || o.tokenId), o); });
-      }
-    }
-  } catch (e) {}
-  // 3. restaurantData.orders
-  try {
-    const raw = localStorage.getItem('restaurantData');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed.orders)) {
-        parsed.orders.forEach(o => { if (o && (o.id || o.tokenId) && !isDummyOrder(o) && !ordersMap.has(String(o.id || o.tokenId))) ordersMap.set(String(o.id || o.tokenId), o); });
-      }
-    }
-  } catch (e) {}
+// ── State Persistence Helpers ─────────────────────────────────────────────────
+const STORAGE_KEYS = {
+  CART: "noor_optics_cart_v1",
+  WISHLIST: "noor_optics_wishlist_v1",
+  SEARCH_RECENT: "noor_optics_recent_queries_v1"
+};
 
-  return Array.from(ordersMap.values());
-}
-if (typeof window !== 'undefined') window.loadPermanentOrders = loadPermanentOrders;
-
-function savePermanentOrders(orders) {
-  if (!Array.isArray(orders)) return;
-  const clean = orders.filter(o => !isDummyOrder(o));
+function getSavedCart() {
   try {
-    const json = JSON.stringify(clean);
-    localStorage.setItem(ORDERS_VAULT_KEY, json);
-    localStorage.setItem(ORDERS_BACKUP_KEY, json);
+    const raw = localStorage.getItem(STORAGE_KEYS.CART);
+    return raw ? JSON.parse(raw) : [];
   } catch (e) {
-    console.warn('[OrdersVault] Failed to write orders vault:', e);
+    return [];
   }
 }
-if (typeof window !== 'undefined') window.savePermanentOrders = savePermanentOrders;
 
-// ── Storage Helpers ────────────────────────────────────────────────────────
-function loadData() {
-  const existingOrders = loadPermanentOrders();
-  let result = null;
-
+function saveCart(cartItems) {
   try {
-    const raw = localStorage.getItem('restaurantData');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        if (Array.isArray(parsed.categories) && Array.isArray(parsed.items) && parsed.items.length > 0) {
-          result = parsed;
-        }
-      }
-    }
-  } catch (e) { /* ignore */ }
-
-  if (!result) {
-    result = structuredClone(DEFAULT_DATA);
-  }
-
-  // Migration: upgrade all item images to fast local assets
-  if (result.items && Array.isArray(result.items)) {
-    const localMap = {"item-1":"images/idly_plate.jpg","item-2":"images/medu_vada.jpg","item-3":"images/mysore_bonda.jpg","item-4":"images/idli_vada_plate.jpg","item-5":"images/idly_bonda.jpg","item-6":"images/idli_vada_trio.jpg","item-7":"images/ghee_idly.jpg","item-8":"images/podi_idly.jpg","item-9":"images/idly_plate.jpg","item-10":"images/ghee_idly.jpg","item-11":"images/tava_wada.jpg","item-12":"images/tava_bonda.jpg","item-13":"images/sambhar_idly.jpg","item-14":"images/button_sambhar_idly.jpg","item-15":"images/sambhar_wada.jpg","item-16":"images/podi_idly.jpg","item-17":"images/plain_dosa.jpg","item-18":"images/butter_dosa.jpg","item-19":"images/masala_dosa.jpg","item-20":"images/onion_dosa.jpg","item-21":"images/upma_dosa.jpg","item-22":"images/upma_dosa.jpg","item-23":"images/masala_dosa.jpg","item-24":"images/butter_dosa.jpg","item-25":"images/butter_dosa.jpg","item-26":"images/masala_dosa.jpg","item-27":"images/butter_dosa.jpg","item-28":"images/cheese_dosa.jpg","item-29":"images/cheese_dosa.jpg","item-30":"images/jini_dosa.jpg","item-31":"images/butter_dosa.jpg","item-32":"images/schezwan_dosa.jpg","item-33":"images/cheese_dosa.jpg","item-34":"images/jini_dosa.jpg","item-35":"images/cheese_dosa.jpg","item-36":"images/jini_dosa.jpg","item-37":"images/jini_dosa.jpg","item-38":"images/butter_dosa.jpg"};
-    result.items.forEach(it => {
-      if (localMap[it.id]) it.image = localMap[it.id];
-      else if (it.image && (it.image.includes('wikimedia') || it.image.includes('unsplash'))) {
-        if (it.categoryId === 'cat-1') it.image = 'images/idly_plate.jpg';
-        else if (it.categoryId === 'cat-2') it.image = 'images/masala_dosa.jpg';
-      }
-    });
-    if (result.store) {
-      if (!result.store.logo || result.store.logo.includes('wikimedia')) result.store.logo = 'images/sattva_logo.png';
-      if (!result.store.bannerImage || result.store.bannerImage.includes('unsplash')) result.store.bannerImage = 'images/banner.jpg';
-    }
-  }
-
-  // Migration: ensure cool drinks category and items exist
-  if (result.categories && result.items) {
-    const hasCoolDrinks = result.categories.some(c => c.id === 'cat-3' || (c.name && c.name.toLowerCase().includes('cool drink')));
-    if (!hasCoolDrinks) {
-      const coolCat = DEFAULT_DATA.categories.find(c => c.id === 'cat-3');
-      if (coolCat) result.categories.push(structuredClone(coolCat));
-    } else {
-      const existingCat = result.categories.find(c => c.id === 'cat-3' || (c.name && c.name.toLowerCase().includes('cool drink')));
-      if (existingCat) {
-        existingCat.id = 'cat-3';
-        existingCat.name = 'Cool Drinks';
-        existingCat.icon = '🥤';
-        existingCat.image = 'images/cool_drinks.png';
-      }
-    }
-    const coolItems = DEFAULT_DATA.items.filter(it => it.categoryId === 'cat-3');
-    for (const ci of coolItems) {
-      const existingIdx = result.items.findIndex(it => it.id === ci.id || (it.name && it.name.toUpperCase() === ci.name.toUpperCase()));
-      if (existingIdx === -1) {
-        result.items.push(structuredClone(ci));
-      } else {
-        result.items[existingIdx].image = ci.image;
-        result.items[existingIdx].price = ci.price;
-        result.items[existingIdx].categoryId = 'cat-3';
-        result.items[existingIdx].description = ci.description;
-        result.items[existingIdx].tags = ci.tags;
-      }
-    }
-  }
-
-  // SECURE ORDERS PRESERVATION:
-  // Merge orders from permanent vault and result so NO order is EVER deleted automatically
-  const ordersMap = new Map();
-  existingOrders.forEach(o => { if (o && (o.id || o.tokenId) && !isDummyOrder(o)) ordersMap.set(String(o.id || o.tokenId), o); });
-  if (Array.isArray(result.orders)) {
-    result.orders.forEach(o => { if (o && (o.id || o.tokenId) && !isDummyOrder(o)) ordersMap.set(String(o.id || o.tokenId), o); });
-  }
-
-  result.orders = Array.from(ordersMap.values());
-  result._version = DATA_VERSION;
-
-  savePermanentOrders(result.orders);
-  try {
-    localStorage.setItem('restaurantData', JSON.stringify(result));
+    localStorage.setItem(STORAGE_KEYS.CART, JSON.stringify(cartItems));
   } catch (e) {}
-
-  return result;
 }
 
-function saveData(data) {
-  data._version = DATA_VERSION;
-  if (Array.isArray(data.orders)) {
-    savePermanentOrders(data.orders);
-  }
+function getSavedWishlist() {
   try {
-    localStorage.setItem('restaurantData', JSON.stringify(data));
+    const raw = localStorage.getItem(STORAGE_KEYS.WISHLIST);
+    return raw ? JSON.parse(raw) : [];
   } catch (e) {
-    console.warn('[Storage] Failed to save restaurantData:', e);
+    return [];
   }
 }
 
-function resetData() {
-  // CRITICAL: NEVER wipe user orders on reset!
-  const preservedOrders = loadPermanentOrders();
-  const fresh = structuredClone(DEFAULT_DATA);
-  fresh.orders = preservedOrders;
-  saveData(fresh);
-  return fresh;
+function saveWishlist(wishlistIds) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.WISHLIST, JSON.stringify(wishlistIds));
+  } catch (e) {}
 }
 
-function generateId(prefix = 'id') {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function getCategoryDisplayName(cat) {
-  if (!cat) return '';
-  const raw = typeof cat === 'string' ? cat : (cat.name || '');
-  let name = raw.trim();
-  if (typeof cat === 'object' && cat.icon && name.startsWith(cat.icon)) {
-    name = name.slice(cat.icon.length).trim();
-  }
-  name = name.replace(/^[\p{Extended_Pictographic}\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]+\s*/u, '').trim();
-  return name || raw;
-}
-if (typeof window !== 'undefined') window.getCategoryDisplayName = getCategoryDisplayName;
-
-// ── Shared Utilities ───────────────────────────────────────────────────────
-function getCustomizations(item) {
-  if (!item) return [];
-  const c = item.customizations;
-  if (!c) return [];
-  if (Array.isArray(c)) {
-    return c.map(s => typeof s === 'string' ? s.trim() : (s.name || String(s)).trim()).filter(Boolean);
-  }
-  if (typeof c === 'string') {
-    return c.split(',').map(s => s.trim()).filter(Boolean);
-  }
-  return [];
-}
-if (typeof window !== 'undefined') window.getCustomizations = getCustomizations;
-
-function escHtml(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-if (typeof window !== 'undefined') window.escHtml = escHtml;
-
-function parseOrderItems(items) {
-  if (!items) return [];
-  if (Array.isArray(items)) return items.filter(Boolean);
-  if (typeof items === 'string') {
-    const trimmed = items.trim();
-    if (!trimmed) return [];
-    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (Array.isArray(parsed)) return parsed.filter(Boolean);
-        if (parsed && typeof parsed === 'object') {
-          if (Array.isArray(parsed.items)) return parsed.items.filter(Boolean);
-          if (Array.isArray(parsed.data)) return parsed.data.filter(Boolean);
-          if (Array.isArray(parsed.list)) return parsed.list.filter(Boolean);
-          return Object.values(parsed).filter(Boolean);
-        }
-      } catch (e) {}
-    }
-    // Handle comma-separated text lines like '2x Masala Dosa, 1x Idly'
-    return trimmed.split(',').map(part => {
-      const pTrim = part.trim();
-      const match = pTrim.match(/^(\d+)\s*[x×*]\s*(.+)$/i) || pTrim.match(/^(.+?)\s*\([x×*]?\s*(\d+)\s*(?:pcs?|pc)?\)$/i);
-      if (match) {
-        return { name: match[2].trim(), qty: parseInt(match[1], 10) || 1, price: 0 };
-      }
-      return { name: pTrim, qty: 1, price: 0 };
-    }).filter(it => it.name);
-  }
-  if (typeof items === 'object') {
-    if (Array.isArray(items.items)) return items.items.filter(Boolean);
-    if (Array.isArray(items.data)) return items.data.filter(Boolean);
-    if (Array.isArray(items.list)) return items.list.filter(Boolean);
-    return Object.values(items).filter(Boolean);
-  }
-  return [];
-}
-if (typeof window !== 'undefined') window.parseOrderItems = parseOrderItems;
-
-if (typeof window !== 'undefined') {
-  window.DEFAULT_DATA = DEFAULT_DATA;
-  window.loadData = loadData;
-  window.saveData = saveData;
-  window.resetData = resetData;
-  window.generateId = generateId;
-}
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { DEFAULT_DATA, loadData, saveData, resetData, generateId, loadPermanentOrders, savePermanentOrders, isDummyOrder };
+if (typeof window !== "undefined") {
+  window.NOOR_BRAND = NOOR_BRAND;
+  window.EYEWEAR_CATALOG = EYEWEAR_CATALOG;
+  window.LENS_PACKAGES = LENS_PACKAGES;
+  window.getSavedCart = getSavedCart;
+  window.saveCart = saveCart;
+  window.getSavedWishlist = getSavedWishlist;
+  window.saveWishlist = saveWishlist;
 }

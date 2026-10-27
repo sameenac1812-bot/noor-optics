@@ -1,12 +1,12 @@
 {
-  "name": "Sattva Tiffins",
-  "short_name": "Sattva",
-  "description": "Pure Taste, Freshly Made Always at Sattva Tiffins.",
+  "name": "Noor Optics - Premium Eyewear",
+  "short_name": "Noor Optics",
+  "description": "Architectural frames, precision lenses & luxury Scandinavian-inspired eyewear.",
   "start_url": "/index.html",
   "display": "standalone",
-  "background_color": "#021f4d",
-  "theme_color": "#021f4d",
+  "background_color": "#FFFFFF",
+  "theme_color": "#111111",
   "icons": [
-    { "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥞</text></svg>", "sizes": "any", "type": "image/svg+xml" }
+    { "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='80'>👓</text></svg>", "sizes": "any", "type": "image/svg+xml" }
   ]
 }
