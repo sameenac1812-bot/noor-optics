@@ -53,6 +53,19 @@
     DOM.btnBagToggle = document.getElementById('btn-bag-toggle');
     DOM.btnTryonHeader = document.getElementById('btn-tryon-header');
 
+    // Mobile Header & Drawer Controls
+    DOM.btnMobileMenu = document.getElementById('btn-mobile-menu');
+    DOM.btnCloseMobileMenu = document.getElementById('btn-close-mobile-menu');
+    DOM.mobileMenuDrawer = document.getElementById('mobile-menu-drawer');
+    DOM.btnMobileSort = document.getElementById('btn-mobile-sort');
+    DOM.btnCloseSortSheet = document.getElementById('btn-close-sort-sheet');
+    DOM.sortBottomSheet = document.getElementById('sort-bottom-sheet');
+    DOM.sortSheetBackdrop = document.getElementById('sort-sheet-backdrop');
+    DOM.btnMobileFilter = document.getElementById('btn-mobile-filter');
+    DOM.mobileFilterCountBadge = document.getElementById('mobile-filter-count-badge');
+    DOM.btnMobileTryon = document.getElementById('btn-mobile-tryon');
+    DOM.btnMobileDrawerTryon = document.getElementById('btn-mobile-drawer-tryon');
+
     // Badge counts
     DOM.wishlistCountBadge = document.getElementById('wishlist-count-badge');
     DOM.bagCountBadge = document.getElementById('bag-count-badge');
@@ -318,7 +331,7 @@
             <div class="card-price-row">
               <span class="card-price">${formatINR(product.price)}</span>
               ${product.originalPrice ? `<span class="card-price-strike">${formatINR(product.originalPrice)}</span>` : ''}
-              ${discountPercent ? `<span style="font-size:0.72rem;color:var(--accent-red);font-weight:600;">Save ${discountPercent}%</span>` : ''}
+              ${discountPercent ? `<span class="card-discount-badge">Save ${discountPercent}%</span>` : ''}
             </div>
             <div class="card-swatches">
               ${swatchesHtml}
@@ -373,12 +386,17 @@
     if (chips.length === 0) {
       DOM.activeFilterChips.innerHTML = '';
       if (DOM.filterCountBadge) DOM.filterCountBadge.classList.add('empty');
+      if (DOM.mobileFilterCountBadge) DOM.mobileFilterCountBadge.classList.add('empty');
       return;
     }
 
     if (DOM.filterCountBadge) {
       DOM.filterCountBadge.textContent = chips.length;
       DOM.filterCountBadge.classList.remove('empty');
+    }
+    if (DOM.mobileFilterCountBadge) {
+      DOM.mobileFilterCountBadge.textContent = chips.length;
+      DOM.mobileFilterCountBadge.classList.remove('empty');
     }
 
     const html = chips.map(c => `
@@ -708,9 +726,11 @@
   }
 
   function closeAllDrawers() {
-    [DOM.cartDrawer, DOM.wishlistDrawer, DOM.filterDrawer].forEach(drawer => {
+    [DOM.cartDrawer, DOM.wishlistDrawer, DOM.filterDrawer, DOM.mobileMenuDrawer].forEach(drawer => {
       if (drawer) drawer.classList.remove('open');
     });
+    if (DOM.sortBottomSheet) DOM.sortBottomSheet.classList.remove('open');
+    if (DOM.sortSheetBackdrop) DOM.sortSheetBackdrop.classList.remove('open');
     if (DOM.drawerBackdrop) DOM.drawerBackdrop.classList.remove('open');
     document.body.classList.remove('drawer-open');
   }
@@ -1204,6 +1224,98 @@
       DOM.btnTryonHeader.addEventListener('click', () => openTryOnStudio('noor-01'));
     }
 
+    // Mobile Drawer Open & Close
+    if (DOM.btnMobileMenu && DOM.mobileMenuDrawer) {
+      DOM.btnMobileMenu.addEventListener('click', () => {
+        closeAllDrawers();
+        DOM.mobileMenuDrawer.classList.add('open');
+        if (DOM.drawerBackdrop) DOM.drawerBackdrop.classList.add('open');
+        document.body.classList.add('drawer-open');
+      });
+    }
+
+    if (DOM.btnCloseMobileMenu && DOM.mobileMenuDrawer) {
+      DOM.btnCloseMobileMenu.addEventListener('click', () => {
+        DOM.mobileMenuDrawer.classList.remove('open');
+        if (DOM.drawerBackdrop) DOM.drawerBackdrop.classList.remove('open');
+        document.body.classList.remove('drawer-open');
+      });
+    }
+
+    // Mobile Drawer Category Navigation
+    document.querySelectorAll('.mobile-drawer-item[data-shape]').forEach(item => {
+      item.addEventListener('click', () => {
+        const shape = item.getAttribute('data-shape') || 'all';
+        state.filters.shape = shape;
+        syncFilterDrawerUI();
+        syncShapePillNav();
+        renderProductGrid();
+        closeAllDrawers();
+      });
+    });
+
+    document.querySelectorAll('.mobile-drawer-item[data-material]').forEach(item => {
+      item.addEventListener('click', () => {
+        const material = item.getAttribute('data-material') || 'all';
+        state.filters.material = material;
+        syncFilterDrawerUI();
+        renderProductGrid();
+        closeAllDrawers();
+      });
+    });
+
+    // Mobile Sort Bottom Sheet
+    if (DOM.btnMobileSort && DOM.sortBottomSheet) {
+      DOM.btnMobileSort.addEventListener('click', () => {
+        closeAllDrawers();
+        DOM.sortBottomSheet.classList.add('open');
+        if (DOM.sortSheetBackdrop) DOM.sortSheetBackdrop.classList.add('open');
+        document.body.classList.add('drawer-open');
+      });
+    }
+
+    const closeSortSheet = () => {
+      if (DOM.sortBottomSheet) DOM.sortBottomSheet.classList.remove('open');
+      if (DOM.sortSheetBackdrop) DOM.sortSheetBackdrop.classList.remove('open');
+      document.body.classList.remove('drawer-open');
+    };
+
+    if (DOM.btnCloseSortSheet) {
+      DOM.btnCloseSortSheet.addEventListener('click', closeSortSheet);
+    }
+    if (DOM.sortSheetBackdrop) {
+      DOM.sortSheetBackdrop.addEventListener('click', closeSortSheet);
+    }
+
+    document.querySelectorAll('.sheet-opt-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sheet-opt-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.currentSort = btn.getAttribute('data-sort');
+        if (DOM.currentSortLabel) {
+          DOM.currentSortLabel.textContent = btn.textContent.replace('✓', '').trim();
+        }
+        closeSortSheet();
+        renderProductGrid();
+      });
+    });
+
+    // Mobile Sub-Bar Filter Trigger
+    if (DOM.btnMobileFilter && DOM.filterDrawer) {
+      DOM.btnMobileFilter.addEventListener('click', () => openDrawer(DOM.filterDrawer));
+    }
+
+    // Mobile 3D Try-On Triggers
+    if (DOM.btnMobileTryon) {
+      DOM.btnMobileTryon.addEventListener('click', () => openTryOnStudio('noor-01'));
+    }
+    if (DOM.btnMobileDrawerTryon) {
+      DOM.btnMobileDrawerTryon.addEventListener('click', () => {
+        closeAllDrawers();
+        openTryOnStudio('noor-01');
+      });
+    }
+
     // Drawer Close Buttons
     document.querySelectorAll('[data-drawer-close]').forEach(btn => {
       btn.addEventListener('click', closeAllDrawers);
@@ -1473,9 +1585,25 @@
     });
   }
 
+  // ── Rotating Announcement Bar Ticker ───────────────────────────────────────
+  function initAnnouncementTicker() {
+    const ticker = document.getElementById('announcement-ticker');
+    if (!ticker) return;
+    const slides = ticker.querySelectorAll('.announcement-slide');
+    if (slides.length <= 1) return;
+    let activeIdx = 0;
+
+    setInterval(() => {
+      slides[activeIdx].classList.remove('active');
+      activeIdx = (activeIdx + 1) % slides.length;
+      slides[activeIdx].classList.add('active');
+    }, 4000);
+  }
+
   // ── Initialization ────────────────────────────────────────────────────────
   function init() {
     initDOMCache();
+    initAnnouncementTicker();
     updateBagBadge();
     updateWishlistBadge();
     renderProductGrid();

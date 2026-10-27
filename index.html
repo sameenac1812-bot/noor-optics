@@ -14,52 +14,73 @@
 
   <!-- PWA Manifest & App Styles -->
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css" />
+  <!-- Favicon & Mobile Touch Icons -->
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+  <link rel="apple-touch-icon" href="images/favicon.png" />
 </head>
 <body>
 
-  <!-- Top Announcement Bar -->
+  <!-- Top Announcement Bar (Single Row Rotating Ticker) -->
   <aside class="top-announcement" aria-label="Store Announcement">
-    <div class="announcement-text">
-      <span>Complimentary Pan-India Express Delivery on Orders Over ₹1,999</span>
-      <span class="announcement-dot" aria-hidden="true"></span>
-      <span>2-Year Comprehensive Frame Warranty</span>
-      <span class="announcement-dot" aria-hidden="true"></span>
-      <span>Virtual 3D Try-On Mirror Active</span>
+    <div class="announcement-container">
+      <div class="announcement-ticker" id="announcement-ticker">
+        <span class="announcement-slide active">Complimentary Pan-India Express Delivery Over ₹1,999</span>
+        <span class="announcement-slide">2-Year Comprehensive International Frame Warranty</span>
+        <span class="announcement-slide">Virtual 3D Fitting Mirror Live & Active</span>
+      </div>
+      <div class="announcement-desktop-row">
+        <span>Complimentary Pan-India Express Delivery Over ₹1,999</span>
+        <span class="announcement-dot" aria-hidden="true"></span>
+        <span>2-Year Comprehensive Frame Warranty</span>
+        <span class="announcement-dot" aria-hidden="true"></span>
+        <span>Virtual 3D Try-On Mirror Active</span>
+      </div>
     </div>
   </aside>
 
-  <!-- Storefront Header (Matching Reference Screenshot Editorial Aesthetic) -->
+  <!-- Storefront Header (Responsive Luxury Scandinavian Header) -->
   <header class="store-header">
     <div class="header-container">
-      <!-- Left: Wordmark & Category Indicator -->
-      <div class="header-left">
-        <a href="index.html" class="brand-wordmark" aria-label="Noor Optics Home">
-          NOOR OPTICS
-          <span class="sub-title">EYEGLASSES</span>
+      <!-- Mobile: Hamburger Menu Toggle -->
+      <button class="header-icon-btn mobile-menu-toggle" id="btn-mobile-menu" aria-label="Open Navigation Menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <!-- Brand Logo: Official Noor Optic Emblem & Wordmark -->
+      <div class="header-brand-wrap">
+        <a href="index.html" class="brand-logo-link" aria-label="Noor Optics Luxury Eyewear">
+          <img src="images/noor_logo_black.png" alt="NOOR OPTIC" class="brand-logo-desktop" />
+          <div class="brand-logo-mobile-lockup">
+            <img src="images/noor_emblem_black.png" alt="Noor Optic Emblem" class="brand-emblem-mobile" />
+            <span class="brand-wordmark-mobile">NOOR OPTIC</span>
+          </div>
         </a>
       </div>
 
-      <!-- Right: Compact Utility Navigation -->
+      <!-- Desktop & Global Utility Navigation -->
       <nav class="header-right" aria-label="Store Utility Navigation">
-        <!-- 3D Try-On Launcher -->
-        <button class="nav-ctrl-btn btn-tryon-highlight" id="btn-tryon-header" aria-label="Launch 3D Virtual Try-On Studio">
+        <!-- 3D Try-On Launcher (Desktop) -->
+        <button class="nav-ctrl-btn btn-tryon-highlight desktop-only" id="btn-tryon-header" aria-label="Launch 3D Virtual Try-On Studio">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
             <circle cx="12" cy="12" r="3"/>
           </svg>
-          <span class="nav-btn-text-desktop">3D TRY-ON</span>
+          <span class="nav-btn-text">3D TRY-ON</span>
         </button>
 
-        <span class="nav-separator" aria-hidden="true"></span>
+        <span class="nav-separator desktop-only" aria-hidden="true"></span>
 
-        <!-- Sort Menu Dropdown -->
-        <div class="sort-dropdown-wrap">
+        <!-- Sort Menu Dropdown (Desktop) -->
+        <div class="sort-dropdown-wrap desktop-only">
           <button class="nav-ctrl-btn" id="btn-sort-toggle" aria-expanded="false" aria-haspopup="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 6h18M7 12h10M10 18h4"/>
             </svg>
-            <span class="nav-btn-text-desktop">SORT BY: <span id="current-sort-label" style="font-weight:700;">CURATED</span></span>
+            <span class="nav-btn-text">SORT BY: <span id="current-sort-label" style="font-weight:700;">CURATED</span></span>
           </button>
           <div class="sort-menu" id="sort-menu" role="menu">
             <button class="sort-item active" data-sort="featured" role="menuitem">Curated / Featured</button>
@@ -70,51 +91,43 @@
           </div>
         </div>
 
-        <!-- Filter Drawer Toggle -->
-        <button class="nav-ctrl-btn" id="btn-filter-toggle" aria-label="Open Filter Panel">
+        <!-- Filter Drawer Toggle (Desktop) -->
+        <button class="nav-ctrl-btn desktop-only" id="btn-filter-toggle" aria-label="Open Filter Panel">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="4" y1="21" x2="4" y2="14"/>
-            <line x1="4" y1="10" x2="4" y2="3"/>
-            <line x1="12" y1="21" x2="12" y2="12"/>
-            <line x1="12" y1="8" x2="12" y2="3"/>
-            <line x1="20" y1="21" x2="20" y2="16"/>
-            <line x1="20" y1="12" x2="20" y2="3"/>
-            <line x1="1" y1="14" x2="7" y2="14"/>
-            <line x1="9" y1="8" x2="15" y2="8"/>
-            <line x1="17" y1="16" x2="23" y2="16"/>
+            <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
+            <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
+            <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
           </svg>
-          <span class="nav-btn-text-desktop">FILTERS</span>
+          <span class="nav-btn-text">FILTERS</span>
           <span class="nav-badge-pill empty" id="filter-count-badge">0</span>
         </button>
 
         <!-- Search Bar Toggle -->
-        <button class="nav-ctrl-btn" id="btn-search-toggle" aria-label="Search Optical Catalog">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="header-icon-btn" id="btn-search-toggle" aria-label="Search Optical Catalog">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"/>
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <span class="nav-btn-text-desktop">SEARCH</span>
         </button>
 
         <span class="nav-separator" aria-hidden="true"></span>
 
         <!-- Wishlist Drawer Toggle -->
-        <button class="nav-ctrl-btn" id="btn-wishlist-toggle" aria-label="View Saved Wishlist">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="header-icon-btn" id="btn-wishlist-toggle" aria-label="View Saved Wishlist">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
           </svg>
-          <span class="nav-btn-text-desktop">WISHLIST</span>
           <span class="nav-badge-pill empty" id="wishlist-count-badge">0</span>
         </button>
 
         <!-- Shopping Bag Drawer Toggle -->
-        <button class="nav-ctrl-btn" id="btn-bag-toggle" aria-label="View Shopping Bag">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="header-icon-btn" id="btn-bag-toggle" aria-label="View Shopping Bag">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
             <line x1="3" y1="6" x2="21" y2="6"/>
             <path d="M16 10a4 4 0 01-8 0"/>
           </svg>
-          <span class="nav-btn-text-desktop">BAG</span>
           <span class="nav-badge-pill empty" id="bag-count-badge">0</span>
         </button>
       </nav>
@@ -132,7 +145,7 @@
         <input type="text"
                class="search-main-input"
                id="search-main-input"
-               placeholder="Search by frame name, shape (Round, Rectangular, Hexagonal), material (Titanium, Bio-Acetate), or color..."
+               placeholder="Search frame name, shape (Round, Rectangular), material, or color..."
                aria-label="Search eyeglasses catalog" />
         <button class="search-clear-btn" id="search-clear-btn" aria-label="Clear Search Input">&times;</button>
       </div>
@@ -147,25 +160,43 @@
     </div>
   </section>
 
-  <!-- Secondary Bar: Shape Pills Nav & Active Filter Chips -->
+  <!-- Secondary Bar: Shape Pills & Mobile Action Bar -->
   <nav class="store-sub-bar" aria-label="Product Categories & Active Filters">
     <div class="sub-bar-container">
-      <!-- Shape Pills Selector -->
-      <div class="shape-pill-nav" id="shape-pills-nav">
-        <button class="shape-pill active" data-shape="all">All Shapes</button>
-        <button class="shape-pill" data-shape="Rectangular">Rectangular</button>
-        <button class="shape-pill" data-shape="Round">Round</button>
-        <button class="shape-pill" data-shape="Square">Square</button>
-        <button class="shape-pill" data-shape="Geometric">Hex / Geometric</button>
-        <button class="shape-pill" data-shape="Aviator">Aviator</button>
-        <button class="shape-pill" data-shape="Cat-Eye">Cat-Eye</button>
+      <!-- Shape Pills Selector (Horizontal Smooth Swipe) -->
+      <div class="shape-pill-scroll-wrap">
+        <div class="shape-pill-nav" id="shape-pills-nav">
+          <button class="shape-pill active" data-shape="all">All Shapes</button>
+          <button class="shape-pill" data-shape="Rectangular">Rectangular</button>
+          <button class="shape-pill" data-shape="Round">Round</button>
+          <button class="shape-pill" data-shape="Square">Square</button>
+          <button class="shape-pill" data-shape="Geometric">Hex / Geometric</button>
+          <button class="shape-pill" data-shape="Aviator">Aviator</button>
+          <button class="shape-pill" data-shape="Cat-Eye">Cat-Eye</button>
+        </div>
       </div>
 
-      <!-- Active Filter Chips & Item Counter -->
-      <div style="display:flex;align-items:center;gap:1.25rem;">
-        <div class="active-filter-chips" id="active-filter-chips"></div>
+      <!-- Action Row: Item Counter & Mobile Sort/Filter Buttons -->
+      <div class="sub-bar-actions-row">
         <div class="catalog-counter" id="catalog-count">Showing 18 curated frames</div>
+        <div class="mobile-sub-ctrls">
+          <button class="mobile-ctrl-btn" id="btn-mobile-sort" aria-label="Sort products">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M7 12h10M10 18h4"/></svg>
+            <span>SORT</span>
+          </button>
+          <button class="mobile-ctrl-btn" id="btn-mobile-filter" aria-label="Filter products">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            <span>FILTERS</span>
+            <span class="mobile-badge-num empty" id="mobile-filter-count-badge">0</span>
+          </button>
+          <button class="mobile-ctrl-btn mobile-tryon-btn" id="btn-mobile-tryon" aria-label="Launch 3D Virtual Try-On">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span>3D TRY-ON</span>
+          </button>
+        </div>
       </div>
+
+      <div class="active-filter-chips" id="active-filter-chips"></div>
     </div>
   </nav>
 
@@ -180,6 +211,87 @@
 
   <!-- Shared Drawer Backdrop -->
   <div class="drawer-backdrop" id="drawer-backdrop" aria-hidden="true"></div>
+
+  <!-- Mobile Navigation Slide-Over Drawer (Left) -->
+  <aside class="slide-drawer drawer-left" id="mobile-menu-drawer" role="dialog" aria-modal="true" aria-label="Mobile Navigation Menu">
+    <div class="drawer-header">
+      <div class="mobile-drawer-brand">
+        <img src="images/noor_logo_black.png" alt="Noor Optic" style="height:24px;width:auto;" />
+      </div>
+      <button class="drawer-close-btn" id="btn-close-mobile-menu" aria-label="Close navigation menu">&times;</button>
+    </div>
+    <div class="drawer-body mobile-menu-body">
+      <!-- 3D Try-On Card -->
+      <div class="mobile-drawer-tryon-card" id="btn-mobile-drawer-tryon">
+        <div class="tryon-card-glow-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </div>
+        <div class="tryon-card-text">
+          <strong>Virtual 3D Fitting Mirror</strong>
+          <span>Try 18 luxury frames on your face in real-time</span>
+        </div>
+      </div>
+
+      <!-- Quick Categories -->
+      <div class="mobile-drawer-section">
+        <div class="mobile-drawer-sec-title">Shop by Frame Shape</div>
+        <div class="mobile-drawer-nav-list">
+          <button class="mobile-drawer-item" data-shape="all">All Curated Frames (18)</button>
+          <button class="mobile-drawer-item" data-shape="Rectangular">Rectangular Collection</button>
+          <button class="mobile-drawer-item" data-shape="Round">Round Heritage</button>
+          <button class="mobile-drawer-item" data-shape="Square">Square Architectural</button>
+          <button class="mobile-drawer-item" data-shape="Geometric">Hex / Geometric</button>
+          <button class="mobile-drawer-item" data-shape="Aviator">Aviator Titanium</button>
+          <button class="mobile-drawer-item" data-shape="Cat-Eye">Cat-Eye Silhouette</button>
+        </div>
+      </div>
+
+      <!-- Materials -->
+      <div class="mobile-drawer-section">
+        <div class="mobile-drawer-sec-title">Materials & Craftsmanship</div>
+        <div class="mobile-drawer-nav-list">
+          <button class="mobile-drawer-item" data-material="Japanese Titanium">Japanese Beta-Titanium</button>
+          <button class="mobile-drawer-item" data-material="Italian Bio-Acetate">Italian Bio-Acetate</button>
+          <button class="mobile-drawer-item" data-material="Crystal Acetate">Crystal Clear Series</button>
+        </div>
+      </div>
+
+      <!-- Boutique Links -->
+      <div class="mobile-drawer-section">
+        <div class="mobile-drawer-sec-title">Optical Services & Boutique</div>
+        <div class="mobile-drawer-nav-list">
+          <a href="/admin" class="mobile-drawer-item store-link">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+            Store POS & Staff Portal
+          </a>
+          <a href="https://wa.me/919876543210" target="_blank" rel="noopener" class="mobile-drawer-item whatsapp-link">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            Optometrist Consultation (WhatsApp)
+          </a>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile Sort Bottom Sheet -->
+  <div class="drawer-backdrop" id="sort-sheet-backdrop" aria-hidden="true"></div>
+  <aside class="mobile-bottom-sheet" id="sort-bottom-sheet" role="dialog" aria-modal="true" aria-label="Sort Options">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">Sort Eyewear Collection</div>
+      <button class="sheet-close-btn" id="btn-close-sort-sheet" aria-label="Close sort sheet">&times;</button>
+    </div>
+    <div class="sheet-options">
+      <button class="sheet-opt-btn active" data-sort="featured">Curated / Featured</button>
+      <button class="sheet-opt-btn" data-sort="price-low">Price: Low to High</button>
+      <button class="sheet-opt-btn" data-sort="price-high">Price: High to Low</button>
+      <button class="sheet-opt-btn" data-sort="newest">New Arrivals</button>
+      <button class="sheet-opt-btn" data-sort="rating">Customer Rating</button>
+    </div>
+  </aside>
 
   <!-- Shopping Bag Slide-Over Drawer -->
   <aside class="slide-drawer" id="cart-drawer" role="dialog" aria-modal="true" aria-labelledby="cart-drawer-title">
@@ -587,9 +699,9 @@
   <footer class="store-footer">
     <div class="footer-container">
       <div class="footer-grid">
-        <!-- Brand Story -->
+        <!-- Brand Story with Official White Logo -->
         <div>
-          <h4 class="footer-brand-title">NOOR OPTICS</h4>
+          <img src="images/noor_logo_white.png" alt="Noor Optic" class="footer-logo-img" />
           <p class="footer-brand-desc">
             Bespoke Scandinavian eyewear engineered with Japanese pure titanium and sculpted Italian bio-acetate. Designed for enduring elegance, minimal weight, and crystalline visual clarity.
           </p>
