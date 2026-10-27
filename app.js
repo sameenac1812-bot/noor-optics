@@ -1015,19 +1015,66 @@
       grand_total: grandTotal
     };
 
+    let retailDbBadge = '';
+    let authoritativeOrderId = orderId;
+    let authoritativeTokenNum = null;
+
+    // 1. Submit to Unified Local Authoritative Retail Backend
+    try {
+      const backendResp = await fetch('/api/orders/online', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: name,
+          customerEmail: email,
+          customerPhone: phone,
+          deliveryAddress: address,
+          city: city,
+          pinCode: pin,
+          prescriptionPref: rxChoice,
+          paymentMethod: payChoice === 'upi' ? 'UPI_GPAY' : (payChoice === 'card' ? 'CARD' : 'CASH'),
+          items: state.cart.map(item => ({
+            id: item.id,
+            name: item.name,
+            color: item.color,
+            lensName: item.lensName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice
+          }))
+        })
+      });
+
+      if (backendResp.ok) {
+        const localRes = await backendResp.json();
+        if (localRes.orderNumber) authoritativeOrderId = localRes.orderNumber;
+        if (localRes.tokenNumber) authoritativeTokenNum = localRes.tokenNumber;
+
+        retailDbBadge = `
+          <div style="margin-top:0.6rem;padding:0.4rem 0.65rem;background:#F0FDF4;border:1px solid #22C55E;border-radius:3px;font-size:0.74rem;color:#15803D;display:flex;align-items:center;justify-content:space-between;">
+            <span>✓ <strong>Live Retail DB:</strong> Token #${localRes.tokenNumber}</span>
+            <span style="font-size:0.7rem;color:#166534;">Print Job #${localRes.printJobId ? localRes.printJobId.substring(0, 8) : 'Spooling'}</span>
+          </div>
+        `;
+      }
+    } catch (localErr) {
+      console.warn('Note: Local Express backend not reached:', localErr);
+    }
+
+    // 2. Submit to Cloud Supabase (if configured)
     let syncBadge = '';
     if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
+      orderData.order_ref = authoritativeOrderId;
       const res = await window.NoorSupabase.submitOrder(orderData);
       if (res && res.cloud) {
         syncBadge = `
-          <div style="margin-top:0.75rem;padding:0.4rem 0.65rem;background:#ECFDF5;border:1px solid #10B981;border-radius:3px;font-size:0.74rem;color:#065F46;display:flex;align-items:center;gap:0.45rem;">
-            <span>✓</span> <strong>Synced to Supabase Cloud</strong> (Table: orders · Ref: ${orderId})
+          <div style="margin-top:0.4rem;padding:0.4rem 0.65rem;background:#ECFDF5;border:1px solid #10B981;border-radius:3px;font-size:0.74rem;color:#065F46;display:flex;align-items:center;gap:0.45rem;">
+            <span>✓</span> <strong>Synced to Supabase Cloud</strong> (Table: orders · Ref: ${authoritativeOrderId})
           </div>
         `;
       }
     } else {
       syncBadge = `
-        <div style="margin-top:0.75rem;padding:0.4rem 0.65rem;background:#F8F8FA;border:1px solid #E5E7EB;border-radius:3px;font-size:0.74rem;color:#6B7280;display:flex;align-items:center;gap:0.45rem;">
+        <div style="margin-top:0.4rem;padding:0.4rem 0.65rem;background:#F8F8FA;border:1px solid #E5E7EB;border-radius:3px;font-size:0.74rem;color:#6B7280;display:flex;align-items:center;gap:0.45rem;">
           <span>ℹ</span> Saved locally (Connect Supabase in supabase.js or .env to sync live)
         </div>
       `;
@@ -1036,7 +1083,7 @@
     if (DOM.orderReceiptBox) {
       DOM.orderReceiptBox.innerHTML = `
         <div style="display:flex;justify-content:space-between;margin-bottom:0.75rem;border-bottom:1px solid #DDD;padding-bottom:0.5rem;">
-          <strong>Order Reference: ${orderId}</strong>
+          <strong>Order Reference: ${authoritativeOrderId} ${authoritativeTokenNum ? `(Token #${authoritativeTokenNum})` : ''}</strong>
           <span>${dateStr}</span>
         </div>
         <div><strong>Billed To:</strong> ${name} (${email})</div>
@@ -1046,6 +1093,7 @@
           <span>Total Payable:</span>
           <span>${formatINR(grandTotal)}</span>
         </div>
+        ${retailDbBadge}
         ${syncBadge}
       `;
     }

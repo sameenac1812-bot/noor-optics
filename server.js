@@ -1,39 +1,75 @@
-const http = require('http');
-const fs = require('fs');
+/**
+ * server.js – Noor Optics Unified Business Platform Server
+ * Serves E-Commerce Storefront, Admin & Physical POS, REST APIs, and Thermal Printer Spooler.
+ */
+
+'use strict';
+
+const express = require('express');
+const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+const apiRouter = require('./server/api');
+const { initializeDatabase } = require('./server/db');
 
-const PORT = 3000;
-const MIME = {
-  '.html': 'text/html; charset=UTF-8',
-  '.css': 'text/css; charset=UTF-8',
-  '.js': 'application/javascript; charset=UTF-8',
-  '.json': 'application/json; charset=UTF-8',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon'
-};
+// Ensure DB is initialized
+initializeDatabase();
 
-const server = http.createServer((req, res) => {
-  let reqPath = req.url.split('?')[0];
-  if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
-  const filePath = path.join(__dirname, decodeURIComponent(reqPath));
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('404 Not Found');
-    return;
+// Enable CORS and Request Parsers
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Mount REST API
+app.use('/api', apiRouter);
+
+// Serve Admin Portal at /admin
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// Serve Static Front-end Files (Storefront, CSS, JS, Images)
+app.use(express.static(path.join(__dirname), {
+  maxAge: '1h',
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
   }
+}));
 
-  const ext = path.extname(filePath).toLowerCase();
-  res.writeHead(200, {
-    'Content-Type': MIME[ext] || 'application/octet-stream',
-    'Cache-Control': 'no-cache'
+// Fallback to Storefront for client navigation
+app.use((req, res) => {
+  if (req.path.startsWith('/admin')) {
+    return res.sendFile(path.join(__dirname, 'admin.html'));
+  }
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Start Server
+if (require.main === module) {
+  const server = app.listen(PORT, () => {
+    console.log(`\n======================================================`);
+    console.log(`👓 NOOR OPTICS COMPLETE BUSINESS PLATFORM IS LIVE`);
+    console.log(`======================================================`);
+    console.log(`🛍️  Customer Storefront: http://localhost:${PORT}`);
+    console.log(`💼 Admin & Physical POS: http://localhost:${PORT}/admin`);
+    console.log(`⚙️  REST APIs:           http://localhost:${PORT}/api`);
+    console.log(`🖨️  Thermal Printer:     2-inch / 58 mm Ready`);
+    console.log(`🔑 Owner Login:          admin@nooroptics.com / AdminPassword@123`);
+    console.log(`======================================================\n`);
   });
-  fs.createReadStream(filePath).pipe(res);
-});
 
-server.listen(PORT, () => {
-  console.log(`Noor Optics Storefront is live at http://localhost:${PORT}`);
-});
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`Port ${PORT} in use, attempting restart...`);
+    } else {
+      console.error('Server error:', err);
+    }
+  });
+}
+
+module.exports = app;
