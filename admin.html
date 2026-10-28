@@ -3,13 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Noor Optics – Retail Business Management & Physical POS Portal</title>
+  <title>Noor Optics – Retail Business Management, Inventory & POS Portal</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="icon" type="image/png" href="images/favicon.png" />
-  <link rel="apple-touch-icon" href="images/favicon.png" />
-  <link rel="stylesheet" href="admin.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/png" href="/images/favicon.png" />
+  <link rel="apple-touch-icon" href="/images/favicon.png" />
+  <link rel="stylesheet" href="/admin.css?v=5.1.0" />
 </head>
 <body>
 
@@ -18,7 +21,7 @@
     <div class="login-card">
       <div class="login-header">
         <img src="images/noor_logo_black.png" alt="NOOR OPTIC" style="height:38px;width:auto;margin:0 auto 0.75rem auto;display:block;" />
-        <p class="login-sub">Retail Business Management & POS</p>
+        <p class="login-sub">Retail Business Management, Inventory & In-Store POS</p>
       </div>
       <form id="login-form">
         <div class="form-group">
@@ -29,12 +32,12 @@
           <label for="login-password">Password</label>
           <input type="password" id="login-password" class="form-control" value="AdminPassword@123" required autocomplete="current-password" />
         </div>
-        <button type="submit" class="btn-login-submit" id="btn-login-submit">Sign In to Workspace</button>
+        <button type="submit" class="btn-login-submit" id="btn-login-submit">Sign In to Retail Workspace</button>
       </form>
       <div class="login-hint">
         <strong>Default Credentials:</strong><br />
-        👑 <strong>Owner:</strong> admin@nooroptics.com / AdminPassword@123<br />
-        💳 <strong>Cashier:</strong> cashier@nooroptics.com / Cashier@123
+        👑 <strong>Owner / Admin:</strong> admin@nooroptics.com / AdminPassword@123<br />
+        💳 <strong>Cashier / POS:</strong> cashier@nooroptics.com / Cashier@123
       </div>
     </div>
   </div>
@@ -42,86 +45,44 @@
   <!-- ── 2. ADMIN SHELL & OPERATIONS ──────────────────────────────────────── -->
   <div class="admin-shell" id="admin-shell" style="display:none;">
 
-    <!-- Left Sidebar -->
+    <!-- Left Sidebar: EXACTLY FOUR MAIN NAVIGATION OPTIONS IN ORDER -->
     <aside class="admin-sidebar" id="admin-sidebar">
       <div class="sidebar-header">
         <div class="sidebar-brand">
           <img src="images/noor_logo_white.png" alt="NOOR OPTIC" style="height:26px;width:auto;margin-bottom:0.35rem;display:block;" />
-          <span>OPS & POS PORTAL</span>
+          <span>RETAIL OPS & POS</span>
         </div>
       </div>
 
+      <!-- EXACTLY FOUR MAIN ADMIN NAVIGATION OPTIONS -->
       <nav class="sidebar-nav">
-        <div class="nav-section-title">Sales & Register</div>
-        <div class="nav-item active" data-nav="dashboard">
+        <!-- 1. Dashboard -->
+        <div class="nav-item active" data-nav="dashboard" id="nav-btn-dashboard" title="Live Store Overview & KPIs">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
           <span>Dashboard</span>
         </div>
-        <div class="nav-item" data-nav="pos">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-          <span>Physical Store POS</span>
-        </div>
-        <div class="nav-item" data-nav="orders">
+
+        <!-- 2. Orders -->
+        <div class="nav-item" data-nav="orders" id="nav-btn-orders" title="In-store & Website Orders Pipeline">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-          <span>Orders Pipeline</span>
-        </div>
-        <div class="nav-item" data-nav="payments">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-          <span>UPI / GPay Verification</span>
-          <span class="nav-item-badge" id="sidebar-pending-count" style="display:none;">0</span>
+          <span>Orders</span>
+          <span class="nav-item-badge" id="sidebar-orders-badge" style="display:none;">0</span>
         </div>
 
-        <div class="nav-section-title">Catalog & Inventory</div>
-        <div class="nav-item" data-nav="products">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="6" cy="12" r="4"/><circle cx="18" cy="12" r="4"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-          <span>Products & Frames</span>
-        </div>
-        <div class="nav-item" data-nav="inventory">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-          <span>Stock Balances & Ledger</span>
-        </div>
-        <div class="nav-item" data-nav="purchases">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-          <span>Suppliers & Purchases</span>
+        <!-- 3. Total Inventory -->
+        <div class="nav-item" data-nav="inventory" id="nav-btn-inventory" title="Optical Frames Catalog & QR Sticker Generation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          <span>Total Inventory</span>
         </div>
 
-        <div class="nav-section-title">Finance & Billing</div>
-        <div class="nav-item" data-nav="customers">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-          <span>Customer Directory</span>
-        </div>
-        <div class="nav-item" data-nav="invoices">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <span>Tax Invoices (PDF)</span>
-        </div>
-        <div class="nav-item" data-nav="expenses">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-          <span>Operating Expenses</span>
-        </div>
-        <div class="nav-item" data-nav="finance">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-          <span>Financials & Profit (P&L)</span>
-        </div>
-
-        <div class="nav-section-title">Hardware & Store</div>
-        <div class="nav-item" data-nav="printer">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          <span>2" Thermal Printer</span>
-        </div>
-        <div class="nav-item" data-nav="settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-          <span>Store & Google Pay QR</span>
-        </div>
-        <div class="nav-item" data-nav="staff">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span>Staff & Permissions</span>
-        </div>
-        <div class="nav-item" data-nav="audit">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          <span>Audit Logs</span>
+        <!-- 4. In-store POS -->
+        <div class="nav-item" data-nav="pos" id="nav-btn-pos" title="Cashier Register, Camera QR Scanner & Billing">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="14" x2="6.01" y2="14"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+          <span>In-store POS</span>
         </div>
       </nav>
 
+      <!-- Sidebar Footer (Staff info & Logout) -->
       <div class="sidebar-footer">
         <div class="user-pill">
           <div class="user-avatar" id="sidebar-avatar">S</div>
@@ -130,7 +91,7 @@
             <span class="user-role" id="sidebar-user-role">Role</span>
           </div>
         </div>
-        <button class="btn-logout" id="btn-logout" title="Log Out">
+        <button class="btn-logout" id="btn-logout" title="Sign Out of Workspace">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
       </div>
@@ -141,677 +102,615 @@
       <header class="admin-header">
         <div class="page-title-wrap">
           <h1 id="page-title">Operations Dashboard</h1>
+          <span class="page-subtitle" id="page-subtitle">Real-time performance overview • Asia/Kolkata (IST)</span>
         </div>
         <div class="header-actions">
           <a href="/" target="_blank" class="btn-header-action" title="Open Customer Online Storefront">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            <span>Customer Storefront</span>
+            <span>Online Storefront</span>
           </a>
-          <button class="btn-header-action btn-primary" id="btn-quick-pos">
+          <button class="btn-header-action btn-primary" id="btn-quick-new-bill">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-            <span>Launch POS Register</span>
+            <span>Start POS Bill</span>
           </button>
         </div>
       </header>
 
       <div class="page-container">
 
-        <!-- ── VIEW: DASHBOARD ───────────────────────────────────────────── -->
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <!-- 1. VIEW: DASHBOARD — COMPLETE BUSINESS OVERVIEW                  -->
+        <!-- ═════════════════════════════════════════════════════════════════ -->
         <section class="view-section active" id="view-dashboard">
-          <div class="metrics-grid">
-            <div class="metric-card">
-              <div class="metric-header">
-                <span class="metric-label">Today's Revenue</span>
-                <div class="metric-icon">₹</div>
-              </div>
-              <div class="metric-value" id="dash-revenue">₹0.00</div>
-              <span class="metric-sub" id="dash-orders-count">0 orders processed today</span>
+
+          <!-- Dashboard Date Filter Bar -->
+          <div class="dashboard-filter-bar">
+            <div class="filter-group-label">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span>Date Range:</span>
             </div>
-            <div class="metric-card">
-              <div class="metric-header">
-                <span class="metric-label">Gross Margin</span>
-                <div class="metric-icon">📈</div>
-              </div>
-              <div class="metric-value" id="dash-profit">₹0.00</div>
-              <span class="metric-sub" id="dash-profit-sub">Sales less inventory cost</span>
+            <div class="date-pills" id="dashboard-date-pills">
+              <button class="date-pill active" data-range="today">Today</button>
+              <button class="date-pill" data-range="yesterday">Yesterday</button>
+              <button class="date-pill" data-range="this_week">This Week</button>
+              <button class="date-pill" data-range="this_month">This Month</button>
+              <button class="date-pill" data-range="custom">Custom Range</button>
             </div>
-            <div class="metric-card">
-              <div class="metric-header">
-                <span class="metric-label">Pending Verification</span>
-                <div class="metric-icon">⏳</div>
-              </div>
-              <div class="metric-value" id="dash-pending-upi">0</div>
-              <span class="metric-sub">UPI payments awaiting desk review</span>
+            <div class="custom-date-inputs" id="dash-custom-date-wrap" style="display:none;">
+              <input type="date" id="dash-custom-start" class="form-control" />
+              <span>to</span>
+              <input type="date" id="dash-custom-end" class="form-control" />
+              <button class="btn-table-action" id="btn-apply-dash-custom">Apply</button>
             </div>
-            <div class="metric-card">
-              <div class="metric-header">
-                <span class="metric-label">Inventory Valuation</span>
-                <div class="metric-icon">📦</div>
+            <div class="tz-badge" title="Business Timezone">IST (Asia/Kolkata)</div>
+            <button class="btn-refresh-dash" id="btn-refresh-dash" title="Refresh Live Data">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </button>
+          </div>
+
+          <!-- 9 Key Performance Metric Cards -->
+          <div class="kpi-grid">
+            <!-- 1. Total In-Store Sales -->
+            <div class="kpi-card" id="card-in-store-sales">
+              <div class="kpi-top">
+                <span class="kpi-label">Total In-Store Sales</span>
+                <span class="kpi-icon channel-pos">🏪 POS</span>
               </div>
-              <div class="metric-value" id="dash-inv-value">₹0.00</div>
-              <span class="metric-sub" id="dash-stock-count">0 frames in boutique stock</span>
+              <div class="kpi-value" id="kpi-in-store-sales">₹0.00</div>
+              <span class="kpi-sub" id="kpi-in-store-orders">0 completed in-store sales</span>
+            </div>
+
+            <!-- 2. Total Website Sales -->
+            <div class="kpi-card" id="card-website-sales">
+              <div class="kpi-top">
+                <span class="kpi-label">Total Website Sales</span>
+                <span class="kpi-icon channel-online">🌐 WEB</span>
+              </div>
+              <div class="kpi-value" id="kpi-website-sales">₹0.00</div>
+              <span class="kpi-sub" id="kpi-website-orders">0 online customer orders</span>
+            </div>
+
+            <!-- 3. Combined Total Revenue -->
+            <div class="kpi-card highlight-card" id="card-combined-revenue">
+              <div class="kpi-top">
+                <span class="kpi-label">Combined Total Revenue</span>
+                <span class="kpi-icon highlight">💼 TOTAL</span>
+              </div>
+              <div class="kpi-value" id="kpi-combined-revenue">₹0.00</div>
+              <span class="kpi-sub" id="kpi-combined-orders">Reconciled net revenue</span>
+            </div>
+
+            <!-- 4. Number of In-Store Orders -->
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">In-Store Orders</span>
+                <span class="kpi-icon">🧾</span>
+              </div>
+              <div class="kpi-value" id="kpi-in-store-count">0</div>
+              <span class="kpi-sub">Boutique walk-in transactions</span>
+            </div>
+
+            <!-- 5. Number of Website Orders -->
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Website Orders</span>
+                <span class="kpi-icon">📦</span>
+              </div>
+              <div class="kpi-value" id="kpi-website-count">0</div>
+              <span class="kpi-sub">Online doorstep orders</span>
+            </div>
+
+            <!-- 6. Total Distinct Inventory Frames -->
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Distinct Frame Models</span>
+                <span class="kpi-icon">👓</span>
+              </div>
+              <div class="kpi-value" id="kpi-distinct-frames">0</div>
+              <span class="kpi-sub">Registered optical designs</span>
+            </div>
+
+            <!-- 7. Total Physical Units in Stock -->
+            <div class="kpi-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Physical Units in Stock</span>
+                <span class="kpi-icon">🏢</span>
+              </div>
+              <div class="kpi-value" id="kpi-physical-units">0</div>
+              <span class="kpi-sub">Total boutique inventory units</span>
+            </div>
+
+            <!-- 8. Low-Stock Products -->
+            <div class="kpi-card alert-warning-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Low-Stock Frames</span>
+                <span class="kpi-icon warning">⚠️</span>
+              </div>
+              <div class="kpi-value" id="kpi-low-stock">0</div>
+              <span class="kpi-sub">At or below reorder threshold</span>
+            </div>
+
+            <!-- 9. Out-of-Stock Products -->
+            <div class="kpi-card alert-danger-card">
+              <div class="kpi-top">
+                <span class="kpi-label">Out-of-Stock Frames</span>
+                <span class="kpi-icon danger">⛔</span>
+              </div>
+              <div class="kpi-value" id="kpi-out-of-stock">0</div>
+              <span class="kpi-sub">0 units available in catalog</span>
             </div>
           </div>
 
-          <div style="display:grid; grid-template-columns:1.5fr 1fr; gap:1.5rem;">
-            <!-- Recent Orders -->
+          <!-- Sales Chart: Comparing In-Store vs Website Sales Over Time -->
+          <div class="panel-card chart-panel">
+            <div class="panel-header">
+              <div>
+                <span class="panel-title">Sales Comparison: In-Store vs. Website</span>
+                <div class="panel-subtitle" id="chart-timeline-sub">Comparing hourly/daily sales volume and revenue by channel</div>
+              </div>
+              <div class="chart-legend-custom">
+                <span class="legend-dot in-store"></span><span>In-Store (POS)</span>
+                <span class="legend-dot website"></span><span>Website (Online)</span>
+              </div>
+            </div>
+            <div class="chart-container" style="position:relative; height:280px; width:100%;">
+              <canvas id="dash-sales-chart"></canvas>
+            </div>
+          </div>
+
+          <!-- Bottom Grid: Recent Orders & Quick Shortcuts -->
+          <div class="dash-bottom-grid">
+            <!-- Miniature Panel: Recent & New Orders -->
             <div class="panel-card">
               <div class="panel-header">
-                <span class="panel-title">Recent Store & Online Orders</span>
-                <button class="btn-table-action" onclick="switchNav('orders')">View All Orders</button>
+                <div>
+                  <span class="panel-title">Recent & New Orders</span>
+                  <div class="panel-subtitle">Latest sales across boutique POS and customer website</div>
+                </div>
+                <button class="btn-table-action" id="dash-btn-view-all-orders">View All in Orders</button>
               </div>
               <div class="table-responsive">
                 <table class="data-table">
                   <thead>
                     <tr>
-                      <th>Token</th>
-                      <th>Order Ref</th>
-                      <th>Customer</th>
-                      <th>Channel</th>
+                      <th>Invoice / Order</th>
+                      <th>Source</th>
+                      <th>Date & Time</th>
+                      <th>Items</th>
                       <th>Total</th>
                       <th>Payment</th>
-                      <th>Action</th>
+                      <th>Status</th>
                     </tr>
                   </thead>
-                  <tbody id="dash-recent-orders"></tbody>
+                  <tbody id="dash-recent-orders-body">
+                    <tr><td colspan="7" style="text-align:center; padding:2rem; color:#9CA3AF;">Loading orders...</td></tr>
+                  </tbody>
                 </table>
               </div>
             </div>
 
-            <!-- Low Stock Warnings -->
-            <div class="panel-card">
+            <!-- Dashboard Shortcuts -->
+            <div class="panel-card shortcuts-panel">
               <div class="panel-header">
-                <span class="panel-title">Low Stock & Reorder Alerts</span>
-                <button class="btn-table-action" onclick="switchNav('inventory')">Manage Stock</button>
+                <span class="panel-title">Operational Shortcuts</span>
               </div>
-              <div class="table-responsive">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>Frame</th>
-                      <th>Color</th>
-                      <th>Available</th>
-                      <th>Threshold</th>
-                    </tr>
-                  </thead>
-                  <tbody id="dash-low-stock"></tbody>
-                </table>
+              <div class="shortcuts-grid">
+                <!-- 1. Add a new frame -->
+                <button class="shortcut-btn" id="sc-add-frame">
+                  <div class="sc-icon">➕</div>
+                  <div class="sc-info">
+                    <span class="sc-title">Add New Frame</span>
+                    <span class="sc-desc">Register optical frame to catalog</span>
+                  </div>
+                </button>
+
+                <!-- 2. Generate and print a frame QR sticker -->
+                <button class="shortcut-btn" id="sc-print-sticker">
+                  <div class="sc-icon yellow-sticker-icon">🏷️</div>
+                  <div class="sc-info">
+                    <span class="sc-title">Generate QR Sticker</span>
+                    <span class="sc-desc">Bright yellow frame label</span>
+                  </div>
+                </button>
+
+                <!-- 3. Start an in-store bill -->
+                <button class="shortcut-btn" id="sc-start-bill">
+                  <div class="sc-icon">🧾</div>
+                  <div class="sc-info">
+                    <span class="sc-title">Start In-Store Bill</span>
+                    <span class="sc-desc">Open cashier cart for customer</span>
+                  </div>
+                </button>
+
+                <!-- 4. Open the QR scanner -->
+                <button class="shortcut-btn" id="sc-open-scanner">
+                  <div class="sc-icon">📷</div>
+                  <div class="sc-info">
+                    <span class="sc-title">Open QR Scanner</span>
+                    <span class="sc-desc">Camera scan frame sticker</span>
+                  </div>
+                </button>
+
+                <!-- 5. View new website orders -->
+                <button class="shortcut-btn" id="sc-view-web-orders">
+                  <div class="sc-icon">🌐</div>
+                  <div class="sc-info">
+                    <span class="sc-title">Website Orders</span>
+                    <span class="sc-desc">Check storefront deliveries</span>
+                  </div>
+                </button>
+
+                <!-- 6. Export a daily sales report -->
+                <button class="shortcut-btn" id="sc-export-report">
+                  <div class="sc-icon">📊</div>
+                  <div class="sc-info">
+                    <span class="sc-title">Export Daily Report</span>
+                    <span class="sc-desc">CSV / XLSX / PDF reconciliation</span>
+                  </div>
+                </button>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- ── VIEW: PHYSICAL STORE POS REGISTER ─────────────────────────── -->
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <!-- 2. VIEW: ORDERS — IN-STORE AND WEBSITE WITH DAILY EXPORT         -->
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <section class="view-section" id="view-orders">
+          <div class="panel-card">
+            <!-- Orders Header with Sub-tabs and Export Button -->
+            <div class="panel-header orders-top-header">
+              <!-- Internal Sub-Tabs (Strictly inside Orders) -->
+              <div class="subtabs-container">
+                <button class="subtab-btn active" id="subtab-in-store" data-order-channel="POS">
+                  <span>🏪 In-store Orders</span>
+                  <span class="subtab-count" id="count-instore-orders">0</span>
+                </button>
+                <button class="subtab-btn" id="subtab-website" data-order-channel="WEBSITE">
+                  <span>🌐 Website Orders</span>
+                  <span class="subtab-count" id="count-website-orders">0</span>
+                </button>
+              </div>
+
+              <!-- Export Daily Sales Report Button -->
+              <div class="orders-header-actions">
+                <button class="btn-header-action btn-gold" id="btn-open-daily-report-modal">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>Export Daily Sales Report</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Orders Search & Filter Controls -->
+            <div class="orders-filter-row">
+              <div class="search-input-wrap">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="orders-search-input" class="form-control" placeholder="Search invoice #, order ref, customer name, or phone..." />
+              </div>
+              <div class="filter-dropdowns">
+                <select id="orders-status-filter" class="form-control">
+                  <option value="">All Order Statuses</option>
+                  <option value="CONFIRMED">Confirmed</option>
+                  <option value="PROCESSING">Processing</option>
+                  <option value="DISPATCHED">Dispatched</option>
+                  <option value="DELIVERED">Delivered</option>
+                  <option value="REFUNDED">Refunded</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+                <select id="orders-payment-filter" class="form-control">
+                  <option value="">All Payment Statuses</option>
+                  <option value="VERIFIED">Verified (Paid)</option>
+                  <option value="AWAITING_VERIFICATION">Awaiting Review</option>
+                  <option value="UNPAID">Unpaid</option>
+                  <option value="REFUNDED">Refunded</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Orders Data Table -->
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Invoice / Token</th>
+                    <th>Date & Time</th>
+                    <th>Customer</th>
+                    <th>Items & Qty</th>
+                    <th>Subtotal</th>
+                    <th>Discount</th>
+                    <th>Total Payable</th>
+                    <th>Payment</th>
+                    <th>Fulfillment</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="orders-table-body">
+                  <tr><td colspan="10" style="text-align:center; padding:2.5rem; color:#9CA3AF;">Loading orders...</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Orders Pagination / Summary -->
+            <div class="table-footer-bar">
+              <span id="orders-count-label">Showing 0 orders</span>
+              <div class="pagination-controls" id="orders-pagination"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <!-- 3. VIEW: TOTAL INVENTORY — COMPLETE FRAME MANAGEMENT             -->
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <section class="view-section" id="view-inventory">
+          <!-- Inventory Metrics Summary Row -->
+          <div class="inv-summary-row">
+            <div class="inv-metric-badge">
+              <span class="badge-num" id="inv-total-distinct">0</span>
+              <span class="badge-text">Unique Frame Records</span>
+            </div>
+            <div class="inv-metric-badge">
+              <span class="badge-num" id="inv-total-physical">0</span>
+              <span class="badge-text">Physical Frames in Stock</span>
+            </div>
+            <div class="inv-metric-badge warning">
+              <span class="badge-num" id="inv-low-stock-count">0</span>
+              <span class="badge-text">Low Stock (≤ Threshold)</span>
+            </div>
+            <div class="inv-metric-badge danger">
+              <span class="badge-num" id="inv-out-stock-count">0</span>
+              <span class="badge-text">Out of Stock (0 units)</span>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-header inventory-top-header">
+              <div>
+                <span class="panel-title">Optical Frame Inventory</span>
+                <div class="panel-subtitle">Authoritative optical frames catalog, stock ledger & QR sticker generator</div>
+              </div>
+              <div class="inv-header-actions">
+                <!-- + Add New Frame Button (Mandatory Prominent Action) -->
+                <button class="btn-header-action btn-primary" id="btn-open-add-frame">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span>Add New Frame</span>
+                </button>
+
+                <!-- Import Frame Data Button (CSV/Excel) -->
+                <button class="btn-header-action btn-secondary" id="btn-open-import-modal">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <span>Import Frame Data</span>
+                </button>
+
+                <!-- Batch QR Stickers Button -->
+                <button class="btn-header-action btn-gold" id="btn-batch-stickers" disabled>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                  <span id="btn-batch-stickers-text">Print Selected Stickers (0)</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Inventory Search, Shape, Brand & Stock Filters -->
+            <div class="inventory-filter-row">
+              <div class="search-input-wrap">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="inv-search-input" class="form-control" placeholder="Search by frame code, SKU, brand, model, or product name..." />
+              </div>
+              <div class="filter-dropdowns">
+                <select id="inv-filter-shape" class="form-control">
+                  <option value="">All Frame Shapes</option>
+                  <option value="Rectangular">Rectangular</option>
+                  <option value="Round">Round</option>
+                  <option value="Square">Square</option>
+                  <option value="Geometric">Geometric</option>
+                  <option value="Aviator">Aviator</option>
+                  <option value="Cat-Eye">Cat-Eye</option>
+                </select>
+                <select id="inv-filter-stock" class="form-control">
+                  <option value="">All Stock Statuses</option>
+                  <option value="in_stock">In Stock (&gt; 0)</option>
+                  <option value="low_stock">Low Stock (≤ Threshold)</option>
+                  <option value="out_of_stock">Out of Stock (0 units)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Inventory Table -->
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width:36px;"><input type="checkbox" id="inv-select-all" title="Select All Frames" /></th>
+                    <th>Image</th>
+                    <th>Frame Name</th>
+                    <th>SKU / Frame Code</th>
+                    <th>Internal ID</th>
+                    <th>Brand & Model</th>
+                    <th>Color & Shape</th>
+                    <th>Cost Price</th>
+                    <th>Selling Price</th>
+                    <th>Stock Units</th>
+                    <th>Stock Status</th>
+                    <th>QR Sticker</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="inventory-table-body">
+                  <tr><td colspan="13" style="text-align:center; padding:2.5rem; color:#9CA3AF;">Loading inventory...</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="table-footer-bar">
+              <span id="inv-count-label">Showing 0 frames</span>
+              <button class="btn-table-action" id="btn-print-all-stickers">Print All Eligible Frame Stickers</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <!-- 4. VIEW: IN-STORE POS — CAMERA SCANNING AND FRAME BILLING         -->
+        <!-- ═════════════════════════════════════════════════════════════════ -->
         <section class="view-section" id="view-pos">
+          <div class="pos-top-bar">
+            <div class="pos-active-info">
+              <span class="pos-token-pill" id="pos-token-display">Token #--</span>
+              <span class="pos-cashier-label" id="pos-cashier-display">Cashier: Active</span>
+              <span class="pos-printer-badge">🖨️ 58mm / 80mm Thermal Printer Ready</span>
+            </div>
+            <div class="pos-top-actions">
+              <button class="btn-pos-new-bill" id="btn-pos-new-bill">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>New Bill</span>
+              </button>
+            </div>
+          </div>
+
           <div class="pos-layout-grid">
-            <!-- Left: Catalog Tiles & Barcode Scan -->
-            <div class="pos-catalog-panel">
-              <div class="pos-search-bar-wrap">
-                <input type="text" class="pos-search-input" id="pos-search-input" placeholder="Search frame name, SKU, or scan barcode..." autocomplete="off" />
-                <button class="btn-header-action" id="pos-btn-clear-search">Clear</button>
+            <!-- Left Panel: Camera QR Scanner + Fast Frame Search + Quick Catalog -->
+            <div class="pos-left-panel">
+              <!-- Camera QR Scanner Viewport & Controls -->
+              <div class="pos-camera-card" id="pos-camera-card">
+                <div class="camera-card-header">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="camera-indicator-dot" id="camera-status-dot"></span>
+                    <span style="font-weight:700; font-size:0.9rem;">Camera Frame Scanner</span>
+                  </div>
+                  <div class="camera-header-buttons">
+                    <select id="camera-select-dropdown" class="form-control" style="width:auto; font-size:0.75rem; padding:4px 8px; display:none;"></select>
+                    <button class="btn-camera-toggle" id="btn-toggle-camera">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                      <span id="btn-camera-text">Open Camera Scanner</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Video Viewport for html5-qrcode -->
+                <div class="camera-viewport-wrap" id="camera-viewport-wrap" style="display:none;">
+                  <div id="html5-qr-reader" style="width:100%; border-radius:10px; overflow:hidden;"></div>
+                  <div class="scan-reticle">
+                    <div class="reticle-corner tl"></div>
+                    <div class="reticle-corner tr"></div>
+                    <div class="reticle-corner bl"></div>
+                    <div class="reticle-corner br"></div>
+                    <div class="reticle-laser"></div>
+                  </div>
+                  <div class="camera-scan-hint">Point camera at the yellow frame QR sticker to add to bill</div>
+                </div>
               </div>
-              <div class="pos-category-pills" id="pos-shape-pills">
-                <button class="pos-cat-pill active" data-pos-shape="all">All Frames</button>
-                <button class="pos-cat-pill" data-pos-shape="Rectangular">Rectangular</button>
-                <button class="pos-cat-pill" data-pos-shape="Round">Round</button>
-                <button class="pos-cat-pill" data-pos-shape="Square">Square</button>
-                <button class="pos-cat-pill" data-pos-shape="Geometric">Geometric</button>
-                <button class="pos-cat-pill" data-pos-shape="Aviator">Aviator</button>
-                <button class="pos-cat-pill" data-pos-shape="Cat-Eye">Cat-Eye</button>
+
+              <!-- Barcode / QR Keyboard Scanner & Search Input -->
+              <div class="pos-search-card">
+                <div class="pos-input-group">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input type="text" id="pos-keyboard-scan-input" class="pos-search-input" placeholder="Scan QR sticker with USB/Bluetooth scanner, or type frame SKU / name..." autocomplete="off" />
+                  <button class="btn-clear-input" id="pos-btn-clear-search">&times;</button>
+                </div>
+                <div class="scan-status-notice" id="pos-scan-feedback" style="display:none;"></div>
               </div>
-              <div class="pos-products-grid" id="pos-products-grid">
+
+              <!-- Frame Shape Chips -->
+              <div class="pos-shape-chips" id="pos-shape-chips">
+                <button class="pos-shape-chip active" data-pos-shape="all">All Frames</button>
+                <button class="pos-shape-chip" data-pos-shape="Rectangular">Rectangular</button>
+                <button class="pos-shape-chip" data-pos-shape="Round">Round</button>
+                <button class="pos-shape-chip" data-pos-shape="Square">Square</button>
+                <button class="pos-shape-chip" data-pos-shape="Geometric">Geometric</button>
+                <button class="pos-shape-chip" data-pos-shape="Aviator">Aviator</button>
+                <button class="pos-shape-chip" data-pos-shape="Cat-Eye">Cat-Eye</button>
+              </div>
+
+              <!-- Quick Click Catalog Grid -->
+              <div class="pos-catalog-grid" id="pos-catalog-grid">
                 <!-- Populated dynamically via admin.js -->
               </div>
             </div>
 
-            <!-- Right: POS Register Cart -->
-            <div class="pos-register-panel">
-              <div class="pos-register-header">
-                <h3 style="font-size:1.05rem; font-weight:800;">CURRENT REGISTER</h3>
-                <span class="badge-status channel-pos">POS REGISTER</span>
-              </div>
-
-              <div class="pos-customer-selector">
-                <input type="text" id="pos-cust-name" class="form-control" placeholder="Walk-in Client Name" style="font-size:0.8rem;" />
-                <input type="tel" id="pos-cust-phone" class="form-control" placeholder="Phone Number" style="font-size:0.8rem;" />
-              </div>
-
-              <!-- Cart Line Items -->
-              <div class="pos-cart-items-wrap" id="pos-cart-items">
-                <div style="text-align:center; color:#9CA3AF; padding:2rem 0;">
-                  Cart is empty. Tap any optical frame on the left to add.
-                </div>
-              </div>
-
-              <!-- Totals & Discounts -->
-              <div class="pos-register-totals">
-                <div class="pos-totals-row">
-                  <span>Subtotal</span>
-                  <span id="pos-subtotal">₹0.00</span>
-                </div>
-                <div class="pos-totals-row">
-                  <span>Discount (₹)</span>
-                  <input type="number" id="pos-discount-input" min="0" value="0" style="width:70px; text-align:right; padding:2px; font-size:0.8rem;" />
-                </div>
-                <div class="pos-totals-row">
-                  <span>GST (18% Included)</span>
-                  <span id="pos-tax">₹0.00</span>
-                </div>
-                <div class="pos-totals-row grand">
-                  <span>TOTAL PAYABLE</span>
-                  <span id="pos-grand-total">₹0.00</span>
-                </div>
-              </div>
-
-              <!-- Payment Mode Selector -->
-              <div class="pos-payment-methods">
-                <button type="button" class="btn-pos-paymode active" data-paymode="CASH">💵 CASH</button>
-                <button type="button" class="btn-pos-paymode" data-paymode="UPI_GPAY">📱 GOOGLE PAY / UPI</button>
-                <button type="button" class="btn-pos-paymode" data-paymode="CARD">💳 CARD</button>
-              </div>
-
-              <div id="pos-gpay-helper" style="display:none; padding:0.5rem 1.25rem; font-size:0.75rem; background:#FEF3C7; color:#92400E;">
-                <span>Show merchant QR to customer. Enter claimed UTR/UPI Ref below:</span>
-                <input type="text" id="pos-upi-ref" class="form-control" placeholder="UPI Ref / UTR No (e.g. 429188172910)" style="margin-top:4px;" />
-              </div>
-
-              <div class="pos-checkout-btn-wrap">
-                <button class="btn-pos-complete" id="btn-pos-submit">
-                  <span>COMPLETE SALE & PRINT TOKEN</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── VIEW: ORDERS PIPELINE ─────────────────────────────────────── -->
-        <section class="view-section" id="view-orders">
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">All Customer Orders (Physical & Online)</span>
-              <div class="panel-filters">
-                <select id="orders-filter-channel" class="form-control" style="width:auto;">
-                  <option value="">All Channels</option>
-                  <option value="POS">Physical POS</option>
-                  <option value="ONLINE">Online Store</option>
-                </select>
-                <select id="orders-filter-payment" class="form-control" style="width:auto;">
-                  <option value="">All Payments</option>
-                  <option value="VERIFIED">Verified</option>
-                  <option value="AWAITING_VERIFICATION">Awaiting Review</option>
-                  <option value="UNPAID">Unpaid</option>
-                </select>
-              </div>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Token #</th>
-                    <th>Order Ref</th>
-                    <th>Channel</th>
-                    <th>Customer</th>
-                    <th>Prescription / Lens</th>
-                    <th>Payable</th>
-                    <th>Payment Status</th>
-                    <th>Date & Time</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="orders-table-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── VIEW: PAYMENT VERIFICATION (GOOGLE PAY / UPI DESK) ────────── -->
-        <section class="view-section" id="view-payments">
-          <div class="panel-card">
-            <div class="panel-header">
-              <div>
-                <span class="panel-title">Google Pay & UPI Payment Verification Desk</span>
-                <div style="font-size:0.75rem; color:#6B7280; margin-top:2px;">
-                  Verify claimed customer UPI transaction IDs against your Google Pay for Business bank credit record.
-                </div>
-              </div>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Token #</th>
-                    <th>Order Ref</th>
-                    <th>Customer Name</th>
-                    <th>Amount Claimed</th>
-                    <th>Customer Claimed Ref / UTR</th>
-                    <th>Created At</th>
-                    <th>Manual Verification Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="payments-pending-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── VIEW: PRODUCTS & FRAMES CATALOG ───────────────────────────── -->
-        <section class="view-section" id="view-products">
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Handcrafted Eyewear Product Catalog</span>
-              <div class="panel-filters">
-                <button class="btn-header-action btn-primary" id="btn-add-product">
-                  <span>+ Add New Optical Frame</span>
-                </button>
-              </div>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Image</th>
-                    <th>Frame Name</th>
-                    <th>SKU</th>
-                    <th>Shape & Material</th>
-                    <th>Selling Price</th>
-                    <th>Purchase Cost</th>
-                    <th>Total Stock</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="products-table-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── VIEW: STOCK & INVENTORY BALANCES ──────────────────────────── -->
-        <section class="view-section" id="view-inventory">
-          <div class="panel-card">
-            <div class="panel-header">
-              <div>
-                <span class="panel-title">Variant-Level Stock Balances</span>
-                <div style="font-size:0.75rem; color:#6B7280;">Live quantities per colorway & reorder alert thresholds.</div>
-              </div>
-              <button class="btn-header-action btn-primary" id="btn-trigger-stock-adjust">
-                <span>Stock Adjustment (Damage / Correction)</span>
-              </button>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Frame</th>
-                    <th>Variant SKU</th>
-                    <th>Barcode</th>
-                    <th>Color</th>
-                    <th>Available Stock</th>
-                    <th>Reorder Level</th>
-                    <th>Unit Cost</th>
-                    <th>Stock Value</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="inventory-balances-body"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Stock Movement Ledger -->
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Stock Ledger & Audit Trail (All Movements)</span>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Date & Time</th>
-                    <th>Frame</th>
-                    <th>Variant</th>
-                    <th>Type</th>
-                    <th>Change</th>
-                    <th>Balance After</th>
-                    <th>Reason / Ref</th>
-                    <th>Staff</th>
-                  </tr>
-                </thead>
-                <tbody id="stock-movements-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── VIEW: SUPPLIERS & PURCHASES ───────────────────────────────── -->
-        <section class="view-section" id="view-purchases">
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Purchase Orders & Goods Receipts</span>
-              <button class="btn-header-action btn-primary" id="btn-create-po">+ New Purchase Order</button>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>PO Number</th>
-                    <th>Supplier</th>
-                    <th>Total Cost</th>
-                    <th>Status</th>
-                    <th>Created At</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="po-table-body"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Optical Material Suppliers</span>
-              <button class="btn-header-action" id="btn-add-supplier">+ Add Supplier</button>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Supplier Name</th>
-                    <th>Contact Person</th>
-                    <th>Phone</th>
-                    <th>Email</th>
-                    <th>GSTIN / Tax ID</th>
-                  </tr>
-                </thead>
-                <tbody id="suppliers-table-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── VIEW: CUSTOMERS CRM ───────────────────────────────────────── -->
-        <section class="view-section" id="view-customers">
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Boutique Customer CRM & Prescriptions</span>
-              <button class="btn-header-action btn-primary" id="btn-add-customer">+ Add Customer</button>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Phone</th>
-                    <th>Email</th>
-                    <th>City</th>
-                    <th>Orders Count</th>
-                    <th>Prescription Status</th>
-                  </tr>
-                </thead>
-                <tbody id="customers-table-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── VIEW: INVOICES (PDF GENERATOR) ────────────────────────────── -->
-        <section class="view-section" id="view-invoices">
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Tax Invoices</span>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Invoice #</th>
-                    <th>Order Ref</th>
-                    <th>Customer</th>
-                    <th>Total</th>
-                    <th>Payment Mode</th>
-                    <th>Status</th>
-                    <th>Date</th>
-                    <th>Download / Print</th>
-                  </tr>
-                </thead>
-                <tbody id="invoices-table-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── VIEW: OPERATING EXPENSES ──────────────────────────────────── -->
-        <section class="view-section" id="view-expenses">
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Operating Expenses & Overheads</span>
-              <button class="btn-header-action btn-primary" id="btn-add-expense">+ Record Expense</button>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Expense #</th>
-                    <th>Category</th>
-                    <th>Title / Purpose</th>
-                    <th>Amount</th>
-                    <th>Payment Mode</th>
-                    <th>Date</th>
-                    <th>Recorded By</th>
-                  </tr>
-                </thead>
-                <tbody id="expenses-table-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── VIEW: FINANCIALS & PROFIT (P&L) ───────────────────────────── -->
-        <section class="view-section" id="view-finance">
-          <div class="metrics-grid">
-            <div class="metric-card">
-              <div class="metric-header"><span class="metric-label">Net Sales</span></div>
-              <div class="metric-value" id="fin-net-sales">₹0.00</div>
-              <span class="metric-sub">Revenue excluding discounts</span>
-            </div>
-            <div class="metric-card">
-              <div class="metric-header"><span class="metric-label">Cost of Goods (COGS)</span></div>
-              <div class="metric-value" id="fin-cogs">₹0.00</div>
-              <span class="metric-sub">Frame purchase costs</span>
-            </div>
-            <div class="metric-card">
-              <div class="metric-header"><span class="metric-label">Gross Profit</span></div>
-              <div class="metric-value" id="fin-gross-profit" style="color:var(--accent-green);">₹0.00</div>
-              <span class="metric-sub">Net Sales less COGS</span>
-            </div>
-            <div class="metric-card">
-              <div class="metric-header"><span class="metric-label">Operating Net Profit</span></div>
-              <div class="metric-value" id="fin-net-profit">₹0.00</div>
-              <span class="metric-sub">Gross profit less expenses</span>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Sales Channel & Payment Breakdown</span>
-            </div>
-            <div class="panel-body">
-              <div style="display:grid; grid-template-columns:1fr 1fr; gap:2rem;">
-                <div>
-                  <h4 style="margin-bottom:0.75rem; font-size:0.85rem;">Sales by Channel</h4>
-                  <div id="fin-channel-summary"></div>
-                </div>
-                <div>
-                  <h4 style="margin-bottom:0.75rem; font-size:0.85rem;">Sales by Payment Method</h4>
-                  <div id="fin-payment-summary"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── VIEW: THERMAL PRINTER STATION ─────────────────────────────── -->
-        <section class="view-section" id="view-printer">
-          <div class="panel-card">
-            <div class="panel-header">
-              <div>
-                <span class="panel-title">2-inch (58 mm) Thermal Receipt Station</span>
-                <div style="font-size:0.75rem; color:#6B7280;">Connected Hardware Printer: POS-80 on USB Port</div>
-              </div>
-              <button class="btn-header-action btn-primary" id="btn-printer-test-print">
-                <span>🖨️ Test Print 58mm Token</span>
-              </button>
-            </div>
-            <div class="panel-body">
-              <div class="form-row-2">
-                <div class="form-group">
-                  <label>Windows Printer Name</label>
-                  <input type="text" id="cfg-printer-name" class="form-control" value="POS-80" />
-                </div>
-                <div class="form-group">
-                  <label>Nominal Paper Width (mm)</label>
-                  <select id="cfg-printer-width" class="form-control">
-                    <option value="58" selected>58 mm (2-inch nominal)</option>
-                    <option value="80">80 mm (3-inch wide)</option>
-                  </select>
-                </div>
-              </div>
-              <button class="btn-header-action btn-primary" id="btn-save-printer-config">Save Printer Configuration</button>
-            </div>
-          </div>
-
-          <!-- Print Job Queue -->
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Thermal Print Job Queue & History</span>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Job ID</th>
-                    <th>Order Ref</th>
-                    <th>Token #</th>
-                    <th>Doc Type</th>
-                    <th>Status</th>
-                    <th>Attempts</th>
-                    <th>Last Error / Spool Info</th>
-                    <th>Created At</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="printer-jobs-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── VIEW: STORE & GOOGLE PAY QR SETTINGS ──────────────────────── -->
-        <section class="view-section" id="view-settings">
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Boutique & Payment QR Configuration</span>
-            </div>
-            <div class="panel-body">
-              <form id="settings-form">
-                <div class="form-row-2">
-                  <div class="form-group">
-                    <label>Store Name</label>
-                    <input type="text" id="set-store-name" class="form-control" />
+            <!-- Right Panel: Active Billing Cart, Totals & Checkout -->
+            <div class="pos-right-panel">
+              <div class="pos-cart-card">
+                <div class="pos-cart-header">
+                  <div>
+                    <h3 class="pos-cart-title">ACTIVE BILL</h3>
+                    <span class="pos-cart-subtitle" id="pos-cart-count">0 frames added</span>
                   </div>
-                  <div class="form-group">
-                    <label>Store Tagline</label>
-                    <input type="text" id="set-store-tagline" class="form-control" />
+                  <button class="btn-table-action" id="btn-clear-cart" title="Clear all items from bill">Clear</button>
+                </div>
+
+                <!-- Customer Details Input -->
+                <div class="pos-customer-row">
+                  <input type="text" id="pos-cust-name" class="form-control" placeholder="Client Name (Walk-in Client)" value="Walk-in Client" />
+                  <input type="tel" id="pos-cust-phone" class="form-control" placeholder="Phone Number" />
+                </div>
+
+                <!-- Cart Line Items -->
+                <div class="pos-cart-items-list" id="pos-cart-items-list">
+                  <div class="pos-cart-empty">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                    <p>Bill is currently empty.<br/>Scan a yellow frame QR sticker or tap any frame from the catalog.</p>
                   </div>
                 </div>
 
-                <div class="form-group">
-                  <label>Store Address</label>
-                  <input type="text" id="set-store-address" class="form-control" />
-                </div>
-
-                <div class="form-row-2">
-                  <div class="form-group">
-                    <label>Phone Number</label>
-                    <input type="text" id="set-store-phone" class="form-control" />
+                <!-- Bill Totals Breakdown -->
+                <div class="pos-totals-block">
+                  <div class="pos-total-row">
+                    <span>Subtotal</span>
+                    <span id="pos-subtotal-val">₹0.00</span>
                   </div>
-                  <div class="form-group">
-                    <label>GSTIN / Tax ID</label>
-                    <input type="text" id="set-store-gstin" class="form-control" />
+                  <div class="pos-total-row discount-row">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      <span>Discount (₹)</span>
+                      <input type="number" id="pos-discount-amount" class="pos-discount-field" min="0" value="0" step="1" />
+                    </div>
+                    <span id="pos-discount-val">-₹0.00</span>
                   </div>
-                </div>
-
-                <div class="form-row-2">
-                  <div class="form-group">
-                    <label>Google Pay / UPI VPA (Merchant ID)</label>
-                    <input type="text" id="set-store-upi" class="form-control" />
+                  <div class="pos-total-row">
+                    <span>GST (18% Inclusive)</span>
+                    <span id="pos-tax-val">₹0.00</span>
                   </div>
-                  <div class="form-group">
-                    <label>Invoice Number Prefix</label>
-                    <input type="text" id="set-invoice-prefix" class="form-control" />
+                  <div class="pos-total-row final-total-row">
+                    <span>TOTAL PAYABLE</span>
+                    <span id="pos-grand-total-val">₹0.00</span>
                   </div>
                 </div>
 
-                <div class="form-group" style="margin-top:1rem;">
-                  <label>Google Pay Merchant QR Code (Upload Image)</label>
-                  <input type="file" id="qr-file-upload" accept="image/*" class="form-control" />
-                  <div style="margin-top:0.75rem;">
-                    <img id="qr-preview-img" src="images/merchant_gpay_qr_sample.png" style="max-width:180px; border:1px solid #E5E7EB; border-radius:4px; padding:4px;" alt="Merchant QR Preview" />
+                <!-- Supported Payment Methods -->
+                <div class="pos-payment-methods-block">
+                  <label class="pos-pm-label">Select Payment Method:</label>
+                  <div class="pos-pm-buttons">
+                    <button type="button" class="btn-pos-pm active" data-paymode="CASH">
+                      <span>💵 CASH</span>
+                    </button>
+                    <button type="button" class="btn-pos-pm" data-paymode="UPI_GPAY">
+                      <span>📱 GOOGLE PAY / UPI</span>
+                    </button>
+                    <button type="button" class="btn-pos-pm" data-paymode="CARD">
+                      <span>💳 CARD</span>
+                    </button>
                   </div>
                 </div>
 
-                <button type="submit" class="btn-header-action btn-primary" style="margin-top:1rem;">Save Store Settings</button>
-              </form>
-            </div>
-          </div>
-        </section>
+                <!-- Dynamic UPI Helper (Shown when UPI is selected) -->
+                <div id="pos-upi-display-card" class="pos-upi-card" style="display:none;">
+                  <div class="upi-card-content">
+                    <div class="upi-qr-preview">
+                      <div id="pos-dynamic-upi-qr"></div>
+                    </div>
+                    <div class="upi-instructions">
+                      <strong>Boutique Instant UPI</strong>
+                      <p>Customer scans with Google Pay, PhonePe, or BHIM.</p>
+                      <input type="text" id="pos-claimed-utr" class="form-control" placeholder="Enter claimed UTR / UPI Ref (optional)" />
+                    </div>
+                  </div>
+                </div>
 
-        <!-- ── VIEW: STAFF & PERMISSIONS (RBAC) ──────────────────────────── -->
-        <section class="view-section" id="view-staff">
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">Staff Members & Role-Based Access Control</span>
-              <button class="btn-header-action btn-primary" id="btn-create-staff">+ Add Staff Member</button>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Phone</th>
-                    <th>Status</th>
-                    <th>Last Login</th>
-                  </tr>
-                </thead>
-                <tbody id="staff-table-body"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- ── VIEW: AUDIT LOGS ──────────────────────────────────────────── -->
-        <section class="view-section" id="view-audit">
-          <div class="panel-card">
-            <div class="panel-header">
-              <span class="panel-title">System Audit Trail & Security Events</span>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Timestamp</th>
-                    <th>Action</th>
-                    <th>User</th>
-                    <th>Entity Type</th>
-                    <th>Entity ID</th>
-                    <th>Details</th>
-                    <th>IP Address</th>
-                  </tr>
-                </thead>
-                <tbody id="audit-table-body"></tbody>
-              </table>
+                <!-- Checkout Action Button -->
+                <div class="pos-checkout-actions">
+                  <button class="btn-pos-checkout" id="btn-pos-confirm-checkout" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span>Confirm Checkout & Print Invoice</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -820,42 +719,345 @@
     </main>
   </div>
 
-  <!-- ── 3. MODAL DIALOGS ─────────────────────────────────────────────────── -->
+  <!-- ═════════════════════════════════════════════════════════════════════ -->
+  <!-- 3. MODAL DIALOGS                                                      -->
+  <!-- ═════════════════════════════════════════════════════════════════════ -->
 
-  <!-- Modal: Payment Verification Inspector -->
-  <div class="modal-overlay" id="modal-payment-verify">
-    <div class="admin-modal">
+  <!-- ── MODAL A: + ADD NEW FRAME (With Save & Save & Print QR Sticker) ── -->
+  <div class="modal-overlay" id="modal-add-frame">
+    <div class="admin-modal modal-lg">
       <div class="modal-header">
-        <h3>Verify Google Pay / UPI Payment</h3>
+        <div>
+          <h3>+ Add New Optical Frame</h3>
+          <p class="modal-sub">Register frame details, authoritative pricing & permanent QR identity</p>
+        </div>
         <button class="btn-close-modal" data-close-modal>&times;</button>
       </div>
-      <div class="modal-body">
-        <div style="font-size:0.85rem; margin-bottom:1rem; line-height:1.6;">
-          <div><strong>Order Ref:</strong> <span id="mv-order-ref"></span></div>
-          <div><strong>Token Number:</strong> <span id="mv-token-num"></span></div>
-          <div><strong>Customer:</strong> <span id="mv-cust-name"></span></div>
-          <div><strong>Amount Payable:</strong> <span id="mv-amount" style="font-size:1.1rem; font-weight:700; color:var(--accent-green);"></span></div>
-          <div style="margin-top:0.5rem; padding:0.5rem; background:#FEF3C7; border:1px solid #F59E0B; border-radius:4px;">
-            <strong>Claimed UTR / UPI Ref:</strong> <span id="mv-claimed-ref" style="font-weight:700;"></span>
+      <form id="form-add-frame">
+        <div class="modal-body modal-scrollable">
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="frm-name">Frame Name <span class="req">*</span></label>
+              <input type="text" id="frm-name" class="form-control" placeholder="e.g. The Oslo Crystal" required />
+            </div>
+            <div class="form-group">
+              <label for="frm-sku">Unique SKU / Frame Code <span class="req">*</span></label>
+              <input type="text" id="frm-sku" class="form-control" placeholder="e.g. NOOR-OSLO-01" required />
+              <small class="form-hint">Must be unique. Encoded into the permanent yellow QR sticker.</small>
+            </div>
+          </div>
+
+          <div class="form-row-3">
+            <div class="form-group">
+              <label for="frm-brand">Brand</label>
+              <input type="text" id="frm-brand" class="form-control" value="Noor Optics" />
+            </div>
+            <div class="form-group">
+              <label for="frm-model">Model</label>
+              <input type="text" id="frm-model" class="form-control" placeholder="e.g. Oslo" />
+            </div>
+            <div class="form-group">
+              <label for="frm-shape">Frame Shape</label>
+              <select id="frm-shape" class="form-control">
+                <option value="Rectangular">Rectangular</option>
+                <option value="Round">Round</option>
+                <option value="Square">Square</option>
+                <option value="Geometric">Geometric</option>
+                <option value="Aviator">Aviator</option>
+                <option value="Cat-Eye">Cat-Eye</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row-3">
+            <div class="form-group">
+              <label for="frm-color-name">Colour Name</label>
+              <input type="text" id="frm-color-name" class="form-control" placeholder="e.g. Crystal Clear" value="Classic Black" />
+            </div>
+            <div class="form-group">
+              <label for="frm-color-hex">Colour Hex</label>
+              <div style="display:flex; gap:6px;">
+                <input type="color" id="frm-color-picker" value="#111111" style="height:38px; width:45px; border-radius:6px; border:1px solid #CCC; cursor:pointer;" />
+                <input type="text" id="frm-color-hex" class="form-control" value="#111111" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="frm-size">Size Specifications</label>
+              <input type="text" id="frm-size" class="form-control" placeholder="e.g. Medium - 49-20-145" value="Medium - 49-20-145" />
+            </div>
+          </div>
+
+          <div class="form-row-3">
+            <div class="form-group">
+              <label for="frm-selling-price">Retail Selling Price (₹) <span class="req">*</span></label>
+              <input type="number" id="frm-selling-price" class="form-control" min="1" step="1" placeholder="3499" required />
+            </div>
+            <div class="form-group">
+              <label for="frm-cost-price">Cost Price (₹)</label>
+              <input type="number" id="frm-cost-price" class="form-control" min="0" step="1" placeholder="1200" />
+            </div>
+            <div class="form-group">
+              <label for="frm-stock-qty">Initial Stock Quantity <span class="req">*</span></label>
+              <input type="number" id="frm-stock-qty" class="form-control" min="0" step="1" value="10" required />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="frm-material">Frame Material</label>
+            <input type="text" id="frm-material" class="form-control" placeholder="e.g. Japanese Beta-Titanium / Mazzucchelli Bio-Acetate" value="Japanese Pure Titanium" />
+          </div>
+
+          <div class="form-group">
+            <label for="frm-image-url">Product Image URL / Relative Path</label>
+            <input type="text" id="frm-image-url" class="form-control" placeholder="images/oslo_crystal.jpg" value="images/stockholm_noir.jpg" />
+          </div>
+
+          <div class="form-group">
+            <label for="frm-description">Description</label>
+            <textarea id="frm-description" class="form-control" rows="2" placeholder="Handcrafted optical frame engineered for ultra-lightweight durability..."></textarea>
           </div>
         </div>
-        <div class="form-group">
-          <label>Merchant Transaction ID (From your GPay Merchant App)</label>
-          <input type="text" id="mv-merchant-tx-id" class="form-control" placeholder="e.g. CICAgKC..." />
+
+        <div class="modal-footer">
+          <button type="button" class="btn-header-action" data-close-modal>Cancel</button>
+          <!-- Action 1: Save Frame -->
+          <button type="submit" class="btn-header-action btn-secondary" id="btn-submit-save-only">Save Frame</button>
+          <!-- Action 2: Save & Print QR Sticker -->
+          <button type="button" class="btn-header-action btn-gold" id="btn-submit-save-print">Save & Print QR Sticker</button>
         </div>
-        <div class="form-group">
-          <label>Verifier Notes / Justification</label>
-          <textarea id="mv-notes" class="form-control" rows="2" placeholder="Credit verified in HDFC Current A/c..."></textarea>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── MODAL B: YELLOW QR-ONLY FRAME STICKER GENERATOR (CRITICAL) ───────── -->
+  <div class="modal-overlay" id="modal-qr-sticker">
+    <div class="admin-modal modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3>🏷️ Yellow Frame QR Sticker Generator</h3>
+          <p class="modal-sub"><strong>NO BARCODES</strong> • Pure Scannable QR Code • Bright-Yellow Background</p>
+        </div>
+        <button class="btn-close-modal" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body modal-scrollable">
+        <div class="sticker-config-grid">
+          <!-- Configuration Settings -->
+          <div class="sticker-settings-column">
+            <h4 class="settings-sec-title">Sticker Dimensions & Store Header</h4>
+
+            <div class="form-group">
+              <label for="stk-contact-line">Store Contact Line (Printed at Top)</label>
+              <input type="text" id="stk-contact-line" class="form-control" value="Ph: +91 98765 43210" />
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="stk-width-mm">Label Width (mm)</label>
+                <input type="number" id="stk-width-mm" class="form-control" value="30" min="20" max="60" step="1" />
+              </div>
+              <div class="form-group">
+                <label for="stk-height-mm">Label Height (mm)</label>
+                <input type="number" id="stk-height-mm" class="form-control" value="18" min="12" max="40" step="1" />
+              </div>
+            </div>
+
+            <!-- Reliability Warning if size too small -->
+            <div id="stk-size-warning" class="size-warning-box" style="display:none;">
+              ⚠️ <strong>Warning:</strong> Labels under 28×16mm may be difficult for some smartphone cameras to scan reliably. We recommend 30×18mm or larger.
+            </div>
+
+            <div class="form-group">
+              <label for="stk-print-layout">Print Layout Mode</label>
+              <select id="stk-print-layout" class="form-control">
+                <option value="individual">Individual Sticker (Thermal Label Roll / Single 30×18mm)</option>
+                <option value="a4_sheet" selected>Multiple Stickers on A4 Sheet (Grid with Cut Guides)</option>
+              </select>
+            </div>
+
+            <div id="a4-sheet-config" class="a4-config-box">
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="stk-sheet-cols">Columns per Row</label>
+                  <input type="number" id="stk-sheet-cols" class="form-control" value="5" min="1" max="10" />
+                </div>
+                <div class="form-group">
+                  <label for="stk-copies-count">Number of Sticker Copies</label>
+                  <input type="number" id="stk-copies-count" class="form-control" value="1" min="1" max="100" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="stk-show-cutlines" checked />
+                  <span>Include outer cut guides for clean physical cutting</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="print-instruction-box">
+              <strong>🖨️ Actual Size Printing Instructions:</strong>
+              <ul>
+                <li>In browser print dialog, set <strong>Scale to 100%</strong> (or "Actual Size").</li>
+                <li>Do NOT choose "Fit to Page".</li>
+                <li>Set Margins to <strong>None</strong> or <strong>Minimum</strong>.</li>
+                <li>Select "Background Graphics: ON" to print vivid bright-yellow color.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Live Sticker Visual Preview -->
+          <div class="sticker-preview-column">
+            <h4 class="settings-sec-title">Physical Label Preview (Actual Ratio)</h4>
+            <div class="preview-stage-wrap">
+              <div class="preview-stage" id="stk-preview-stage">
+                <!-- Dynamically rendered yellow sticker -->
+              </div>
+            </div>
+            <div class="preview-dimensions-tag" id="stk-dimensions-tag">Physical Size: 30 mm × 18 mm</div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn-header-action" style="background:var(--accent-red); color:#FFF;" id="btn-reject-payment">Reject Claim</button>
-        <button class="btn-header-action btn-success" id="btn-confirm-payment">✓ Confirm & Verify Payment</button>
+        <button type="button" class="btn-header-action" data-close-modal>Close</button>
+        <button type="button" class="btn-header-action btn-gold" id="btn-trigger-sticker-print">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          <span>Print Frame QR Stickers</span>
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Stock Adjustment -->
+  <!-- ── MODAL C: IMPORT FRAME DATA (CSV/EXCEL WITH VALIDATION) ────────────── -->
+  <div class="modal-overlay" id="modal-import-frames">
+    <div class="admin-modal modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3>📁 Import Optical Frame Data</h3>
+          <p class="modal-sub">Upload CSV or Excel file • Column Mapping • Duplicate SKU Validation</p>
+        </div>
+        <button class="btn-close-modal" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body modal-scrollable">
+        <!-- Step 1: File Dropzone -->
+        <div class="import-step" id="import-step-upload">
+          <div class="file-dropzone" id="import-dropzone">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <p><strong>Click to choose a file</strong> or drag and drop your spreadsheet here</p>
+            <span class="dropzone-sub">Supports .csv, .xlsx, and .xls files</span>
+            <input type="file" id="import-file-input" accept=".csv, .xlsx, .xls" style="display:none;" />
+          </div>
+          <div style="margin-top:1rem; text-align:center;">
+            <button type="button" class="btn-table-action" id="btn-download-sample-csv">Download Sample CSV Template</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Column Mapping & Preview -->
+        <div class="import-step" id="import-step-mapping" style="display:none;">
+          <h4 class="settings-sec-title">Step 2: Map Source Columns to Frame Fields</h4>
+          <div class="mapping-grid" id="mapping-fields-grid">
+            <!-- Populated via admin.js -->
+          </div>
+
+          <h4 class="settings-sec-title" style="margin-top:1.5rem;">Step 3: Data Preview & Duplicate Detection</h4>
+          <div class="table-responsive" style="max-height:220px;">
+            <table class="data-table" id="import-preview-table">
+              <!-- Populated via admin.js -->
+            </table>
+          </div>
+          <div id="import-validation-alerts" style="margin-top:1rem;"></div>
+        </div>
+
+        <!-- Step 3: Import Summary -->
+        <div class="import-step" id="import-step-summary" style="display:none;">
+          <div class="import-success-box">
+            <div class="import-badge-check">✓</div>
+            <h3 id="import-summary-headline">Import Completed Successfully</h3>
+            <p id="import-summary-sub">0 frames imported into active inventory.</p>
+          </div>
+          <div id="import-summary-errors"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-header-action" data-close-modal id="btn-import-cancel">Cancel</button>
+        <button type="button" class="btn-header-action btn-primary" id="btn-import-confirm" style="display:none;">Confirm & Import Records</button>
+        <button type="button" class="btn-header-action btn-gold" id="btn-print-imported-stickers" style="display:none;">🏷️ Print Stickers for Imported Frames</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL D: EXPORT DAILY SALES REPORT ────────────────────────────────── -->
+  <div class="modal-overlay" id="modal-export-daily-report">
+    <div class="admin-modal">
+      <div class="modal-header">
+        <div>
+          <h3>📊 Export Daily Sales Report</h3>
+          <p class="modal-sub">Multi-channel reconciliation (In-store POS & Website storefront)</p>
+        </div>
+        <button class="btn-close-modal" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="report-business-date">Select Business Date</label>
+          <input type="date" id="report-business-date" class="form-control" />
+        </div>
+
+        <!-- Quick Summary Box -->
+        <div class="report-summary-box" id="report-preview-box">
+          <div style="text-align:center; padding:1.5rem; color:#9CA3AF;">Loading daily sales summary...</div>
+        </div>
+
+        <div class="report-formats-wrap">
+          <label class="settings-sec-title" style="margin-bottom:8px; display:block;">Download Report Format:</label>
+          <div class="report-btn-grid">
+            <button class="btn-export-format" id="btn-download-report-csv">
+              <span class="fmt-icon">📄</span>
+              <div class="fmt-info">
+                <strong>CSV Spreadsheet</strong>
+                <span>Comma-separated table for Excel</span>
+              </div>
+            </button>
+            <button class="btn-export-format" id="btn-download-report-xlsx">
+              <span class="fmt-icon">📗</span>
+              <div class="fmt-info">
+                <strong>Excel Workbook (.xlsx)</strong>
+                <span>Formatted multi-channel audit sheet</span>
+              </div>
+            </button>
+            <button class="btn-export-format" id="btn-print-report-pdf">
+              <span class="fmt-icon">🖨️</span>
+              <div class="fmt-info">
+                <strong>Print / Save PDF</strong>
+                <span>Clean printable daily executive summary</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-header-action" data-close-modal>Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL E: ORDER DETAILS & SAFE REFUND ──────────────────────────────── -->
+  <div class="modal-overlay" id="modal-order-details">
+    <div class="admin-modal modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3 id="od-title">Order Details</h3>
+          <p class="modal-sub" id="od-sub">Invoice & payment breakdown</p>
+        </div>
+        <button class="btn-close-modal" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body modal-scrollable" id="od-content">
+        <!-- Rendered via admin.js -->
+      </div>
+      <div class="modal-footer" id="od-actions">
+        <button type="button" class="btn-header-action" data-close-modal>Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL F: STOCK ADJUSTMENT WITH MANDATORY AUDIT REASON ─────────────── -->
   <div class="modal-overlay" id="modal-stock-adjust">
     <div class="admin-modal">
       <div class="modal-header">
@@ -865,16 +1067,16 @@
       <form id="form-stock-adjust">
         <div class="modal-body">
           <div class="form-group">
-            <label>Select Product Variant</label>
+            <label>Selected Frame / Variant</label>
             <select id="adj-variant-select" class="form-control" required></select>
           </div>
           <div class="form-group">
             <label>Quantity Change (+ to Add, - to Deduct)</label>
-            <input type="number" id="adj-qty-input" class="form-control" placeholder="e.g. -2 for damaged, +10 for found" required />
+            <input type="number" id="adj-qty-input" class="form-control" placeholder="e.g. -1 for damaged in trial, +10 for stock delivery" required />
           </div>
           <div class="form-group">
             <label>Mandatory Audit Reason</label>
-            <textarea id="adj-reason-input" class="form-control" rows="2" placeholder="Frame bent during dispensing trial, written off as damaged..." required></textarea>
+            <textarea id="adj-reason-input" class="form-control" rows="2" placeholder="Required for compliance and stock movement logs..." required></textarea>
           </div>
         </div>
         <div class="modal-footer">
@@ -885,106 +1087,11 @@
     </div>
   </div>
 
-  <!-- Modal: Add New Staff -->
-  <div class="modal-overlay" id="modal-add-staff">
-    <div class="admin-modal">
-      <div class="modal-header">
-        <h3>Create Staff Member</h3>
-        <button class="btn-close-modal" data-close-modal>&times;</button>
-      </div>
-      <form id="form-add-staff">
-        <div class="modal-body">
-          <div class="form-group">
-            <label>Full Name</label>
-            <input type="text" id="staff-name" class="form-control" required />
-          </div>
-          <div class="form-group">
-            <label>Staff Email</label>
-            <input type="email" id="staff-email" class="form-control" required />
-          </div>
-          <div class="form-row-2">
-            <div class="form-group">
-              <label>Password</label>
-              <input type="password" id="staff-password" class="form-control" required minlength="6" />
-            </div>
-            <div class="form-group">
-              <label>Role</label>
-              <select id="staff-role" class="form-control" required>
-                <option value="role-cashier">Cashier</option>
-                <option value="role-inventory">Inventory Staff</option>
-                <option value="role-manager">Store Manager</option>
-                <option value="role-accountant">Accountant</option>
-                <option value="role-owner">Owner / Super Admin</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Contact Phone</label>
-            <input type="tel" id="staff-phone" class="form-control" />
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-header-action" data-close-modal>Cancel</button>
-          <button type="submit" class="btn-header-action btn-primary">Create Staff Account</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Modal: Record Expense -->
-  <div class="modal-overlay" id="modal-add-expense">
-    <div class="admin-modal">
-      <div class="modal-header">
-        <h3>Record Operational Expense</h3>
-        <button class="btn-close-modal" data-close-modal>&times;</button>
-      </div>
-      <form id="form-add-expense">
-        <div class="modal-body">
-          <div class="form-group">
-            <label>Expense Category</label>
-            <select id="exp-category" class="form-control" required></select>
-          </div>
-          <div class="form-group">
-            <label>Expense Title / Purpose</label>
-            <input type="text" id="exp-title" class="form-control" placeholder="e.g. October Flagship Boutique Rent" required />
-          </div>
-          <div class="form-row-2">
-            <div class="form-group">
-              <label>Amount (₹)</label>
-              <input type="number" id="exp-amount" class="form-control" min="1" step="0.01" required />
-            </div>
-            <div class="form-group">
-              <label>Payment Mode</label>
-              <select id="exp-paymode" class="form-control">
-                <option value="BANK_TRANSFER">Bank NEFT / RTGS</option>
-                <option value="UPI">Google Pay / UPI</option>
-                <option value="CASH">Cash Drawer</option>
-                <option value="CARD">Credit Card</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Expense Date</label>
-            <input type="date" id="exp-date" class="form-control" required />
-          </div>
-          <div class="form-group">
-            <label>Notes / Voucher Reference</label>
-            <input type="text" id="exp-notes" class="form-control" placeholder="Voucher #994" />
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-header-action" data-close-modal>Cancel</button>
-          <button type="submit" class="btn-header-action btn-primary">Save Expense Record</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Modal: Browser 58mm Thermal Print Preview Frame -->
+  <!-- ── MODAL G: THERMAL RECEIPT PREVIEW (58mm / 80mm) ────────────────────── -->
   <div class="modal-overlay" id="modal-receipt-preview">
-    <div class="admin-modal" style="max-width:380px;">
+    <div class="admin-modal" style="max-width:390px;">
       <div class="modal-header">
-        <h3>58mm Thermal Receipt Preview</h3>
+        <h3>Thermal Receipt Preview</h3>
         <button class="btn-close-modal" data-close-modal>&times;</button>
       </div>
       <div class="modal-body" style="padding:0;">
@@ -992,12 +1099,21 @@
       </div>
       <div class="modal-footer">
         <button class="btn-header-action" data-close-modal>Close</button>
-        <button class="btn-header-action btn-primary" id="btn-iframe-print">🖨️ Print to Thermal Printer</button>
+        <button class="btn-header-action btn-primary" id="btn-iframe-print">🖨️ Print Receipt</button>
       </div>
     </div>
   </div>
 
-  <!-- Scripts -->
-  <script src="admin.js"></script>
+  <!-- ── 4. DEDICATED PRINT STICKER CONTAINER (ISOLATED @MEDIA PRINT) ──────── -->
+  <div id="print-sticker-container" style="display:none;" aria-hidden="true"></div>
+
+  <!-- ── 5. LOCAL VENDOR LIBRARIES (Zero CDN Lag, 100% Offline Capable) ────── -->
+  <script src="/vendor/qrcode.min.js?v=5.1.0"></script>
+  <script src="/vendor/html5-qrcode.min.js?v=5.1.0"></script>
+  <script src="/vendor/xlsx.full.min.js?v=5.1.0"></script>
+  <script src="/vendor/chart.umd.min.js?v=5.1.0"></script>
+
+  <!-- ── 6. APPLICATION CONTROLLER ─────────────────────────────────────────── -->
+  <script src="/admin.js?v=5.1.0"></script>
 </body>
 </html>

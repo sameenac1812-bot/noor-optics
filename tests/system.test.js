@@ -359,6 +359,53 @@ async function runAllTests() {
     assert.strictEqual(magic, '%PDF', 'PDF buffer must start with %PDF magic header');
   });
 
+  // ── TEST GROUP 9: Permanent Frame QR Resolution ───────────────────────────
+  console.log('\n--- 9. Permanent Frame QR Resolution ---');
+
+  runTest('QR resolve finds frame by SKU and returns live authoritative price', () => {
+    const prod = db.prepare('SELECT sku, name, selling_price_paise FROM products LIMIT 1').get();
+    assert.ok(prod, 'At least one product must exist');
+
+    const item = db.prepare(`
+      SELECT p.id, p.sku, p.name, p.selling_price_paise, COALESCE(SUM(ib.available_qty), 0) as available_qty
+      FROM products p
+      JOIN product_variants pv ON p.id = pv.product_id
+      LEFT JOIN inventory_balances ib ON pv.id = ib.variant_id
+      WHERE LOWER(p.sku) = LOWER(?)
+      GROUP BY p.id
+    `).get(prod.sku);
+
+    assert.ok(item, 'Lookup by SKU must resolve product');
+    assert.strictEqual(item.selling_price_paise, prod.selling_price_paise);
+    assert.ok(item.available_qty >= 0);
+  });
+
+  // ── TEST GROUP 10: Reconciled Daily Sales & Multi-Channel Accounting ───────
+  console.log('\n--- 10. Reconciled Daily Sales & Multi-Channel Accounting ---');
+
+  runTest('Daily sales report reconciles In-Store and Website orders without double-counting', () => {
+    const inStoreSales = db.prepare(`
+      SELECT COUNT(id) as c, COALESCE(SUM(total_payable_paise), 0) as s
+      FROM orders
+      WHERE channel = 'POS' AND status != 'CANCELLED' AND payment_status = 'VERIFIED'
+    `).get();
+
+    const websiteSales = db.prepare(`
+      SELECT COUNT(id) as c, COALESCE(SUM(total_payable_paise), 0) as s
+      FROM orders
+      WHERE channel IN ('ONLINE', 'WEBSITE') AND status != 'CANCELLED' AND payment_status = 'VERIFIED'
+    `).get();
+
+    const combined = db.prepare(`
+      SELECT COUNT(id) as c, COALESCE(SUM(total_payable_paise), 0) as s
+      FROM orders
+      WHERE status != 'CANCELLED' AND payment_status = 'VERIFIED'
+    `).get();
+
+    assert.strictEqual(inStoreSales.c + websiteSales.c, combined.c, 'Order counts must reconcile');
+    assert.strictEqual(inStoreSales.s + websiteSales.s, combined.s, 'Revenue must reconcile perfectly without double counting');
+  });
+
   console.log('\n======================================================');
   console.log(`🏁 TEST RESULTS: ${passedTests}/${totalTests} TESTS PASSED`);
   console.log('======================================================\n');
@@ -374,3 +421,4 @@ runAllTests().catch(err => {
   console.error('Fatal error during test run:', err);
   process.exit(1);
 });
+

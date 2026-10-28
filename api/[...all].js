@@ -7,7 +7,7 @@ const app = require('../server.js');
 
 module.exports = (req, res) => {
   // If the serverless invocation strips '/api', ensure req.url has '/api'
-  if (req.url && !req.url.startsWith('/api')) {
+  if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/qr')) {
     req.url = '/api' + req.url;
   }
   return app(req, res);

@@ -5,6 +5,7 @@
   "trailingSlash": false,
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/qr/(.*)", "destination": "/api" },
     { "source": "/admin", "destination": "/admin.html" }
   ],
   "headers": [
@@ -18,11 +19,19 @@
       ]
     },
     {
-      "source": "/(.*)\\.(css|js)",
+      "source": "/(admin.*|vendor/.*|.*\\.css|.*\\.js)",
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "no-cache, must-revalidate"
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
         }
       ]
     },

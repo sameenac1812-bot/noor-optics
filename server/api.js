@@ -1504,6 +1504,718 @@ router.post('/settings', authenticateToken, requirePermission('settings:manage')
 });
 
 // ==============================================================================
+// 17. COMPLETE RETAIL DASHBOARD, QR RESOLVER, BULK IMPORT, & DAILY REPORT
+// ==============================================================================
+
+// Helper: Get Asia/Kolkata date string (YYYY-MM-DD)
+function getKolkataDateString(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  return formatter.format(date);
+}
+
+// ── GET /api/settings (Allow read of store contact phone & info) ───────────────
+router.get('/settings', (req, res) => {
+  res.json(getStoreSettings());
+});
+
+// ── GET /api/qr/resolve/:code (Permanent Frame QR Code Resolution) ────────────
+router.get('/qr/resolve/:code', (req, res) => {
+  const rawCode = (req.params.code || '').trim();
+  if (!rawCode) {
+    return res.status(400).json({ error: 'Frame identifier or SKU required.' });
+  }
+
+  // Look up product and primary variant by SKU, barcode, variant SKU, or ID
+  const item = db.prepare(`
+    SELECT
+      p.id as product_id,
+      p.sku as product_sku,
+      p.name as product_name,
+      p.brand,
+      p.shape,
+      p.material,
+      p.fit,
+      p.category,
+      p.selling_price_paise,
+      p.original_price_paise,
+      p.purchase_cost_paise,
+      p.image_url,
+      p.description,
+      p.is_active,
+      pv.id as variant_id,
+      pv.sku as variant_sku,
+      pv.barcode,
+      pv.color_name,
+      pv.color_hex,
+      COALESCE(ib.available_qty, 0) as available_qty
+    FROM products p
+    JOIN product_variants pv ON p.id = pv.product_id
+    LEFT JOIN inventory_balances ib ON pv.id = ib.variant_id
+    WHERE LOWER(p.sku) = LOWER(?)
+       OR LOWER(pv.sku) = LOWER(?)
+       OR pv.barcode = ?
+       OR p.id = ?
+       OR pv.id = ?
+    LIMIT 1
+  `).get(rawCode, rawCode, rawCode, rawCode, rawCode);
+
+  if (!item) {
+    return res.status(404).json({
+      found: false,
+      error: `No optical frame found matching code "${rawCode}".`
+    });
+  }
+
+  res.json({
+    found: true,
+    product: {
+      productId: item.product_id,
+      variantId: item.variant_id,
+      sku: item.variant_sku || item.product_sku,
+      productSku: item.product_sku,
+      name: item.product_name,
+      brand: item.brand,
+      shape: item.shape,
+      material: item.material,
+      fit: item.fit,
+      colorName: item.color_name,
+      colorHex: item.color_hex,
+      imageUrl: item.image_url,
+      description: item.description,
+      sellingPricePaise: item.selling_price_paise,
+      sellingPriceINR: item.selling_price_paise / 100,
+      originalPriceINR: item.original_price_paise ? item.original_price_paise / 100 : null,
+      availableQty: item.available_qty,
+      inStock: item.available_qty > 0
+    }
+  });
+});
+
+// ── GET /api/dashboard/overview (Live Data-Driven Dashboard Overview) ──────────
+router.get('/dashboard/overview', authenticateToken, (req, res) => {
+  const range = req.query.range || 'today';
+  let startDate = req.query.startDate;
+  let endDate = req.query.endDate;
+
+  const todayStr = getKolkataDateString();
+
+  if (range === 'today') {
+    startDate = todayStr;
+    endDate = todayStr;
+  } else if (range === 'yesterday') {
+    const yDate = new Date();
+    yDate.setDate(yDate.getDate() - 1);
+    const yStr = getKolkataDateString(yDate);
+    startDate = yStr;
+    endDate = yStr;
+  } else if (range === 'this_week') {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = (day === 0 ? -6 : 1) - day; // Monday
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diff);
+    startDate = getKolkataDateString(monday);
+    endDate = todayStr;
+  } else if (range === 'this_month') {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    startDate = getKolkataDateString(firstDay);
+    endDate = todayStr;
+  } else if (range === 'custom') {
+    if (!startDate) startDate = todayStr;
+    if (!endDate) endDate = todayStr;
+  }
+
+  const startTimestamp = `${startDate} 00:00:00`;
+  const endTimestamp = `${endDate} 23:59:59`;
+
+  // 1. In-Store Sales (Completed/Verified POS)
+  const inStoreRow = db.prepare(`
+    SELECT
+      COUNT(id) as order_count,
+      COALESCE(SUM(total_payable_paise), 0) as total_sales_paise
+    FROM orders
+    WHERE channel = 'POS'
+      AND status != 'CANCELLED'
+      AND payment_status = 'VERIFIED'
+      AND created_at >= ? AND created_at <= ?
+  `).get(startTimestamp, endTimestamp);
+
+  // 2. Website Sales (Completed/Verified Online)
+  const websiteRow = db.prepare(`
+    SELECT
+      COUNT(id) as order_count,
+      COALESCE(SUM(total_payable_paise), 0) as total_sales_paise
+    FROM orders
+    WHERE channel IN ('ONLINE', 'WEBSITE')
+      AND status != 'CANCELLED'
+      AND payment_status = 'VERIFIED'
+      AND created_at >= ? AND created_at <= ?
+  `).get(startTimestamp, endTimestamp);
+
+  // 3. Combined Total Revenue
+  const inStoreSalesINR = (inStoreRow.total_sales_paise || 0) / 100;
+  const websiteSalesINR = (websiteRow.total_sales_paise || 0) / 100;
+  const combinedRevenueINR = inStoreSalesINR + websiteSalesINR;
+
+  const inStoreOrderCount = inStoreRow.order_count || 0;
+  const websiteOrderCount = websiteRow.order_count || 0;
+
+  // 4. Inventory counts
+  const distinctProductsRow = db.prepare(`
+    SELECT COUNT(DISTINCT id) as total_frames FROM products WHERE is_active = 1
+  `).get();
+  const distinctFramesCount = distinctProductsRow ? distinctProductsRow.total_frames : 0;
+
+  const stockUnitsRow = db.prepare(`
+    SELECT COALESCE(SUM(available_qty), 0) as total_units FROM inventory_balances
+  `).get();
+  const physicalUnitsInStock = stockUnitsRow ? stockUnitsRow.total_units : 0;
+
+  // Low stock: products whose total available units <= reorder_threshold and > 0
+  const lowStockRow = db.prepare(`
+    SELECT COUNT(*) as low_count FROM (
+      SELECT p.id, COALESCE(SUM(ib.available_qty), 0) as units, p.reorder_threshold
+      FROM products p
+      JOIN product_variants pv ON p.id = pv.product_id
+      LEFT JOIN inventory_balances ib ON pv.id = ib.variant_id
+      WHERE p.is_active = 1
+      GROUP BY p.id
+      HAVING units > 0 AND units <= p.reorder_threshold
+    )
+  `).get();
+  const lowStockCount = lowStockRow ? lowStockRow.low_count : 0;
+
+  // Out of stock: products with 0 total available units
+  const outOfStockRow = db.prepare(`
+    SELECT COUNT(*) as out_count FROM (
+      SELECT p.id, COALESCE(SUM(ib.available_qty), 0) as units
+      FROM products p
+      LEFT JOIN product_variants pv ON p.id = pv.product_id
+      LEFT JOIN inventory_balances ib ON pv.id = ib.variant_id
+      WHERE p.is_active = 1
+      GROUP BY p.id
+      HAVING units = 0
+    )
+  `).get();
+  const outOfStockCount = outOfStockRow ? outOfStockRow.out_count : 0;
+
+  // 5. Sales Timeline for Chart (Hourly for today/yesterday, Daily for week/month/custom)
+  const isHourly = (range === 'today' || range === 'yesterday' || startDate === endDate);
+  let timeline = [];
+
+  if (isHourly) {
+    // Generate 24 hours (00 to 23)
+    const ordersInRange = db.prepare(`
+      SELECT channel, total_payable_paise, strftime('%H', created_at) as hour_part
+      FROM orders
+      WHERE status != 'CANCELLED' AND payment_status = 'VERIFIED'
+        AND created_at >= ? AND created_at <= ?
+    `).all(startTimestamp, endTimestamp);
+
+    const hourlyMap = {};
+    for (let h = 0; h < 24; h++) {
+      const key = String(h).padStart(2, '0');
+      const label = `${h}:00`;
+      hourlyMap[key] = { label, inStore: 0, website: 0, inStoreCount: 0, websiteCount: 0 };
+    }
+
+    ordersInRange.forEach(o => {
+      const h = o.hour_part;
+      if (hourlyMap[h]) {
+        const amt = (o.total_payable_paise || 0) / 100;
+        if (o.channel === 'POS') {
+          hourlyMap[h].inStore += amt;
+          hourlyMap[h].inStoreCount += 1;
+        } else {
+          hourlyMap[h].website += amt;
+          hourlyMap[h].websiteCount += 1;
+        }
+      }
+    });
+
+    timeline = Object.values(hourlyMap);
+  } else {
+    // Group by Day (YYYY-MM-DD)
+    const dailyOrders = db.prepare(`
+      SELECT channel, total_payable_paise, substr(created_at, 1, 10) as day_date
+      FROM orders
+      WHERE status != 'CANCELLED' AND payment_status = 'VERIFIED'
+        AND created_at >= ? AND created_at <= ?
+    `).all(startTimestamp, endTimestamp);
+
+    const dayMap = {};
+    // Seed days between startDate and endDate
+    const cur = new Date(startDate);
+    const end = new Date(endDate);
+    while (cur <= end) {
+      const dStr = cur.toISOString().slice(0, 10);
+      const shortLabel = cur.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+      dayMap[dStr] = { label: shortLabel, inStore: 0, website: 0, inStoreCount: 0, websiteCount: 0 };
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    dailyOrders.forEach(o => {
+      if (dayMap[o.day_date]) {
+        const amt = (o.total_payable_paise || 0) / 100;
+        if (o.channel === 'POS') {
+          dayMap[o.day_date].inStore += amt;
+          dayMap[o.day_date].inStoreCount += 1;
+        } else {
+          dayMap[o.day_date].website += amt;
+          dayMap[o.day_date].websiteCount += 1;
+        }
+      }
+    });
+
+    timeline = Object.values(dayMap);
+  }
+
+  // 6. Recent Orders Panel (latest 8 orders across channels)
+  const recentOrdersRaw = db.prepare(`
+    SELECT
+      o.id,
+      o.order_number,
+      o.token_number,
+      o.channel,
+      o.customer_name,
+      o.created_at,
+      o.status as order_status,
+      o.payment_status,
+      o.total_payable_paise,
+      inv.invoice_number,
+      (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) as item_count
+    FROM orders o
+    LEFT JOIN invoices inv ON o.id = inv.order_id
+    ORDER BY o.created_at DESC
+    LIMIT 8
+  `).all();
+
+  const recentOrders = recentOrdersRaw.map(o => ({
+    id: o.id,
+    orderNumber: o.order_number,
+    invoiceNumber: o.invoice_number || o.order_number,
+    tokenNumber: o.token_number,
+    channel: o.channel === 'POS' ? 'IN-STORE' : 'WEBSITE',
+    customerName: o.customer_name || (o.channel === 'POS' ? 'Walk-in Client' : 'Online Client'),
+    createdAt: o.created_at,
+    itemCount: o.item_count || 1,
+    totalINR: (o.total_payable_paise || 0) / 100,
+    paymentStatus: o.payment_status,
+    orderStatus: o.order_status
+  }));
+
+  res.json({
+    dateRange: { range, startDate, endDate, timezone: 'Asia/Kolkata' },
+    cards: {
+      inStoreSalesINR,
+      websiteSalesINR,
+      combinedRevenueINR,
+      inStoreOrderCount,
+      websiteOrderCount,
+      distinctFramesCount,
+      physicalUnitsInStock,
+      lowStockCount,
+      outOfStockCount
+    },
+    timeline,
+    recentOrders
+  });
+});
+
+// ── GET /api/reports/daily-sales (Reconciled Daily Sales Report) ───────────────
+router.get('/reports/daily-sales', authenticateToken, (req, res) => {
+  const businessDate = req.query.date || getKolkataDateString();
+  const startTimestamp = `${businessDate} 00:00:00`;
+  const endTimestamp = `${businessDate} 23:59:59`;
+
+  const allOrders = db.prepare(`
+    SELECT
+      o.*,
+      inv.invoice_number,
+      (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) as item_count,
+      (SELECT GROUP_CONCAT(product_name || ' (' || quantity || ')') FROM order_items oi WHERE oi.order_id = o.id) as items_summary
+    FROM orders o
+    LEFT JOIN invoices inv ON o.id = inv.order_id
+    WHERE o.created_at >= ? AND o.created_at <= ?
+    ORDER BY o.created_at ASC
+  `).all(startTimestamp, endTimestamp);
+
+  let inStoreCount = 0;
+  let inStoreSalesPaise = 0;
+  let websiteCount = 0;
+  let websiteSalesPaise = 0;
+
+  let grossSalesPaise = 0;
+  let discountsPaise = 0;
+  let taxCollectedPaise = 0;
+  let refundsPaise = 0;
+  let netSalesPaise = 0;
+
+  let paidPaise = 0;
+  let pendingPaise = 0;
+
+  const paymentBreakdown = {
+    CASH: { count: 0, totalPaise: 0 },
+    UPI_GPAY: { count: 0, totalPaise: 0 },
+    CARD: { count: 0, totalPaise: 0 },
+    OTHER: { count: 0, totalPaise: 0 }
+  };
+
+  const formattedOrders = allOrders.map(o => {
+    const isPOS = o.channel === 'POS';
+    const isVerified = o.payment_status === 'VERIFIED';
+    const isCancelled = o.status === 'CANCELLED';
+    const isRefunded = o.status === 'REFUNDED' || o.payment_status === 'REFUNDED';
+
+    const totalPaise = o.total_payable_paise || 0;
+    const subtotalPaise = o.subtotal_paise || 0;
+    const discPaise = o.discount_paise || 0;
+    const taxPaise = o.tax_paise || 0;
+
+    if (!isCancelled && !isRefunded && isVerified) {
+      if (isPOS) {
+        inStoreCount++;
+        inStoreSalesPaise += totalPaise;
+      } else {
+        websiteCount++;
+        websiteSalesPaise += totalPaise;
+      }
+      grossSalesPaise += subtotalPaise;
+      discountsPaise += discPaise;
+      taxCollectedPaise += taxPaise;
+      netSalesPaise += totalPaise;
+      paidPaise += totalPaise;
+
+      // Payment method
+      const pm = (o.payment_method || (isPOS ? 'CASH' : 'UPI_GPAY')).toUpperCase();
+      const target = paymentBreakdown[pm] || paymentBreakdown.OTHER;
+      target.count++;
+      target.totalPaise += totalPaise;
+    } else if (isRefunded) {
+      refundsPaise += totalPaise;
+    } else if (!isVerified && !isCancelled) {
+      pendingPaise += totalPaise;
+    }
+
+    return {
+      orderId: o.id,
+      orderNumber: o.order_number,
+      invoiceNumber: o.invoice_number || o.order_number,
+      tokenNumber: o.token_number,
+      channel: isPOS ? 'IN-STORE' : 'WEBSITE',
+      time: o.created_at ? o.created_at.slice(11, 19) : '',
+      createdAt: o.created_at,
+      customerName: o.customer_name || (isPOS ? 'Walk-in Client' : 'Online Client'),
+      customerPhone: o.customer_phone || '-',
+      itemsSummary: o.items_summary || 'Optical Frame',
+      itemCount: o.item_count || 1,
+      subtotalINR: subtotalPaise / 100,
+      discountINR: discPaise / 100,
+      taxINR: taxPaise / 100,
+      totalINR: totalPaise / 100,
+      paymentMethod: o.payment_method || (isPOS ? 'CASH' : 'UPI_GPAY'),
+      paymentStatus: o.payment_status,
+      orderStatus: o.status
+    };
+  });
+
+  const combinedSalesINR = (inStoreSalesPaise + websiteSalesPaise) / 100;
+
+  res.json({
+    businessDate,
+    generatedAt: new Date().toISOString(),
+    timezone: 'Asia/Kolkata',
+    summary: {
+      inStoreOrderCount: inStoreCount,
+      inStoreSalesINR: inStoreSalesPaise / 100,
+      websiteOrderCount: websiteCount,
+      websiteSalesINR: websiteSalesPaise / 100,
+      combinedSalesINR,
+      grossSalesINR: grossSalesPaise / 100,
+      discountsINR: discountsPaise / 100,
+      taxCollectedINR: taxCollectedPaise / 100,
+      refundsINR: refundsPaise / 100,
+      netSalesINR: netSalesPaise / 100,
+      paidAmountINR: paidPaise / 100,
+      pendingAmountINR: pendingPaise / 100
+    },
+    paymentMethods: {
+      cash: { count: paymentBreakdown.CASH.count, totalINR: paymentBreakdown.CASH.totalPaise / 100 },
+      upiGpay: { count: paymentBreakdown.UPI_GPAY.count, totalINR: paymentBreakdown.UPI_GPAY.totalPaise / 100 },
+      card: { count: paymentBreakdown.CARD.count, totalINR: paymentBreakdown.CARD.totalPaise / 100 },
+      other: { count: paymentBreakdown.OTHER.count, totalINR: paymentBreakdown.OTHER.totalPaise / 100 }
+    },
+    orders: formattedOrders
+  });
+});
+
+// ── POST /api/inventory/import (Bulk CSV/Excel Optical Frame Importer) ────────
+router.post('/inventory/import', authenticateToken, requirePermission('products:manage'), (req, res) => {
+  const { frames } = req.body;
+  if (!Array.isArray(frames) || frames.length === 0) {
+    return res.status(400).json({ error: 'Import payload must contain a non-empty array of frame rows.' });
+  }
+
+  const results = {
+    importedCount: 0,
+    skippedCount: 0,
+    errors: [],
+    importedItems: []
+  };
+
+  const checkExistingSku = db.prepare('SELECT id FROM products WHERE LOWER(sku) = LOWER(?)');
+  const checkExistingVarSku = db.prepare('SELECT id FROM product_variants WHERE LOWER(sku) = LOWER(?)');
+
+  const importTx = db.transaction(() => {
+    frames.forEach((row, index) => {
+      const rowNum = index + 1;
+      const name = (row.name || row.frameName || row.product_name || '').trim();
+      let sku = (row.sku || row.frameCode || row.code || '').trim().toUpperCase();
+      const brand = (row.brand || 'Noor Optics').trim();
+      const model = (row.model || name.replace(/The\s+/i, '').split(' ')[0] || 'Classic').trim();
+      const shape = (row.shape || row.frameShape || 'Rectangular').trim();
+      const material = (row.material || 'Japanese Titanium').trim();
+      const color = (row.color || row.colour || 'Classic Black').trim();
+      const colorHex = (row.colorHex || '#111111').trim();
+      const fit = (row.fit || 'Regular').trim();
+      const size = (row.size || 'Medium - 49-20-145').trim();
+      const description = (row.description || `${brand} ${shape} frame`).trim();
+
+      const sellingPriceINR = parseFloat(row.sellingPrice || row.price || row.retailPrice || 0);
+      const costPriceINR = parseFloat(row.costPrice || row.purchaseCost || 0);
+      const initialStock = parseInt(row.initialStock || row.stock || row.quantity || 0, 10);
+
+      if (!name) {
+        results.skippedCount++;
+        results.errors.push(`Row ${rowNum}: Missing mandatory Frame Name.`);
+        return;
+      }
+
+      if (!sku) {
+        // Auto-generate unique SKU if omitted
+        sku = `NOOR-${model.substring(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+      }
+
+      if (isNaN(sellingPriceINR) || sellingPriceINR <= 0) {
+        results.skippedCount++;
+        results.errors.push(`Row ${rowNum} (${sku}): Selling price must be a valid positive number.`);
+        return;
+      }
+
+      // Check duplicate
+      const existsProd = checkExistingSku.get(sku);
+      const existsVar = checkExistingVarSku.get(sku);
+      if (existsProd || existsVar) {
+        results.skippedCount++;
+        results.errors.push(`Row ${rowNum} (${sku}): SKU already exists in catalog.`);
+        return;
+      }
+
+      const prodId = 'prod-' + Date.now() + '-' + index;
+      const varId = 'var-' + prodId + '-1';
+      const sellingPaise = Math.round(sellingPriceINR * 100);
+      const costPaise = Math.round(costPriceINR * 100);
+      const img = row.imageUrl || row.image || 'images/stockholm_noir.jpg';
+
+      db.prepare(`
+        INSERT INTO products (
+          id, sku, name, brand, shape, material, fit, category,
+          selling_price_paise, original_price_paise, purchase_cost_paise,
+          reorder_threshold, image_url, description
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Optical', ?, ?, ?, 5, ?, ?)
+      `).run(
+        prodId, sku, name, brand, shape, material, fit,
+        sellingPaise, Math.round(sellingPaise * 1.2), costPaise,
+        img, `${description} | Size: ${size}`
+      );
+
+      db.prepare(`
+        INSERT INTO product_variants (
+          id, product_id, sku, barcode, color_name, color_hex
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        varId, prodId, sku, `890${Math.floor(100000000 + Math.random() * 900000000)}`, color, colorHex
+      );
+
+      const qty = Math.max(0, initialStock);
+      db.prepare(`
+        INSERT INTO inventory_balances (id, variant_id, location_id, available_qty, reserved_qty)
+        VALUES (?, ?, 'loc-main', ?, 0)
+      `).run(`bal-${varId}`, varId, qty);
+
+      if (qty > 0) {
+        db.prepare(`
+          INSERT INTO stock_movements (
+            id, variant_id, location_id, change_qty, balance_after, movement_type, reason, created_by_user_id
+          ) VALUES (?, ?, 'loc-main', ?, ?, 'ADJUSTMENT', 'Batch catalog import', ?)
+        `).run('mov-' + Date.now() + '-' + index, varId, qty, qty, req.user.id);
+      }
+
+      results.importedCount++;
+      results.importedItems.push({
+        id: prodId,
+        variantId: varId,
+        sku,
+        name,
+        brand,
+        color,
+        sellingPriceINR,
+        stock: qty
+      });
+    });
+  });
+
+  try {
+    importTx();
+    logAudit(req.user.id, req.user.email, 'BULK_FRAMES_IMPORTED', 'INVENTORY', 'MULTIPLE', {
+      importedCount: results.importedCount,
+      skippedCount: results.skippedCount
+    }, req);
+    res.json({
+      success: true,
+      importedCount: results.importedCount,
+      skippedCount: results.skippedCount,
+      errors: results.errors,
+      importedItems: results.importedItems
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Import transaction failed: ' + err.message });
+  }
+});
+
+// ── POST /api/orders/:id/refund (Safe Return & Refund Workflow) ────────────────
+router.post('/orders/:id/refund', authenticateToken, requirePermission('orders:manage'), (req, res) => {
+  const orderId = req.params.id;
+  const reason = (req.body.reason || 'Customer Return').trim();
+  const restockInventory = req.body.restockInventory !== false;
+
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+  if (order.status === 'REFUNDED') {
+    return res.status(400).json({ error: 'Order has already been refunded.' });
+  }
+
+  const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
+
+  const refundTx = db.transaction(() => {
+    // 1. Mark order as REFUNDED
+    db.prepare(`
+      UPDATE orders
+      SET status = 'REFUNDED', payment_status = 'REFUNDED', updated_at = datetime('now')
+      WHERE id = ?
+    `).run(orderId);
+
+    // 2. Update payment status
+    db.prepare(`
+      UPDATE payments
+      SET status = 'REFUNDED', notes = notes || ' [Refunded: ' || ? || ']'
+      WHERE order_id = ?
+    `).run(reason, orderId);
+
+    // 3. Record in refunds table
+    const refundId = 'ref-' + Date.now();
+    db.prepare(`
+      INSERT INTO refunds (id, order_id, amount_paise, reason, status, processed_by_user_id)
+      VALUES (?, ?, ?, ?, 'COMPLETED', ?)
+    `).run(refundId, orderId, order.total_payable_paise, reason, req.user.id);
+
+    // 4. Restock inventory if requested
+    if (restockInventory) {
+      items.forEach((item, idx) => {
+        if (item.variant_id) {
+          db.prepare(`
+            UPDATE inventory_balances
+            SET available_qty = available_qty + ?, updated_at = datetime('now')
+            WHERE variant_id = ?
+          `).run(item.quantity, item.variant_id);
+
+          const balAfter = db.prepare('SELECT available_qty FROM inventory_balances WHERE variant_id = ?').get(item.variant_id);
+          const currentStock = balAfter ? balAfter.available_qty : item.quantity;
+
+          db.prepare(`
+            INSERT INTO stock_movements (
+              id, variant_id, location_id, change_qty, balance_after, movement_type, reference_id, reason, created_by_user_id
+            ) VALUES (?, ?, 'loc-main', ?, ?, 'RETURN_RESTOCK', ?, ?, ?)
+          `).run(
+            'mov-ref-' + Date.now() + '-' + idx,
+            item.variant_id,
+            item.quantity,
+            currentStock,
+            order.order_number,
+            `Refund return restock: ${reason}`,
+            req.user.id
+          );
+        }
+      });
+    }
+  });
+
+  try {
+    refundTx();
+    logAudit(req.user.id, req.user.email, 'ORDER_REFUNDED', 'ORDER', orderId, { reason, restocked: restockInventory }, req);
+    res.json({ success: true, message: 'Order refunded and stock restored safely.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Refund failed: ' + err.message });
+  }
+});
+
+// ── PUT /api/orders/:id/fulfillment (Update Website Order Fulfillment) ────────
+router.put('/orders/:id/fulfillment', authenticateToken, requirePermission('orders:manage'), (req, res) => {
+  const orderId = req.params.id;
+  const { status, trackingNumber } = req.body;
+
+  const validStatuses = ['CONFIRMED', 'PROCESSING', 'DISPATCHED', 'DELIVERED', 'CANCELLED'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+  }
+
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+  const fulfillmentTx = db.transaction(() => {
+    db.prepare(`
+      UPDATE orders
+      SET status = ?, notes = COALESCE(notes, '') || ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      status,
+      trackingNumber ? ` [Tracking: ${trackingNumber}]` : '',
+      orderId
+    );
+
+    // If order was cancelled, restore inventory
+    if (status === 'CANCELLED' && order.status !== 'CANCELLED') {
+      const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
+      items.forEach((item, idx) => {
+        if (item.variant_id) {
+          db.prepare('UPDATE inventory_balances SET available_qty = available_qty + ? WHERE variant_id = ?').run(item.quantity, item.variant_id);
+          const bal = db.prepare('SELECT available_qty FROM inventory_balances WHERE variant_id = ?').get(item.variant_id);
+          db.prepare(`
+            INSERT INTO stock_movements (id, variant_id, location_id, change_qty, balance_after, movement_type, reference_id, reason, created_by_user_id)
+            VALUES (?, ?, 'loc-main', ?, ?, 'ORDER_CANCELLED', ?, 'Website order cancelled by admin', ?)
+          `).run('mov-cnc-' + Date.now() + '-' + idx, item.variant_id, item.quantity, bal ? bal.available_qty : 0, order.order_number, req.user.id);
+        }
+      });
+    }
+  });
+
+  try {
+    fulfillmentTx();
+    logAudit(req.user.id, req.user.email, 'FULFILLMENT_UPDATED', 'ORDER', orderId, { status, trackingNumber }, req);
+    res.json({ success: true, status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==============================================================================
 // 16. AUDIT LOGS
 // ==============================================================================
 
