@@ -1641,11 +1641,9 @@
   }
 
   function initSmoothScrollEngine() {
-    const progressBar = document.getElementById('scroll-progress-bar');
     const header = document.querySelector('.store-header');
-    const nativeScrollTimeline = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('animation-timeline', 'scroll()');
 
-    // Throttled 120Hz/60Hz compositor-friendly scroll watcher
+    // Throttled 120Hz/60Hz compositor-friendly scroll watcher for header elevation
     let ticking = false;
     window.addEventListener('scroll', () => {
       if (!ticking) {
@@ -1653,11 +1651,6 @@
           const y = window.scrollY || window.pageYOffset || 0;
           if (header) {
             header.classList.toggle('scrolled', y > 20);
-          }
-          if (progressBar && !nativeScrollTimeline) {
-            const maxScroll = (document.documentElement.scrollHeight - window.innerHeight) || 1;
-            const progress = Math.min(Math.max(y / maxScroll, 0), 1);
-            progressBar.style.transform = `scaleX(${progress})`;
           }
           ticking = false;
         });
