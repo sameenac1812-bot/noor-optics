@@ -1499,7 +1499,7 @@ router.post('/printer/print-qr-sticker', async (req, res) => {
     const buffers = [];
     for (const item of rawItems) {
       const sku = item.sku || 'NOOR-FRAME';
-      const qrPayload = item.qrPayload || `https://nooroptics.vercel.app/qr/${encodeURIComponent(sku)}`;
+      const qrPayload = item.qrPayload;
       const copies = parseInt(item.copies || req.body.copies || 1, 10);
 
       const buf = await generateEscPosQrLabel({

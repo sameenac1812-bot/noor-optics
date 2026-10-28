@@ -359,8 +359,8 @@ async function generateEscPosQrLabel(opts = {}) {
     price = '',
     copies = 1,
     paperWidthMm = 58,
-    qrPreset = 'standard',
-    qrMode = 'sku'
+    qrPreset = 'url',
+    qrMode = ''
   } = opts;
 
   // Determine QR payload:
@@ -392,16 +392,17 @@ async function generateEscPosQrLabel(opts = {}) {
   const totalModules = rawSize + quiet * 2;
   const qrPixels = totalModules * scale; // 33 * 4 = 132 pixels (URL) or 29 * 4 = 116 pixels (SKU)
 
-  // Label width: exact multiple of 8 matching the QR code column width (~17mm = 136 pixels)
-  const labelWidth = Math.max(136, Math.ceil(qrPixels / 8) * 8); // 136 pixels (17 bytes)
-  const qrOffsetX = Math.floor((labelWidth - qrPixels) / 2);
-  const qrOffsetY = 10; // Generous 10px white paper buffer at top
+  // Label width: 152 pixels (19 bytes = 19mm) ensuring 26px (3.25mm) solid white margins on both sides
+  // Guaranteed protection so cutting the strip with scissors never damages the quiet zone
+  const labelWidth = 152;
+  const qrOffsetX = Math.floor((labelWidth - qrPixels) / 2); // 10px
+  const qrOffsetY = 12; // Generous 12px white paper buffer at top
 
-  // Typography layout: strictly within labelWidth with generous white gap below QR
-  const skuScale = (sku.length * 12 <= labelWidth) ? 2 : 1;
-  const skuOffsetY = qrOffsetY + qrPixels + 10; // Clean 26px white space between bottom finder patterns & SKU text
+  // Typography layout: centered within 152px width with generous white gap below QR
+  const skuScale = (sku.length * 12 <= labelWidth - 8) ? 2 : 1;
+  const skuOffsetY = qrOffsetY + qrPixels + 12; // Clean 28px white space between bottom finder patterns & SKU text
   const skuHeight = 7 * skuScale;
-  const nameOffsetY = skuOffsetY + skuHeight + 5;
+  const nameOffsetY = skuOffsetY + skuHeight + 6;
   const priceOffsetY = nameOffsetY + 7 + 4;
   const lineOffsetY = priceOffsetY + 7 + 8;
   const totalHeight = lineOffsetY + 8;
