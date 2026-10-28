@@ -33,8 +33,8 @@ app.use('/api', apiRouter);
 // Also mount apiRouter directly to catch any stripped serverless paths
 app.use(apiRouter);
 
-// Public Phone Camera Frame QR Resolution Route
-app.get('/qr/:code', (req, res) => {
+// Public Phone Camera Frame QR Resolution Route (Supports both /qr/:code and short /q/:code)
+app.get(['/qr/:code', '/q/:code'], (req, res) => {
   const code = (req.params.code || '').trim();
   const { db } = require('./server/db');
   const frame = db.prepare(`

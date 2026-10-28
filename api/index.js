@@ -8,7 +8,7 @@
 const app = require('../server.js');
 
 module.exports = (req, res) => {
-  if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/qr')) {
+  if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/qr') && !req.url.startsWith('/q')) {
     req.url = '/api' + req.url;
   }
   return app(req, res);

@@ -357,30 +357,48 @@ async function generateEscPosQrLabel(opts = {}) {
     name = 'Optical Frame',
     brand = 'Noor Optics',
     price = '',
-    qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(sku)}`,
     copies = 1,
     paperWidthMm = 58,
-    qrPreset = 'standard'
+    qrPreset = 'standard',
+    qrMode = 'sku'
   } = opts;
 
-  // "make the qr a little smaller": scale = 4 (~16.5mm)
-  let scale = 4;
-  let quiet = 2; // 2-module quiet zone
-  if (qrPreset === 'temple' || opts.qrSize === 'tiny' || opts.qrSize === 'temple') {
-    scale = 3;
-    quiet = 2;
-  } else if (qrPreset === 'large' || opts.qrSize === 'large') {
-    scale = 6;
-    quiet = 3;
+  // Determine QR payload:
+  // Default to ultra-clean Alphanumeric uppercase SKU (Version 1, 21x21 modules = 441 dots)
+  // Or short uppercase URL (Version 2, 25x25 modules = 625 dots)
+  let qrPayload = opts.qrPayload;
+  const isUrlPreset = (qrPreset === 'url' || qrMode === 'url' || (qrPayload && qrPayload.toLowerCase().startsWith('http') && !qrPayload.includes('/qr/')));
+
+  if (isUrlPreset || qrPreset === 'url') {
+    qrPayload = `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku).toUpperCase()}`;
+  } else {
+    qrPayload = (sku || 'NOOR-FRAME').toUpperCase();
   }
 
-  const qr = QRCode.create(qrPayload, { errorCorrectionLevel: 'M' });
-  const rawSize = qr.modules.size;
-  const totalModules = rawSize + quiet * 2;
-  const qrPixels = totalModules * scale; // 33 * 4 = 132 pixels
+  // Create QR with Error Correction 'L' (Low redundancy = smallest version, chunky dots, zero thermal smudging)
+  const qr = QRCode.create(qrPayload, { errorCorrectionLevel: 'L' });
+  const rawSize = qr.modules.size; // 21 for SKU (Version 1), 25 for short URL (Version 2)
 
-  // Label width: exact multiple of 8 matching the QR code width + 4px margin
-  const labelWidth = Math.ceil(qrPixels / 8) * 8; // 136 pixels (17 bytes)
+  let scale = 5; // Chunky 5x5 pixels (0.625mm per dot on 203 DPI)
+  let quiet = 2; // 2-module quiet zone
+
+  if (qrPreset === 'temple' || opts.qrSize === 'tiny' || opts.qrSize === 'temple') {
+    scale = 4;
+    quiet = 2;
+  } else if (rawSize >= 25) {
+    scale = 5;
+    quiet = 1; // 25 + 2 = 27 modules * 5 = 135 pixels
+  } else {
+    // Version 1 (21x21): 21 + 4 = 25 modules * 5 = 125 pixels
+    scale = 5;
+    quiet = 2;
+  }
+
+  const totalModules = rawSize + quiet * 2;
+  const qrPixels = totalModules * scale; // 125px (Version 1) or 135px (Version 2)
+
+  // Label width: exact multiple of 8 matching the QR code column width (~17mm = 136 pixels)
+  const labelWidth = Math.max(136, Math.ceil(qrPixels / 8) * 8); // 136 pixels (17 bytes)
   const qrOffsetX = Math.floor((labelWidth - qrPixels) / 2);
   const qrOffsetY = 4;
 

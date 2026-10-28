@@ -1362,8 +1362,14 @@
         if (heightInput) heightInput.value = '25';
         if (qrSizeInput) qrSizeInput.value = 'medium';
         if (layoutInput) layoutInput.value = 'a4_sheet';
+      } else if (presetKey === 'url') {
+        // Low-density web link
+        if (widthInput) widthInput.value = '50';
+        if (heightInput) heightInput.value = '25';
+        if (qrSizeInput) qrSizeInput.value = 'medium';
+        if (layoutInput) layoutInput.value = 'individual';
       } else {
-        // standard default (18.5mm crisp instant scan)
+        // standard default (ultra-simple SKU, Version 1)
         if (widthInput) widthInput.value = '50';
         if (heightInput) heightInput.value = '25';
         if (qrSizeInput) qrSizeInput.value = 'medium';
@@ -1390,7 +1396,15 @@
       const qrSize = activePreset === 'temple' ? 'temple' : 'medium';
 
       const dimTag = document.getElementById('stk-dimensions-tag');
-      if (dimTag) dimTag.textContent = `Preset: ${w} mm × ${h} mm • Crisp QR (${activePreset === 'temple' ? '14mm' : '18.5mm'})`;
+      if (dimTag) {
+        if (activePreset === 'url') {
+          dimTag.textContent = `Preset: Web Link (25×25) • Chunky 5px Dots • Tap Opens Boutique Page`;
+        } else if (activePreset === 'temple') {
+          dimTag.textContent = `Preset: Temple Arm (14mm) • Chunky Dots • Slim Fit`;
+        } else {
+          dimTag.textContent = `Preset: Ultra-Simple Frame SKU (21×21) • Chunky 5px Dots • Zero Bleed`;
+        }
+      }
 
       const stage = document.getElementById('stk-preview-stage');
       if (!stage) return;
@@ -1401,7 +1415,7 @@
         brand: 'Noor Optics'
       });
 
-      renderSingleStickerCard(stage, frame, w, h, '', true, qrSize);
+      renderSingleStickerCard(stage, frame, w, h, '', true, qrSize, activePreset);
     }
 
     // Connect preset radio choices & card clicks
@@ -1688,7 +1702,7 @@
             height: size,
             colorDark: '#000000',
             colorLight: '#FFFFFF',
-            correctLevel: window.QRCode.CorrectLevel.M
+            correctLevel: window.QRCode.CorrectLevel.L
           });
 
           let attempts = 0;
@@ -1775,9 +1789,13 @@
   /**
    * Render One Bright-Yellow Frame QR Sticker inside an on-screen container (Modal preview)
    */
-  async function renderSingleStickerCard(container, frame, widthMm, heightMm, contactText, isPreview = false, qrSize = 'medium') {
+  async function renderSingleStickerCard(container, frame, widthMm, heightMm, contactText, isPreview = false, qrSize = 'medium', preset = '') {
     container.innerHTML = '';
-    const qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(frame.sku || frame.id)}`;
+    const activePreset = preset || document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
+    const sku = (frame.sku || frame.id || 'NOOR-FRAME').toUpperCase();
+    const qrPayload = (activePreset === 'url')
+      ? `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`
+      : sku;
     const qrDataUrl = await generateQrDataUrl(qrPayload, 320);
     container.innerHTML = buildStickerHtml(frame, widthMm, heightMm, '', qrDataUrl, qrSize);
   }
@@ -1806,7 +1824,10 @@
     for (const id of targetIds) {
       const frame = state.inventoryList.find(p => p.id === id) || state.activeStickerFrame;
       if (!frame) continue;
-      const qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(frame.sku || frame.id)}`;
+      const sku = (frame.sku || frame.id || 'NOOR-FRAME').toUpperCase();
+      const qrPayload = (activePreset === 'url')
+        ? `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`
+        : sku;
       const qrDataUrl = await generateQrDataUrl(qrPayload, 320);
       stickerPayloads.push({ frame, qrDataUrl });
     }
@@ -2024,10 +2045,12 @@
     }
 
     try {
-      // If code is a full URL (e.g., https://nooroptics.vercel.app/qr/NOOR-OSLO-01), extract code
+      // If code is a full URL (e.g., https://nooroptics.vercel.app/qr/NOOR-OSLO-01 or /q/NOOR-OSLO-01), extract code
       let skuOrId = cleanCode;
       if (cleanCode.includes('/qr/')) {
         skuOrId = cleanCode.split('/qr/')[1].split('?')[0].split('#')[0];
+      } else if (cleanCode.includes('/q/')) {
+        skuOrId = cleanCode.split('/q/')[1].split('?')[0].split('#')[0];
       }
 
       const res = await apiFetch(`/api/qr/resolve/${encodeURIComponent(skuOrId)}`);

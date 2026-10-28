@@ -10,7 +10,7 @@ const assert = require('assert');
 const { db } = require('../server/db');
 const { signToken, verifyToken } = require('../server/auth');
 const bcrypt = require('bcryptjs');
-const { format58mmTextReceipt } = require('../server/printer');
+const { format58mmTextReceipt, generateEscPosQrLabel } = require('../server/printer');
 const { generateInvoicePDF } = require('../server/pdfInvoice');
 
 let passedTests = 0;
@@ -378,6 +378,28 @@ async function runAllTests() {
     assert.ok(item, 'Lookup by SKU must resolve product');
     assert.strictEqual(item.selling_price_paise, prod.selling_price_paise);
     assert.ok(item.available_qty >= 0);
+  });
+
+  await runAsyncTest('Generates simplified ESC/POS raster QR sticker with chunky dots and no smudging', async () => {
+    const skuBuf = await generateEscPosQrLabel({
+      sku: 'NOOR-AMB-11',
+      name: 'Amber Minimalist',
+      price: 'Rs. 4,299.00',
+      qrPreset: 'standard'
+    });
+    assert.ok(Buffer.isBuffer(skuBuf), 'Result must be a buffer');
+    assert.ok(skuBuf.length > 500, 'Buffer must contain raster image data');
+    assert.strictEqual(skuBuf[0], 0x1B, 'First byte must be ESC (0x1B)');
+    assert.strictEqual(skuBuf[1], 0x40, 'Second byte must be @ (0x40)');
+
+    const urlBuf = await generateEscPosQrLabel({
+      sku: 'NOOR-AMB-11',
+      name: 'Amber Minimalist',
+      price: 'Rs. 4,299.00',
+      qrPreset: 'url'
+    });
+    assert.ok(Buffer.isBuffer(urlBuf), 'URL preset must return valid ESC/POS raster buffer');
+    assert.ok(urlBuf.length > 500);
   });
 
   // ── TEST GROUP 10: Reconciled Daily Sales & Multi-Channel Accounting ───────

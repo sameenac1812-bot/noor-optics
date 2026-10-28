@@ -846,32 +846,46 @@
             <h4 class="settings-sec-title" style="margin-bottom:0.75rem;">Choose Label Preset</h4>
 
             <div class="stk-presets-wrapper" style="display:flex; flex-direction:column; gap:0.65rem;">
-              <!-- Preset 1: Standard Frame Tag -->
+              <!-- Preset 1: Ultra-Simple Frame SKU (Version 1, 21x21) -->
               <label class="stk-preset-card active" data-preset="standard" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:2px solid #000; background:#FFFDE7; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
                 <input type="radio" name="stk-preset-choice" value="standard" checked style="margin-top:0.25rem; accent-color:#000;" />
                 <div style="flex:1;">
                   <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <strong style="font-size:0.88rem; color:#000;">🏷️ Standard Frame Tag (Recommended)</strong>
-                    <span style="font-size:0.7rem; font-weight:800; background:#000; color:#FFE500; padding:2px 6px; border-radius:4px;">INSTANT SCAN</span>
+                    <strong style="font-size:0.88rem; color:#000;">🏷️ Ultra-Simple Frame SKU (21×21 — Recommended)</strong>
+                    <span style="font-size:0.7rem; font-weight:800; background:#000; color:#FFE500; padding:2px 6px; border-radius:4px;">CHUNKY 5PX DOTS</span>
                   </div>
                   <p style="font-size:0.75rem; color:#475569; margin-top:0.25rem; line-height:1.35;">
-                    Crisp 18–20mm QR code + bold SKU & frame name. Perfect for thermal rolls and phone camera scans without adjustments.
+                    Simplest 21×21 QR standard with chunky 5px dots (only 441 dots). Eliminates fine thermal bleed. Phone cameras lock on instantly without adjusting focus.
                   </p>
                 </div>
               </label>
 
-              <!-- Preset 2: Compact Temple Arm Tag -->
+              <!-- Preset 2: Low-Density Web Link (Version 2, 25x25) -->
+              <label class="stk-preset-card" data-preset="url" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:1px solid #CBD5E1; background:#FFFFFF; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
+                <input type="radio" name="stk-preset-choice" value="url" style="margin-top:0.25rem; accent-color:#000;" />
+                <div style="flex:1;">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="font-size:0.88rem; color:#1E293B;">🌐 Low-Density Web Link (25×25)</strong>
+                    <span style="font-size:0.7rem; font-weight:700; background:#E2E8F0; color:#1E293B; padding:2px 6px; border-radius:4px;">OPENS PAGE</span>
+                  </div>
+                  <p style="font-size:0.75rem; color:#64748B; margin-top:0.25rem; line-height:1.35;">
+                    Uppercase short URL (HTTPS://NOOROPTICS.VERCEL.APP/Q/...). Opens online frame boutique page on phone camera tap.
+                  </p>
+                </div>
+              </label>
+
+              <!-- Preset 3: Compact Temple Arm Tag -->
               <label class="stk-preset-card" data-preset="temple" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:1px solid #CBD5E1; background:#FFFFFF; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
                 <input type="radio" name="stk-preset-choice" value="temple" style="margin-top:0.25rem; accent-color:#000;" />
                 <div style="flex:1;">
-                  <strong style="font-size:0.88rem; color:#1E293B;">🏷️ Compact Frame Temple</strong>
+                  <strong style="font-size:0.88rem; color:#1E293B;">🏷️ Compact Frame Temple (14mm)</strong>
                   <p style="font-size:0.75rem; color:#64748B; margin-top:0.25rem; line-height:1.35;">
-                    Compact 14mm QR code designed for narrow temples and slim sunglasses arms.
+                    Narrow 14mm tag designed for slim sunglasses temples and delicate wire arms.
                   </p>
                 </div>
               </label>
 
-              <!-- Preset 3: A4 Label Sheet -->
+              <!-- Preset 4: A4 Label Sheet -->
               <label class="stk-preset-card" data-preset="a4_sheet" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:1px solid #CBD5E1; background:#FFFFFF; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
                 <input type="radio" name="stk-preset-choice" value="a4_sheet" style="margin-top:0.25rem; accent-color:#000;" />
                 <div style="flex:1;">
