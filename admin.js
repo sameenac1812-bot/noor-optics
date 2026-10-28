@@ -1742,47 +1742,32 @@
     const sku = frame.sku || frame.id || 'NOOR-FRAME';
     const brand = frame.brand || 'Noor Optics';
     const name = frame.name || '';
-    const price = frame.selling_price_paise ? formatINR(frame.selling_price_paise, true) : '';
+    let price = frame.selling_price_paise ? formatINR(frame.selling_price_paise, true) : (frame.selling_price_inr ? formatINR(frame.selling_price_inr * 100, true) : '');
+    if (price && price.startsWith('₹')) price = 'Rs. ' + price.substring(1).trim();
 
-    // Proportional dimensions: enlarged crisp QR (~18.5mm) for instant smartphone scanning
-    let qrMm = 18.5;
-    if (qrSize === 'tiny' || qrSize === 'temple') qrMm = 14;
-    else if (qrSize === 'small') qrMm = 16;
-    else if (qrSize === 'medium' || qrSize === 'standard') qrMm = 18.5;
-    else if (qrSize === 'large') qrMm = Math.max(20, Math.min(heightMm - 5, widthMm * 0.42));
-
-    const skuPt = heightMm <= 20 ? '7.5pt' : (heightMm <= 26 ? '9.8pt' : '11.5pt');
-    const namePt = heightMm <= 20 ? '5.2pt' : '6.5pt';
-    const brandPt = heightMm <= 20 ? '4.5pt' : '5.5pt';
-    const footerPt = heightMm <= 20 ? '4pt' : '5pt';
+    // Compact QR dimension (~16mm) fitting directly within narrow cut strips
+    const qrMm = (qrSize === 'tiny' || qrSize === 'temple') ? 13 : 16;
+    const tagWidthMm = (qrSize === 'tiny' || qrSize === 'temple') ? 22 : 25;
+    const tagHeightMm = Math.max(heightMm, 38);
 
     return `
-      <div class="frame-sticker" style="width:${widthMm}mm; height:${heightMm}mm; background-color:#FFE500 !important; color:#000000 !important; box-sizing:border-box; border-radius:2mm; padding:1.5mm 1.8mm; display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; position:relative; border:0.5px solid rgba(0,0,0,0.35); font-family:'Plus Jakarta Sans', -apple-system, sans-serif; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; margin:0 auto;">
-        <!-- Body Row: Pure Crisp Square QR on Left + Frame SKU on Right (ZERO TOP HEADER) -->
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:2mm; flex:1; min-height:0;">
-          <!-- Genuine High-Contrast Square QR Box with Quiet Zone -->
-          <div style="width:${qrMm}mm; height:${qrMm}mm; background:#FFFFFF; padding:0.6mm; border-radius:1mm; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:0.5px solid rgba(0,0,0,0.5); box-sizing:border-box;">
-            ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" style="width:100%; height:100%; display:block; object-fit:contain; image-rendering:pixelated;" />` : `<div style="font-size:5pt; font-weight:bold;">QR</div>`}
-          </div>
-
-          <!-- Frame Identification -->
-          <div style="flex:1; display:flex; flex-direction:column; justify-content:center; text-align:left; overflow:hidden; padding-left:0.5mm;">
-            <div style="font-size:${skuPt}; font-weight:900; line-height:1.15; letter-spacing:0.02em; color:#000000 !important; overflow-wrap:break-word; word-break:normal;">
-              ${escapeHtml(sku)}
-            </div>
-            ${name ? `<div style="font-size:${namePt}; font-weight:700; color:#1E293B; margin-top:0.3mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(name)}</div>` : ''}
-            <div style="font-size:${brandPt}; font-weight:600; color:#334155; margin-top:0.2mm; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-              ${escapeHtml(brand)}
-            </div>
-            ${price ? `<div style="font-size:${namePt}; font-weight:800; color:#000000; margin-top:0.3mm;">${price}</div>` : ''}
-          </div>
+      <div class="frame-sticker" style="width:${tagWidthMm}mm; min-height:${tagHeightMm}mm; background-color:#FFE500 !important; color:#000000 !important; box-sizing:border-box; border-radius:1.5mm; padding:1.5mm 1mm; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:1mm; overflow:hidden; position:relative; border:0.5px solid rgba(0,0,0,0.35); font-family:'Plus Jakarta Sans', -apple-system, sans-serif; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; margin:0 auto; text-align:center;">
+        <!-- Top: Crisp Square QR Code (A little smaller, ~16mm) -->
+        <div style="width:${qrMm}mm; height:${qrMm}mm; background:#FFFFFF; padding:0.4mm; border-radius:0.8mm; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:0.5px solid rgba(0,0,0,0.5); box-sizing:border-box;">
+          ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" style="width:100%; height:100%; display:block; object-fit:contain; image-rendering:pixelated;" />` : `<div style="font-size:5pt; font-weight:bold;">QR</div>`}
         </div>
 
-        <!-- Clean Bottom Line: NO STORE HEADER, NO PHONE NUMBER -->
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:${footerPt}; font-weight:800; line-height:1; border-top:0.5px solid rgba(0,0,0,0.35); padding-top:0.5mm; color:#111111; letter-spacing:0.04em;">
-          <span>NOOR OPTICS</span>
-          <span>AUTHENTIC</span>
+        <!-- Middle Rows: Text strictly fitted within QR column width so sides can be cut cleanly -->
+        <div style="width:100%; max-width:${qrMm + 4}mm; display:flex; flex-direction:column; align-items:center; text-align:center; overflow:hidden; padding:0 0.5mm;">
+          <div style="font-size:7.2pt; font-weight:900; line-height:1.15; letter-spacing:0.02em; color:#000000 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">
+            ${escapeHtml(sku)}
+          </div>
+          ${name ? `<div style="font-size:5.2pt; font-weight:700; color:#1E293B; margin-top:0.4mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">${escapeHtml(name)}</div>` : ''}
+          ${price ? `<div style="font-size:5.2pt; font-weight:800; color:#000000; margin-top:0.4mm; white-space:nowrap;">M.R.P: ${price}</div>` : ''}
         </div>
+
+        <!-- Bottom: Dashed Cut Guide Line -->
+        <div style="width:90%; border-bottom:0.5px dashed #000000; margin-top:1.5mm;"></div>
       </div>
     `;
   }

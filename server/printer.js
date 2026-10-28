@@ -346,9 +346,12 @@ async function processPrintJob(jobId) {
 /**
  * Generate 58mm / 80mm ESC/POS Raster QR Label Binary
  * Fully compatible with ESC/POS thermal printers (POS-58, POS-80, etc.)
+ * GUARANTEE: QR code and text are in ONE SINGLE BITMAP so text strictly fits within
+ * the QR code column width and is never cut off when cutting along the sides.
  */
 async function generateEscPosQrLabel(opts = {}) {
   const QRCode = require('qrcode');
+  const font = require('./fontData.json');
   const {
     sku = 'NOOR-FRAME',
     name = 'Optical Frame',
@@ -357,80 +360,152 @@ async function generateEscPosQrLabel(opts = {}) {
     qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(sku)}`,
     copies = 1,
     paperWidthMm = 58,
-    qrPreset = 'standard' // 'standard' (18-22mm instant scan) | 'temple' (14mm) | 'large'
+    qrPreset = 'standard'
   } = opts;
 
-  // Scale & quiet zone configuration for instant mobile camera detection without hunting
-  let scale = 5;
-  let quiet = 3; // 3-module textbook white quiet zone on all sides for instant finder detection
+  // "make the qr a little smaller": scale = 4 (~16.5mm)
+  let scale = 4;
+  let quiet = 2; // 2-module quiet zone
   if (qrPreset === 'temple' || opts.qrSize === 'tiny' || opts.qrSize === 'temple') {
-    scale = 4;
+    scale = 3;
     quiet = 2;
   } else if (qrPreset === 'large' || opts.qrSize === 'large') {
-    scale = 7;
-    quiet = 4;
+    scale = 6;
+    quiet = 3;
   }
 
   const qr = QRCode.create(qrPayload, { errorCorrectionLevel: 'M' });
   const rawSize = qr.modules.size;
   const totalModules = rawSize + quiet * 2;
-  const pixelWidth = totalModules * scale;
-  const pixelHeight = totalModules * scale;
+  const qrPixels = totalModules * scale; // 33 * 4 = 132 pixels
+
+  // Label width: exact multiple of 8 matching the QR code width + 4px margin
+  const labelWidth = Math.ceil(qrPixels / 8) * 8; // 136 pixels (17 bytes)
+  const qrOffsetX = Math.floor((labelWidth - qrPixels) / 2);
+  const qrOffsetY = 4;
+
+  // Typography layout: strictly within labelWidth so nothing is ever sliced off when cutting sides
+  const skuScale = (sku.length * 12 <= labelWidth) ? 2 : 1;
+  const skuOffsetY = qrOffsetY + qrPixels + 6;
+  const skuHeight = 7 * skuScale;
+  const nameOffsetY = skuOffsetY + skuHeight + 5;
+  const priceOffsetY = nameOffsetY + 7 + 4;
+  const lineOffsetY = priceOffsetY + 7 + 6;
+  const totalHeight = lineOffsetY + 6;
+
+  // Format price cleanly without Unicode Rupee symbol
+  let cleanPrice = price ? String(price).trim() : '';
+  if (cleanPrice) {
+    if (cleanPrice.startsWith('₹')) cleanPrice = 'Rs. ' + cleanPrice.substring(1).trim();
+    if (!cleanPrice.toUpperCase().startsWith('M.R.P') && !cleanPrice.toUpperCase().startsWith('RS')) {
+      cleanPrice = 'M.R.P: ' + cleanPrice;
+    }
+  }
+
+  const grid = Array.from({ length: totalHeight }, () => new Array(labelWidth).fill(0));
+
+  // 1. Render QR into grid
+  for (let my = 0; my < totalModules; my++) {
+    const rawY = my - quiet;
+    for (let mx = 0; mx < totalModules; mx++) {
+      const rawX = mx - quiet;
+      const isBlack = (rawX >= 0 && rawX < rawSize && rawY >= 0 && rawY < rawSize)
+        ? Boolean(qr.modules.data[rawY * rawSize + rawX])
+        : false;
+
+      if (isBlack) {
+        for (let dy = 0; dy < scale; dy++) {
+          for (let dx = 0; dx < scale; dx++) {
+            grid[qrOffsetY + my * scale + dy][qrOffsetX + mx * scale + dx] = 1;
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Helper to draw text glyphs from 5x7 font
+  function drawChar(char, startX, startY, s) {
+    const code = char.charCodeAt(0);
+    const offset = code * 5;
+    for (let c = 0; c < 5; c++) {
+      const colByte = font[offset + c] || 0;
+      for (let r = 0; r < 7; r++) {
+        if (colByte & (1 << r)) {
+          for (let dy = 0; dy < s; dy++) {
+            for (let dx = 0; dx < s; dx++) {
+              const x = startX + c * s + dx;
+              const y = startY + r * s + dy;
+              if (y >= 0 && y < grid.length && x >= 0 && x < labelWidth) {
+                grid[y][x] = 1;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function drawCenteredText(text, y, s) {
+    if (!text) return;
+    const maxChars = Math.floor(labelWidth / ((5 + 1) * s));
+    const cleanText = text.length > maxChars ? text.substring(0, maxChars - 1) + '.' : text;
+    const textWidth = cleanText.length * (5 + 1) * s - s;
+    const startX = Math.max(0, Math.floor((labelWidth - textWidth) / 2));
+    let curX = startX;
+    for (let i = 0; i < cleanText.length; i++) {
+      drawChar(cleanText[i], curX, y, s);
+      curX += (5 + 1) * s;
+    }
+  }
+
+  // 3. Render SKU, Name, Price centered strictly between the QR sides
+  drawCenteredText(sku, skuOffsetY, skuScale);
+  if (name) drawCenteredText(name, nameOffsetY, 1);
+  if (cleanPrice) drawCenteredText(cleanPrice, priceOffsetY, 1);
+
+  // 4. Render clean dashed cut line
+  for (let x = 4; x < labelWidth - 4; x++) {
+    if (Math.floor(x / 5) % 2 === 0) {
+      grid[lineOffsetY][x] = 1;
+    }
+  }
+
+  // Convert to ESC/POS GS v 0 format
   const totalPrintWidth = paperWidthMm >= 80 ? 576 : 384;
-  const leftPadPixels = Math.max(0, Math.floor((totalPrintWidth - pixelWidth) / 2));
+  const leftPadPixels = Math.max(0, Math.floor((totalPrintWidth - labelWidth) / 2));
   const leftPadBytes = Math.floor(leftPadPixels / 8);
-  const qrBytesWidth = Math.ceil(pixelWidth / 8);
-  const totalBytesWidth = leftPadBytes + qrBytesWidth;
+  const labelBytesWidth = labelWidth / 8;
+  const totalBytesWidth = leftPadBytes + labelBytesWidth;
 
   const bytes = [];
 
   for (let c = 0; c < copies; c++) {
     // ESC @ (Initialize)
     bytes.push(0x1B, 0x40);
-    // Center Align
-    bytes.push(0x1B, 0x61, 0x01);
-
-    // ZERO STORE HEADER (Noor Optics Boutique & Phone completely removed per user request)
 
     // Raster Bit Image: GS v 0 00 xL xH yL yH
     const xL = totalBytesWidth % 256;
     const xH = Math.floor(totalBytesWidth / 256);
-    const yL = pixelHeight % 256;
-    const yH = Math.floor(pixelHeight / 256);
+    const yL = totalHeight % 256;
+    const yH = Math.floor(totalHeight / 256);
 
     bytes.push(0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH);
 
-    for (let y = 0; y < pixelHeight; y++) {
-      const modY = Math.floor(y / scale) - quiet;
+    for (let y = 0; y < totalHeight; y++) {
       for (let p = 0; p < leftPadBytes; p++) {
         bytes.push(0x00);
       }
-      for (let b = 0; b < qrBytesWidth; b++) {
+      for (let b = 0; b < labelBytesWidth; b++) {
         let byteVal = 0;
         for (let bit = 0; bit < 8; bit++) {
-          const pixelX = b * 8 + bit;
-          const modX = Math.floor(pixelX / scale) - quiet;
-          if (modX >= 0 && modX < rawSize && modY >= 0 && modY < rawSize) {
-            if (qr.modules.data[modY * rawSize + modX]) {
-              byteVal |= (1 << (7 - bit));
-            }
+          const x = b * 8 + bit;
+          if (grid[y][x]) {
+            byteVal |= (1 << (7 - bit));
           }
         }
         bytes.push(byteVal);
       }
     }
-
-    // Details below QR (Bold & Prominent SKU)
-    bytes.push(0x1B, 0x61, 0x01); // Center
-    bytes.push(0x0A); // newline
-    bytes.push(0x1B, 0x45, 0x01); // Bold ON
-    bytes.push(0x1D, 0x21, 0x01); // Double height for SKU
-    bytes.push(...Buffer.from(`${sku}\n`, 'ascii'));
-    bytes.push(0x1D, 0x21, 0x00); // Normal size
-    bytes.push(0x1B, 0x45, 0x00); // Bold OFF
-    if (name) bytes.push(...Buffer.from(`${name}\n`, 'ascii'));
-    if (price) bytes.push(...Buffer.from(`M.R.P: ${price}\n`, 'ascii'));
-    bytes.push(...Buffer.from('--------------------------------\n', 'ascii'));
 
     // Feed minimal lines & Cut
     bytes.push(0x0A, 0x0A);
