@@ -181,8 +181,12 @@ $bw.Write([System.Text.Encoding]::ASCII.GetBytes("*** THANK YOU! VISIT AGAIN ***
 $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes("NOOR OPTICALS`n"))
 
-# Feed 4 lines and cut paper
-$bw.Write([byte[]]@(0x0A, 0x0A, 0x0A, 0x0A, 0x1D, 0x56, 0x41, 0x00))
+# Feed 5 lines and cut paper (supports GS V, ESC m, and ESC i standards)
+$bw.Write([byte[]]@(0x0A, 0x0A, 0x0A, 0x0A, 0x0A))
+$bw.Write([byte[]]@(0x1D, 0x56, 0x41, 0x00)) # GS V 65 0 (Feed and full cut)
+$bw.Write([byte[]]@(0x1D, 0x56, 0x00))       # GS V 0 (Full cut)
+$bw.Write([byte[]]@(0x1B, 0x6D))             # ESC m (Partial cut)
+$bw.Write([byte[]]@(0x1B, 0x69))             # ESC i (Full cut)
 
 $bw.Flush()
 $bytes = $ms.ToArray()
