@@ -1483,30 +1483,44 @@ router.post('/printer/test-print', authenticateToken, requirePermission('printer
   }
 });
 
-// 14b. DIRECT THERMAL HARDWARE QR STICKER PRINTER
+// 14b. DIRECT THERMAL HARDWARE QR STICKER PRINTER (SINGLE & BATCH SEQUENTIAL)
 router.post('/printer/print-qr-sticker', async (req, res) => {
   try {
-    const { sku, name, brand, price, copies = 1 } = req.body;
     const settings = getStoreSettings();
     const printerName = req.body.printerName || settings.printer_windows_name || 'POS-80';
     const paperWidth = parseInt(req.body.paperWidthMm || settings.printer_nominal_width_mm || '58', 10);
-    const qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(sku || 'NOOR-FRAME')}`;
+    const qrPreset = req.body.qrPreset || req.body.qrSize || 'standard';
 
-    const qrBinary = await generateEscPosQrLabel({
-      sku: sku || 'NOOR-FRAME',
-      name: name || 'Optical Frame',
-      brand: brand || 'Noor Optics',
-      price: price || '',
-      qrPayload,
-      copies: parseInt(copies, 10) || 1,
-      paperWidthMm: paperWidth,
-      qrPreset: req.body.qrPreset || req.body.qrSize || 'standard'
-    });
+    // Support both single item and array of items (sequential batch)
+    const rawItems = Array.isArray(req.body.items) && req.body.items.length > 0
+      ? req.body.items
+      : [req.body];
+
+    const buffers = [];
+    for (const item of rawItems) {
+      const sku = item.sku || 'NOOR-FRAME';
+      const qrPayload = item.qrPayload || `https://nooroptics.vercel.app/qr/${encodeURIComponent(sku)}`;
+      const copies = parseInt(item.copies || req.body.copies || 1, 10);
+
+      const buf = await generateEscPosQrLabel({
+        sku,
+        name: item.name || 'Optical Frame',
+        brand: item.brand || 'Noor Optics',
+        price: item.price || '',
+        qrPayload,
+        copies,
+        paperWidthMm: paperWidth,
+        qrPreset
+      });
+      buffers.push(buf);
+    }
+
+    const combinedBinary = Buffer.concat(buffers);
 
     const dataDir = path.join(__dirname, '..', 'data');
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-    const tempFile = path.join(dataDir, `qr_${Date.now()}.bin`);
-    fs.writeFileSync(tempFile, qrBinary);
+    const tempFile = path.join(dataDir, `qr_batch_${Date.now()}.bin`);
+    fs.writeFileSync(tempFile, combinedBinary);
 
     const psScript = path.join(__dirname, '..', 'scripts', 'print_raw_qr.ps1');
     const cmd = `powershell.exe -ExecutionPolicy Bypass -File "${psScript}" -FilePath "${tempFile}" -PrinterName "${printerName}"`;
@@ -1517,7 +1531,12 @@ router.post('/printer/print-qr-sticker', async (req, res) => {
       if (err) {
         return res.status(500).json({ success: false, error: stderr || err.message });
       }
-      return res.json({ success: true, message: `Directly printed crisp QR sticker for ${sku} to ${printerName}!`, stdout: stdout.trim() });
+      return res.json({
+        success: true,
+        count: rawItems.length,
+        message: `Successfully printed ${rawItems.length} sticker(s) in sequence to ${printerName}!`,
+        stdout: stdout ? stdout.trim() : ''
+      });
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

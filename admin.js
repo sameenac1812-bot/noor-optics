@@ -1443,24 +1443,33 @@
     const btnDirect = document.getElementById('btn-direct-thermal-print');
     if (btnDirect) {
       btnDirect.addEventListener('click', async () => {
-        const frame = state.activeStickerFrame || (state.inventoryList[0] || {
-          sku: 'NOOR-AMB-11',
-          name: 'The Oslo Crystal',
-          brand: 'Noor Optics'
-        });
+        const frameIds = state.activeBatchStickerIds && state.activeBatchStickerIds.length > 0
+          ? state.activeBatchStickerIds
+          : (state.activeStickerFrame ? [state.activeStickerFrame.id] : []);
+
+        const frames = frameIds.map(id => state.inventoryList.find(p => p.id === id)).filter(Boolean);
+        if (frames.length === 0) {
+          if (state.activeStickerFrame) frames.push(state.activeStickerFrame);
+          else if (state.inventoryList[0]) frames.push(state.inventoryList[0]);
+        }
+
         const copies = parseInt(document.getElementById('stk-copies-count')?.value || '1', 10);
         const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
         const qrSize = activePreset === 'temple' ? 'temple' : 'standard';
 
         btnDirect.disabled = true;
-        btnDirect.innerHTML = `<span>⏳ Printing to POS-80...</span>`;
+        btnDirect.innerHTML = `<span>⏳ Printing ${frames.length} in Sequence...</span>`;
+
+        const items = frames.map(f => ({
+          sku: f.sku || f.id,
+          name: f.name || '',
+          brand: f.brand || 'Noor Optics',
+          price: f.selling_price_paise ? formatINR(f.selling_price_paise, true) : (f.selling_price_inr ? formatINR(f.selling_price_inr * 100, true) : ''),
+          copies: copies
+        }));
 
         const payload = {
-          sku: frame.sku || frame.id,
-          name: frame.name,
-          brand: frame.brand,
-          price: frame.selling_price_paise ? formatINR(frame.selling_price_paise, true) : '',
-          copies: copies,
+          items: items,
           paperWidthMm: 58,
           qrPreset: activePreset,
           qrSize: qrSize
@@ -1484,7 +1493,7 @@
           }
 
           if (res && res.success) {
-            showToast(`✓ Crisp QR for ${frame.sku || 'frame'} printed to POS-80 thermal printer!`, 'success');
+            showToast(`✓ All ${frames.length} stickers printed sequentially to POS-80 thermal printer!`, 'success');
           } else {
             showToast('Printer response: ' + (res?.error || 'Check printer connection'), 'error');
           }
@@ -1500,20 +1509,98 @@
       });
     }
 
-    // Batch stickers from selection
+    // Direct Sequential Print when clicking "Print Selected Stickers" button on Inventory table
     const btnBatch = document.getElementById('btn-batch-stickers');
     if (btnBatch) {
-      btnBatch.addEventListener('click', () => {
-        openBatchStickersModal(Array.from(state.selectedFrameIds));
+      btnBatch.addEventListener('click', async () => {
+        await printBatchStickersSequence(Array.from(state.selectedFrameIds));
       });
     }
 
     // Print all eligible frame stickers
     const btnAll = document.getElementById('btn-print-all-stickers');
     if (btnAll) {
-      btnAll.addEventListener('click', () => {
-        openBatchStickersModal(state.inventoryList.map(p => p.id));
+      btnAll.addEventListener('click', async () => {
+        await printBatchStickersSequence(state.inventoryList.map(p => p.id));
       });
+    }
+  }
+
+  /**
+   * Print Batch of Stickers One After Another in Sequence to POS Thermal Printer
+   */
+  async function printBatchStickersSequence(frameIds) {
+    if (!frameIds || frameIds.length === 0) {
+      showToast('Please select one or more frames from the inventory table first.', 'warning');
+      return;
+    }
+
+    const selectedFrames = frameIds.map(id => state.inventoryList.find(p => p.id === id)).filter(Boolean);
+    if (selectedFrames.length === 0) {
+      showToast('No matching frames found for selection.', 'warning');
+      return;
+    }
+
+    const btnBatch = document.getElementById('btn-batch-stickers');
+    const txtBatch = document.getElementById('btn-batch-stickers-text');
+    const count = selectedFrames.length;
+
+    if (btnBatch) btnBatch.disabled = true;
+    if (txtBatch) txtBatch.textContent = `⏳ Printing ${count} in Sequence...`;
+
+    showToast(`Sending ${count} stickers to POS-80 thermal printer in sequence...`, 'info');
+
+    const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
+    const copies = parseInt(document.getElementById('stk-copies-count')?.value || '1', 10);
+
+    const items = selectedFrames.map(f => ({
+      sku: f.sku || f.id,
+      name: f.name || '',
+      brand: f.brand || 'Noor Optics',
+      price: f.selling_price_paise ? formatINR(f.selling_price_paise, true) : (f.selling_price_inr ? formatINR(f.selling_price_inr * 100, true) : ''),
+      copies: copies
+    }));
+
+    const payload = {
+      items: items,
+      paperWidthMm: 58,
+      qrPreset: activePreset
+    };
+
+    try {
+      let res;
+      try {
+        res = await apiFetch('/api/printer/print-qr-sticker', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+      } catch (cloudErr) {
+        // Cloud fallback: try local POS hardware bridge on port 3000
+        const localResp = await fetch('http://127.0.0.1:3000/api/printer/print-qr-sticker', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        res = await localResp.json();
+      }
+
+      if (res && res.success) {
+        showToast(`✓ All ${count} stickers printed one after another in sequence!`, 'success');
+        if (txtBatch) txtBatch.textContent = `✓ Printed ${count} in Sequence!`;
+        setTimeout(() => {
+          updateBatchStickersButton();
+        }, 3500);
+      } else {
+        showToast('Printer response: ' + (res?.error || 'Check printer connection'), 'error');
+        openBatchStickersModal(frameIds);
+        updateBatchStickersButton();
+      }
+    } catch (err) {
+      showToast('Could not reach POS printer: ' + err.message + '. Opening preview modal...', 'error');
+      openBatchStickersModal(frameIds);
+      updateBatchStickersButton();
+    } finally {
+      if (btnBatch) btnBatch.disabled = state.selectedFrameIds.size === 0;
     }
   }
 
@@ -1533,6 +1620,14 @@
       const stage = document.getElementById('stk-preview-stage');
       const qrSize = activePreset === 'temple' ? 'temple' : 'medium';
       renderSingleStickerCard(stage, frame, w, h, '', true, qrSize);
+
+      const btnDirect = document.getElementById('btn-direct-thermal-print');
+      if (btnDirect) {
+        btnDirect.innerHTML = `
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          <span>⚡ Print to POS Thermal Printer</span>
+        `;
+      }
     }
   };
 
@@ -1555,6 +1650,14 @@
       const stage = document.getElementById('stk-preview-stage');
       const qrSize = activePreset === 'temple' ? 'temple' : 'medium';
       renderSingleStickerCard(stage, firstFrame, w, h, '', true, qrSize);
+
+      const btnDirect = document.getElementById('btn-direct-thermal-print');
+      if (btnDirect) {
+        btnDirect.innerHTML = `
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          <span>⚡ Print All ${frameIds.length} Stickers in Sequence to POS-80</span>
+        `;
+      }
     }
   };
 
