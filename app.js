@@ -1,8 +1,7 @@
 /**
  * app.js – Noor Optics Storefront Logic
  * High-performance vanilla JavaScript controller for product catalog,
- * facet filtering, real-time search, interactive drawers, virtual 3D try-on,
- * and demo checkout.
+ * facet filtering, real-time search, interactive drawers, and demo checkout.
  */
 
 'use strict';
@@ -25,15 +24,7 @@
     // Active product in Quick View
     quickViewProductId: null,
     selectedLensPackageId: 'lens-bluecut',
-    selectedColorName: null,
-    // Virtual Try-On state
-    tryOn: {
-      productId: 'noor-01',
-      scale: 1.0,
-      offsetY: 0,
-      tilt: 0,
-      faceSrc: 'images/model_female1.jpg'
-    }
+    selectedColorName: null
   };
 
   // ── DOM Element Cache ──────────────────────────────────────────────────────
@@ -51,7 +42,6 @@
     DOM.btnFilterToggle = document.getElementById('btn-filter-toggle');
     DOM.btnWishlistToggle = document.getElementById('btn-wishlist-toggle');
     DOM.btnBagToggle = document.getElementById('btn-bag-toggle');
-    DOM.btnTryonHeader = document.getElementById('btn-tryon-header');
 
     // Mobile Header & Drawer Controls
     DOM.btnMobileMenu = document.getElementById('btn-mobile-menu');
@@ -63,8 +53,6 @@
     DOM.sortSheetBackdrop = document.getElementById('sort-sheet-backdrop');
     DOM.btnMobileFilter = document.getElementById('btn-mobile-filter');
     DOM.mobileFilterCountBadge = document.getElementById('mobile-filter-count-badge');
-    DOM.btnMobileTryon = document.getElementById('btn-mobile-tryon');
-    DOM.btnMobileDrawerTryon = document.getElementById('btn-mobile-drawer-tryon');
 
     // Badge counts
     DOM.wishlistCountBadge = document.getElementById('wishlist-count-badge');
@@ -102,23 +90,6 @@
     // Quick View Modal
     DOM.quickViewModal = document.getElementById('quickview-modal');
     DOM.quickViewContainer = document.getElementById('quickview-container');
-
-    // Try-On Studio Modal
-    DOM.tryOnModal = document.getElementById('tryon-modal');
-    DOM.tryOnGlassesImg = document.getElementById('tryon-glasses-img');
-    DOM.tryOnGlassesLayer = document.getElementById('tryon-glasses-layer');
-    DOM.tryOnCurrentName = document.getElementById('tryon-current-name');
-    DOM.tryOnCurrentPrice = document.getElementById('tryon-current-price');
-    DOM.tryOnScaleSlider = document.getElementById('tryon-scale-slider');
-    DOM.tryOnYSlider = document.getElementById('tryon-y-slider');
-    DOM.tryOnTiltSlider = document.getElementById('tryon-tilt-slider');
-    DOM.tryOnScaleVal = document.getElementById('tryon-scale-val');
-    DOM.tryOnYVal = document.getElementById('tryon-y-val');
-    DOM.tryOnTiltVal = document.getElementById('tryon-tilt-val');
-    DOM.tryOnCarousel = document.getElementById('tryon-carousel');
-    DOM.btnTryonAddBag = document.getElementById('btn-tryon-addbag');
-    DOM.tryOnBaseFace = document.getElementById('tryon-base-face');
-    DOM.tryOnFaceUpload = document.getElementById('tryon-face-upload');
 
     // Demo Checkout Modal
     DOM.checkoutModal = document.getElementById('checkout-modal');
@@ -321,13 +292,6 @@
                  id="img-${product.id}">
             <div class="card-quick-action">
               <button class="btn-card-quickview" data-action="quickview" data-id="${product.id}">Quick View</button>
-              <button class="btn-card-tryon-pill" data-action="tryon" data-id="${product.id}">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-                Try-On
-              </button>
             </div>
           </div>
           <div class="card-content">
@@ -762,7 +726,7 @@
   }
 
   function closeAllModals() {
-    [DOM.quickViewModal, DOM.tryOnModal, DOM.checkoutModal].forEach(modal => {
+    [DOM.quickViewModal, DOM.checkoutModal].forEach(modal => {
       if (modal) modal.classList.remove('open');
     });
     document.body.classList.remove('drawer-open');
@@ -858,13 +822,6 @@
               </svg>
               Add to Bag
             </button>
-            <button class="btn-qv-tryon" id="btn-qv-trigger-tryon">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-              3D Try-On
-            </button>
           </div>
         </div>
       </div>
@@ -900,14 +857,6 @@
       });
     }
 
-    const btnTryon = document.getElementById('btn-qv-trigger-tryon');
-    if (btnTryon) {
-      btnTryon.addEventListener('click', () => {
-        closeModal(DOM.quickViewModal);
-        openTryOnStudio(product.id);
-      });
-    }
-
     openModal(DOM.quickViewModal);
   }
 
@@ -916,56 +865,6 @@
     const calculated = product.price + lensPkg.price;
     const priceElem = document.getElementById('qv-calculated-price');
     if (priceElem) priceElem.textContent = formatINR(calculated);
-  }
-
-  // ── 3D / Virtual Try-On Studio ─────────────────────────────────────────────
-  function openTryOnStudio(productId) {
-    const selectedId = productId || state.tryOn.productId || (state.catalog[0] ? state.catalog[0].id : null);
-    if (!selectedId) return;
-
-    state.tryOn.productId = selectedId;
-    renderTryOnStudio();
-    openModal(DOM.tryOnModal);
-  }
-
-  function renderTryOnStudio() {
-    const product = state.catalog.find(p => p.id === state.tryOn.productId);
-    if (!product) return;
-
-    // Set Frame Visuals
-    if (DOM.tryOnGlassesImg) DOM.tryOnGlassesImg.src = product.image;
-    if (DOM.tryOnCurrentName) DOM.tryOnCurrentName.textContent = product.name;
-    if (DOM.tryOnCurrentPrice) DOM.tryOnCurrentPrice.textContent = formatINR(product.price);
-
-    // Apply Transformation Overlay
-    applyTryOnTransform();
-
-    // Render Bottom Horizontal Carousel
-    if (DOM.tryOnCarousel) {
-      const carouselHtml = state.catalog.map(p => `
-        <div class="tryon-frame-thumb ${p.id === state.tryOn.productId ? 'active' : ''}" data-tryon-pick="${p.id}">
-          <img src="${p.image}" alt="${p.name}">
-          <span>${p.name}</span>
-        </div>
-      `).join('');
-
-      DOM.tryOnCarousel.innerHTML = carouselHtml;
-
-      DOM.tryOnCarousel.querySelectorAll('[data-tryon-pick]').forEach(thumb => {
-        thumb.addEventListener('click', () => {
-          const id = thumb.getAttribute('data-tryon-pick');
-          state.tryOn.productId = id;
-          renderTryOnStudio();
-        });
-      });
-    }
-  }
-
-  function applyTryOnTransform() {
-    if (!DOM.tryOnGlassesLayer) return;
-    const topPct = 36 + (state.tryOn.offsetY * 0.2);
-    DOM.tryOnGlassesLayer.style.top = `${topPct}%`;
-    DOM.tryOnGlassesLayer.style.transform = `translate(-50%, -50%) scale(${state.tryOn.scale}) rotate(${state.tryOn.tilt}deg)`;
   }
 
   // ── Demo Checkout Modal ───────────────────────────────────────────────────
@@ -1229,9 +1128,6 @@
         openDrawer(DOM.cartDrawer);
       });
     }
-    if (DOM.btnTryonHeader) {
-      DOM.btnTryonHeader.addEventListener('click', () => openTryOnStudio('noor-01'));
-    }
 
     // Mobile Drawer Open & Close
     if (DOM.btnMobileMenu && DOM.mobileMenuDrawer) {
@@ -1314,17 +1210,6 @@
       DOM.btnMobileFilter.addEventListener('click', () => openDrawer(DOM.filterDrawer));
     }
 
-    // Mobile 3D Try-On Triggers
-    if (DOM.btnMobileTryon) {
-      DOM.btnMobileTryon.addEventListener('click', () => openTryOnStudio('noor-01'));
-    }
-    if (DOM.btnMobileDrawerTryon) {
-      DOM.btnMobileDrawerTryon.addEventListener('click', () => {
-        closeAllDrawers();
-        openTryOnStudio('noor-01');
-      });
-    }
-
     // Drawer Close Buttons
     document.querySelectorAll('[data-drawer-close]').forEach(btn => {
       btn.addEventListener('click', closeAllDrawers);
@@ -1341,7 +1226,7 @@
     }
 
     // Modal Backdrop Click
-    [DOM.quickViewModal, DOM.tryOnModal, DOM.checkoutModal].forEach(modal => {
+    [DOM.quickViewModal, DOM.checkoutModal].forEach(modal => {
       if (!modal) return;
       modal.addEventListener('click', (e) => {
         if (e.target === modal) closeAllModals();
@@ -1395,55 +1280,6 @@
       }
     }
 
-    // Try-On Controls (Sliders)
-    if (DOM.tryOnScaleSlider) {
-      DOM.tryOnScaleSlider.addEventListener('input', (e) => {
-        state.tryOn.scale = parseFloat(e.target.value);
-        if (DOM.tryOnScaleVal) DOM.tryOnScaleVal.textContent = state.tryOn.scale.toFixed(1) + 'x';
-        applyTryOnTransform();
-      });
-    }
-
-    if (DOM.tryOnYSlider) {
-      DOM.tryOnYSlider.addEventListener('input', (e) => {
-        state.tryOn.offsetY = parseInt(e.target.value, 10);
-        if (DOM.tryOnYVal) DOM.tryOnYVal.textContent = state.tryOn.offsetY + 'px';
-        applyTryOnTransform();
-      });
-    }
-
-    if (DOM.tryOnTiltSlider) {
-      DOM.tryOnTiltSlider.addEventListener('input', (e) => {
-        state.tryOn.tilt = parseInt(e.target.value, 10);
-        if (DOM.tryOnTiltVal) DOM.tryOnTiltVal.textContent = state.tryOn.tilt + '°';
-        applyTryOnTransform();
-      });
-    }
-
-    // Try-On Add to Bag
-    if (DOM.btnTryonAddBag) {
-      DOM.btnTryonAddBag.addEventListener('click', () => {
-        if (state.tryOn.productId) {
-          addToCart(state.tryOn.productId);
-          closeModal(DOM.tryOnModal);
-        }
-      });
-    }
-
-    // Try-On Face upload or switcher
-    if (DOM.tryOnFaceUpload) {
-      DOM.tryOnFaceUpload.addEventListener('change', (e) => {
-        const file = e.target.files && e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = function(evt) {
-            if (DOM.tryOnBaseFace) DOM.tryOnBaseFace.src = evt.target.result;
-          };
-          reader.readAsDataURL(file);
-        }
-      });
-    }
-
     // Checkout Modal Open & Submit
     if (DOM.btnCartCheckout) {
       DOM.btnCartCheckout.addEventListener('click', openDemoCheckout);
@@ -1474,14 +1310,6 @@
           e.stopPropagation();
           const id = addBagBtn.getAttribute('data-id');
           addToCart(id);
-          return;
-        }
-
-        const tryOnBtn = e.target.closest('[data-action="tryon"]');
-        if (tryOnBtn) {
-          e.stopPropagation();
-          const id = tryOnBtn.getAttribute('data-id');
-          openTryOnStudio(id);
           return;
         }
 

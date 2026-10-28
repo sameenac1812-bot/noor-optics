@@ -1,6 +1,6 @@
 /* ==========================================================================
    NOOR OPTICS – SCANDINAVIAN LUXURY EYEWEAR STOREFRONT
-   Design System, Editorial Grid, Drawers, Modals & Virtual Try-On Studio
+   Design System, Editorial Grid, Drawers & Concierge Checkout
    ========================================================================== */
 
 :root {
@@ -364,27 +364,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   display: none;
 }
 
-/* Special button styling for 3D TRY-ON */
-.btn-tryon-highlight {
-  background-color: #F3F3F6;
-  border: 1px solid #E5E5E9;
-  border-radius: var(--radius-xs);
-  padding: 0.45rem 0.8rem;
-}
-
-.btn-tryon-highlight:hover {
-  background-color: #EAEAEF;
-  border-color: #D5D5DB;
-}
-
-/* Separator between utility groups */
-.nav-separator {
-  width: 1px;
-  height: 18px;
-  background-color: var(--border-light);
-  margin: 0 0.35rem;
-}
-
 /* ── Inline Search Banner (Slide-Down Bar) ──────────────────────────────── */
 .search-expand-bar {
   max-height: 0;
@@ -683,20 +662,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   display: none;
 }
 
-.mobile-tryon-btn {
-  background-color: #111111;
-  color: #FFFFFF;
-  border-color: #111111;
-}
-
-.mobile-tryon-btn:hover {
-  background-color: #222222;
-}
-
-.tryon-text-short {
-  display: none;
-}
-
 .active-filter-chips {
   display: flex;
   align-items: center;
@@ -946,7 +911,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.45rem 0.9rem;
+  padding: 0.5rem 1.4rem;
   border-radius: var(--radius-xs);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   transition: all var(--transition-fast);
@@ -956,27 +921,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   background-color: #111111;
   color: #FFFFFF;
   border-color: #111111;
-}
-
-.btn-card-tryon-pill {
-  background-color: rgba(243, 243, 246, 0.98);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-main);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.45rem 0.75rem;
-  border-radius: var(--radius-xs);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  transition: all var(--transition-fast);
-}
-
-.btn-card-tryon-pill:hover {
-  background-color: #E2E2E8;
 }
 
 /* Card Body Content */
@@ -1233,54 +1177,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   flex-direction: column;
   gap: 1.5rem;
   overflow-y: auto;
-}
-
-/* 3D Try-On Card in Drawer */
-.mobile-drawer-tryon-card {
-  background: linear-gradient(135deg, #111111 0%, #2A2A30 100%);
-  color: #FFFFFF;
-  border-radius: var(--radius-xs);
-  padding: 1rem 1.1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
-  transition: transform var(--transition-fast);
-}
-
-.mobile-drawer-tryon-card:hover {
-  transform: translateY(-1px);
-}
-
-.tryon-card-glow-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: rgba(255, 255, 255, 0.12);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--accent-gold);
-}
-
-.tryon-card-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.tryon-card-text strong {
-  font-size: 0.88rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.tryon-card-text span {
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.75);
 }
 
 .mobile-drawer-section {
@@ -1890,7 +1786,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   border-radius: var(--radius-xs);
 }
 
-/* ── Modal Dialogs Base (Quick View, 3D Try-On, Demo Checkout) ──────────── */
+/* ── Modal Dialogs Base (Quick View, Demo Checkout) ────────────────────────── */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -2094,15 +1990,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .quickview-actions {
   display: flex;
-  gap: 0.75rem;
   margin-top: 0.5rem;
 }
 
 .btn-qv-addbag {
-  flex: 2;
+  width: 100%;
   background-color: var(--text-main);
   color: var(--text-inverse);
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2116,287 +2011,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .btn-qv-addbag:hover {
-  background-color: #2D2D2D;
-}
-
-.btn-qv-tryon {
-  flex: 1;
-  background-color: #F3F3F6;
-  border: 1px solid var(--border-subtle);
-  color: var(--text-main);
-  font-size: 0.76rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.85rem;
-  border-radius: var(--radius-xs);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-}
-
-.btn-qv-tryon:hover {
-  background-color: #E6E6EC;
-}
-
-/* ── 3D / Virtual Try-On Studio Modal ────────────────────────────────────── */
-.tryon-modal-container {
-  max-width: 960px;
-}
-
-.tryon-studio-grid {
-  display: grid;
-  grid-template-columns: 1.35fr 1fr;
-}
-
-.tryon-stage-panel {
-  background-color: #0F1115;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  min-height: 480px;
-  overflow: hidden;
-}
-
-.tryon-mirror-frame {
-  position: relative;
-  width: 320px;
-  height: 410px;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-  background-color: #1A1D24;
-}
-
-.tryon-base-face {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/* Live Glasses Overlay element positioned over eyes */
-.tryon-glasses-layer {
-  position: absolute;
-  top: 36%;
-  left: 50%;
-  transform: translate(-50%, -50%) scale(1);
-  width: 220px;
-  pointer-events: none;
-  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35));
-  transition: transform 0.05s ease-out;
-  will-change: transform;
-}
-
-.tryon-glasses-layer img {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
-/* Studio Stage Top Toolbar */
-.tryon-stage-toolbar {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  right: 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 10;
-}
-
-.tryon-stage-badge {
-  background-color: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(8px);
-  color: #FFFFFF;
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.3rem 0.65rem;
-  border-radius: var(--radius-full);
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.tryon-stage-badge span.live-dot {
-  width: 6px;
-  height: 6px;
-  background-color: #10B981;
-  border-radius: 50%;
-  animation: pulse 1.5s infinite;
-}
-
-.tryon-face-picker {
-  display: flex;
-  gap: 0.4rem;
-}
-
-.btn-face-choice {
-  font-size: 0.68rem;
-  background-color: rgba(255, 255, 255, 0.12);
-  color: #E2E8F0;
-  padding: 0.3rem 0.6rem;
-  border-radius: var(--radius-xs);
-  transition: background-color var(--transition-fast);
-}
-
-.btn-face-choice:hover, .btn-face-choice.active {
-  background-color: #FFFFFF;
-  color: #111111;
-  font-weight: 600;
-}
-
-/* Try-On Controls Sidebar */
-.tryon-controls-panel {
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  background-color: #FFFFFF;
-}
-
-.tryon-heading-wrap h3 {
-  font-family: var(--font-serif);
-  font-size: 1.45rem;
-  font-weight: 600;
-}
-
-.tryon-heading-wrap p {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin-top: 0.15rem;
-}
-
-.tryon-current-frame-card {
-  padding: 0.85rem 1rem;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-xs);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.tryon-current-frame-name {
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.tryon-current-frame-price {
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-
-/* Sliders for Fitting Adjustments */
-.tryon-slider-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-.tryon-slider-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.tryon-slider-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  display: flex;
-  justify-content: space-between;
-}
-
-.tryon-slider-input {
-  width: 100%;
-  accent-color: var(--text-main);
-  cursor: pointer;
-}
-
-/* Horizontal Frame Picker Carousel */
-.tryon-carousel-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.tryon-carousel-title {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-main);
-}
-
-.tryon-frames-carousel {
-  display: flex;
-  gap: 0.6rem;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
-  scrollbar-width: thin;
-}
-
-.tryon-frame-thumb {
-  flex-shrink: 0;
-  width: 78px;
-  background-color: var(--bg-surface-img);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-xs);
-  padding: 0.4rem;
-  text-align: center;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.tryon-frame-thumb:hover {
-  border-color: var(--border-subtle);
-}
-
-.tryon-frame-thumb.active {
-  border-color: var(--text-main);
-  background-color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.tryon-frame-thumb img {
-  width: 100%;
-  height: 40px;
-  object-fit: contain;
-}
-
-.tryon-frame-thumb span {
-  display: block;
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 0.25rem;
-}
-
-.btn-tryon-addtobag {
-  width: 100%;
-  background-color: var(--text-main);
-  color: var(--text-inverse);
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.85rem;
-  border-radius: var(--radius-xs);
-  margin-top: auto;
-}
-
-.btn-tryon-addtobag:hover {
   background-color: #2D2D2D;
 }
 
@@ -3074,7 +2688,6 @@ body.drawer-open .toast-pill {
   }
 
   .quickview-grid,
-  .tryon-studio-grid,
   .checkout-grid {
     grid-template-columns: 1fr !important;
     width: 100% !important;
@@ -3083,19 +2696,6 @@ body.drawer-open .toast-pill {
 
   .quickview-gallery {
     padding: 1.5rem;
-  }
-
-  .tryon-stage-panel {
-    min-height: 360px;
-  }
-
-  .tryon-mirror-frame {
-    width: 260px;
-    height: 340px;
-  }
-
-  .tryon-glasses-layer {
-    width: 180px;
   }
 
   .slide-drawer {
@@ -3220,14 +2820,6 @@ body.drawer-open .toast-pill {
     gap: 0.5rem;
     width: 100%;
     box-sizing: border-box;
-  }
-
-  .tryon-text-full {
-    display: none;
-  }
-
-  .tryon-text-short {
-    display: inline;
   }
 
   .store-main {

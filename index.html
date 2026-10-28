@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Noor Optics – Curated Scandinavian Eyewear & Precision Lenses</title>
-  <meta name="description" content="Explore Noor Optics' Scandinavian-inspired luxury eyewear collection. Handcrafted Japanese titanium and Italian bio-acetate frames with custom precision lenses. Interactive 3D Try-On available." />
+  <meta name="description" content="Explore Noor Optics' Scandinavian-inspired luxury eyewear collection. Handcrafted Japanese titanium and Italian bio-acetate frames with custom precision lenses. Complimentary express delivery across India." />
   <meta name="theme-color" content="#FFFFFF" />
 
   <!-- Preconnect to Google Fonts -->
@@ -14,7 +14,7 @@
 
   <!-- PWA Manifest & App Styles -->
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=20261028_smooth_v6" />
+  <link rel="stylesheet" href="style.css?v=20261028_no_tryon_v7" />
   <!-- Favicon & Mobile Touch Icons -->
   <link rel="icon" type="image/png" href="images/favicon.png" />
   <link rel="apple-touch-icon" href="images/favicon.png" />
@@ -27,14 +27,14 @@
       <div class="announcement-ticker" id="announcement-ticker">
         <span class="announcement-slide active">Complimentary Pan-India Express Delivery Over ₹1,999</span>
         <span class="announcement-slide">2-Year Comprehensive International Frame Warranty</span>
-        <span class="announcement-slide">Virtual 3D Fitting Mirror Live & Active</span>
+        <span class="announcement-slide">Handcrafted Japanese Titanium & Italian Bio-Acetate</span>
       </div>
       <div class="announcement-desktop-row">
         <span>Complimentary Pan-India Express Delivery Over ₹1,999</span>
         <span class="announcement-dot" aria-hidden="true"></span>
         <span>2-Year Comprehensive Frame Warranty</span>
         <span class="announcement-dot" aria-hidden="true"></span>
-        <span>Virtual 3D Try-On Mirror Active</span>
+        <span>Handcrafted Japanese Titanium & Italian Bio-Acetate</span>
       </div>
     </div>
   </aside>
@@ -64,17 +64,6 @@
 
       <!-- Desktop & Global Utility Navigation -->
       <nav class="header-right" aria-label="Store Utility Navigation">
-        <!-- 3D Try-On Launcher (Desktop) -->
-        <button class="nav-ctrl-btn btn-tryon-highlight desktop-only" id="btn-tryon-header" aria-label="Launch 3D Virtual Try-On Studio">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-          <span class="nav-btn-text">3D TRY-ON</span>
-        </button>
-
-        <span class="nav-separator desktop-only" aria-hidden="true"></span>
-
         <!-- Sort Menu Dropdown (Desktop) -->
         <div class="sort-dropdown-wrap desktop-only">
           <button class="nav-ctrl-btn" id="btn-sort-toggle" aria-expanded="false" aria-haspopup="true">
@@ -190,10 +179,6 @@
             <span>FILTERS</span>
             <span class="mobile-badge-num empty" id="mobile-filter-count-badge">0</span>
           </button>
-          <button class="mobile-ctrl-btn mobile-tryon-btn" id="btn-mobile-tryon" aria-label="Launch 3D Virtual Try-On">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-            <span class="tryon-text-full">3D TRY-ON</span><span class="tryon-text-short">3D</span>
-          </button>
         </div>
       </div>
 
@@ -222,20 +207,6 @@
       <button class="drawer-close-btn" id="btn-close-mobile-menu" aria-label="Close navigation menu">&times;</button>
     </div>
     <div class="drawer-body mobile-menu-body">
-      <!-- 3D Try-On Card -->
-      <div class="mobile-drawer-tryon-card" id="btn-mobile-drawer-tryon">
-        <div class="tryon-card-glow-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-        </div>
-        <div class="tryon-card-text">
-          <strong>Virtual 3D Fitting Mirror</strong>
-          <span>Try 18 luxury frames on your face in real-time</span>
-        </div>
-      </div>
-
       <!-- Quick Categories -->
       <div class="mobile-drawer-section">
         <div class="mobile-drawer-sec-title">Shop by Frame Shape</div>
@@ -495,92 +466,6 @@
     </div>
   </div>
 
-  <!-- 3D / Virtual Try-On Studio Modal -->
-  <div class="modal-backdrop" id="tryon-modal" role="dialog" aria-modal="true" aria-label="3D Virtual Try-On Studio">
-    <div class="modal-container tryon-modal-container">
-      <button class="modal-close-icon" data-modal-close aria-label="Close Try-On Studio">&times;</button>
-      <div class="tryon-studio-grid">
-        <!-- Live Mirror / Model Stage -->
-        <div class="tryon-stage-panel">
-          <div class="tryon-stage-toolbar">
-            <div class="tryon-stage-badge">
-              <span class="live-dot" aria-hidden="true"></span>
-              <span>Virtual Fitting Mirror</span>
-            </div>
-            <div class="tryon-face-picker">
-              <label class="btn-face-choice" style="cursor:pointer;">
-                <span>Upload Photo</span>
-                <input type="file" id="tryon-face-upload" accept="image/*" style="display:none;" />
-              </label>
-            </div>
-          </div>
-          <!-- Model Mirror Frame -->
-          <div class="tryon-mirror-frame">
-            <img class="tryon-base-face" id="tryon-base-face" src="images/model_female1.jpg" alt="Model Portrait for Virtual Fitting" />
-            <div class="tryon-glasses-layer" id="tryon-glasses-layer">
-              <img id="tryon-glasses-img" src="images/stockholm_noir.jpg" alt="Eyewear Frame Overlay" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Controls & Frame Selector Sidebar -->
-        <div class="tryon-controls-panel">
-          <div class="tryon-heading-wrap">
-            <h3>3D Try-On Studio</h3>
-            <p>Fine-tune frame scale and alignment to simulate your tailored optical fit.</p>
-          </div>
-
-          <div class="tryon-current-frame-card">
-            <div>
-              <div class="tryon-current-frame-name" id="tryon-current-name">The Stockholm Noir</div>
-              <span style="font-size:0.72rem;color:var(--text-muted);">Selected Optical Frame</span>
-            </div>
-            <div class="tryon-current-frame-price" id="tryon-current-price">₹3,499</div>
-          </div>
-
-          <!-- Alignment Sliders -->
-          <div class="tryon-slider-group">
-            <div class="tryon-slider-item">
-              <div class="tryon-slider-label">
-                <span>Frame Scale</span>
-                <span id="tryon-scale-val">1.0x</span>
-              </div>
-              <input type="range" class="tryon-slider-input" id="tryon-scale-slider" min="0.7" max="1.4" step="0.05" value="1.0" />
-            </div>
-
-            <div class="tryon-slider-item">
-              <div class="tryon-slider-label">
-                <span>Bridge Height</span>
-                <span id="tryon-y-val">0px</span>
-              </div>
-              <input type="range" class="tryon-slider-input" id="tryon-y-slider" min="-30" max="30" step="2" value="0" />
-            </div>
-
-            <div class="tryon-slider-item">
-              <div class="tryon-slider-label">
-                <span>Frame Tilt / Rotation</span>
-                <span id="tryon-tilt-val">0°</span>
-              </div>
-              <input type="range" class="tryon-slider-input" id="tryon-tilt-slider" min="-12" max="12" step="1" value="0" />
-            </div>
-          </div>
-
-          <!-- Carousel of All 18 Frames -->
-          <div class="tryon-carousel-wrap">
-            <div class="tryon-carousel-title">Select Any Frame to Preview:</div>
-            <div class="tryon-frames-carousel" id="tryon-carousel">
-              <!-- Rendered via app.js -->
-            </div>
-          </div>
-
-          <button class="btn-tryon-addtobag" id="btn-tryon-addbag">
-            Add Current Frame to Bag
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Demo Checkout Modal -->
   <div class="modal-backdrop" id="checkout-modal" role="dialog" aria-modal="true" aria-label="Demo Checkout">
     <div class="modal-container checkout-modal-container">
@@ -716,7 +601,7 @@
             <li><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Bio-Acetate Frames</a></li>
             <li><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Blue-Light Screen Shields</a></li>
             <li><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">High-Index Precision Lenses</a></li>
-            <li><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">3D Virtual Try-On Studio</a></li>
+            <li><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Bespoke Frame Tailoring</a></li>
           </ul>
         </div>
 
@@ -758,6 +643,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
   <script src="data.js"></script>
-  <script src="app.js?v=20261028_smooth_v6"></script>
+  <script src="app.js?v=20261028_no_tryon_v7"></script>
 </body>
 </html>
