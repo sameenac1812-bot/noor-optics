@@ -1347,27 +1347,51 @@
     const modal = document.getElementById('modal-qr-sticker');
     const widthInput = document.getElementById('stk-width-mm');
     const heightInput = document.getElementById('stk-height-mm');
-    const contactInput = document.getElementById('stk-contact-line');
-    const layoutSelect = document.getElementById('stk-print-layout');
-    const warningBox = document.getElementById('stk-size-warning');
+    const qrSizeInput = document.getElementById('stk-qr-size');
+    const layoutInput = document.getElementById('stk-print-layout');
     const btnPrint = document.getElementById('btn-trigger-sticker-print');
 
-    function updatePreview() {
-      const w = parseInt(widthInput.value, 10) || 50;
-      const h = parseInt(heightInput.value, 10) || 25;
-      const contact = contactInput.value.trim() || state.storeSettings.store_phone || '+91 98765 43210';
-
-      // Check reliability warning
-      if (w < 28 || h < 16) {
-        warningBox.style.display = 'block';
+    function applyPreset(presetKey) {
+      if (presetKey === 'temple') {
+        if (widthInput) widthInput.value = '38';
+        if (heightInput) heightInput.value = '18';
+        if (qrSizeInput) qrSizeInput.value = 'temple';
+        if (layoutInput) layoutInput.value = 'individual';
+      } else if (presetKey === 'a4_sheet') {
+        if (widthInput) widthInput.value = '50';
+        if (heightInput) heightInput.value = '25';
+        if (qrSizeInput) qrSizeInput.value = 'medium';
+        if (layoutInput) layoutInput.value = 'a4_sheet';
       } else {
-        warningBox.style.display = 'none';
+        // standard default (18.5mm crisp instant scan)
+        if (widthInput) widthInput.value = '50';
+        if (heightInput) heightInput.value = '25';
+        if (qrSizeInput) qrSizeInput.value = 'medium';
+        if (layoutInput) layoutInput.value = 'individual';
       }
 
-      const dimTag = document.getElementById('stk-dimensions-tag');
-      if (dimTag) dimTag.textContent = `Physical Dimensions: ${w} mm × ${h} mm`;
+      // Update card visual states
+      document.querySelectorAll('.stk-preset-card').forEach(card => {
+        const isMatch = card.dataset.preset === presetKey;
+        card.classList.toggle('active', isMatch);
+        card.style.border = isMatch ? '2px solid #000' : '1px solid #CBD5E1';
+        card.style.background = isMatch ? '#FFFDE7' : '#FFFFFF';
+        const radio = card.querySelector('input[type="radio"]');
+        if (radio) radio.checked = isMatch;
+      });
 
-      // Render sticker in preview stage
+      updatePreview();
+    }
+
+    function updatePreview() {
+      const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
+      const w = parseInt(widthInput?.value, 10) || (activePreset === 'temple' ? 38 : 50);
+      const h = parseInt(heightInput?.value, 10) || (activePreset === 'temple' ? 18 : 25);
+      const qrSize = activePreset === 'temple' ? 'temple' : 'medium';
+
+      const dimTag = document.getElementById('stk-dimensions-tag');
+      if (dimTag) dimTag.textContent = `Preset: ${w} mm × ${h} mm • Crisp QR (${activePreset === 'temple' ? '14mm' : '18.5mm'})`;
+
       const stage = document.getElementById('stk-preview-stage');
       if (!stage) return;
 
@@ -1377,40 +1401,34 @@
         brand: 'Noor Optics'
       });
 
-      const qrSize = document.getElementById('stk-qr-size')?.value || 'small';
-      renderSingleStickerCard(stage, frame, w, h, contact, true, qrSize);
+      renderSingleStickerCard(stage, frame, w, h, '', true, qrSize);
     }
 
-    [widthInput, heightInput, contactInput].forEach(el => {
-      if (el) el.addEventListener('input', updatePreview);
+    // Connect preset radio choices & card clicks
+    document.querySelectorAll('input[name="stk-preset-choice"]').forEach(radio => {
+      radio.addEventListener('change', () => applyPreset(radio.value));
     });
-
-    const qrSizeSelect = document.getElementById('stk-qr-size');
-    if (qrSizeSelect) {
-      qrSizeSelect.addEventListener('change', updatePreview);
-    }
-
-    // Preset Chip Buttons
-    document.querySelectorAll('.btn-stk-preset, [data-stk-preset]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const w = btn.dataset.w || (btn.dataset.stkPreset ? btn.dataset.stkPreset.split('x')[0] : null);
-        const h = btn.dataset.h || (btn.dataset.stkPreset ? btn.dataset.stkPreset.split('x')[1] : null);
-        if (w && h) {
-          widthInput.value = w;
-          heightInput.value = h;
-        }
-        if (btn.dataset.qr && qrSizeSelect) {
-          qrSizeSelect.value = btn.dataset.qr;
-        }
-        updatePreview();
+    document.querySelectorAll('.stk-preset-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        const val = card.dataset.preset;
+        if (val) applyPreset(val);
       });
     });
 
-    if (layoutSelect) {
-      layoutSelect.addEventListener('change', () => {
-        const a4Box = document.getElementById('a4-sheet-config');
-        if (a4Box) a4Box.style.display = layoutSelect.value === 'a4_sheet' ? 'block' : 'none';
+    // Copies increment / decrement
+    const btnDec = document.getElementById('btn-stk-copies-dec');
+    const btnInc = document.getElementById('btn-stk-copies-inc');
+    const copiesInput = document.getElementById('stk-copies-count');
+    if (btnDec && copiesInput) {
+      btnDec.addEventListener('click', () => {
+        const cur = parseInt(copiesInput.value, 10) || 1;
+        if (cur > 1) copiesInput.value = cur - 1;
+      });
+    }
+    if (btnInc && copiesInput) {
+      btnInc.addEventListener('click', () => {
+        const cur = parseInt(copiesInput.value, 10) || 1;
+        if (cur < 100) copiesInput.value = cur + 1;
       });
     }
 
@@ -1431,19 +1449,20 @@
           brand: 'Noor Optics'
         });
         const copies = parseInt(document.getElementById('stk-copies-count')?.value || '1', 10);
-        const w = parseInt(document.getElementById('stk-width-mm')?.value || '58', 10);
+        const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
+        const qrSize = activePreset === 'temple' ? 'temple' : 'standard';
 
         btnDirect.disabled = true;
         btnDirect.innerHTML = `<span>⏳ Printing to POS-80...</span>`;
 
-        const qrSize = document.getElementById('stk-qr-size')?.value || 'small';
         const payload = {
           sku: frame.sku || frame.id,
           name: frame.name,
           brand: frame.brand,
           price: frame.selling_price_paise ? formatINR(frame.selling_price_paise, true) : '',
           copies: copies,
-          paperWidthMm: w >= 70 ? 80 : 58,
+          paperWidthMm: 58,
+          qrPreset: activePreset,
           qrSize: qrSize
         };
 
@@ -1465,7 +1484,7 @@
           }
 
           if (res && res.success) {
-            showToast(`✓ QR code for ${frame.sku || 'frame'} printed to POS-80 thermal printer!`, 'success');
+            showToast(`✓ Crisp QR for ${frame.sku || 'frame'} printed to POS-80 thermal printer!`, 'success');
           } else {
             showToast('Printer response: ' + (res?.error || 'Check printer connection'), 'error');
           }
@@ -1505,17 +1524,15 @@
     state.activeStickerFrame = frame;
     state.activeBatchStickerIds = [frameId];
 
-    const contactInput = document.getElementById('stk-contact-line');
-    if (contactInput) contactInput.value = `Ph: ${state.storeSettings.store_phone || '+91 98765 43210'}`;
-
     const modal = document.getElementById('modal-qr-sticker');
     if (modal) {
       modal.classList.add('open');
-      const w = parseInt(document.getElementById('stk-width-mm')?.value || '50', 10);
-      const h = parseInt(document.getElementById('stk-height-mm')?.value || '25', 10);
+      const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
+      const w = activePreset === 'temple' ? 38 : 50;
+      const h = activePreset === 'temple' ? 18 : 25;
       const stage = document.getElementById('stk-preview-stage');
-      const qrSize = document.getElementById('stk-qr-size')?.value || 'small';
-      renderSingleStickerCard(stage, frame, w, h, contactInput.value, true, qrSize);
+      const qrSize = activePreset === 'temple' ? 'temple' : 'medium';
+      renderSingleStickerCard(stage, frame, w, h, '', true, qrSize);
     }
   };
 
@@ -1529,25 +1546,23 @@
     const firstFrame = state.inventoryList.find(p => p.id === frameIds[0]);
     state.activeStickerFrame = firstFrame;
 
-    const contactInput = document.getElementById('stk-contact-line');
-    if (contactInput) contactInput.value = `Ph: ${state.storeSettings.store_phone || '+91 98765 43210'}`;
-
     const modal = document.getElementById('modal-qr-sticker');
     if (modal) {
       modal.classList.add('open');
-      const w = parseInt(document.getElementById('stk-width-mm')?.value || '50', 10);
-      const h = parseInt(document.getElementById('stk-height-mm')?.value || '25', 10);
+      const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
+      const w = activePreset === 'temple' ? 38 : 50;
+      const h = activePreset === 'temple' ? 18 : 25;
       const stage = document.getElementById('stk-preview-stage');
-      const qrSize = document.getElementById('stk-qr-size')?.value || 'small';
-      renderSingleStickerCard(stage, firstFrame, w, h, contactInput.value, true, qrSize);
+      const qrSize = activePreset === 'temple' ? 'temple' : 'medium';
+      renderSingleStickerCard(stage, firstFrame, w, h, '', true, qrSize);
     }
   };
 
   /**
    * Helper: Generate QR Code as Base64 Data URL
-   * Guarantees pure vector image data that renders in print iframes without canvas loss.
+   * Guarantees pure crisp vector image data with high resolution (320px).
    */
-  function generateQrDataUrl(text, size = 200) {
+  function generateQrDataUrl(text, size = 320) {
     return new Promise((resolve) => {
       function renderWithQrCode() {
         if (!window.QRCode) {
@@ -1618,52 +1633,50 @@
 
   /**
    * Build Pure HTML for One Bright-Yellow Frame QR Sticker
-   * ABSOLUTE RULE: ZERO BARCODES. Genuine Square QR Code Only.
+   * ZERO STORE HEADER & PHONE NUMBER. Genuine Square Crisp QR Code.
    */
-  function buildStickerHtml(frame, widthMm, heightMm, contactText, qrDataUrl, qrSize = 'small') {
-    const contact = contactText || `Ph: ${state.storeSettings.store_phone || '+91 98765 43210'}`;
+  function buildStickerHtml(frame, widthMm, heightMm, contactText, qrDataUrl, qrSize = 'medium') {
     const sku = frame.sku || frame.id || 'NOOR-FRAME';
     const brand = frame.brand || 'Noor Optics';
+    const name = frame.name || '';
+    const price = frame.selling_price_paise ? formatINR(frame.selling_price_paise, true) : '';
 
-    // Proportional dimensions based on physical label size & QR size setting
-    let qrMm = 13.5;
-    if (qrSize === 'tiny') qrMm = 10;
-    else if (qrSize === 'small') qrMm = 13.5;
-    else if (qrSize === 'medium') qrMm = 17;
-    else if (qrSize === 'large') qrMm = Math.max(18, Math.min(heightMm - 6.5, widthMm * 0.38));
+    // Proportional dimensions: enlarged crisp QR (~18.5mm) for instant smartphone scanning
+    let qrMm = 18.5;
+    if (qrSize === 'tiny' || qrSize === 'temple') qrMm = 14;
+    else if (qrSize === 'small') qrMm = 16;
+    else if (qrSize === 'medium' || qrSize === 'standard') qrMm = 18.5;
+    else if (qrSize === 'large') qrMm = Math.max(20, Math.min(heightMm - 5, widthMm * 0.42));
 
-    const titlePt = heightMm <= 20 ? '4.8pt' : '6.5pt';
-    const skuPt = heightMm <= 20 ? '6.8pt' : (heightMm <= 26 ? '9pt' : '11pt');
-    const brandPt = heightMm <= 20 ? '4.2pt' : '5.5pt';
-    const footerPt = heightMm <= 20 ? '3.8pt' : '5pt';
+    const skuPt = heightMm <= 20 ? '7.5pt' : (heightMm <= 26 ? '9.8pt' : '11.5pt');
+    const namePt = heightMm <= 20 ? '5.2pt' : '6.5pt';
+    const brandPt = heightMm <= 20 ? '4.5pt' : '5.5pt';
+    const footerPt = heightMm <= 20 ? '4pt' : '5pt';
 
     return `
-      <div class="frame-sticker" style="width:${widthMm}mm; height:${heightMm}mm; background-color:#FFE500 !important; color:#000000 !important; box-sizing:border-box; border-radius:1.8mm; padding:1.2mm 1.6mm; display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; position:relative; border:0.5px solid rgba(0,0,0,0.35); font-family:'Plus Jakarta Sans', -apple-system, sans-serif; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; margin:0 auto;">
-        <!-- Top Contact Line -->
-        <div style="font-size:${titlePt}; font-weight:800; line-height:1.1; text-align:center; text-transform:uppercase; letter-spacing:0.04em; color:#000000 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-bottom:0.2mm;">
-          ${escapeHtml(contact)}
-        </div>
-
-        <!-- Body Row: Pure Square QR Code on Left + Bold Frame SKU on Right -->
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:1.5mm; flex:1; min-height:0;">
-          <!-- Genuine Square QR Box -->
-          <div style="width:${qrMm}mm; height:${qrMm}mm; background:#FFFFFF; padding:0.4mm; border-radius:0.8mm; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:0.5px solid rgba(0,0,0,0.4);">
-            ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" style="width:100%; height:100%; display:block; object-fit:contain;" />` : `<div style="font-size:5pt; font-weight:bold;">QR</div>`}
+      <div class="frame-sticker" style="width:${widthMm}mm; height:${heightMm}mm; background-color:#FFE500 !important; color:#000000 !important; box-sizing:border-box; border-radius:2mm; padding:1.5mm 1.8mm; display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; position:relative; border:0.5px solid rgba(0,0,0,0.35); font-family:'Plus Jakarta Sans', -apple-system, sans-serif; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; margin:0 auto;">
+        <!-- Body Row: Pure Crisp Square QR on Left + Frame SKU on Right (ZERO TOP HEADER) -->
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:2mm; flex:1; min-height:0;">
+          <!-- Genuine High-Contrast Square QR Box with Quiet Zone -->
+          <div style="width:${qrMm}mm; height:${qrMm}mm; background:#FFFFFF; padding:0.6mm; border-radius:1mm; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:0.5px solid rgba(0,0,0,0.5); box-sizing:border-box;">
+            ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" style="width:100%; height:100%; display:block; object-fit:contain; image-rendering:pixelated;" />` : `<div style="font-size:5pt; font-weight:bold;">QR</div>`}
           </div>
 
           <!-- Frame Identification -->
           <div style="flex:1; display:flex; flex-direction:column; justify-content:center; text-align:left; overflow:hidden; padding-left:0.5mm;">
-            <div style="font-size:${skuPt}; font-weight:900; line-height:1.1; letter-spacing:0.02em; color:#000000 !important; overflow-wrap:break-word; word-break:normal;">
+            <div style="font-size:${skuPt}; font-weight:900; line-height:1.15; letter-spacing:0.02em; color:#000000 !important; overflow-wrap:break-word; word-break:normal;">
               ${escapeHtml(sku)}
             </div>
-            <div style="font-size:${brandPt}; font-weight:700; color:#222222; margin-top:0.4mm; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            ${name ? `<div style="font-size:${namePt}; font-weight:700; color:#1E293B; margin-top:0.3mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(name)}</div>` : ''}
+            <div style="font-size:${brandPt}; font-weight:600; color:#334155; margin-top:0.2mm; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
               ${escapeHtml(brand)}
             </div>
+            ${price ? `<div style="font-size:${namePt}; font-weight:800; color:#000000; margin-top:0.3mm;">${price}</div>` : ''}
           </div>
         </div>
 
-        <!-- Footer -->
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:${footerPt}; font-weight:700; line-height:1; border-top:0.5px solid rgba(0,0,0,0.35); padding-top:0.4mm; color:#111111;">
+        <!-- Clean Bottom Line: NO STORE HEADER, NO PHONE NUMBER -->
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:${footerPt}; font-weight:800; line-height:1; border-top:0.5px solid rgba(0,0,0,0.35); padding-top:0.5mm; color:#111111; letter-spacing:0.04em;">
           <span>NOOR OPTICS</span>
           <span>AUTHENTIC</span>
         </div>
@@ -1674,25 +1687,25 @@
   /**
    * Render One Bright-Yellow Frame QR Sticker inside an on-screen container (Modal preview)
    */
-  async function renderSingleStickerCard(container, frame, widthMm, heightMm, contactText, isPreview = false, qrSize = 'small') {
+  async function renderSingleStickerCard(container, frame, widthMm, heightMm, contactText, isPreview = false, qrSize = 'medium') {
     container.innerHTML = '';
     const qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(frame.sku || frame.id)}`;
-    const qrDataUrl = await generateQrDataUrl(qrPayload, 180);
-    container.innerHTML = buildStickerHtml(frame, widthMm, heightMm, contactText, qrDataUrl, qrSize);
+    const qrDataUrl = await generateQrDataUrl(qrPayload, 320);
+    container.innerHTML = buildStickerHtml(frame, widthMm, heightMm, '', qrDataUrl, qrSize);
   }
 
   /**
    * Execute Sticker Print with 100% Suppression of Browser Date, Time, Project Title & URL
-   * Uses an isolated hidden iframe with empty <title> and @page { margin: 0; }
+   * Opens a clean dedicated popup window with @page { margin: 0; }
    */
   async function executeStickerPrint() {
-    const w = parseInt(document.getElementById('stk-width-mm').value, 10) || 50;
-    const h = parseInt(document.getElementById('stk-height-mm').value, 10) || 25;
-    const contact = document.getElementById('stk-contact-line').value.trim() || `Ph: ${state.storeSettings.store_phone || '+91 98765 43210'}`;
-    const layout = document.getElementById('stk-print-layout').value;
-    const cols = parseInt(document.getElementById('stk-sheet-cols')?.value || '5', 10);
+    const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
+    const w = activePreset === 'temple' ? 38 : 50;
+    const h = activePreset === 'temple' ? 18 : 25;
+    const qrSize = activePreset === 'temple' ? 'temple' : 'medium';
+    const layout = activePreset === 'a4_sheet' ? 'a4_sheet' : 'individual';
+    const cols = 4;
     const copies = parseInt(document.getElementById('stk-copies-count')?.value || '1', 10);
-    const showCutlines = document.getElementById('stk-show-cutlines')?.checked !== false;
 
     const targetIds = state.activeBatchStickerIds && state.activeBatchStickerIds.length > 0
       ? state.activeBatchStickerIds
@@ -1706,7 +1719,7 @@
       const frame = state.inventoryList.find(p => p.id === id) || state.activeStickerFrame;
       if (!frame) continue;
       const qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(frame.sku || frame.id)}`;
-      const qrDataUrl = await generateQrDataUrl(qrPayload, 200);
+      const qrDataUrl = await generateQrDataUrl(qrPayload, 320);
       stickerPayloads.push({ frame, qrDataUrl });
     }
 
@@ -1720,7 +1733,7 @@
         for (let c = 0; c < copies; c++) {
           printBodyHtml += `
             <div class="roll-sticker-wrapper" style="page-break-after:always; break-after:page; margin:0; padding:1.5mm 0; width:${w}mm; min-height:${h}mm; display:flex; flex-direction:column; align-items:center; justify-content:center;">
-              ${buildStickerHtml(item.frame, w, h, contact, item.qrDataUrl)}
+              ${buildStickerHtml(item.frame, w, h, '', item.qrDataUrl, qrSize)}
               <div style="width:100%; border-bottom:0.5px dashed #888888; margin-top:2.5mm;"></div>
             </div>
           `;
@@ -1729,13 +1742,13 @@
     } else {
       // Multiple Stickers on A4 Sheet Grid
       printBodyHtml += `
-        <div style="display:grid; grid-template-columns:repeat(${cols}, ${w}mm); gap:2mm; padding:4mm; box-sizing:border-box;">
+        <div style="display:grid; grid-template-columns:repeat(${cols}, ${w}mm); gap:2.5mm; padding:4mm; box-sizing:border-box;">
       `;
       for (const item of stickerPayloads) {
         for (let c = 0; c < copies; c++) {
           printBodyHtml += `
-            <div style="${showCutlines ? 'border:0.5px dashed #888888; padding:1mm;' : 'padding:0;'} display:flex; align-items:center; justify-content:center;">
-              ${buildStickerHtml(item.frame, w, h, contact, item.qrDataUrl)}
+            <div style="border:0.5px dashed #888888; padding:1mm; display:flex; align-items:center; justify-content:center;">
+              ${buildStickerHtml(item.frame, w, h, '', item.qrDataUrl, qrSize)}
             </div>
           `;
         }

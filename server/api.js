@@ -1500,8 +1500,7 @@ router.post('/printer/print-qr-sticker', async (req, res) => {
       qrPayload,
       copies: parseInt(copies, 10) || 1,
       paperWidthMm: paperWidth,
-      qrSize: req.body.qrSize || 'small',
-      labelSize: req.body.labelSize || ''
+      qrPreset: req.body.qrPreset || req.body.qrSize || 'standard'
     });
 
     const dataDir = path.join(__dirname, '..', 'data');

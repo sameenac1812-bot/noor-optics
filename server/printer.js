@@ -357,26 +357,25 @@ async function generateEscPosQrLabel(opts = {}) {
     qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(sku)}`,
     copies = 1,
     paperWidthMm = 58,
-    qrSize = 'small' // 'tiny' | 'small' (14mm) | 'medium' (18mm) | 'large' (25mm)
+    qrPreset = 'standard' // 'standard' (18-22mm instant scan) | 'temple' (14mm) | 'large'
   } = opts;
 
-  const settings = getStoreSettings();
-  const storeName = (settings.store_name || 'NOOR OPTICS').toUpperCase();
-  const storePhone = settings.store_phone || '+91 98765 43210';
+  // Scale & quiet zone configuration for instant mobile camera detection without hunting
+  let scale = 5;
+  let quiet = 3; // 3-module textbook white quiet zone on all sides for instant finder detection
+  if (qrPreset === 'temple' || opts.qrSize === 'tiny' || opts.qrSize === 'temple') {
+    scale = 4;
+    quiet = 2;
+  } else if (qrPreset === 'large' || opts.qrSize === 'large') {
+    scale = 7;
+    quiet = 4;
+  }
 
   const qr = QRCode.create(qrPayload, { errorCorrectionLevel: 'M' });
-  const size = qr.modules.size;
-  
-  // Compact scaling: 3=~11mm, 4=~14.5mm, 5=~18mm, 7=~25mm
-  let scale = 4; // Default to small ~14.5mm for frame temples & compact stickers
-  if (qrSize === 'tiny' || opts.labelSize === '30x18') scale = 3;
-  else if (qrSize === 'small' || opts.labelSize === '40x25') scale = 4;
-  else if (qrSize === 'medium' || opts.labelSize === '50x25') scale = 5;
-  else if (qrSize === 'large' || opts.labelSize === '58x30') scale = 7;
-  else if (typeof opts.scale === 'number') scale = opts.scale;
-
-  const pixelWidth = size * scale;
-  const pixelHeight = size * scale;
+  const rawSize = qr.modules.size;
+  const totalModules = rawSize + quiet * 2;
+  const pixelWidth = totalModules * scale;
+  const pixelHeight = totalModules * scale;
   const totalPrintWidth = paperWidthMm >= 80 ? 576 : 384;
   const leftPadPixels = Math.max(0, Math.floor((totalPrintWidth - pixelWidth) / 2));
   const leftPadBytes = Math.floor(leftPadPixels / 8);
@@ -391,11 +390,7 @@ async function generateEscPosQrLabel(opts = {}) {
     // Center Align
     bytes.push(0x1B, 0x61, 0x01);
 
-    // Compact Header: Store Name & Phone
-    bytes.push(0x1B, 0x45, 0x01); // Bold ON
-    bytes.push(...Buffer.from(`${storeName}\n`, 'ascii'));
-    bytes.push(0x1B, 0x45, 0x00); // Bold OFF
-    bytes.push(...Buffer.from(`Ph: ${storePhone}\n\n`, 'ascii'));
+    // ZERO STORE HEADER (Noor Optics Boutique & Phone completely removed per user request)
 
     // Raster Bit Image: GS v 0 00 xL xH yL yH
     const xL = totalBytesWidth % 256;
@@ -406,32 +401,35 @@ async function generateEscPosQrLabel(opts = {}) {
     bytes.push(0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH);
 
     for (let y = 0; y < pixelHeight; y++) {
-      const modY = Math.floor(y / scale);
+      const modY = Math.floor(y / scale) - quiet;
       for (let p = 0; p < leftPadBytes; p++) {
         bytes.push(0x00);
       }
       for (let b = 0; b < qrBytesWidth; b++) {
         let byteVal = 0;
         for (let bit = 0; bit < 8; bit++) {
-          const x = b * 8 + bit;
-          const modX = Math.floor(x / scale);
-          if (modX < size && modY < size && qr.modules.data[modY * size + modX]) {
-            byteVal |= (1 << (7 - bit));
+          const pixelX = b * 8 + bit;
+          const modX = Math.floor(pixelX / scale) - quiet;
+          if (modX >= 0 && modX < rawSize && modY >= 0 && modY < rawSize) {
+            if (qr.modules.data[modY * rawSize + modX]) {
+              byteVal |= (1 << (7 - bit));
+            }
           }
         }
         bytes.push(byteVal);
       }
     }
 
-    // Details below QR (Compact & Bold)
+    // Details below QR (Bold & Prominent SKU)
     bytes.push(0x1B, 0x61, 0x01); // Center
     bytes.push(0x0A); // newline
     bytes.push(0x1B, 0x45, 0x01); // Bold ON
+    bytes.push(0x1D, 0x21, 0x01); // Double height for SKU
     bytes.push(...Buffer.from(`${sku}\n`, 'ascii'));
+    bytes.push(0x1D, 0x21, 0x00); // Normal size
     bytes.push(0x1B, 0x45, 0x00); // Bold OFF
     if (name) bytes.push(...Buffer.from(`${name}\n`, 'ascii'));
     if (price) bytes.push(...Buffer.from(`M.R.P: ${price}\n`, 'ascii'));
-    bytes.push(...Buffer.from('NOOR OPTICS AUTHENTIC\n', 'ascii'));
     bytes.push(...Buffer.from('--------------------------------\n', 'ascii'));
 
     // Feed minimal lines & Cut

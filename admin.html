@@ -841,88 +841,67 @@
       </div>
       <div class="modal-body modal-scrollable">
         <div class="sticker-config-grid">
-          <!-- Configuration Settings -->
+          <!-- Clutter-Free Presets Column -->
           <div class="sticker-settings-column">
-            <h4 class="settings-sec-title">Sticker Dimensions & Store Header</h4>
+            <h4 class="settings-sec-title" style="margin-bottom:0.75rem;">Choose Label Preset</h4>
 
-            <div class="form-group">
-              <label for="stk-contact-line">Store Contact Line (Printed at Top)</label>
-              <input type="text" id="stk-contact-line" class="form-control" value="Ph: +91 98765 43210" />
-            </div>
-
-            <div class="form-group" style="margin-bottom:0.75rem;">
-              <label for="stk-qr-size" style="display:block; font-size:0.78rem; font-weight:700; margin-bottom:0.35rem; color:#0F172A;">Physical QR Code Size</label>
-              <select id="stk-qr-size" class="form-control" style="font-weight:600; font-size:0.82rem;">
-                <option value="tiny">Tiny (11 mm) — Ultra-compact Frame Temple</option>
-                <option value="small" selected>Small (14.5 mm) — Recommended Frame Sticker</option>
-                <option value="medium">Medium (18 mm) — Standard Eyewear Tag</option>
-                <option value="large">Large (25 mm) — Wide Roll / Box</option>
-              </select>
-            </div>
-
-            <div class="form-group" style="margin-bottom:0.75rem;">
-              <label style="display:block; font-size:0.78rem; font-weight:700; margin-bottom:0.35rem; color:#475569;">Quick Preset Formats</label>
-              <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
-                <button type="button" class="btn-stk-preset" data-w="30" data-h="18" data-qr="tiny" style="font-size:0.73rem; padding:3px 8px; border:1px solid #CBD5E1; border-radius:4px; background:#F8FAFC; cursor:pointer; font-weight:600;">🏷️ 30×18mm (Temple)</button>
-                <button type="button" class="btn-stk-preset" data-w="40" data-h="25" data-qr="small" style="font-size:0.73rem; padding:3px 8px; border:1px solid #CBD5E1; border-radius:4px; background:#F8FAFC; cursor:pointer; font-weight:600;">🏷️ 40×25mm (Standard)</button>
-                <button type="button" class="btn-stk-preset" data-w="50" data-h="25" data-qr="small" style="font-size:0.73rem; padding:3px 8px; border:1px solid #000; border-radius:4px; background:#FFE500; cursor:pointer; font-weight:800; color:#000;">🧾 50×25mm (Thermal Roll)</button>
-                <button type="button" class="btn-stk-preset" data-w="58" data-h="30" data-qr="medium" style="font-size:0.73rem; padding:3px 8px; border:1px solid #CBD5E1; border-radius:4px; background:#F8FAFC; cursor:pointer; font-weight:600;">🧾 58×30mm (Wide Roll)</button>
-              </div>
-            </div>
-
-            <div class="form-row-2">
-              <div class="form-group">
-                <label for="stk-width-mm">Label Width (mm)</label>
-                <input type="number" id="stk-width-mm" class="form-control" value="50" min="20" max="60" step="1" />
-              </div>
-              <div class="form-group">
-                <label for="stk-height-mm">Label Height (mm)</label>
-                <input type="number" id="stk-height-mm" class="form-control" value="25" min="12" max="50" step="1" />
-              </div>
-            </div>
-
-            <!-- Reliability Warning if size too small -->
-            <div id="stk-size-warning" class="size-warning-box" style="display:none;">
-              ⚠️ <strong>Warning:</strong> Labels under 28×16mm may be difficult for some smartphone cameras to scan reliably. We recommend 30×18mm or larger.
-            </div>
-
-            <div class="form-group">
-              <label for="stk-print-layout">Print Layout Mode</label>
-              <select id="stk-print-layout" class="form-control">
-                <option value="individual" selected>Individual Sticker (Thermal Label Roll / POS-58 / Single)</option>
-                <option value="a4_sheet">Multiple Stickers on A4 Sheet (Grid with Cut Guides)</option>
-              </select>
-            </div>
-
-            <div id="a4-sheet-config" class="a4-config-box" style="display:none;">
-              <div class="form-row-2">
-                <div class="form-group">
-                  <label for="stk-sheet-cols">Columns per Row</label>
-                  <input type="number" id="stk-sheet-cols" class="form-control" value="5" min="1" max="10" />
+            <div class="stk-presets-wrapper" style="display:flex; flex-direction:column; gap:0.65rem;">
+              <!-- Preset 1: Standard Frame Tag -->
+              <label class="stk-preset-card active" data-preset="standard" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:2px solid #000; background:#FFFDE7; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
+                <input type="radio" name="stk-preset-choice" value="standard" checked style="margin-top:0.25rem; accent-color:#000;" />
+                <div style="flex:1;">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="font-size:0.88rem; color:#000;">🏷️ Standard Frame Tag (Recommended)</strong>
+                    <span style="font-size:0.7rem; font-weight:800; background:#000; color:#FFE500; padding:2px 6px; border-radius:4px;">INSTANT SCAN</span>
+                  </div>
+                  <p style="font-size:0.75rem; color:#475569; margin-top:0.25rem; line-height:1.35;">
+                    Crisp 18–20mm QR code + bold SKU & frame name. Perfect for thermal rolls and phone camera scans without adjustments.
+                  </p>
                 </div>
-                <div class="form-group">
-                  <label for="stk-copies-count">Number of Copies</label>
-                  <input type="number" id="stk-copies-count" class="form-control" value="1" min="1" max="100" />
+              </label>
+
+              <!-- Preset 2: Compact Temple Arm Tag -->
+              <label class="stk-preset-card" data-preset="temple" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:1px solid #CBD5E1; background:#FFFFFF; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
+                <input type="radio" name="stk-preset-choice" value="temple" style="margin-top:0.25rem; accent-color:#000;" />
+                <div style="flex:1;">
+                  <strong style="font-size:0.88rem; color:#1E293B;">🏷️ Compact Frame Temple</strong>
+                  <p style="font-size:0.75rem; color:#64748B; margin-top:0.25rem; line-height:1.35;">
+                    Compact 14mm QR code designed for narrow temples and slim sunglasses arms.
+                  </p>
                 </div>
-              </div>
-              <div class="form-group">
-                <label class="checkbox-label">
-                  <input type="checkbox" id="stk-show-cutlines" checked />
-                  <span>Include outer cut guides for clean physical cutting</span>
-                </label>
+              </label>
+
+              <!-- Preset 3: A4 Label Sheet -->
+              <label class="stk-preset-card" data-preset="a4_sheet" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:1px solid #CBD5E1; background:#FFFFFF; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
+                <input type="radio" name="stk-preset-choice" value="a4_sheet" style="margin-top:0.25rem; accent-color:#000;" />
+                <div style="flex:1;">
+                  <strong style="font-size:0.88rem; color:#1E293B;">📑 A4 Adhesive Sheet (Grid)</strong>
+                  <p style="font-size:0.75rem; color:#64748B; margin-top:0.25rem; line-height:1.35;">
+                    Grid layout with cut guides for printing batches onto standard A4 sticker paper.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <!-- Number of copies -->
+            <div class="form-group" style="margin-top:1.1rem; margin-bottom:0.5rem;">
+              <label for="stk-copies-count" style="display:block; font-size:0.82rem; font-weight:700; margin-bottom:0.4rem; color:#0F172A;">Number of Copies</label>
+              <div style="display:flex; align-items:center; gap:0.5rem; max-width:180px;">
+                <button type="button" id="btn-stk-copies-dec" style="width:34px; height:34px; border:1px solid #CBD5E1; background:#F8FAFC; border-radius:6px; font-weight:bold; font-size:1.1rem; cursor:pointer;">-</button>
+                <input type="number" id="stk-copies-count" class="form-control" value="1" min="1" max="100" style="text-align:center; font-weight:700; height:34px; font-size:0.95rem;" />
+                <button type="button" id="btn-stk-copies-inc" style="width:34px; height:34px; border:1px solid #CBD5E1; background:#F8FAFC; border-radius:6px; font-weight:bold; font-size:1.1rem; cursor:pointer;">+</button>
               </div>
             </div>
 
-            <div class="print-instruction-box" style="background:#FFFBEB; border:1px solid #FCD34D; padding:0.85rem; border-radius:6px; margin-top:1rem; font-size:0.76rem; line-height:1.45;">
-              <strong>🖨️ Clean Thermal & Sticker Printing Instructions:</strong>
-              <ul style="margin:0.4rem 0 0 1.1rem; padding:0;">
-                <li>In browser print dialog under <strong>More settings</strong>:</li>
-                <li><strong>Uncheck "Headers and footers"</strong> (permanently eliminates URL, date & time).</li>
-                <li>Set <strong>Margins to "None"</strong> or "0".</li>
-                <li>Set <strong>Scale to 100%</strong> (Actual size).</li>
-                <li>Check <strong>"Background graphics"</strong> to print the yellow background on color printers.</li>
-              </ul>
-            </div>
+            <!-- Hidden values to preserve internal backward-compatibility -->
+            <input type="hidden" id="stk-width-mm" value="50" />
+            <input type="hidden" id="stk-height-mm" value="25" />
+            <input type="hidden" id="stk-qr-size" value="medium" />
+            <input type="hidden" id="stk-contact-line" value="" />
+            <input type="hidden" id="stk-print-layout" value="individual" />
+            <input type="hidden" id="stk-sheet-cols" value="4" />
+            <div id="stk-size-warning" style="display:none;"></div>
+            <div id="a4-sheet-config" style="display:none;"></div>
           </div>
 
           <!-- Live Sticker Visual Preview -->
