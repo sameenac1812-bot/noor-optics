@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="apple-touch-icon" href="/images/favicon.png" />
-  <link rel="stylesheet" href="/admin.css?v=5.2.0" />
+  <link rel="stylesheet" href="/admin.css?v=5.3.0" />
 </head>
 <body>
 
@@ -850,14 +850,31 @@
               <input type="text" id="stk-contact-line" class="form-control" value="Ph: +91 98765 43210" />
             </div>
 
+            <div class="preset-buttons-row" style="display:flex; gap:6px; flex-wrap:wrap; margin:0.5rem 0 1rem 0;">
+              <button type="button" class="btn-table-action" data-stk-preset="30x18" title="Tiny Frame Temple Sticker">🏷️ 30×18mm (Frame)</button>
+              <button type="button" class="btn-table-action" data-stk-preset="40x25" title="Standard Optical Label">🏷️ 40×25mm (Standard)</button>
+              <button type="button" class="btn-table-action" data-stk-preset="50x25" title="2-inch Thermal Roll">🖨️ 50×25mm (Thermal Roll)</button>
+              <button type="button" class="btn-table-action" data-stk-preset="58x30" title="Full 58mm Thermal Receipt Roll">🧾 58×30mm (58mm Receipt)</button>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0.75rem;">
+              <label style="display:block; font-size:0.78rem; font-weight:700; margin-bottom:0.35rem; color:#475569;">Quick Size Presets</label>
+              <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
+                <button type="button" class="btn-stk-preset" data-w="30" data-h="18" style="font-size:0.73rem; padding:3px 8px; border:1px solid #CBD5E1; border-radius:4px; background:#F8FAFC; cursor:pointer; font-weight:600;">30×18mm (Temple)</button>
+                <button type="button" class="btn-stk-preset" data-w="40" data-h="25" style="font-size:0.73rem; padding:3px 8px; border:1px solid #CBD5E1; border-radius:4px; background:#F8FAFC; cursor:pointer; font-weight:600;">40×25mm (Standard)</button>
+                <button type="button" class="btn-stk-preset" data-w="50" data-h="25" style="font-size:0.73rem; padding:3px 8px; border:1px solid #CBD5E1; border-radius:4px; background:#F8FAFC; cursor:pointer; font-weight:600;">50×25mm (Label Roll)</button>
+                <button type="button" class="btn-stk-preset" data-w="58" data-h="30" style="font-size:0.73rem; padding:3px 8px; border:1px solid #000; border-radius:4px; background:#FFE500; cursor:pointer; font-weight:800; color:#000;">58×30mm (58mm Receipt Roll)</button>
+              </div>
+            </div>
+
             <div class="form-row-2">
               <div class="form-group">
                 <label for="stk-width-mm">Label Width (mm)</label>
-                <input type="number" id="stk-width-mm" class="form-control" value="30" min="20" max="60" step="1" />
+                <input type="number" id="stk-width-mm" class="form-control" value="50" min="20" max="60" step="1" />
               </div>
               <div class="form-group">
                 <label for="stk-height-mm">Label Height (mm)</label>
-                <input type="number" id="stk-height-mm" class="form-control" value="18" min="12" max="40" step="1" />
+                <input type="number" id="stk-height-mm" class="form-control" value="25" min="12" max="50" step="1" />
               </div>
             </div>
 
@@ -869,19 +886,19 @@
             <div class="form-group">
               <label for="stk-print-layout">Print Layout Mode</label>
               <select id="stk-print-layout" class="form-control">
-                <option value="individual">Individual Sticker (Thermal Label Roll / Single 30×18mm)</option>
-                <option value="a4_sheet" selected>Multiple Stickers on A4 Sheet (Grid with Cut Guides)</option>
+                <option value="individual" selected>Individual Sticker (Thermal Label Roll / POS-58 / Single)</option>
+                <option value="a4_sheet">Multiple Stickers on A4 Sheet (Grid with Cut Guides)</option>
               </select>
             </div>
 
-            <div id="a4-sheet-config" class="a4-config-box">
+            <div id="a4-sheet-config" class="a4-config-box" style="display:none;">
               <div class="form-row-2">
                 <div class="form-group">
                   <label for="stk-sheet-cols">Columns per Row</label>
                   <input type="number" id="stk-sheet-cols" class="form-control" value="5" min="1" max="10" />
                 </div>
                 <div class="form-group">
-                  <label for="stk-copies-count">Number of Sticker Copies</label>
+                  <label for="stk-copies-count">Number of Copies</label>
                   <input type="number" id="stk-copies-count" class="form-control" value="1" min="1" max="100" />
                 </div>
               </div>
@@ -893,13 +910,14 @@
               </div>
             </div>
 
-            <div class="print-instruction-box">
-              <strong>🖨️ Actual Size Printing Instructions:</strong>
-              <ul>
-                <li>In browser print dialog, set <strong>Scale to 100%</strong> (or "Actual Size").</li>
-                <li>Do NOT choose "Fit to Page".</li>
-                <li>Set Margins to <strong>None</strong> or <strong>Minimum</strong>.</li>
-                <li>Select "Background Graphics: ON" to print vivid bright-yellow color.</li>
+            <div class="print-instruction-box" style="background:#FFFBEB; border:1px solid #FCD34D; padding:0.85rem; border-radius:6px; margin-top:1rem; font-size:0.76rem; line-height:1.45;">
+              <strong>🖨️ Clean Thermal & Sticker Printing Instructions:</strong>
+              <ul style="margin:0.4rem 0 0 1.1rem; padding:0;">
+                <li>In browser print dialog under <strong>More settings</strong>:</li>
+                <li><strong>Uncheck "Headers and footers"</strong> (permanently eliminates URL, date & time).</li>
+                <li>Set <strong>Margins to "None"</strong> or "0".</li>
+                <li>Set <strong>Scale to 100%</strong> (Actual size).</li>
+                <li>Check <strong>"Background graphics"</strong> to print the yellow background on color printers.</li>
               </ul>
             </div>
           </div>
@@ -1108,12 +1126,12 @@
   <div id="print-sticker-container" style="display:none;" aria-hidden="true"></div>
 
   <!-- ── 5. LOCAL VENDOR LIBRARIES (Zero CDN Lag, 100% Offline Capable) ────── -->
-  <script src="/vendor/qrcode.min.js?v=5.2.0"></script>
-  <script src="/vendor/html5-qrcode.min.js?v=5.2.0"></script>
-  <script src="/vendor/xlsx.full.min.js?v=5.2.0"></script>
-  <script src="/vendor/chart.umd.min.js?v=5.2.0"></script>
+  <script src="/vendor/qrcode.min.js?v=5.3.0"></script>
+  <script src="/vendor/html5-qrcode.min.js?v=5.3.0"></script>
+  <script src="/vendor/xlsx.full.min.js?v=5.3.0"></script>
+  <script src="/vendor/chart.umd.min.js?v=5.3.0"></script>
 
   <!-- ── 6. APPLICATION CONTROLLER ─────────────────────────────────────────── -->
-  <script src="/admin.js?v=5.2.0"></script>
+  <script src="/admin.js?v=5.3.0"></script>
 </body>
 </html>
