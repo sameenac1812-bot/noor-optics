@@ -846,30 +846,30 @@
             <h4 class="settings-sec-title" style="margin-bottom:0.75rem;">Choose Label Preset</h4>
 
             <div class="stk-presets-wrapper" style="display:flex; flex-direction:column; gap:0.65rem;">
-              <!-- Preset 1: Ultra-Simple Frame SKU (Version 1, 21x21) -->
-              <label class="stk-preset-card active" data-preset="standard" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:2px solid #000; background:#FFFDE7; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
-                <input type="radio" name="stk-preset-choice" value="standard" checked style="margin-top:0.25rem; accent-color:#000;" />
+              <!-- Preset 1: Web Link QR (Version 2, 25x25 — Instant Phone Camera & POS) -->
+              <label class="stk-preset-card active" data-preset="url" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:2px solid #000; background:#FFFDE7; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
+                <input type="radio" name="stk-preset-choice" value="url" checked style="margin-top:0.25rem; accent-color:#000;" />
                 <div style="flex:1;">
                   <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <strong style="font-size:0.88rem; color:#000;">🏷️ Ultra-Simple Frame SKU (21×21 — Recommended)</strong>
-                    <span style="font-size:0.7rem; font-weight:800; background:#000; color:#FFE500; padding:2px 6px; border-radius:4px;">CHUNKY 5PX DOTS</span>
+                    <strong style="font-size:0.88rem; color:#000;">🌐 Web Link QR (Recommended — Phone Camera & POS)</strong>
+                    <span style="font-size:0.7rem; font-weight:800; background:#000; color:#FFE500; padding:2px 6px; border-radius:4px;">INSTANT CAMERA SCAN</span>
                   </div>
                   <p style="font-size:0.75rem; color:#475569; margin-top:0.25rem; line-height:1.35;">
-                    Simplest 21×21 QR standard with chunky 5px dots (only 441 dots). Eliminates fine thermal bleed. Phone cameras lock on instantly without adjusting focus.
+                    Uppercase short link (HTTPS://NOOROPTICS.VERCEL.APP/Q/...). Instantly recognized by iPhone & Android cameras with clickable popup banner, and adds directly to bill in POS scanner. Full 4-module quiet zone.
                   </p>
                 </div>
               </label>
 
-              <!-- Preset 2: Low-Density Web Link (Version 2, 25x25) -->
-              <label class="stk-preset-card" data-preset="url" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:1px solid #CBD5E1; background:#FFFFFF; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
-                <input type="radio" name="stk-preset-choice" value="url" style="margin-top:0.25rem; accent-color:#000;" />
+              <!-- Preset 2: Pure Frame SKU (Version 1, 21x21) -->
+              <label class="stk-preset-card" data-preset="sku" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:1px solid #CBD5E1; background:#FFFFFF; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
+                <input type="radio" name="stk-preset-choice" value="sku" style="margin-top:0.25rem; accent-color:#000;" />
                 <div style="flex:1;">
                   <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <strong style="font-size:0.88rem; color:#1E293B;">🌐 Low-Density Web Link (25×25)</strong>
-                    <span style="font-size:0.7rem; font-weight:700; background:#E2E8F0; color:#1E293B; padding:2px 6px; border-radius:4px;">OPENS PAGE</span>
+                    <strong style="font-size:0.88rem; color:#1E293B;">🏷️ Pure Frame SKU (21×21 — USB/Bluetooth Scanners)</strong>
+                    <span style="font-size:0.7rem; font-weight:700; background:#E2E8F0; color:#1E293B; padding:2px 6px; border-radius:4px;">HARDWARE SCANNERS</span>
                   </div>
                   <p style="font-size:0.75rem; color:#64748B; margin-top:0.25rem; line-height:1.35;">
-                    Uppercase short URL (HTTPS://NOOROPTICS.VERCEL.APP/Q/...). Opens online frame boutique page on phone camera tap.
+                    Encodes raw SKU string (e.g. NOOR-AMB-11). Recommended for dedicated handheld USB/Bluetooth barcode guns. Note: phone cameras do not pop up link banners for raw text.
                   </p>
                 </div>
               </label>

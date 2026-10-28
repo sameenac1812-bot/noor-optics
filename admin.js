@@ -1362,14 +1362,14 @@
         if (heightInput) heightInput.value = '25';
         if (qrSizeInput) qrSizeInput.value = 'medium';
         if (layoutInput) layoutInput.value = 'a4_sheet';
-      } else if (presetKey === 'url') {
-        // Low-density web link
+      } else if (presetKey === 'sku') {
+        // Pure raw SKU string
         if (widthInput) widthInput.value = '50';
         if (heightInput) heightInput.value = '25';
         if (qrSizeInput) qrSizeInput.value = 'medium';
         if (layoutInput) layoutInput.value = 'individual';
       } else {
-        // standard default (ultra-simple SKU, Version 1)
+        // url / standard default (uppercase short web link)
         if (widthInput) widthInput.value = '50';
         if (heightInput) heightInput.value = '25';
         if (qrSizeInput) qrSizeInput.value = 'medium';
@@ -1390,19 +1390,19 @@
     }
 
     function updatePreview() {
-      const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
+      const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'url';
       const w = parseInt(widthInput?.value, 10) || (activePreset === 'temple' ? 38 : 50);
       const h = parseInt(heightInput?.value, 10) || (activePreset === 'temple' ? 18 : 25);
       const qrSize = activePreset === 'temple' ? 'temple' : 'medium';
 
       const dimTag = document.getElementById('stk-dimensions-tag');
       if (dimTag) {
-        if (activePreset === 'url') {
-          dimTag.textContent = `Preset: Web Link (25×25) • Chunky 5px Dots • Tap Opens Boutique Page`;
+        if (activePreset === 'sku') {
+          dimTag.textContent = `Preset: Pure Frame SKU (21×21) • Raw Text • USB/Bluetooth Scanners`;
         } else if (activePreset === 'temple') {
-          dimTag.textContent = `Preset: Temple Arm (14mm) • Chunky Dots • Slim Fit`;
+          dimTag.textContent = `Preset: Temple Arm (14mm) • Slim Fit`;
         } else {
-          dimTag.textContent = `Preset: Ultra-Simple Frame SKU (21×21) • Chunky 5px Dots • Zero Bleed`;
+          dimTag.textContent = `Preset: Web Link QR (25×25) • 4-Module Quiet Zone • Instant Phone & POS Scan`;
         }
       }
 
@@ -1468,8 +1468,8 @@
         }
 
         const copies = parseInt(document.getElementById('stk-copies-count')?.value || '1', 10);
-        const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
-        const qrSize = activePreset === 'temple' ? 'temple' : 'standard';
+        const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'url';
+        const qrSize = activePreset === 'temple' ? 'temple' : 'url';
 
         btnDirect.disabled = true;
         btnDirect.innerHTML = `<span>⏳ Printing ${frames.length} in Sequence...</span>`;
@@ -1564,7 +1564,7 @@
 
     showToast(`Sending ${count} stickers to POS-80 thermal printer in sequence...`, 'info');
 
-    const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
+    const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'url';
     const copies = parseInt(document.getElementById('stk-copies-count')?.value || '1', 10);
 
     const items = selectedFrames.map(f => ({
@@ -1766,8 +1766,8 @@
 
     return `
       <div class="frame-sticker" style="width:${tagWidthMm}mm; min-height:${tagHeightMm}mm; background-color:#FFE500 !important; color:#000000 !important; box-sizing:border-box; border-radius:1.5mm; padding:1.5mm 1mm; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:1mm; overflow:hidden; position:relative; border:0.5px solid rgba(0,0,0,0.35); font-family:'Plus Jakarta Sans', -apple-system, sans-serif; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; margin:0 auto; text-align:center;">
-        <!-- Top: Crisp Square QR Code (A little smaller, ~16mm) -->
-        <div style="width:${qrMm}mm; height:${qrMm}mm; background:#FFFFFF; padding:0.4mm; border-radius:0.8mm; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:0.5px solid rgba(0,0,0,0.5); box-sizing:border-box;">
+        <!-- Top: Crisp Square QR Code (Surrounded by pure white quiet zone) -->
+        <div style="width:${qrMm + 4}mm; height:${qrMm + 4}mm; background:#FFFFFF; padding:1.8mm; border-radius:1.5mm; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-sizing:border-box;">
           ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" style="width:100%; height:100%; display:block; object-fit:contain; image-rendering:pixelated;" />` : `<div style="font-size:5pt; font-weight:bold;">QR</div>`}
         </div>
 
@@ -1791,11 +1791,11 @@
    */
   async function renderSingleStickerCard(container, frame, widthMm, heightMm, contactText, isPreview = false, qrSize = 'medium', preset = '') {
     container.innerHTML = '';
-    const activePreset = preset || document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
+    const activePreset = preset || document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'url';
     const sku = (frame.sku || frame.id || 'NOOR-FRAME').toUpperCase();
-    const qrPayload = (activePreset === 'url')
-      ? `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`
-      : sku;
+    const qrPayload = (activePreset === 'sku')
+      ? sku
+      : `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`;
     const qrDataUrl = await generateQrDataUrl(qrPayload, 320);
     container.innerHTML = buildStickerHtml(frame, widthMm, heightMm, '', qrDataUrl, qrSize);
   }
@@ -1805,7 +1805,7 @@
    * Opens a clean dedicated popup window with @page { margin: 0; }
    */
   async function executeStickerPrint() {
-    const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
+    const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'url';
     const w = activePreset === 'temple' ? 38 : 50;
     const h = activePreset === 'temple' ? 18 : 25;
     const qrSize = activePreset === 'temple' ? 'temple' : 'medium';
@@ -1825,9 +1825,9 @@
       const frame = state.inventoryList.find(p => p.id === id) || state.activeStickerFrame;
       if (!frame) continue;
       const sku = (frame.sku || frame.id || 'NOOR-FRAME').toUpperCase();
-      const qrPayload = (activePreset === 'url')
-        ? `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`
-        : sku;
+      const qrPayload = (activePreset === 'sku')
+        ? sku
+        : `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`;
       const qrDataUrl = await generateQrDataUrl(qrPayload, 320);
       stickerPayloads.push({ frame, qrDataUrl });
     }
@@ -2264,8 +2264,11 @@
         await state.html5QrScanner.start(
           backCamera.id,
           {
-            fps: 15,
-            qrbox: { width: 220, height: 220 },
+            fps: 20,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+              return { width: Math.floor(minEdge * 0.85), height: Math.floor(minEdge * 0.85) };
+            },
             aspectRatio: 1.0
           },
           (decodedText) => {

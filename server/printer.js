@@ -364,52 +364,47 @@ async function generateEscPosQrLabel(opts = {}) {
   } = opts;
 
   // Determine QR payload:
-  // Default to ultra-clean Alphanumeric uppercase SKU (Version 1, 21x21 modules = 441 dots)
-  // Or short uppercase URL (Version 2, 25x25 modules = 625 dots)
+  // Default to uppercase short web URL (Version 2, 25x25 modules = 625 dots)
+  // This guarantees that any phone camera (iPhone iOS / Android) instantly detects the link,
+  // and in-store POS scanners resolve the frame directly.
   let qrPayload = opts.qrPayload;
-  const isUrlPreset = (qrPreset === 'url' || qrMode === 'url' || (qrPayload && qrPayload.toLowerCase().startsWith('http') && !qrPayload.includes('/qr/')));
+  const isExplicitSku = (qrPreset === 'sku' || qrMode === 'sku');
 
-  if (isUrlPreset || qrPreset === 'url') {
-    qrPayload = `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku).toUpperCase()}`;
-  } else {
+  if (isExplicitSku) {
     qrPayload = (sku || 'NOOR-FRAME').toUpperCase();
+  } else {
+    qrPayload = `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku).toUpperCase()}`;
   }
 
-  // Create QR with Error Correction 'L' (Low redundancy = smallest version, chunky dots, zero thermal smudging)
+  // Create QR with Error Correction 'L' (Low redundancy = smallest version, crisp dots, no smudging)
   const qr = QRCode.create(qrPayload, { errorCorrectionLevel: 'L' });
-  const rawSize = qr.modules.size; // 21 for SKU (Version 1), 25 for short URL (Version 2)
+  const rawSize = qr.modules.size; // 25 for short URL (Version 2), 21 for raw SKU (Version 1)
 
-  let scale = 5; // Chunky 5x5 pixels (0.625mm per dot on 203 DPI)
-  let quiet = 2; // 2-module quiet zone
+  // Full ISO/IEC 18004 compliant 4-module quiet zone on all sides
+  // Mandatory for camera scanners to detect the 1:1:3:1:1 corner finder patterns
+  const quiet = 4;
+  let scale = 4; // Crisp 4x4 printer dots (0.5mm)
 
   if (qrPreset === 'temple' || opts.qrSize === 'tiny' || opts.qrSize === 'temple') {
-    scale = 4;
-    quiet = 2;
-  } else if (rawSize >= 25) {
-    scale = 5;
-    quiet = 1; // 25 + 2 = 27 modules * 5 = 135 pixels
-  } else {
-    // Version 1 (21x21): 21 + 4 = 25 modules * 5 = 125 pixels
-    scale = 5;
-    quiet = 2;
+    scale = 3;
   }
 
   const totalModules = rawSize + quiet * 2;
-  const qrPixels = totalModules * scale; // 125px (Version 1) or 135px (Version 2)
+  const qrPixels = totalModules * scale; // 33 * 4 = 132 pixels (URL) or 29 * 4 = 116 pixels (SKU)
 
   // Label width: exact multiple of 8 matching the QR code column width (~17mm = 136 pixels)
   const labelWidth = Math.max(136, Math.ceil(qrPixels / 8) * 8); // 136 pixels (17 bytes)
   const qrOffsetX = Math.floor((labelWidth - qrPixels) / 2);
-  const qrOffsetY = 4;
+  const qrOffsetY = 10; // Generous 10px white paper buffer at top
 
-  // Typography layout: strictly within labelWidth so nothing is ever sliced off when cutting sides
+  // Typography layout: strictly within labelWidth with generous white gap below QR
   const skuScale = (sku.length * 12 <= labelWidth) ? 2 : 1;
-  const skuOffsetY = qrOffsetY + qrPixels + 6;
+  const skuOffsetY = qrOffsetY + qrPixels + 10; // Clean 26px white space between bottom finder patterns & SKU text
   const skuHeight = 7 * skuScale;
   const nameOffsetY = skuOffsetY + skuHeight + 5;
   const priceOffsetY = nameOffsetY + 7 + 4;
-  const lineOffsetY = priceOffsetY + 7 + 6;
-  const totalHeight = lineOffsetY + 6;
+  const lineOffsetY = priceOffsetY + 7 + 8;
+  const totalHeight = lineOffsetY + 8;
 
   // Format price cleanly without Unicode Rupee symbol
   let cleanPrice = price ? String(price).trim() : '';
