@@ -143,6 +143,14 @@
   // ── Toast Notification System ──────────────────────────────────────────────
   function showToast(message, iconSvg) {
     if (!DOM.toastContainer) return;
+    // Suppress any 'added' or cart toasts completely
+    if (typeof message === 'string' && (message.toLowerCase().includes('added') || message.toLowerCase().includes('bag'))) {
+      return;
+    }
+    // Suppress toasts when cart or any drawer is open so buttons are never covered
+    if (document.body.classList.contains('drawer-open')) {
+      return;
+    }
     const toast = document.createElement('div');
     toast.className = 'toast-pill';
 
@@ -605,7 +613,6 @@
     updateBagBadge();
     renderCartDrawer();
     openDrawer(DOM.cartDrawer);
-    showToast(`Added "${product.name}" to Shopping Bag`);
   }
 
   function updateCartQuantity(cartKey, delta) {
@@ -1039,7 +1046,7 @@
     let authoritativeOrderId = orderId;
     let authoritativeTokenNum = null;
 
-    // 1. Submit to Unified Local Authoritative Retail Backend
+    // 1. Submit to Unified Local Authoritative Retail Backend (in background)
     try {
       const backendResp = await fetch('/api/orders/online', {
         method: 'POST',
@@ -1068,53 +1075,49 @@
         const localRes = await backendResp.json();
         if (localRes.orderNumber) authoritativeOrderId = localRes.orderNumber;
         if (localRes.tokenNumber) authoritativeTokenNum = localRes.tokenNumber;
-
-        retailDbBadge = `
-          <div style="margin-top:0.6rem;padding:0.4rem 0.65rem;background:#F0FDF4;border:1px solid #22C55E;border-radius:3px;font-size:0.74rem;color:#15803D;display:flex;align-items:center;justify-content:space-between;">
-            <span>✓ <strong>Live Retail DB:</strong> Token #${localRes.tokenNumber}</span>
-            <span style="font-size:0.7rem;color:#166534;">Print Job #${localRes.printJobId ? localRes.printJobId.substring(0, 8) : 'Spooling'}</span>
-          </div>
-        `;
       }
     } catch (localErr) {
       console.warn('Note: Local Express backend not reached:', localErr);
     }
 
-    // 2. Submit to Cloud Supabase (if configured)
-    let syncBadge = '';
+    // 2. Submit to Cloud Supabase (in background if configured)
     if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
       orderData.order_ref = authoritativeOrderId;
-      const res = await window.NoorSupabase.submitOrder(orderData);
-      if (res && res.cloud) {
-        syncBadge = `
-          <div style="margin-top:0.4rem;padding:0.4rem 0.65rem;background:#ECFDF5;border:1px solid #10B981;border-radius:3px;font-size:0.74rem;color:#065F46;display:flex;align-items:center;gap:0.45rem;">
-            <span>✓</span> <strong>Synced to Supabase Cloud</strong> (Table: orders · Ref: ${authoritativeOrderId})
-          </div>
-        `;
-      }
-    } else {
-      syncBadge = `
-        <div style="margin-top:0.4rem;padding:0.4rem 0.65rem;background:#F8F8FA;border:1px solid #E5E7EB;border-radius:3px;font-size:0.74rem;color:#6B7280;display:flex;align-items:center;gap:0.45rem;">
-          <span>ℹ</span> Saved locally (Connect Supabase in supabase.js or .env to sync live)
-        </div>
-      `;
+      await window.NoorSupabase.submitOrder(orderData).catch(e => console.warn('Supabase sync note:', e));
     }
 
+    // Render clean, luxury customer-facing receipt (no internal DB/debug badges)
     if (DOM.orderReceiptBox) {
       DOM.orderReceiptBox.innerHTML = `
-        <div style="display:flex;justify-content:space-between;margin-bottom:0.75rem;border-bottom:1px solid #DDD;padding-bottom:0.5rem;">
-          <strong>Order Reference: ${authoritativeOrderId} ${authoritativeTokenNum ? `(Token #${authoritativeTokenNum})` : ''}</strong>
-          <span>${dateStr}</span>
+        <div class="receipt-header-row">
+          <div class="receipt-ref-group">
+            <span class="receipt-ref-label">Order Reference</span>
+            <span class="receipt-ref-code">${authoritativeOrderId}</span>
+          </div>
+          <span class="receipt-date-pill">${dateStr}</span>
         </div>
-        <div><strong>Billed To:</strong> ${name} (${email})</div>
-        <div><strong>Destination:</strong> ${city}, India · Express Tracked</div>
-        <div><strong>Prescription Pref:</strong> ${rxChoice === 'call-optometrist' ? 'Optometrist Verification Call' : 'Zero-Power Blue-Cut'}</div>
-        <div style="margin-top:0.6rem;padding-top:0.6rem;border-top:1px dashed #CCC;display:flex;justify-content:space-between;font-weight:700;">
-          <span>Total Payable:</span>
+        <div class="receipt-details-list">
+          <div class="receipt-detail-item">
+            <span class="receipt-item-label">Billed To</span>
+            <span class="receipt-item-val">${name} <span class="receipt-item-sub">(${email})</span></span>
+          </div>
+          <div class="receipt-detail-item">
+            <span class="receipt-item-label">Destination</span>
+            <span class="receipt-item-val">${city}, India · Express Tracked</span>
+          </div>
+          <div class="receipt-detail-item">
+            <span class="receipt-item-label">Prescription</span>
+            <span class="receipt-item-val">${rxChoice === 'call-optometrist' ? 'Optometrist Verification Call' : 'Zero-Power Blue-Cut'}</span>
+          </div>
+          <div class="receipt-detail-item">
+            <span class="receipt-item-label">Payment</span>
+            <span class="receipt-item-val">${payChoice === 'upi' ? 'Instant UPI / Google Pay (Demo)' : (payChoice === 'card' ? 'Card Payment (Demo)' : 'Cash / UPI on Delivery (Demo)')}</span>
+          </div>
+        </div>
+        <div class="receipt-total-row">
+          <span>Total Payable</span>
           <span>${formatINR(grandTotal)}</span>
         </div>
-        ${retailDbBadge}
-        ${syncBadge}
       `;
     }
 
