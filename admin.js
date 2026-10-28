@@ -1377,12 +1377,18 @@
         brand: 'Noor Optics'
       });
 
-      renderSingleStickerCard(stage, frame, w, h, contact, true);
+      const qrSize = document.getElementById('stk-qr-size')?.value || 'small';
+      renderSingleStickerCard(stage, frame, w, h, contact, true, qrSize);
     }
 
     [widthInput, heightInput, contactInput].forEach(el => {
       if (el) el.addEventListener('input', updatePreview);
     });
+
+    const qrSizeSelect = document.getElementById('stk-qr-size');
+    if (qrSizeSelect) {
+      qrSizeSelect.addEventListener('change', updatePreview);
+    }
 
     // Preset Chip Buttons
     document.querySelectorAll('.btn-stk-preset, [data-stk-preset]').forEach(btn => {
@@ -1393,8 +1399,11 @@
         if (w && h) {
           widthInput.value = w;
           heightInput.value = h;
-          updatePreview();
         }
+        if (btn.dataset.qr && qrSizeSelect) {
+          qrSizeSelect.value = btn.dataset.qr;
+        }
+        updatePreview();
       });
     });
 
@@ -1427,13 +1436,15 @@
         btnDirect.disabled = true;
         btnDirect.innerHTML = `<span>⏳ Printing to POS-80...</span>`;
 
+        const qrSize = document.getElementById('stk-qr-size')?.value || 'small';
         const payload = {
           sku: frame.sku || frame.id,
           name: frame.name,
           brand: frame.brand,
           price: frame.selling_price_paise ? formatINR(frame.selling_price_paise, true) : '',
           copies: copies,
-          paperWidthMm: w >= 70 ? 80 : 58
+          paperWidthMm: w >= 70 ? 80 : 58,
+          qrSize: qrSize
         };
 
         try {
@@ -1503,7 +1514,8 @@
       const w = parseInt(document.getElementById('stk-width-mm')?.value || '50', 10);
       const h = parseInt(document.getElementById('stk-height-mm')?.value || '25', 10);
       const stage = document.getElementById('stk-preview-stage');
-      renderSingleStickerCard(stage, frame, w, h, contactInput.value, true);
+      const qrSize = document.getElementById('stk-qr-size')?.value || 'small';
+      renderSingleStickerCard(stage, frame, w, h, contactInput.value, true, qrSize);
     }
   };
 
@@ -1526,7 +1538,8 @@
       const w = parseInt(document.getElementById('stk-width-mm')?.value || '50', 10);
       const h = parseInt(document.getElementById('stk-height-mm')?.value || '25', 10);
       const stage = document.getElementById('stk-preview-stage');
-      renderSingleStickerCard(stage, firstFrame, w, h, contactInput.value, true);
+      const qrSize = document.getElementById('stk-qr-size')?.value || 'small';
+      renderSingleStickerCard(stage, firstFrame, w, h, contactInput.value, true, qrSize);
     }
   };
 
@@ -1607,15 +1620,20 @@
    * Build Pure HTML for One Bright-Yellow Frame QR Sticker
    * ABSOLUTE RULE: ZERO BARCODES. Genuine Square QR Code Only.
    */
-  function buildStickerHtml(frame, widthMm, heightMm, contactText, qrDataUrl) {
+  function buildStickerHtml(frame, widthMm, heightMm, contactText, qrDataUrl, qrSize = 'small') {
     const contact = contactText || `Ph: ${state.storeSettings.store_phone || '+91 98765 43210'}`;
     const sku = frame.sku || frame.id || 'NOOR-FRAME';
     const brand = frame.brand || 'Noor Optics';
 
-    // Proportional dimensions based on physical label size
-    const qrMm = Math.max(9.5, Math.min(heightMm - 6.5, widthMm * 0.38));
+    // Proportional dimensions based on physical label size & QR size setting
+    let qrMm = 13.5;
+    if (qrSize === 'tiny') qrMm = 10;
+    else if (qrSize === 'small') qrMm = 13.5;
+    else if (qrSize === 'medium') qrMm = 17;
+    else if (qrSize === 'large') qrMm = Math.max(18, Math.min(heightMm - 6.5, widthMm * 0.38));
+
     const titlePt = heightMm <= 20 ? '4.8pt' : '6.5pt';
-    const skuPt = heightMm <= 20 ? '6.8pt' : (heightMm <= 26 ? '9.5pt' : '11.5pt');
+    const skuPt = heightMm <= 20 ? '6.8pt' : (heightMm <= 26 ? '9pt' : '11pt');
     const brandPt = heightMm <= 20 ? '4.2pt' : '5.5pt';
     const footerPt = heightMm <= 20 ? '3.8pt' : '5pt';
 
@@ -1656,11 +1674,11 @@
   /**
    * Render One Bright-Yellow Frame QR Sticker inside an on-screen container (Modal preview)
    */
-  async function renderSingleStickerCard(container, frame, widthMm, heightMm, contactText, isPreview = false) {
+  async function renderSingleStickerCard(container, frame, widthMm, heightMm, contactText, isPreview = false, qrSize = 'small') {
     container.innerHTML = '';
     const qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(frame.sku || frame.id)}`;
     const qrDataUrl = await generateQrDataUrl(qrPayload, 180);
-    container.innerHTML = buildStickerHtml(frame, widthMm, heightMm, contactText, qrDataUrl);
+    container.innerHTML = buildStickerHtml(frame, widthMm, heightMm, contactText, qrDataUrl, qrSize);
   }
 
   /**
@@ -1725,79 +1743,48 @@
       printBodyHtml += `</div>`;
     }
 
-    // 3. Print via dedicated hidden iframe with EMPTY TITLE and ZERO MARGINS
-    // This completely removes browser headers (time, date, project title) and footers (URL)!
-    let iframe = document.getElementById('sticker-print-iframe');
-    if (!iframe) {
-      iframe = document.createElement('iframe');
-      iframe.id = 'sticker-print-iframe';
-      iframe.style.position = 'fixed';
-      iframe.style.top = '-9999px';
-      iframe.style.left = '-9999px';
-      iframe.style.width = '1px';
-      iframe.style.height = '1px';
-      iframe.style.border = 'none';
-      document.body.appendChild(iframe);
+    // 3. Open dedicated popup window for browser print (100% reliable)
+    const printWin = window.open('', '_blank', 'width=700,height=700');
+    if (!printWin) {
+      showToast('Browser blocked print popup. Please allow popups or use the POS Thermal button.', 'warning');
+      return;
     }
 
-    const doc = iframe.contentWindow.document;
-    doc.open();
-    doc.write(`
+    printWin.document.open();
+    printWin.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
-        <title></title> <!-- INTENTIONALLY EMPTY: PREVENTS PROJECT NAME IN BROWSER HEADER -->
+        <title></title>
         <style>
-          @page {
-            size: auto;
-            margin: 0mm !important; /* ZERO MARGINS: SUPPRESSES TIME, DATE, PROJECT NAME & URL */
-          }
-          *, *::before, *::after {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-          }
+          @page { size: auto; margin: 0mm !important; }
+          *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
           html, body {
             margin: 0 auto !important;
             padding: 0 !important;
-            width: ${isRoll ? '48mm' : 'auto'} !important;
+            width: ${isRoll ? `${Math.min(w, 58)}mm` : 'auto'} !important;
             max-width: ${isRoll ? '58mm' : 'none'} !important;
             background: #FFFFFF !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
-            color-adjust: exact !important;
-          }
-          @media print {
-            body {
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
           }
         </style>
       </head>
       <body>
         ${printBodyHtml}
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.focus();
+              window.print();
+            }, 300);
+          };
+        <\/script>
       </body>
       </html>
     `);
-    doc.close();
-
-    // Ensure all images are fully rendered before triggering print
-    const checkImagesAndPrint = () => {
-      const imgs = Array.from(doc.images || []);
-      const allLoaded = imgs.every(img => img.complete);
-      if (allLoaded || imgs.length === 0) {
-        setTimeout(() => {
-          iframe.contentWindow.focus();
-          iframe.contentWindow.print();
-        }, 150);
-      } else {
-        setTimeout(checkImagesAndPrint, 50);
-      }
-    };
-
-    setTimeout(checkImagesAndPrint, 100);
+    printWin.document.close();
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -356,7 +356,8 @@ async function generateEscPosQrLabel(opts = {}) {
     price = '',
     qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(sku)}`,
     copies = 1,
-    paperWidthMm = 58
+    paperWidthMm = 58,
+    qrSize = 'small' // 'tiny' | 'small' (14mm) | 'medium' (18mm) | 'large' (25mm)
   } = opts;
 
   const settings = getStoreSettings();
@@ -365,7 +366,15 @@ async function generateEscPosQrLabel(opts = {}) {
 
   const qr = QRCode.create(qrPayload, { errorCorrectionLevel: 'M' });
   const size = qr.modules.size;
-  const scale = paperWidthMm >= 80 ? 9 : 7; // 7 -> 203px for 58mm (384 dots printable width)
+  
+  // Compact scaling: 3=~11mm, 4=~14.5mm, 5=~18mm, 7=~25mm
+  let scale = 4; // Default to small ~14.5mm for frame temples & compact stickers
+  if (qrSize === 'tiny' || opts.labelSize === '30x18') scale = 3;
+  else if (qrSize === 'small' || opts.labelSize === '40x25') scale = 4;
+  else if (qrSize === 'medium' || opts.labelSize === '50x25') scale = 5;
+  else if (qrSize === 'large' || opts.labelSize === '58x30') scale = 7;
+  else if (typeof opts.scale === 'number') scale = opts.scale;
+
   const pixelWidth = size * scale;
   const pixelHeight = size * scale;
   const totalPrintWidth = paperWidthMm >= 80 ? 576 : 384;
@@ -382,11 +391,9 @@ async function generateEscPosQrLabel(opts = {}) {
     // Center Align
     bytes.push(0x1B, 0x61, 0x01);
 
-    // Header: Store Name
+    // Compact Header: Store Name & Phone
     bytes.push(0x1B, 0x45, 0x01); // Bold ON
-    bytes.push(0x1D, 0x21, 0x01); // Double height
     bytes.push(...Buffer.from(`${storeName}\n`, 'ascii'));
-    bytes.push(0x1D, 0x21, 0x00); // Normal size
     bytes.push(0x1B, 0x45, 0x00); // Bold OFF
     bytes.push(...Buffer.from(`Ph: ${storePhone}\n\n`, 'ascii'));
 
@@ -416,22 +423,19 @@ async function generateEscPosQrLabel(opts = {}) {
       }
     }
 
-    // Details below QR
+    // Details below QR (Compact & Bold)
     bytes.push(0x1B, 0x61, 0x01); // Center
     bytes.push(0x0A); // newline
     bytes.push(0x1B, 0x45, 0x01); // Bold ON
-    bytes.push(0x1D, 0x21, 0x11); // Double width + height for SKU
     bytes.push(...Buffer.from(`${sku}\n`, 'ascii'));
-    bytes.push(0x1D, 0x21, 0x00); // Normal size
     bytes.push(0x1B, 0x45, 0x00); // Bold OFF
     if (name) bytes.push(...Buffer.from(`${name}\n`, 'ascii'));
-    if (brand && brand !== 'Noor Optics') bytes.push(...Buffer.from(`${brand}\n`, 'ascii'));
     if (price) bytes.push(...Buffer.from(`M.R.P: ${price}\n`, 'ascii'));
-    bytes.push(...Buffer.from('AUTHENTIC · NOOR OPTICS\n', 'ascii'));
+    bytes.push(...Buffer.from('NOOR OPTICS AUTHENTIC\n', 'ascii'));
     bytes.push(...Buffer.from('--------------------------------\n', 'ascii'));
 
-    // Feed lines & Cut
-    bytes.push(0x0A, 0x0A, 0x0A, 0x0A);
+    // Feed minimal lines & Cut
+    bytes.push(0x0A, 0x0A);
     bytes.push(0x1D, 0x56, 0x41, 0x00); // GS V 65 0 (Full cut)
     bytes.push(0x1B, 0x69); // ESC i (Cut)
   }

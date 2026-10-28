@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="apple-touch-icon" href="/images/favicon.png" />
-  <link rel="stylesheet" href="/admin.css?v=5.4.0" />
+  <link rel="stylesheet" href="/admin.css?v=5.5.0" />
 </head>
 <body>
 
@@ -850,20 +850,23 @@
               <input type="text" id="stk-contact-line" class="form-control" value="Ph: +91 98765 43210" />
             </div>
 
-            <div class="preset-buttons-row" style="display:flex; gap:6px; flex-wrap:wrap; margin:0.5rem 0 1rem 0;">
-              <button type="button" class="btn-table-action" data-stk-preset="30x18" title="Tiny Frame Temple Sticker">🏷️ 30×18mm (Frame)</button>
-              <button type="button" class="btn-table-action" data-stk-preset="40x25" title="Standard Optical Label">🏷️ 40×25mm (Standard)</button>
-              <button type="button" class="btn-table-action" data-stk-preset="50x25" title="2-inch Thermal Roll">🖨️ 50×25mm (Thermal Roll)</button>
-              <button type="button" class="btn-table-action" data-stk-preset="58x30" title="Full 58mm Thermal Receipt Roll">🧾 58×30mm (58mm Receipt)</button>
+            <div class="form-group" style="margin-bottom:0.75rem;">
+              <label for="stk-qr-size" style="display:block; font-size:0.78rem; font-weight:700; margin-bottom:0.35rem; color:#0F172A;">Physical QR Code Size</label>
+              <select id="stk-qr-size" class="form-control" style="font-weight:600; font-size:0.82rem;">
+                <option value="tiny">Tiny (11 mm) — Ultra-compact Frame Temple</option>
+                <option value="small" selected>Small (14.5 mm) — Recommended Frame Sticker</option>
+                <option value="medium">Medium (18 mm) — Standard Eyewear Tag</option>
+                <option value="large">Large (25 mm) — Wide Roll / Box</option>
+              </select>
             </div>
 
             <div class="form-group" style="margin-bottom:0.75rem;">
-              <label style="display:block; font-size:0.78rem; font-weight:700; margin-bottom:0.35rem; color:#475569;">Quick Size Presets</label>
+              <label style="display:block; font-size:0.78rem; font-weight:700; margin-bottom:0.35rem; color:#475569;">Quick Preset Formats</label>
               <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
-                <button type="button" class="btn-stk-preset" data-w="30" data-h="18" style="font-size:0.73rem; padding:3px 8px; border:1px solid #CBD5E1; border-radius:4px; background:#F8FAFC; cursor:pointer; font-weight:600;">30×18mm (Temple)</button>
-                <button type="button" class="btn-stk-preset" data-w="40" data-h="25" style="font-size:0.73rem; padding:3px 8px; border:1px solid #CBD5E1; border-radius:4px; background:#F8FAFC; cursor:pointer; font-weight:600;">40×25mm (Standard)</button>
-                <button type="button" class="btn-stk-preset" data-w="50" data-h="25" style="font-size:0.73rem; padding:3px 8px; border:1px solid #CBD5E1; border-radius:4px; background:#F8FAFC; cursor:pointer; font-weight:600;">50×25mm (Label Roll)</button>
-                <button type="button" class="btn-stk-preset" data-w="58" data-h="30" style="font-size:0.73rem; padding:3px 8px; border:1px solid #000; border-radius:4px; background:#FFE500; cursor:pointer; font-weight:800; color:#000;">58×30mm (58mm Receipt Roll)</button>
+                <button type="button" class="btn-stk-preset" data-w="30" data-h="18" data-qr="tiny" style="font-size:0.73rem; padding:3px 8px; border:1px solid #CBD5E1; border-radius:4px; background:#F8FAFC; cursor:pointer; font-weight:600;">🏷️ 30×18mm (Temple)</button>
+                <button type="button" class="btn-stk-preset" data-w="40" data-h="25" data-qr="small" style="font-size:0.73rem; padding:3px 8px; border:1px solid #CBD5E1; border-radius:4px; background:#F8FAFC; cursor:pointer; font-weight:600;">🏷️ 40×25mm (Standard)</button>
+                <button type="button" class="btn-stk-preset" data-w="50" data-h="25" data-qr="small" style="font-size:0.73rem; padding:3px 8px; border:1px solid #000; border-radius:4px; background:#FFE500; cursor:pointer; font-weight:800; color:#000;">🧾 50×25mm (Thermal Roll)</button>
+                <button type="button" class="btn-stk-preset" data-w="58" data-h="30" data-qr="medium" style="font-size:0.73rem; padding:3px 8px; border:1px solid #CBD5E1; border-radius:4px; background:#F8FAFC; cursor:pointer; font-weight:600;">🧾 58×30mm (Wide Roll)</button>
               </div>
             </div>
 
@@ -1137,6 +1140,6 @@
   <script src="/vendor/chart.umd.min.js?v=5.3.0"></script>
 
   <!-- ── 6. APPLICATION CONTROLLER ─────────────────────────────────────────── -->
-  <script src="/admin.js?v=5.4.0"></script>
+  <script src="/admin.js?v=5.5.0"></script>
 </body>
 </html>

@@ -1499,7 +1499,9 @@ router.post('/printer/print-qr-sticker', async (req, res) => {
       price: price || '',
       qrPayload,
       copies: parseInt(copies, 10) || 1,
-      paperWidthMm: paperWidth
+      paperWidthMm: paperWidth,
+      qrSize: req.body.qrSize || 'small',
+      labelSize: req.body.labelSize || ''
     });
 
     const dataDir = path.join(__dirname, '..', 'data');
