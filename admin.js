@@ -1405,10 +1405,68 @@
       });
     }
 
-    // Actual Print Trigger
+    // Actual Print Trigger (Browser / Sheet Print)
     if (btnPrint) {
       btnPrint.addEventListener('click', () => {
         executeStickerPrint();
+      });
+    }
+
+    // Direct Thermal Hardware Print (Instant ESC/POS to POS-80)
+    const btnDirect = document.getElementById('btn-direct-thermal-print');
+    if (btnDirect) {
+      btnDirect.addEventListener('click', async () => {
+        const frame = state.activeStickerFrame || (state.inventoryList[0] || {
+          sku: 'NOOR-AMB-11',
+          name: 'The Oslo Crystal',
+          brand: 'Noor Optics'
+        });
+        const copies = parseInt(document.getElementById('stk-copies-count')?.value || '1', 10);
+        const w = parseInt(document.getElementById('stk-width-mm')?.value || '58', 10);
+
+        btnDirect.disabled = true;
+        btnDirect.innerHTML = `<span>⏳ Printing to POS-80...</span>`;
+
+        const payload = {
+          sku: frame.sku || frame.id,
+          name: frame.name,
+          brand: frame.brand,
+          price: frame.selling_price_paise ? formatINR(frame.selling_price_paise, true) : '',
+          copies: copies,
+          paperWidthMm: w >= 70 ? 80 : 58
+        };
+
+        try {
+          let res;
+          try {
+            res = await apiFetch('/api/printer/print-qr-sticker', {
+              method: 'POST',
+              body: JSON.stringify(payload)
+            });
+          } catch (cloudErr) {
+            // Cloud fallback: try local POS hardware bridge on port 3000
+            const localResp = await fetch('http://127.0.0.1:3000/api/printer/print-qr-sticker', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            res = await localResp.json();
+          }
+
+          if (res && res.success) {
+            showToast(`✓ QR code for ${frame.sku || 'frame'} printed to POS-80 thermal printer!`, 'success');
+          } else {
+            showToast('Printer response: ' + (res?.error || 'Check printer connection'), 'error');
+          }
+        } catch (err) {
+          showToast('Could not reach POS printer: ' + err.message, 'error');
+        } finally {
+          btnDirect.disabled = false;
+          btnDirect.innerHTML = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            <span>⚡ Print to POS Thermal Printer</span>
+          `;
+        }
       });
     }
 
@@ -1692,7 +1750,7 @@
         <title></title> <!-- INTENTIONALLY EMPTY: PREVENTS PROJECT NAME IN BROWSER HEADER -->
         <style>
           @page {
-            size: ${isRoll ? `${w}mm ${h + 5}mm` : 'auto'};
+            size: auto;
             margin: 0mm !important; /* ZERO MARGINS: SUPPRESSES TIME, DATE, PROJECT NAME & URL */
           }
           *, *::before, *::after {
@@ -1701,8 +1759,10 @@
             padding: 0;
           }
           html, body {
-            margin: 0 !important;
+            margin: 0 auto !important;
             padding: 0 !important;
+            width: ${isRoll ? '48mm' : 'auto'} !important;
+            max-width: ${isRoll ? '58mm' : 'none'} !important;
             background: #FFFFFF !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;

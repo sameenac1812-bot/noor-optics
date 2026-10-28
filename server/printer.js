@@ -344,6 +344,102 @@ async function processPrintJob(jobId) {
 }
 
 /**
+ * Generate 58mm / 80mm ESC/POS Raster QR Label Binary
+ * Fully compatible with ESC/POS thermal printers (POS-58, POS-80, etc.)
+ */
+async function generateEscPosQrLabel(opts = {}) {
+  const QRCode = require('qrcode');
+  const {
+    sku = 'NOOR-FRAME',
+    name = 'Optical Frame',
+    brand = 'Noor Optics',
+    price = '',
+    qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(sku)}`,
+    copies = 1,
+    paperWidthMm = 58
+  } = opts;
+
+  const settings = getStoreSettings();
+  const storeName = (settings.store_name || 'NOOR OPTICS').toUpperCase();
+  const storePhone = settings.store_phone || '+91 98765 43210';
+
+  const qr = QRCode.create(qrPayload, { errorCorrectionLevel: 'M' });
+  const size = qr.modules.size;
+  const scale = paperWidthMm >= 80 ? 9 : 7; // 7 -> 203px for 58mm (384 dots printable width)
+  const pixelWidth = size * scale;
+  const pixelHeight = size * scale;
+  const totalPrintWidth = paperWidthMm >= 80 ? 576 : 384;
+  const leftPadPixels = Math.max(0, Math.floor((totalPrintWidth - pixelWidth) / 2));
+  const leftPadBytes = Math.floor(leftPadPixels / 8);
+  const qrBytesWidth = Math.ceil(pixelWidth / 8);
+  const totalBytesWidth = leftPadBytes + qrBytesWidth;
+
+  const bytes = [];
+
+  for (let c = 0; c < copies; c++) {
+    // ESC @ (Initialize)
+    bytes.push(0x1B, 0x40);
+    // Center Align
+    bytes.push(0x1B, 0x61, 0x01);
+
+    // Header: Store Name
+    bytes.push(0x1B, 0x45, 0x01); // Bold ON
+    bytes.push(0x1D, 0x21, 0x01); // Double height
+    bytes.push(...Buffer.from(`${storeName}\n`, 'ascii'));
+    bytes.push(0x1D, 0x21, 0x00); // Normal size
+    bytes.push(0x1B, 0x45, 0x00); // Bold OFF
+    bytes.push(...Buffer.from(`Ph: ${storePhone}\n\n`, 'ascii'));
+
+    // Raster Bit Image: GS v 0 00 xL xH yL yH
+    const xL = totalBytesWidth % 256;
+    const xH = Math.floor(totalBytesWidth / 256);
+    const yL = pixelHeight % 256;
+    const yH = Math.floor(pixelHeight / 256);
+
+    bytes.push(0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH);
+
+    for (let y = 0; y < pixelHeight; y++) {
+      const modY = Math.floor(y / scale);
+      for (let p = 0; p < leftPadBytes; p++) {
+        bytes.push(0x00);
+      }
+      for (let b = 0; b < qrBytesWidth; b++) {
+        let byteVal = 0;
+        for (let bit = 0; bit < 8; bit++) {
+          const x = b * 8 + bit;
+          const modX = Math.floor(x / scale);
+          if (modX < size && modY < size && qr.modules.data[modY * size + modX]) {
+            byteVal |= (1 << (7 - bit));
+          }
+        }
+        bytes.push(byteVal);
+      }
+    }
+
+    // Details below QR
+    bytes.push(0x1B, 0x61, 0x01); // Center
+    bytes.push(0x0A); // newline
+    bytes.push(0x1B, 0x45, 0x01); // Bold ON
+    bytes.push(0x1D, 0x21, 0x11); // Double width + height for SKU
+    bytes.push(...Buffer.from(`${sku}\n`, 'ascii'));
+    bytes.push(0x1D, 0x21, 0x00); // Normal size
+    bytes.push(0x1B, 0x45, 0x00); // Bold OFF
+    if (name) bytes.push(...Buffer.from(`${name}\n`, 'ascii'));
+    if (brand && brand !== 'Noor Optics') bytes.push(...Buffer.from(`${brand}\n`, 'ascii'));
+    if (price) bytes.push(...Buffer.from(`M.R.P: ${price}\n`, 'ascii'));
+    bytes.push(...Buffer.from('AUTHENTIC · NOOR OPTICS\n', 'ascii'));
+    bytes.push(...Buffer.from('--------------------------------\n', 'ascii'));
+
+    // Feed lines & Cut
+    bytes.push(0x0A, 0x0A, 0x0A, 0x0A);
+    bytes.push(0x1D, 0x56, 0x41, 0x00); // GS V 65 0 (Full cut)
+    bytes.push(0x1B, 0x69); // ESC i (Cut)
+  }
+
+  return Buffer.from(bytes);
+}
+
+/**
  * Helper to fetch store settings map
  */
 function getStoreSettings() {
@@ -356,7 +452,9 @@ function getStoreSettings() {
 module.exports = {
   format58mmTextReceipt,
   generate58mmHTML,
+  generateEscPosQrLabel,
   enqueuePrintJob,
   processPrintJob,
   getStoreSettings
 };
+

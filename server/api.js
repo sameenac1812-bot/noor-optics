@@ -6,6 +6,8 @@
 
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const { db } = require('./db');
 const {
@@ -19,6 +21,7 @@ const {
   enqueuePrintJob,
   processPrintJob,
   generate58mmHTML,
+  generateEscPosQrLabel,
   getStoreSettings
 } = require('./printer');
 const { generateInvoicePDF } = require('./pdfInvoice');
@@ -1477,6 +1480,46 @@ router.post('/printer/test-print', authenticateToken, requirePermission('printer
     res.json({ success: true, previewHtml: html, message: 'Test token generated for 58mm printer.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// 14b. DIRECT THERMAL HARDWARE QR STICKER PRINTER
+router.post('/printer/print-qr-sticker', async (req, res) => {
+  try {
+    const { sku, name, brand, price, copies = 1 } = req.body;
+    const settings = getStoreSettings();
+    const printerName = req.body.printerName || settings.printer_windows_name || 'POS-80';
+    const paperWidth = parseInt(req.body.paperWidthMm || settings.printer_nominal_width_mm || '58', 10);
+    const qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(sku || 'NOOR-FRAME')}`;
+
+    const qrBinary = await generateEscPosQrLabel({
+      sku: sku || 'NOOR-FRAME',
+      name: name || 'Optical Frame',
+      brand: brand || 'Noor Optics',
+      price: price || '',
+      qrPayload,
+      copies: parseInt(copies, 10) || 1,
+      paperWidthMm: paperWidth
+    });
+
+    const dataDir = path.join(__dirname, '..', 'data');
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    const tempFile = path.join(dataDir, `qr_${Date.now()}.bin`);
+    fs.writeFileSync(tempFile, qrBinary);
+
+    const psScript = path.join(__dirname, '..', 'scripts', 'print_raw_qr.ps1');
+    const cmd = `powershell.exe -ExecutionPolicy Bypass -File "${psScript}" -FilePath "${tempFile}" -PrinterName "${printerName}"`;
+
+    const { exec } = require('child_process');
+    exec(cmd, (err, stdout, stderr) => {
+      try { fs.unlinkSync(tempFile); } catch (e) {}
+      if (err) {
+        return res.status(500).json({ success: false, error: stderr || err.message });
+      }
+      return res.json({ success: true, message: `Directly printed crisp QR sticker for ${sku} to ${printerName}!`, stdout: stdout.trim() });
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
