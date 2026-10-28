@@ -23,8 +23,15 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Health check for /api
+app.get('/api', (req, res) => {
+  res.json({ status: 'ok', service: 'Noor Optics API', timestamp: new Date().toISOString() });
+});
+
 // Mount REST API
 app.use('/api', apiRouter);
+// Also mount apiRouter directly to catch any stripped serverless paths
+app.use(apiRouter);
 
 // Serve Admin Portal at /admin
 app.get('/admin', (req, res) => {
@@ -41,10 +48,13 @@ app.use(express.static(path.join(__dirname), {
   }
 }));
 
-// Fallback to Storefront for client navigation
+// Fallback for client navigation
 app.use((req, res) => {
   if (req.path.startsWith('/admin')) {
     return res.sendFile(path.join(__dirname, 'admin.html'));
+  }
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: `Not found: ${req.method} ${req.originalUrl || req.url}` });
   }
   res.sendFile(path.join(__dirname, 'index.html'));
 });

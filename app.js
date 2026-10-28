@@ -242,7 +242,7 @@
 
     // Update Counter
     if (DOM.catalogCount) {
-      DOM.catalogCount.innerHTML = `Showing <strong>${items.length}</strong> of ${state.catalog.length} curated frames`;
+      DOM.catalogCount.innerHTML = `<span class="count-desktop">Showing <strong>${items.length}</strong> of ${state.catalog.length} curated frames</span><span class="count-mobile"><strong>${items.length}</strong> Frames</span>`;
     }
 
     // Render Active Chips
