@@ -64,10 +64,12 @@
 html {
   font-size: 15px;
   scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-primary);
   color: var(--text-main);
+  text-rendering: optimizeLegibility;
 }
 
 body {
@@ -77,6 +79,7 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-main);
   overflow-x: hidden;
+  overscroll-behavior-y: none;
 }
 
 body.drawer-open {
@@ -212,11 +215,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   height: 62px;
   display: flex;
   align-items: center;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+  transform: translateZ(0);
 }
 
 .store-header.scrolled {
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  background-color: rgba(255, 255, 255, 0.95);
 }
 
 .header-container {
@@ -749,6 +754,37 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   row-gap: 2.2rem;
 }
 
+/* ── Top Scroll Progress Bar (Compositor-Accelerated 120 FPS) ────────── */
+.scroll-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #111111 0%, #B89047 100%);
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  z-index: 1000;
+  pointer-events: none;
+  will-change: transform;
+}
+
+@supports (animation-timeline: scroll()) {
+  .scroll-progress-bar {
+    animation: scroll-progress-fill linear;
+    animation-timeline: scroll();
+  }
+
+  @keyframes scroll-progress-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+}
+
 /* ── Product Card Component ─────────────────────────────────────────────── */
 .product-card {
   position: relative;
@@ -762,11 +798,61 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
+  content-visibility: auto;
+  contain-intrinsic-size: auto none auto 420px;
+  contain: layout style;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .product-card:hover {
   border-color: #D8D8DF;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+}
+
+/* ── Scroll-Driven Card Reveal Animation (Zero-JS Compositor Thread) ─ */
+@supports ((animation-timeline: view()) and (animation-range: 0% 100%)) {
+  .product-card {
+    animation: card-scroll-reveal ease-out both;
+    animation-timeline: view();
+    animation-range: entry 10% cover 30%;
+  }
+
+  @keyframes card-scroll-reveal {
+    from {
+      opacity: 0.15;
+      transform: translateY(22px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}
+
+/* Fallback for browsers without animation-timeline: view() using IntersectionObserver */
+.product-card.scroll-reveal-item {
+  opacity: 0.15;
+  transform: translateY(22px) scale(0.985);
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.product-card.scroll-reveal-item.revealed {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-progress-bar {
+    display: none !important;
+  }
+  .product-card,
+  .product-card.scroll-reveal-item {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
 }
 
 /* Card Image Area (Light Gray Surface #F4F4F6 matching reference) */
@@ -780,6 +866,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   justify-content: center;
   overflow: hidden;
   cursor: pointer;
+  transform: translateZ(0);
 }
 
 .card-img {
@@ -787,12 +874,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   height: 82%;
   object-fit: contain;
   transition: transform var(--transition-normal);
-  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.05));
-  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .product-card:hover .card-img {
-  transform: scale(1.05);
+  transform: scale(1.05) translateZ(0);
 }
 
 /* Top Badges inside Image */

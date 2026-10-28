@@ -317,6 +317,7 @@
                  src="${product.image}"
                  alt="${product.name} - ${product.shape} Eyeglasses"
                  loading="lazy"
+                 decoding="async"
                  id="img-${product.id}">
             <div class="card-quick-action">
               <button class="btn-card-quickview" data-action="quickview" data-id="${product.id}">Quick View</button>
@@ -360,6 +361,11 @@
     });
 
     DOM.productGrid.innerHTML = html;
+
+    // Trigger smooth card scroll reveal observer if view-timeline is not natively supported
+    if (typeof refreshCardScrollObserver === 'function') {
+      refreshCardScrollObserver();
+    }
   }
 
   // ── Render Active Filter Chips ─────────────────────────────────────────────
@@ -1603,10 +1609,70 @@
     }, 4000);
   }
 
+  // ── High-Performance Smooth Scroll & Elevation Engine ─────────────────────
+  let cardObserver = null;
+  function refreshCardScrollObserver() {
+    const nativeViewTimeline = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('animation-timeline', 'view()');
+    if (nativeViewTimeline) return; // Native CSS scroll-driven animation handles it on compositor thread
+
+    if (!('IntersectionObserver' in window)) {
+      document.querySelectorAll('.product-card').forEach(c => c.classList.add('revealed'));
+      return;
+    }
+
+    if (cardObserver) cardObserver.disconnect();
+
+    cardObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('revealed');
+          cardObserver.unobserve(entry.target);
+        }
+      });
+    }, {
+      rootMargin: '0px 0px -30px 0px',
+      threshold: 0.05
+    });
+
+    document.querySelectorAll('.product-card').forEach(card => {
+      card.classList.add('scroll-reveal-item');
+      cardObserver.observe(card);
+    });
+  }
+
+  function initSmoothScrollEngine() {
+    const progressBar = document.getElementById('scroll-progress-bar');
+    const header = document.querySelector('.store-header');
+    const nativeScrollTimeline = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('animation-timeline', 'scroll()');
+
+    // Throttled 120Hz/60Hz compositor-friendly scroll watcher
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const y = window.scrollY || window.pageYOffset || 0;
+          if (header) {
+            header.classList.toggle('scrolled', y > 20);
+          }
+          if (progressBar && !nativeScrollTimeline) {
+            const maxScroll = (document.documentElement.scrollHeight - window.innerHeight) || 1;
+            const progress = Math.min(Math.max(y / maxScroll, 0), 1);
+            progressBar.style.transform = `scaleX(${progress})`;
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }
+    }, { passive: true });
+
+    refreshCardScrollObserver();
+  }
+
   // ── Initialization ────────────────────────────────────────────────────────
   function init() {
     initDOMCache();
     initAnnouncementTicker();
+    initSmoothScrollEngine();
     updateBagBadge();
     updateWishlistBadge();
     renderProductGrid();
