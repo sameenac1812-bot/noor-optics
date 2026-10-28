@@ -1458,75 +1458,111 @@
   };
 
   /**
-   * Render One Bright-Yellow Frame QR Sticker
-   * ABSOLUTE RULE: ZERO BARCODES. Genuine Square QR Code Only.
+   * Helper: Generate QR Code as Base64 Data URL
+   * Guarantees pure vector image data that renders in print iframes without canvas loss.
    */
-  function renderSingleStickerCard(container, frame, widthMm, heightMm, contactText, isPreview = false) {
-    container.innerHTML = '';
+  function generateQrDataUrl(text, size = 180) {
+    return new Promise((resolve) => {
+      if (!window.QRCode) {
+        resolve('');
+        return;
+      }
 
-    const sticker = document.createElement('div');
-    sticker.className = 'frame-sticker';
-    sticker.style.width = `${widthMm}mm`;
-    sticker.style.height = `${heightMm}mm`;
+      const tempDiv = document.createElement('div');
+      tempDiv.style.position = 'fixed';
+      tempDiv.style.left = '-9999px';
+      tempDiv.style.top = '-9999px';
+      tempDiv.style.width = `${size}px`;
+      tempDiv.style.height = `${size}px`;
+      document.body.appendChild(tempDiv);
 
-    // Permanent QR resolution URL (resolves authoritative frame details on phone camera scan)
-    const qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(frame.sku || frame.id)}`;
+      try {
+        new window.QRCode(tempDiv, {
+          text: text,
+          width: size,
+          height: size,
+          colorDark: '#000000',
+          colorLight: '#FFFFFF',
+          correctLevel: window.QRCode.CorrectLevel.M
+        });
 
-    // Top Contact Line
-    const header = document.createElement('div');
-    header.className = 'stk-header-phone';
-    header.textContent = contactText || `Ph: ${state.storeSettings.store_phone || '+91 98765 43210'}`;
-    sticker.appendChild(header);
-
-    // Body Row
-    const bodyRow = document.createElement('div');
-    bodyRow.className = 'stk-body-row';
-
-    // QR Box (Crisp Square Vector QR Code)
-    const qrBox = document.createElement('div');
-    qrBox.className = 'stk-qr-box';
-
-    // Generate genuine square QR code using QRCode library
-    if (window.QRCode) {
-      new window.QRCode(qrBox, {
-        text: qrPayload,
-        width: 120,
-        height: 120,
-        colorDark: '#000000',
-        colorLight: '#FFFFFF',
-        correctLevel: window.QRCode.CorrectLevel.M
-      });
-    }
-
-    bodyRow.appendChild(qrBox);
-
-    // Details Box
-    const details = document.createElement('div');
-    details.className = 'stk-details-box';
-
-    const skuEl = document.createElement('div');
-    skuEl.className = 'stk-sku-text';
-    skuEl.textContent = frame.sku || frame.id;
-    details.appendChild(skuEl);
-
-    const brandEl = document.createElement('div');
-    brandEl.className = 'stk-brand-text';
-    brandEl.textContent = frame.brand || 'Noor Optics';
-    details.appendChild(brandEl);
-
-    bodyRow.appendChild(details);
-    sticker.appendChild(bodyRow);
-
-    // Footer
-    const footer = document.createElement('div');
-    footer.className = 'stk-footer-row';
-    footer.innerHTML = `<span>NOOR OPTICS</span><span>GENUINE</span>`;
-    sticker.appendChild(footer);
-
-    container.appendChild(sticker);
+        setTimeout(() => {
+          let dataUrl = '';
+          const img = tempDiv.querySelector('img');
+          const canvas = tempDiv.querySelector('canvas');
+          if (img && img.src && img.src.startsWith('data:image')) {
+            dataUrl = img.src;
+          } else if (canvas) {
+            dataUrl = canvas.toDataURL('image/png');
+          }
+          tempDiv.remove();
+          resolve(dataUrl);
+        }, 80);
+      } catch (err) {
+        tempDiv.remove();
+        resolve('');
+      }
+    });
   }
 
-  function executeStickerPrint() {
+  /**
+   * Build Pure HTML for One Bright-Yellow Frame QR Sticker
+   * ABSOLUTE RULE: ZERO BARCODES. Genuine Square QR Code Only.
+   */
+  function buildStickerHtml(frame, widthMm, heightMm, contactText, qrDataUrl) {
+    const contact = contactText || `Ph: ${state.storeSettings.store_phone || '+91 98765 43210'}`;
+    const sku = frame.sku || frame.id || 'NOOR-FRAME';
+    const brand = frame.brand || 'Noor Optics';
+
+    return `
+      <div class="frame-sticker" style="width:${widthMm}mm; height:${heightMm}mm; background-color:#FFE500 !important; color:#000000 !important; box-sizing:border-box; border-radius:1.8mm; padding:1.2mm 1.6mm; display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; position:relative; border:0.5px solid rgba(0,0,0,0.35); font-family:'Plus Jakarta Sans', -apple-system, sans-serif; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;">
+        <!-- Top Contact Line -->
+        <div style="font-size:4.8pt; font-weight:800; line-height:1.1; text-align:center; text-transform:uppercase; letter-spacing:0.04em; color:#000000 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-bottom:0.2mm;">
+          ${contact}
+        </div>
+
+        <!-- Body Row: Pure Square QR Code on Left + Bold Frame SKU on Right -->
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:1.2mm; flex:1; min-height:0;">
+          <!-- Genuine Square QR Box -->
+          <div style="width:9.5mm; height:9.5mm; background:#FFFFFF; padding:0.3mm; border-radius:0.8mm; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:0.4px solid rgba(0,0,0,0.25);">
+            ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" style="width:100%; height:100%; display:block; object-fit:contain;" />` : `<div style="font-size:5pt; font-weight:bold;">QR</div>`}
+          </div>
+
+          <!-- Frame Identification -->
+          <div style="flex:1; display:flex; flex-direction:column; justify-content:center; text-align:left; overflow:hidden; padding-left:0.4mm;">
+            <div style="font-size:6.8pt; font-weight:900; line-height:1.05; letter-spacing:0.02em; color:#000000 !important; word-break:break-all;">
+              ${sku}
+            </div>
+            <div style="font-size:4.2pt; font-weight:700; color:#222222; margin-top:0.3mm; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${brand}
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:3.8pt; font-weight:700; line-height:1; border-top:0.4px solid rgba(0,0,0,0.3); padding-top:0.3mm; color:#111111;">
+          <span>NOOR OPTICS</span>
+          <span>AUTHENTIC</span>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Render One Bright-Yellow Frame QR Sticker inside an on-screen container (Modal preview)
+   */
+  async function renderSingleStickerCard(container, frame, widthMm, heightMm, contactText, isPreview = false) {
+    container.innerHTML = '';
+    const qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(frame.sku || frame.id)}`;
+    const qrDataUrl = await generateQrDataUrl(qrPayload, 160);
+    container.innerHTML = buildStickerHtml(frame, widthMm, heightMm, contactText, qrDataUrl);
+  }
+
+  /**
+   * Execute Sticker Print with 100% Suppression of Browser Date, Time, Project Title & URL
+   * Uses an isolated hidden iframe with empty <title> and @page { margin: 0; }
+   */
+  async function executeStickerPrint() {
     const w = parseInt(document.getElementById('stk-width-mm').value, 10) || 30;
     const h = parseInt(document.getElementById('stk-height-mm').value, 10) || 18;
     const contact = document.getElementById('stk-contact-line').value.trim() || `Ph: ${state.storeSettings.store_phone || '+91 98765 43210'}`;
@@ -1535,53 +1571,109 @@
     const copies = parseInt(document.getElementById('stk-copies-count')?.value || '1', 10);
     const showCutlines = document.getElementById('stk-show-cutlines')?.checked !== false;
 
-    const printContainer = document.getElementById('print-sticker-container');
-    if (!printContainer) return;
-
-    printContainer.innerHTML = '';
-    printContainer.style.display = 'block';
-
     const targetIds = state.activeBatchStickerIds && state.activeBatchStickerIds.length > 0
       ? state.activeBatchStickerIds
       : [state.activeStickerFrame.id];
 
-    if (layout === 'individual') {
-      // Individual Sticker Roll Layout
-      printContainer.className = 'single-label-print';
-      targetIds.forEach(id => {
-        const frame = state.inventoryList.find(p => p.id === id) || state.activeStickerFrame;
-        for (let c = 0; c < copies; c++) {
-          renderSingleStickerCard(printContainer, frame, w, h, contact, false);
-        }
-      });
-    } else {
-      // Multiple Stickers on A4 Sheet Grid
-      const grid = document.createElement('div');
-      grid.className = 'a4-sticker-grid';
-      grid.style.gridTemplateColumns = `repeat(${cols}, ${w}mm)`;
+    showToast('Preparing crisp sticker(s) for printer...', 'info');
 
-      targetIds.forEach(id => {
-        const frame = state.inventoryList.find(p => p.id === id) || state.activeStickerFrame;
-        for (let c = 0; c < copies; c++) {
-          const cell = document.createElement('div');
-          if (showCutlines) cell.className = 'cut-guide-cell';
-          renderSingleStickerCard(cell, frame, w, h, contact, false);
-          grid.appendChild(cell);
-        }
-      });
-
-      printContainer.appendChild(grid);
+    // 1. Pre-generate all QR Base64 Data URLs
+    const stickerPayloads = [];
+    for (const id of targetIds) {
+      const frame = state.inventoryList.find(p => p.id === id) || state.activeStickerFrame;
+      if (!frame) continue;
+      const qrPayload = `https://nooroptics.vercel.app/qr/${encodeURIComponent(frame.sku || frame.id)}`;
+      const qrDataUrl = await generateQrDataUrl(qrPayload, 180);
+      stickerPayloads.push({ frame, qrDataUrl });
     }
 
-    // Invoke browser print dialog after render completes
+    // 2. Build Print Body HTML
+    let printBodyHtml = '';
+    const isRoll = (layout === 'individual');
+
+    if (isRoll) {
+      // Individual Roll Mode: Each sticker is a distinct page with exact label dimensions
+      for (const item of stickerPayloads) {
+        for (let c = 0; c < copies; c++) {
+          printBodyHtml += `
+            <div style="page-break-after:always; break-after:page; margin:0; padding:0; width:${w}mm; height:${h}mm; display:flex; align-items:center; justify-content:center;">
+              ${buildStickerHtml(item.frame, w, h, contact, item.qrDataUrl)}
+            </div>
+          `;
+        }
+      }
+    } else {
+      // Multiple Stickers on A4 Sheet Grid
+      printBodyHtml += `
+        <div style="display:grid; grid-template-columns:repeat(${cols}, ${w}mm); gap:2mm; padding:4mm; box-sizing:border-box;">
+      `;
+      for (const item of stickerPayloads) {
+        for (let c = 0; c < copies; c++) {
+          printBodyHtml += `
+            <div style="${showCutlines ? 'border:0.5px dashed #888888; padding:1mm;' : 'padding:0;'} display:flex; align-items:center; justify-content:center;">
+              ${buildStickerHtml(item.frame, w, h, contact, item.qrDataUrl)}
+            </div>
+          `;
+        }
+      }
+      printBodyHtml += `</div>`;
+    }
+
+    // 3. Print via dedicated hidden iframe with EMPTY TITLE and ZERO MARGINS
+    // This completely removes browser headers (time, date, project title) and footers (URL)!
+    let iframe = document.getElementById('sticker-print-iframe');
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'sticker-print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.top = '-9999px';
+      iframe.style.left = '-9999px';
+      iframe.style.width = '1px';
+      iframe.style.height = '1px';
+      iframe.style.border = 'none';
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title></title> <!-- INTENTIONALLY EMPTY: PREVENTS PROJECT NAME IN BROWSER HEADER -->
+        <style>
+          @page {
+            size: ${isRoll ? `${w}mm ${h}mm` : 'auto'};
+            margin: 0mm !important; /* ZERO MARGINS: SUPPRESSES TIME, DATE, PROJECT NAME & URL */
+          }
+          *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #FFFFFF !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+        </style>
+      </head>
+      <body>
+        ${printBodyHtml}
+      </body>
+      </html>
+    `);
+    doc.close();
+
+    // Trigger print once iframe DOM is ready
     setTimeout(() => {
-      window.print();
-      // Clean up after print dialog closes
-      setTimeout(() => {
-        printContainer.innerHTML = '';
-        printContainer.style.display = 'none';
-      }, 1000);
-    }, 450);
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }, 300);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

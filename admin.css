@@ -1728,23 +1728,34 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   color: #111111;
 }
 
+@page {
+  margin: 0mm !important;
+  size: auto;
+}
+
 /* ── ISOLATED PRINT STYLES FOR STICKERS ──────────────────────────────────── */
 @media print {
-  /* Hide all dashboard UI, sidebar, modals, headers */
-  body * {
-    visibility: hidden !important;
+  @page {
+    margin: 0mm !important;
+    size: auto;
   }
 
-  /* Make ONLY the print-sticker-container visible */
-  #print-sticker-container, #print-sticker-container * {
-    visibility: visible !important;
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #FFFFFF !important;
+    width: 100% !important;
   }
 
+  /* Completely remove admin UI from print layout */
+  .admin-shell, .login-overlay, .modal-overlay, .admin-toast-container {
+    display: none !important;
+  }
+
+  /* Make ONLY the print-sticker-container visible and static */
   #print-sticker-container {
     display: block !important;
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: static !important;
     width: 100% !important;
     background: #FFFFFF !important;
     margin: 0 !important;
