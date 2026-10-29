@@ -32,6 +32,8 @@ const {
   pushPrescriptionToSupabase,
   deleteOrderFromSupabase,
   deleteAllOrdersFromSupabase,
+  deleteCustomerFromSupabase,
+  deleteAllCustomersFromSupabase,
   startBackgroundSync
 } = require('./supabaseSync');
 
@@ -963,6 +965,20 @@ router.delete('/customers/:id', authenticateToken, (req, res) => {
 
   const isPermanent = req.query.permanent === 'true' || (req.body && req.body.permanent === true);
   if (isPermanent) {
+    // 1. Tombstone in SQLite so background sync never resurrects it
+    try {
+      db.prepare(`
+        INSERT OR REPLACE INTO deleted_customers (customer_id, client_code, phone, deleted_at)
+        VALUES (?, ?, ?, datetime('now'))
+      `).run(client.id, client.client_code, client.phone || null);
+    } catch (e) {
+      console.warn('Tombstone insert note:', e.message);
+    }
+
+    // 2. Delete from Supabase cloud
+    deleteCustomerFromSupabase(client.id, client.phone).catch(console.warn);
+
+    // 3. Remove linked prescriptions & disassociate orders
     db.prepare('DELETE FROM prescriptions WHERE client_id = ?').run(client.id);
     db.prepare('UPDATE orders SET customer_id = NULL WHERE customer_id = ?').run(client.id);
     db.prepare('DELETE FROM customers WHERE id = ?').run(client.id);
@@ -987,6 +1003,45 @@ router.delete('/customers/:id', authenticateToken, (req, res) => {
   }, req);
 
   res.json({ success: true, message: `Client ${client.name} (${client.client_code}) has been archived safely without deleting purchase history.` });
+});
+
+// ── DELETE /api/customers (Delete All Clients) ───────────────────────────────
+router.delete('/customers', authenticateToken, (req, res) => {
+  // Verify permissions (owner or inventory/admin)
+  const isOwner = req.user.roleId === 'role-owner' || (req.user.permissions && (req.user.permissions.includes('*') || req.user.permissions.includes('orders:manage')));
+  if (!isOwner) {
+    return res.status(403).json({ error: 'Permission denied: Only business owners or store managers can delete all clients.' });
+  }
+
+  try {
+    const allClients = db.prepare('SELECT id, client_code, phone FROM customers').all();
+
+    // 1. Tombstone all customers in deleted_customers
+    const insertTombstone = db.prepare(`
+      INSERT OR REPLACE INTO deleted_customers (customer_id, client_code, phone, deleted_at)
+      VALUES (?, ?, ?, datetime('now'))
+    `);
+    allClients.forEach(c => {
+      try { insertTombstone.run(c.id, c.client_code, c.phone || null); } catch (e) {}
+    });
+
+    // 2. Delete all from Supabase cloud
+    deleteAllCustomersFromSupabase().catch(console.warn);
+
+    // 3. Clear prescriptions & disassociate orders
+    db.prepare('DELETE FROM prescriptions').run();
+    db.prepare('UPDATE orders SET customer_id = NULL').run();
+    db.prepare('DELETE FROM customers').run();
+
+    logAudit(req.user.id, req.user.email, 'ALL_CLIENTS_DELETED', 'CLIENT', 'ALL', {
+      count: allClients.length
+    }, req);
+
+    res.json({ success: true, count: allClients.length, message: `All ${allClients.length} clients have been permanently deleted from database and cloud.` });
+  } catch (err) {
+    console.error('Error deleting all customers:', err);
+    res.status(500).json({ error: 'Failed to delete all clients: ' + err.message });
+  }
 });
 
 // ── POST /api/customers/:id/restore (Restore Archived Client) ───────────────────

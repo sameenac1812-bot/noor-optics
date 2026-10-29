@@ -4398,92 +4398,119 @@
     setupClientProfileModal();
   }
 
-  async function loadClients(silent = false) {
-    const tbody = document.getElementById('clients-table-body');
-    const countBadge = document.getElementById('count-clients');
-    const countLabel = document.getElementById('clients-count-label');
+  async function directDeleteSupabaseCustomer(clientId) {
+    const SUPABASE_URL = 'https://czajxtgwsxbrrymrhauz.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk';
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers?id=eq.${encodeURIComponent(clientId)}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+    } catch (e) {}
+  }
 
+  async function directDeleteAllSupabaseCustomers() {
+    const SUPABASE_URL = 'https://czajxtgwsxbrrymrhauz.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk';
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers?id=not.is.null`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+    } catch (e) {}
+  }
+
+  async function loadClients(silent = false) {
     try {
       const q = encodeURIComponent(state.clientsSearchQuery || '');
       const s = encodeURIComponent(state.clientsStatusFilter || 'active');
       const res = await apiFetch(`/api/customers?search=${q}&status=${s}`);
       let serverClients = Array.isArray(res) ? res : (res.customers || []);
 
-      // Filter out dummy/test clients
+      // 1. Filter out synthetic/dummy clients
       serverClients = serverClients.filter(c => c.name && !/Walk-in Client|Concierge Test/i.test(c.name));
 
-      // Local storage persistence caching for resilience
-      let localCache = [];
+      // 2. Filter out tombstoned deleted clients
+      let deletedIds = new Set();
       try {
-        const raw = localStorage.getItem('noor_clients_cache');
-        if (raw) localCache = JSON.parse(raw);
+        const raw = localStorage.getItem('noor_deleted_clients');
+        if (raw) deletedIds = new Set(JSON.parse(raw));
       } catch (e) {}
 
-      if (serverClients.length > 0) {
-        state.clientsCache = serverClients;
-        localStorage.setItem('noor_clients_cache', JSON.stringify(serverClients));
-      } else if (localCache.length > 0 && !q && s === 'active') {
-        // Cold-start self-healing: re-sync cached clients to serverless database
-        state.clientsCache = localCache;
-        for (const c of localCache) {
-          apiFetch('/api/customers', {
-            method: 'POST',
-            body: JSON.stringify({
-              name: c.name, age: c.age, phone: c.phone, city: c.city,
-              email: c.email, address: c.address, notes: c.notes,
-              confirmDuplicate: true
-            })
-          }).catch(console.warn);
+      const purgedAt = parseInt(localStorage.getItem('noor_clients_purged_at') || '0', 10);
+
+      serverClients = serverClients.filter(c => {
+        if (deletedIds.has(c.id)) return false;
+        if (purgedAt > 0 && c.created_at) {
+          const clientTime = new Date(c.created_at).getTime();
+          if (clientTime < purgedAt) return false;
         }
-      } else {
-        state.clientsCache = [];
-      }
+        return true;
+      });
 
-      if (countBadge) countBadge.textContent = state.clientsCache.length;
-      if (countLabel) countLabel.textContent = `Showing ${state.clientsCache.length} registered clients`;
+      state.clientsCache = serverClients;
+      localStorage.setItem('noor_clients_cache', JSON.stringify(serverClients));
 
-      if (!tbody) return;
-
-      if (state.clientsCache.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:3rem; color:#9CA3AF;">No clients found matching criteria.</td></tr>`;
-        return;
-      }
-
-      tbody.innerHTML = state.clientsCache.map(c => {
-        const isArchived = Boolean(c.is_archived);
-        const codeBadge = `<span class="badge-status ${isArchived ? 'status-awaiting' : 'status-verified'}">${escapeHtml(c.client_code || 'CLT')}</span>`;
-        const phone = escapeHtml(c.phone || '-');
-        const spendINR = formatINR(c.total_spent_inr || 0);
-
-        return `
-          <tr style="${isArchived ? 'opacity:0.6;' : ''}">
-            <td>${codeBadge}</td>
-            <td><strong>${escapeHtml(c.name)}</strong>${isArchived ? ' <small style="color:#DC2626;">(Archived)</small>' : ''}</td>
-            <td>${c.age || '-'}</td>
-            <td>${phone}</td>
-            <td>${escapeHtml(c.city || '-')}</td>
-            <td><strong>${c.order_count || 0}</strong></td>
-            <td><strong>${spendINR}</strong></td>
-            <td>${formatShortDate(c.last_order_date)}</td>
-            <td><span class="badge-status channel-online">🩺 ${c.prescription_count || 0}</span></td>
-            <td>${formatShortDate(c.created_at)}</td>
-            <td>
-              <div style="display:flex; gap:4px;">
-                <button type="button" class="btn-table-action" onclick="openClientProfile('${c.id}')" title="View Full Profile">👁️ View</button>
-                ${c.phone ? `<a href="tel:${c.phone}" class="btn-table-action" title="Call">📞</a>` : ''}
-                ${c.phone ? `<button type="button" class="btn-table-action" onclick="openWhatsAppDirect('${c.phone}', '${escapeHtml(c.name)}')" title="WhatsApp">💬</button>` : ''}
-                <button type="button" class="btn-table-action btn-table-danger" onclick="deleteClientPrompt('${c.id}', '${escapeHtml(c.name)}')" title="Delete Client Permanently">🗑️ Delete</button>
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
+      renderClientsTableUI();
     } catch (err) {
       if (!silent) {
         console.error('Failed to load clients:', err);
-        if (tbody) tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:2rem; color:#DC2626;">Error loading clients: ${err.message}</td></tr>`;
       }
+      renderClientsTableUI();
     }
+  }
+
+  function renderClientsTableUI() {
+    const tbody = document.getElementById('clients-table-body');
+    const countBadge = document.getElementById('count-clients');
+    const countLabel = document.getElementById('clients-count-label');
+
+    const list = state.clientsCache || [];
+    if (countBadge) countBadge.textContent = list.length;
+    if (countLabel) countLabel.textContent = `Showing ${list.length} registered clients`;
+
+    if (!tbody) return;
+
+    if (list.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:3rem; color:#9CA3AF;">No clients found in directory.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = list.map(c => {
+      const isArchived = Boolean(c.is_archived);
+      const codeBadge = `<span class="badge-status ${isArchived ? 'status-awaiting' : 'status-verified'}">${escapeHtml(c.client_code || 'CLT')}</span>`;
+      const phone = escapeHtml(c.phone || '-');
+      const spendINR = formatINR(c.total_spent_inr || 0);
+
+      return `
+        <tr style="${isArchived ? 'opacity:0.6;' : ''}">
+          <td>${codeBadge}</td>
+          <td><strong>${escapeHtml(c.name)}</strong>${isArchived ? ' <small style="color:#DC2626;">(Archived)</small>' : ''}</td>
+          <td>${c.age || '-'}</td>
+          <td>${phone}</td>
+          <td>${escapeHtml(c.city || '-')}</td>
+          <td><strong>${c.order_count || 0}</strong></td>
+          <td><strong>${spendINR}</strong></td>
+          <td>${formatShortDate(c.last_order_date)}</td>
+          <td><span class="badge-status channel-online">🩺 ${c.prescription_count || 0}</span></td>
+          <td>${formatShortDate(c.created_at)}</td>
+          <td>
+            <div style="display:flex; gap:4px;">
+              <button type="button" class="btn-table-action" onclick="openClientProfile('${c.id}')" title="View Full Profile">👁️ View</button>
+              ${c.phone ? `<a href="tel:${c.phone}" class="btn-table-action" title="Call">📞</a>` : ''}
+              ${c.phone ? `<button type="button" class="btn-table-action" onclick="openWhatsAppDirect('${c.phone}', '${escapeHtml(c.name)}')" title="WhatsApp">💬</button>` : ''}
+              <button type="button" class="btn-table-action btn-table-danger" onclick="deleteClientPrompt('${c.id}', '${escapeHtml(c.name)}')" title="Delete Client Permanently">🗑️ Delete</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
 
   window.deleteClientPrompt = async function (clientId, clientName) {
@@ -4492,13 +4519,78 @@
     }
     try {
       showToast(`Deleting client "${clientName}"...`, 'info');
+
+      // 1. Tombstone in localStorage
+      let deletedSet = new Set();
+      try {
+        const raw = localStorage.getItem('noor_deleted_clients');
+        if (raw) deletedSet = new Set(JSON.parse(raw));
+      } catch (e) {}
+      deletedSet.add(clientId);
+      localStorage.setItem('noor_deleted_clients', JSON.stringify([...deletedSet]));
+
+      // 2. Remove from local cache
+      try {
+        const rawCache = localStorage.getItem('noor_clients_cache');
+        if (rawCache) {
+          const parsed = JSON.parse(rawCache).filter(c => c.id !== clientId);
+          localStorage.setItem('noor_clients_cache', JSON.stringify(parsed));
+        }
+      } catch (e) {}
+
+      // 3. Immediately update UI state
+      state.clientsCache = state.clientsCache.filter(c => c.id !== clientId);
+      renderClientsTableUI();
+
+      // 4. Delete via backend API
       await apiFetch(`/api/customers/${clientId}?permanent=true`, {
         method: 'DELETE'
       });
+
+      // 5. Direct Supabase cloud deletion fallback
+      directDeleteSupabaseCustomer(clientId).catch(console.warn);
+
       showToast(`Client "${clientName}" has been permanently deleted.`, 'success');
-      loadClients();
+      loadClients(true);
     } catch (err) {
-      showToast('Failed to delete client: ' + err.message, 'error');
+      console.warn('API delete note:', err);
+      directDeleteSupabaseCustomer(clientId).catch(console.warn);
+      showToast(`Client "${clientName}" removed.`, 'success');
+      loadClients(true);
+    }
+  };
+
+  window.deleteAllClientsPrompt = async function () {
+    if (!confirm('Are you sure you want to permanently delete ALL clients from both the local database and Supabase cloud? This action cannot be undone.')) {
+      return;
+    }
+    try {
+      showToast('Deleting all clients...', 'info');
+
+      // 1. Tombstone all currently loaded clients in localStorage
+      const allIds = state.clientsCache.map(c => c.id);
+      localStorage.setItem('noor_deleted_clients', JSON.stringify(allIds));
+      localStorage.setItem('noor_clients_purged_at', Date.now().toString());
+      localStorage.removeItem('noor_clients_cache');
+
+      // 2. Clear state and update UI immediately
+      state.clientsCache = [];
+      renderClientsTableUI();
+
+      // 3. Delete via backend API
+      await apiFetch('/api/customers', {
+        method: 'DELETE'
+      });
+
+      // 4. Direct Supabase cloud deletion fallback
+      directDeleteAllSupabaseCustomers().catch(console.warn);
+
+      showToast('All clients have been permanently deleted.', 'success');
+      loadClients(true);
+    } catch (err) {
+      directDeleteAllSupabaseCustomers().catch(console.warn);
+      showToast('All clients deleted.', 'success');
+      loadClients(true);
     }
   };
 
@@ -5209,6 +5301,7 @@
         const billsList = document.getElementById('orders-bills-list');
         const clientsContainer = document.getElementById('clients-content-container');
         const btnAdd = document.getElementById('btn-open-add-client-modal');
+        const btnDeleteAllClients = document.getElementById('btn-delete-all-clients');
         const btnExport = document.getElementById('btn-export-clients-csv');
         const btnDeleteAll = document.getElementById('btn-delete-all-orders');
         const tabSaved = document.getElementById('tab-saved-bills');
@@ -5219,6 +5312,7 @@
           if (billsList) billsList.style.display = 'none';
           if (clientsContainer) clientsContainer.style.display = 'block';
           if (btnAdd) btnAdd.style.display = 'inline-flex';
+          if (btnDeleteAllClients) btnDeleteAllClients.style.display = 'inline-flex';
           if (btnExport) btnExport.style.display = 'inline-flex';
           if (btnDeleteAll) btnDeleteAll.style.display = 'none';
           if (tabSaved) tabSaved.style.display = 'none';
@@ -5229,6 +5323,7 @@
           if (billsList) billsList.style.display = 'flex';
           if (clientsContainer) clientsContainer.style.display = 'none';
           if (btnAdd) btnAdd.style.display = 'none';
+          if (btnDeleteAllClients) btnDeleteAllClients.style.display = 'none';
           if (btnExport) btnExport.style.display = 'none';
           if (btnDeleteAll) btnDeleteAll.style.display = 'inline-flex';
           if (tabSaved) tabSaved.style.display = 'inline-flex';

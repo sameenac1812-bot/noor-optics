@@ -517,6 +517,12 @@ function initializeDatabase() {
         order_number TEXT PRIMARY KEY,
         deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
+      CREATE TABLE IF NOT EXISTS deleted_customers (
+        customer_id TEXT PRIMARY KEY,
+        client_code TEXT,
+        phone TEXT,
+        deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
     `);
   } catch (migErr) {
     console.warn('DB Migration check note:', migErr.message);

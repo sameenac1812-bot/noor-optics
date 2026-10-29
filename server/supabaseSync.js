@@ -348,15 +348,121 @@ async function pushPrescriptionToSupabase(rx) {
 }
 
 /**
+ * Delete single customer from Supabase cloud by customer ID and optional phone
+ */
+async function deleteCustomerFromSupabase(customerId, phone = null) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !customerId) return;
+  try {
+    let url = `${SUPABASE_URL}/rest/v1/customers?id=eq.${encodeURIComponent(customerId)}`;
+    if (phone) {
+      url = `${SUPABASE_URL}/rest/v1/customers?or=(id.eq.${encodeURIComponent(customerId)},phone.eq.${encodeURIComponent(phone)})`;
+    }
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    console.log(`[SupabaseSync] Deleted customer ${customerId} from Supabase, status: ${res.status}`);
+    return res.ok;
+  } catch (err) {
+    console.warn('[SupabaseSync] Error deleting customer from Supabase:', err.message);
+  }
+}
+
+/**
+ * Delete all customers from Supabase cloud
+ */
+async function deleteAllCustomersFromSupabase() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?id=not.is.null`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    console.log(`[SupabaseSync] Deleted all customers from Supabase, status: ${res.status}`);
+    return res.ok;
+  } catch (err) {
+    console.warn('[SupabaseSync] Error deleting all customers from Supabase:', err.message);
+  }
+}
+
+/**
+ * Pull and sync customers from Supabase cloud into local database
+ */
+async function syncSupabaseCustomers(db) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?select=*`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (!res.ok) return;
+    const cloudCusts = await res.json();
+    if (!Array.isArray(cloudCusts)) return;
+
+    for (const c of cloudCusts) {
+      if (!c.name || /Walk-in Client|Concierge Test/i.test(c.name)) continue;
+
+      // Check if client was deleted / tombstoned by admin
+      try {
+        const isTombstoned = db.prepare('SELECT customer_id FROM deleted_customers WHERE customer_id = ? OR (phone IS NOT NULL AND phone = ?)').get(c.id, c.phone);
+        if (isTombstoned) continue;
+      } catch (e) {}
+
+      const existing = db.prepare('SELECT id FROM customers WHERE id = ? OR (phone IS NOT NULL AND phone = ?)').get(c.id, c.phone);
+      if (existing) {
+        db.prepare(`
+          UPDATE customers
+          SET name = ?, client_code = ?, age = ?, dob = ?, phone = ?, email = ?, address = ?, city = ?, pin_code = ?, notes = ?, is_archived = ?, updated_at = ?
+          WHERE id = ?
+        `).run(
+          c.name, c.client_code, c.age || null, c.dob || null, c.phone || null,
+          c.email || null, c.address || null, c.city || 'Bengaluru', c.pin_code || null,
+          c.notes || null, c.is_archived ? 1 : 0, c.updated_at || new Date().toISOString(),
+          existing.id
+        );
+      } else {
+        // Ensure client_code is not duplicate in SQLite
+        let code = c.client_code;
+        const codeTaken = db.prepare('SELECT id FROM customers WHERE client_code = ?').get(code);
+        if (codeTaken) continue;
+
+        db.prepare(`
+          INSERT INTO customers (
+            id, client_code, name, age, dob, phone, email, address, city, pin_code, notes, is_archived, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          c.id, code, c.name, c.age || null, c.dob || null, c.phone || null,
+          c.email || null, c.address || null, c.city || 'Bengaluru', c.pin_code || null,
+          c.notes || null, c.is_archived ? 1 : 0, c.created_at || new Date().toISOString(),
+          c.updated_at || new Date().toISOString()
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('[SupabaseSync] Error syncing customers from Supabase:', err.message);
+  }
+}
+
+/**
  * Start recurring background synchronization
  */
 function startBackgroundSync(db, intervalMs = 10000) {
   // Run immediate initial sync
   syncSupabaseOrders(db).catch(console.warn);
+  syncSupabaseCustomers(db).catch(console.warn);
 
   // Set recurring interval
   const timer = setInterval(() => {
     syncSupabaseOrders(db).catch(console.warn);
+    syncSupabaseCustomers(db).catch(console.warn);
   }, intervalMs);
 
   if (timer.unref) timer.unref();
@@ -365,10 +471,13 @@ function startBackgroundSync(db, intervalMs = 10000) {
 
 module.exports = {
   syncSupabaseOrders,
+  syncSupabaseCustomers,
   pushOrderToSupabase,
   pushCustomerToSupabase,
   pushPrescriptionToSupabase,
   deleteOrderFromSupabase,
   deleteAllOrdersFromSupabase,
+  deleteCustomerFromSupabase,
+  deleteAllCustomersFromSupabase,
   startBackgroundSync
 };
