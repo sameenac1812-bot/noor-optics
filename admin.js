@@ -487,9 +487,12 @@
           // 1. Play audible boutique chime
           playOrderChime();
 
-          // 2. Flash live notification toast
-          const latest = brandNewOrders[0];
-          showToast(`🔔 New Order Placed: #${latest.order_number} by ${latest.customer_name || 'Client'}`, 'success');
+          // 2. Flash live notification toast only when not currently in an active sale completion modal
+          const isSuccessModalOpen = document.getElementById('modal-order-success')?.classList.contains('open');
+          if (!isSuccessModalOpen) {
+            const latest = brandNewOrders[0];
+            showToast(`🔔 New Order Placed: #${latest.order_number} by ${latest.customer_name || 'Client'}`, 'success');
+          }
 
           // 3. Automatic instant thermal bill printout with zero delay
           if (typeof instantPrintReceipt === 'function') {
@@ -531,23 +534,10 @@
     const statusFilter = state.ordersStatusFilter;
     const paymentFilter = state.ordersPaymentFilter;
 
-    // Filter out ghost/test orders & client-side deleted orders
-    let localDeleted = [];
-    try {
-      localDeleted = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
-    } catch (e) {}
-    const localDeletedSet = new Set(localDeleted);
-    const purgedAt = Number(localStorage.getItem('noor_orders_purged_at') || 0);
-
+    // Filter out dummy test ghost orders only
     const cleanOrders = state.ordersCache.filter(o => {
       if (o.order_number && /TEST/i.test(o.order_number)) return false;
       if (o.customer_name && /test/i.test(o.customer_name)) return false;
-      if (o.order_number && localDeletedSet.has(o.order_number)) return false;
-      if (o.id && localDeletedSet.has(o.id)) return false;
-      if (purgedAt && o.created_at) {
-        const t = new Date(o.created_at).getTime();
-        if (t <= purgedAt) return false;
-      }
       return true;
     });
 
@@ -993,8 +983,56 @@
         </tbody>
       </table>
 
-      <div style="display:flex; justify-content:flex-end;">
-        <div style="width:280px; display:flex; flex-direction:column; gap:6px; font-size:0.85rem;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1.25rem; align-items:start; margin-top:1rem; padding-top:1rem; border-top:1px solid #E5E7EB;">
+        <!-- Left Column: Client's Preferred Prescription RX Values -->
+        <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:12px; font-size:0.82rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-size:1.15rem;">👓</span>
+              <strong style="color:#166534; font-size:0.88rem;">${order.prescription_number ? `Prescription RX: ${escapeHtml(order.prescription_number)}` : 'Client Prescription (RX)'}</strong>
+            </div>
+            ${order.prescription_id ? `
+              <div style="display:flex; gap:4px;">
+                <button type="button" class="btn-table-action" style="padding:2px 8px; font-size:0.75rem; background:#166534; color:#FFF; font-weight:700;" onclick="printPrescriptionRecord('${order.prescription_id}')">🖨️ Print RX</button>
+                <button type="button" class="btn-table-action" style="padding:2px 8px; font-size:0.75rem; background:#2563EB; color:#FFF; font-weight:700;" onclick="openEditPrescriptionModal('${order.prescription_id}')">✏️ Edit</button>
+              </div>
+            ` : (order.customer_id ? `
+              <button type="button" class="btn-table-action" style="padding:2px 8px; font-size:0.75rem; background:#2563EB; color:#FFF; font-weight:700;" onclick="openEditPrescriptionModal('', '${order.customer_id}')">+ Add RX</button>
+            ` : '')}
+          </div>
+
+          ${(order.od_sph || order.os_sph || order.prescription_number) ? `
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; background:#FFFFFF; border:1px solid #DCFCE7; border-radius:6px; padding:8px 10px; font-size:0.80rem; line-height:1.5;">
+              <div>
+                <strong style="color:#0A2540; font-size:0.72rem; display:block; text-transform:uppercase;">OD (Right Eye)</strong>
+                <div>SPH: <strong>${order.od_sph || '0.00'}</strong></div>
+                <div>CYL: <strong>${order.od_cyl || '0.00'}</strong></div>
+                <div>AXIS: <strong>${order.od_axis != null ? order.od_axis + '°' : '-'}</strong></div>
+              </div>
+              <div>
+                <strong style="color:#0A2540; font-size:0.72rem; display:block; text-transform:uppercase;">OS (Left Eye)</strong>
+                <div>SPH: <strong>${order.os_sph || '0.00'}</strong></div>
+                <div>CYL: <strong>${order.os_cyl || '0.00'}</strong></div>
+                <div>AXIS: <strong>${order.os_axis != null ? order.os_axis + '°' : '-'}</strong></div>
+              </div>
+              <div>
+                <strong style="color:#0A2540; font-size:0.72rem; display:block; text-transform:uppercase;">Optics & PD</strong>
+                ${order.addition ? `<div>ADD: <strong>${escapeHtml(order.addition)}</strong></div>` : '<div>ADD: -</div>'}
+                ${order.ipd_distance ? `<div>IPD: <strong>${order.ipd_distance} mm</strong></div>` : ''}
+                ${order.rx_checked_by ? `<div style="font-size:0.72rem; color:#6B7280; margin-top:2px;">By: ${escapeHtml(order.rx_checked_by)}</div>` : ''}
+              </div>
+            </div>
+            ${order.rx_notes ? `<div style="font-size:0.74rem; color:#4B5563; margin-top:6px; font-style:italic;">Notes: ${escapeHtml(order.rx_notes)}</div>` : ''}
+          ` : `
+            <div style="background:#FFFFFF; border:1px dashed #CBD5E1; border-radius:6px; padding:8px 10px; font-size:0.80rem; color:#64748B;">
+              <div>Preference: <strong>${escapeHtml(order.prescription_pref || 'Standard Demonstration Lenses')}</strong></div>
+              <div style="font-size:0.74rem; margin-top:3px; color:#94A3B8;">No structured OD/OS power values submitted for this order.</div>
+            </div>
+          `}
+        </div>
+
+        <!-- Right Column: Financial Summary -->
+        <div style="display:flex; flex-direction:column; gap:6px; font-size:0.85rem;">
           <div style="display:flex; justify-content:space-between;">
             <span>Subtotal:</span>
             <span>${formatINR(order.subtotal_paise, true)}</span>
@@ -1475,7 +1513,13 @@
     const filtered = state.inventoryList.filter(p => {
       if (activeCat !== 'ALL') {
         const cat = (p.category || p.shape || p.name || '').toLowerCase();
-        if (!cat.includes(activeCat.toLowerCase())) return false;
+        if (activeCat.toLowerCase() === 'frames' || activeCat.toLowerCase() === 'glasses') {
+          if (!cat.includes('frame') && !cat.includes('glass') && !cat.includes('optic') && !cat.includes('sunglass')) {
+            return false;
+          }
+        } else if (!cat.includes(activeCat.toLowerCase())) {
+          return false;
+        }
       }
       if (query) {
         const name = (p.name || '').toLowerCase();
@@ -1515,11 +1559,14 @@
                 <div class="optic-inv-name">${escapeHtml(p.name || p.model || 'Frame')}</div>
                 <div class="optic-inv-qty">Qty: <span class="qty-bold">${stock}</span></div>
               </div>
-              <div class="optic-inv-meta">
+              <div class="optic-inv-meta" style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
                 <div class="optic-inv-date">Created: ${createdDate}</div>
-                <div class="optic-inv-date">Updated: ${updatedDate}</div>
-                <div class="optic-inv-price">Retail Rs ${price.toLocaleString('en-IN')}</div>
-                <button type="button" class="optic-dots-btn" onclick="openFrameActionMenu('${p.id}', event)">•••</button>
+                <div class="optic-inv-price" style="font-weight:800; color:#0A2540;">Retail Rs ${price.toLocaleString('en-IN')}</div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; margin-top:2px;">
+                  <button type="button" class="btn-table-action" style="padding:4px 10px; font-size:0.75rem; background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE; font-weight:700;" onclick="openEditFrameModal('${p.id}')">✏️ Edit</button>
+                  <button type="button" class="btn-table-action" style="padding:4px 10px; font-size:0.75rem; background:#FEF3C7; color:#B45309; border:1px solid #FDE68A; font-weight:700;" onclick="openSingleStickerModal('${p.id}')">🏷️ QR</button>
+                  <button type="button" class="btn-table-action btn-table-danger" style="padding:4px 10px; font-size:0.75rem; background:#FEE2E2; color:#DC2626; border:1px solid #FECACA; font-weight:700;" onclick="deleteFramePrompt('${p.id}', '${escapeHtml(p.name)}', '${escapeHtml(p.sku)}')">🗑️ Del</button>
+                </div>
               </div>
             </div>
           `;
@@ -1530,7 +1577,7 @@
     // 2. Render Desktop Table if present
     if (tbody) {
       if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:3rem; color:#9CA3AF;">No frames found matching your search.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:3rem; color:#9CA3AF;">No frames found matching your search.</td></tr>`;
         return;
       }
 
@@ -1563,13 +1610,11 @@
             <td><strong>${formatINR(p.selling_price_inr)}</strong></td>
             <td><strong>${stock}</strong></td>
             <td>${stockBadge}</td>
-            <td>
-              <button class="btn-table-action" onclick="openSingleStickerModal('${p.id}')" title="Generate Yellow QR Sticker">🏷️ QR Sticker</button>
-            </td>
-            <td>
-              <div style="display:flex; gap:4px;">
-                <button class="btn-table-action" onclick="openStockAdjustModal('${p.id}')" title="Adjust Stock Balance">Stock</button>
-                <button class="btn-table-action btn-table-danger" onclick="deleteFramePrompt('${p.id}', '${escapeHtml(p.name)}', '${escapeHtml(p.sku)}')" title="Delete Optical Frame">Delete</button>
+            <td style="text-align:center;">
+              <div style="display:flex; gap:6px; justify-content:center;">
+                <button class="btn-table-action" style="background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE; font-weight:700;" onclick="openEditFrameModal('${p.id}')" title="Edit Frame Specs & Price">✏️ Edit</button>
+                <button class="btn-table-action" style="background:#FEF3C7; color:#B45309; border:1px solid #FDE68A; font-weight:700;" onclick="openSingleStickerModal('${p.id}')" title="Generate Yellow QR Sticker">🏷️ QR Sticker</button>
+                <button class="btn-table-action btn-table-danger" onclick="deleteFramePrompt('${p.id}', '${escapeHtml(p.name)}', '${escapeHtml(p.sku)}')" title="Delete Optical Frame">🗑️ Delete</button>
               </div>
             </td>
           </tr>
@@ -1724,6 +1769,7 @@
             name,
             sku,
             brand,
+            category: 'Frames',
             shape: 'Rectangular',
             material: 'Acetate',
             fit: size,
@@ -1757,6 +1803,86 @@
         }
       });
     }
+  }
+
+  // ── Edit Optical Frame Specifications Modal ──────────────────────────────
+  window.openEditFrameModal = function (productId) {
+    const frame = state.inventoryList.find(p => p.id === productId);
+    if (!frame) {
+      showToast('Frame not found in inventory cache.', 'error');
+      return;
+    }
+
+    const modal = document.getElementById('modal-edit-frame');
+    if (!modal) return;
+
+    const idInput = document.getElementById('edit-frame-id');
+    const nameInput = document.getElementById('edit-frame-name');
+    const brandInput = document.getElementById('edit-frame-brand');
+    const shapeInput = document.getElementById('edit-frame-shape');
+    const retailInput = document.getElementById('edit-frame-retail');
+    const wholesaleInput = document.getElementById('edit-frame-wholesale');
+    const stockInput = document.getElementById('edit-frame-stock');
+    const thresholdInput = document.getElementById('edit-frame-threshold');
+    const subEl = document.getElementById('edit-frame-sub');
+
+    if (idInput) idInput.value = frame.id;
+    if (nameInput) nameInput.value = frame.name || '';
+    if (brandInput) brandInput.value = frame.brand || '';
+    if (shapeInput) shapeInput.value = frame.shape || 'Rectangular';
+    if (retailInput) retailInput.value = frame.selling_price_inr !== undefined ? frame.selling_price_inr : Math.round((frame.selling_price_paise || 0) / 100);
+    if (wholesaleInput) wholesaleInput.value = frame.purchase_cost_inr !== undefined ? frame.purchase_cost_inr : Math.round((frame.purchase_cost_paise || 0) / 100);
+    if (stockInput) stockInput.value = frame.total_stock !== undefined ? frame.total_stock : 10;
+    if (thresholdInput) thresholdInput.value = frame.reorder_threshold || 2;
+    if (subEl) subEl.textContent = `ID: ${frame.id} • SKU: ${frame.sku || '-'}`;
+
+    modal.classList.add('open');
+    document.body.classList.add('modal-open');
+  };
+
+  function setupEditFrameModal() {
+    const form = document.getElementById('form-edit-frame');
+    const modal = document.getElementById('modal-edit-frame');
+    if (!form) return;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pId = document.getElementById('edit-frame-id')?.value;
+      if (!pId) return;
+
+      const name = document.getElementById('edit-frame-name')?.value.trim();
+      const brand = document.getElementById('edit-frame-brand')?.value.trim();
+      const shape = document.getElementById('edit-frame-shape')?.value.trim();
+      const sellingPriceINR = Number(document.getElementById('edit-frame-retail')?.value) || 0;
+      const purchaseCostINR = Number(document.getElementById('edit-frame-wholesale')?.value) || 0;
+      const stockQuantity = Number(document.getElementById('edit-frame-stock')?.value) || 0;
+      const reorderThreshold = Number(document.getElementById('edit-frame-threshold')?.value) || 2;
+
+      try {
+        showToast('Saving frame changes...', 'info');
+        await apiFetch(`/api/products/${pId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            name,
+            brand,
+            shape,
+            sellingPriceINR,
+            purchaseCostINR,
+            stockQuantity,
+            reorderThreshold
+          })
+        });
+
+        showToast('Frame updated successfully!', 'success');
+        modal.classList.remove('open');
+        document.body.classList.remove('modal-open');
+        await loadInventory();
+        if (typeof loadDashboard === 'function') loadDashboard();
+        if (typeof loadPosCatalog === 'function') loadPosCatalog();
+      } catch (err) {
+        showToast('Failed to update frame: ' + err.message, 'error');
+      }
+    });
   }
 
   // ── Import Frame Data (CSV/Excel) ─────────────────────────────────────────
@@ -5101,7 +5227,6 @@
     if (!orderId) return;
     // Dispatch signal to POS portable thermal printer daemon via background API
     fetch(`/api/printer/orders/${orderId}/daemon-dispatch`, { method: 'POST' }).catch(() => {});
-    showToast('Print signal dispatched to POS portable daemon.', 'info');
   };
 
   // ── Receipt & Token Printing Preview ──────────────────────────────────────
@@ -5466,8 +5591,10 @@
     });
 
     // Initialize Components
+    try { localStorage.removeItem('noor_orders_purged_at'); } catch (e) {}
     setupAuth();
     setupAddFrameModal();
+    setupEditFrameModal();
     setupStickerGenerator();
     setupImportModal();
     setupDailySalesReport();

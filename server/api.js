@@ -347,7 +347,7 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
 
 router.put('/products/:id', authenticateToken, requirePermission('products:manage'), (req, res) => {
   const pId = req.params.id;
-  const { name, shape, material, fit, sellingPriceINR, purchaseCostINR, reorderThreshold, isActive, description } = req.body;
+  const { name, brand, shape, material, fit, sellingPriceINR, purchaseCostINR, reorderThreshold, isActive, description, stockQuantity } = req.body;
 
   const sellingPaise = sellingPriceINR !== undefined ? Math.round(Number(sellingPriceINR) * 100) : null;
   const costPaise = purchaseCostINR !== undefined ? Math.round(Number(purchaseCostINR) * 100) : null;
@@ -355,6 +355,7 @@ router.put('/products/:id', authenticateToken, requirePermission('products:manag
   db.prepare(`
     UPDATE products SET
       name = COALESCE(?, name),
+      brand = COALESCE(?, brand),
       shape = COALESCE(?, shape),
       material = COALESCE(?, material),
       fit = COALESCE(?, fit),
@@ -365,10 +366,23 @@ router.put('/products/:id', authenticateToken, requirePermission('products:manag
       description = COALESCE(?, description),
       updated_at = datetime('now')
     WHERE id = ?
-  `).run(name, shape, material, fit, sellingPaise, costPaise, reorderThreshold, isActive !== undefined ? (isActive ? 1 : 0) : null, description, pId);
+  `).run(name, brand, shape, material, fit, sellingPaise, costPaise, reorderThreshold, isActive !== undefined ? (isActive ? 1 : 0) : null, description, pId);
+
+  // Update stock balance if provided
+  if (stockQuantity !== undefined) {
+    const qty = Math.max(0, parseInt(stockQuantity, 10) || 0);
+    const variants = db.prepare('SELECT id FROM product_variants WHERE product_id = ?').all(pId);
+    if (variants.length > 0) {
+      db.prepare('UPDATE inventory_balances SET available_qty = ? WHERE variant_id = ?').run(qty, variants[0].id);
+      db.prepare(`
+        INSERT INTO stock_movements (id, variant_id, location_id, change_qty, balance_after, movement_type, reason, created_by_user_id)
+        VALUES (?, ?, 'loc-main', 0, ?, 'ADJUSTMENT', 'Direct stock update', ?)
+      `).run('mov-' + Date.now(), variants[0].id, qty, req.user.id);
+    }
+  }
 
   logAudit(req.user.id, req.user.email, 'PRODUCT_UPDATED', 'PRODUCT', pId, req.body, req);
-  res.json({ success: true });
+  res.json({ success: true, message: 'Frame updated successfully.' });
 });
 
 // ── DELETE /api/products/:id (Delete Single Frame & Cleanup Variants/Balances) ─
@@ -1998,19 +2012,44 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
 
   const orders = db.prepare(sql).all(...params);
   const getItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?');
+  const getLatestRxForCustomer = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1');
+  const getCustByPhone = db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0 LIMIT 1');
 
-  const formatted = orders.map(o => ({
-    ...o,
-    subtotal_inr: o.subtotal_paise / 100,
-    discount_inr: o.discount_paise / 100,
-    total_payable_inr: o.total_payable_paise / 100,
-    amount_paid_inr: o.amount_paid_paise / 100,
-    items: getItems.all(o.id).map(i => ({
-      ...i,
-      unit_price_inr: i.unit_price_paise / 100,
-      subtotal_inr: i.subtotal_paise / 100
-    }))
-  }));
+  const formatted = orders.map(o => {
+    let rx = null;
+    if (!o.prescription_number && o.customer_id) {
+      rx = getLatestRxForCustomer.get(o.customer_id);
+    } else if (!o.prescription_number && o.customer_phone) {
+      const cust = getCustByPhone.get(o.customer_phone.trim());
+      if (cust) rx = getLatestRxForCustomer.get(cust.id);
+    }
+
+    return {
+      ...o,
+      prescription_id: o.prescription_id || (rx ? rx.id : null),
+      prescription_number: o.prescription_number || (rx ? rx.prescription_number : null),
+      od_sph: o.od_sph || (rx ? rx.od_sph : null),
+      od_cyl: o.od_cyl || (rx ? rx.od_cyl : null),
+      od_axis: o.od_axis !== undefined && o.od_axis !== null ? o.od_axis : (rx ? rx.od_axis : null),
+      os_sph: o.os_sph || (rx ? rx.os_sph : null),
+      os_cyl: o.os_cyl || (rx ? rx.os_cyl : null),
+      os_axis: o.os_axis !== undefined && o.os_axis !== null ? o.os_axis : (rx ? rx.os_axis : null),
+      addition: o.addition || (rx ? rx.addition : null),
+      ipd_distance: o.ipd_distance || (rx ? rx.ipd_distance : null),
+      ipd_near: o.ipd_near || (rx ? rx.ipd_near : null),
+      rx_checked_by: o.rx_checked_by || (rx ? rx.checked_by : null),
+      rx_notes: o.rx_notes || (rx ? rx.notes : null),
+      subtotal_inr: o.subtotal_paise / 100,
+      discount_inr: o.discount_paise / 100,
+      total_payable_inr: o.total_payable_paise / 100,
+      amount_paid_inr: o.amount_paid_paise / 100,
+      items: getItems.all(o.id).map(i => ({
+        ...i,
+        unit_price_inr: i.unit_price_paise / 100,
+        subtotal_inr: i.subtotal_paise / 100
+      }))
+    };
+  });
 
   res.json(formatted);
 });
@@ -2045,16 +2084,42 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), (
 
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
+  // Fallback to customer's latest prescription if order has none linked
+  let rx = null;
+  if (!order.prescription_number && order.customer_id) {
+    rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(order.customer_id);
+  } else if (!order.prescription_number && order.customer_phone) {
+    const cust = db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0 LIMIT 1').get(order.customer_phone.trim());
+    if (cust) {
+      rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(cust.id);
+    }
+  }
+
+  const resolvedOrder = {
+    ...order,
+    prescription_id: order.prescription_id || (rx ? rx.id : null),
+    prescription_number: order.prescription_number || (rx ? rx.prescription_number : null),
+    od_sph: order.od_sph || (rx ? rx.od_sph : null),
+    od_cyl: order.od_cyl || (rx ? rx.od_cyl : null),
+    od_axis: order.od_axis !== undefined && order.od_axis !== null ? order.od_axis : (rx ? rx.od_axis : null),
+    os_sph: order.os_sph || (rx ? rx.os_sph : null),
+    os_cyl: order.os_cyl || (rx ? rx.os_cyl : null),
+    os_axis: order.os_axis !== undefined && order.os_axis !== null ? order.os_axis : (rx ? rx.os_axis : null),
+    addition: order.addition || (rx ? rx.addition : null),
+    ipd_distance: order.ipd_distance || (rx ? rx.ipd_distance : null),
+    ipd_near: order.ipd_near || (rx ? rx.ipd_near : null),
+    rx_checked_by: order.rx_checked_by || (rx ? rx.checked_by : null),
+    rx_notes: order.rx_notes || (rx ? rx.notes : null),
+    total_payable_inr: order.total_payable_paise / 100,
+    amount_paid_inr: order.amount_paid_paise / 100
+  };
+
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
   const payments = db.prepare('SELECT * FROM payments WHERE order_id = ?').all(order.id);
   const printJobs = db.prepare('SELECT * FROM print_jobs WHERE order_id = ? ORDER BY created_at DESC').all(order.id);
 
   res.json({
-    order: {
-      ...order,
-      total_payable_inr: order.total_payable_paise / 100,
-      amount_paid_inr: order.amount_paid_paise / 100
-    },
+    order: resolvedOrder,
     items,
     payments,
     printJobs

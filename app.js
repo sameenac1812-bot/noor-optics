@@ -1617,13 +1617,17 @@
     // Fetch live inventory items so newly added frames appear immediately on the webpage
     loadLiveCatalog();
 
-    // Optional catalog sync from Supabase if connected
+    // Optional background sync from Supabase if connected (merges without dropping live catalog items)
     if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
       window.NoorSupabase.fetchCatalog().then(cloudProducts => {
-        if (cloudProducts && cloudProducts.length > 0) {
-          state.catalog = cloudProducts;
-          renderProductGrid();
-          console.log('✓ Synced optical catalog from Supabase cloud products table.');
+        if (Array.isArray(cloudProducts) && cloudProducts.length > 0) {
+          const existingIds = new Set(state.catalog.map(p => p.id));
+          const newFromCloud = cloudProducts.filter(cp => !existingIds.has(cp.id));
+          if (newFromCloud.length > 0) {
+            state.catalog = [...state.catalog, ...newFromCloud];
+            renderProductGrid();
+            console.log(`✓ Merged ${newFromCloud.length} products from Supabase cloud.`);
+          }
         }
       });
     }
