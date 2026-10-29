@@ -45,7 +45,18 @@
     posScannerActive: false,
     html5QrScanner: null,
     lastScannedCode: null,
-    lastScanTime: 0
+    lastScanTime: 0,
+    // Active POS Client & Prescription
+    posSelectedClient: null,
+    posSelectedPrescription: null,
+    posDraftPrescription: null,
+    // Client CRM state
+    clientsCache: [],
+    clientsSearchQuery: '',
+    clientsStatusFilter: 'active',
+    activeProfileClientId: null,
+    activeDiopterTarget: null,
+    uploadedRxImageUrl: null
   };
 
   // ── Currency Formatter (Paise & INR) ───────────────────────────────────────
@@ -486,8 +497,17 @@
           <td>${formatDateTime(o.created_at)}</td>
           <td>
             <strong>${escapeHtml(o.customer_name || (channel === 'POS' ? 'Walk-in Client' : 'Online Client'))}</strong>
+            ${o.client_code ? `<span style="font-size:0.68rem; font-weight:700; color:#1D4ED8; background:#EFF6FF; border:1px solid #BFDBFE; padding:1px 5px; border-radius:4px; margin-left:4px;">${escapeHtml(o.client_code)}</span>` : ''}
             ${o.customer_phone ? `<div style="font-size:0.72rem; color:#6B7280;">${escapeHtml(o.customer_phone)}</div>` : ''}
             ${o.city ? `<div style="font-size:0.7rem; color:#9CA3AF;">${escapeHtml(o.city)}</div>` : ''}
+            ${o.prescription_number ? `
+              <div style="margin-top:4px;">
+                <span class="badge-status" style="background:#EBF5FF; color:#1E40AF; border:1px solid #BFDBFE; font-size:0.68rem; font-weight:700; cursor:pointer;" onclick="event.stopPropagation(); printPrescriptionRecord('${o.prescription_id}')" title="Click to view/print prescription">
+                  👓 ${escapeHtml(o.prescription_number)}
+                  ${o.od_sph ? `(R: ${o.od_sph} / L: ${o.os_sph || o.od_sph})` : ''}
+                </span>
+              </div>
+            ` : (o.prescription_pref ? `<div style="font-size:0.68rem; color:#9CA3AF; margin-top:2px;">RX: ${escapeHtml(o.prescription_pref)}</div>` : '')}
           </td>
           <td>
             <div style="font-weight:600;">${itemsCount} item${itemsCount > 1 ? 's' : ''}</div>
@@ -505,6 +525,7 @@
             <div style="display:flex; gap:4px;">
               <button class="btn-table-action" onclick="viewOrderDetails('${o.id}')" title="View Full Details">View</button>
               <button class="btn-table-action" onclick="previewThermalReceipt('${o.id}')" title="Print Receipt">Receipt</button>
+              <button class="btn-table-action btn-table-danger" onclick="deleteOrderPrompt('${o.id}', '${escapeHtml(o.order_number)}')" title="Delete Order">Delete</button>
             </div>
           </td>
         </tr>
@@ -554,9 +575,57 @@
           <div><strong>Payment Method:</strong> ${escapeHtml(order.payment_method || 'CASH')}</div>
           <div><strong>Payment Status:</strong> <span class="badge-status status-${order.payment_status?.toLowerCase()}">${escapeHtml(order.payment_status)}</span></div>
           <div><strong>Order Status:</strong> <span class="badge-status status-${order.status?.toLowerCase()}">${escapeHtml(order.status)}</span></div>
-          ${order.prescription_pref ? `<div style="margin-top:4px; font-size:0.8rem; color:#4B5563;"><strong>Prescription:</strong> ${escapeHtml(order.prescription_pref)}</div>` : ''}
         </div>
       </div>
+
+      <!-- Glasses Prescription Section -->
+      ${order.prescription_number ? `
+        <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:1.1rem; margin-bottom:1.5rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:1.25rem;">👓</span>
+              <div>
+                <strong style="color:#166534; font-size:0.95rem;">Glasses Prescription: ${escapeHtml(order.prescription_number)}</strong>
+                <div style="font-size:0.72rem; color:#15803D;">Checked by: ${escapeHtml(order.rx_checked_by || 'Optometrist')}</div>
+              </div>
+            </div>
+            <button type="button" class="btn-table-action" style="background:#166534; color:#FFF; font-weight:700; padding:6px 14px;" onclick="printPrescriptionRecord('${order.prescription_id}')">
+              🖨️ Print Prescription RX
+            </button>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; font-size:0.82rem; background:#FFF; padding:12px; border-radius:6px; border:1px solid #DCFCE7;">
+            <div>
+              <span style="color:#6B7280; font-size:0.72rem; text-transform:uppercase; font-weight:700; display:block;">OD (Right Eye)</span>
+              <strong>SPH:</strong> ${order.od_sph || '0.00'}<br/>
+              <strong>CYL:</strong> ${order.od_cyl || '0.00'}<br/>
+              <strong>AXIS:</strong> ${order.od_axis != null ? order.od_axis + '°' : '-'}
+            </div>
+            <div>
+              <span style="color:#6B7280; font-size:0.72rem; text-transform:uppercase; font-weight:700; display:block;">OS (Left Eye)</span>
+              <strong>SPH:</strong> ${order.os_sph || '0.00'}<br/>
+              <strong>CYL:</strong> ${order.os_cyl || '0.00'}<br/>
+              <strong>AXIS:</strong> ${order.os_axis != null ? order.os_axis + '°' : '-'}
+            </div>
+            <div>
+              <span style="color:#6B7280; font-size:0.72rem; text-transform:uppercase; font-weight:700; display:block;">Optics & IPD</span>
+              ${order.addition ? `<div><strong>ADD:</strong> ${escapeHtml(order.addition)}</div>` : ''}
+              ${order.ipd_distance ? `<div><strong>IPD Dist:</strong> ${order.ipd_distance} mm</div>` : ''}
+              ${order.ipd_near ? `<div><strong>IPD Near:</strong> ${order.ipd_near} mm</div>` : ''}
+            </div>
+          </div>
+          ${order.rx_notes ? `<div style="font-size:0.75rem; color:#374151; margin-top:8px; font-style:italic;"><strong>Clinical Notes:</strong> ${escapeHtml(order.rx_notes)}</div>` : ''}
+          ${order.rx_image_url ? `<div style="margin-top:8px;"><a href="${escapeHtml(order.rx_image_url.startsWith('/') ? order.rx_image_url : '/' + order.rx_image_url)}" target="_blank" style="font-size:0.75rem; color:#1D4ED8; font-weight:600;">📷 View Uploaded Prescription Document</a></div>` : ''}
+        </div>
+      ` : `
+        <div style="background:#F9FAFB; border:1px dashed #D1D5DB; border-radius:6px; padding:0.75rem; margin-bottom:1.5rem; font-size:0.8rem; color:#6B7280; display:flex; justify-content:space-between; align-items:center;">
+          <span>${order.prescription_pref ? `Prescription Preference: <strong>${escapeHtml(order.prescription_pref)}</strong>` : 'No structured glasses prescription attached to this order.'}</span>
+          ${order.customer_id ? `
+            <button type="button" class="btn-table-action" onclick="openClientProfile('${order.customer_id}')">
+              View Client Profile & Past RX
+            </button>
+          ` : ''}
+        </div>
+      `}
 
       <h4 style="font-size:0.85rem; font-weight:800; margin-bottom:8px;">Purchased Frames</h4>
       <table class="data-table" style="margin-bottom:1.5rem;">
@@ -600,6 +669,8 @@
       <button type="button" class="btn-header-action" data-close-modal>Close</button>
       <button type="button" class="btn-header-action" onclick="window.open('/api/invoices/order/${order.id}/pdf', '_blank')">📄 Tax Invoice PDF</button>
       <button type="button" class="btn-header-action btn-secondary" onclick="previewThermalReceipt('${order.id}')">🖨️ Thermal Receipt</button>
+      ${order.prescription_id ? `<button type="button" class="btn-header-action" style="background:#059669; color:#FFF; font-weight:700;" onclick="printPrescriptionRecord('${order.prescription_id}')">👓 Prescription RX</button>` : ''}
+      <button type="button" class="btn-header-action btn-danger-soft" onclick="deleteOrderPrompt('${order.id}', '${escapeHtml(order.order_number)}')">🗑️ Delete Order</button>
       ${order.status !== 'REFUNDED' && order.payment_status === 'VERIFIED' ? `
         <button type="button" class="btn-header-action" style="background:#DC2626; color:#FFF;" onclick="promptRefund('${order.id}')">Safe Refund & Restock</button>
       ` : ''}
@@ -615,6 +686,31 @@
     `;
 
     modal.classList.add('open');
+  };
+
+  // ── Delete Single Order with Inventory Restocking ──────────────────────────
+  window.deleteOrderPrompt = async function (orderId, orderNumber) {
+    if (!confirm(`Are you sure you want to delete order "${orderNumber}"?\n\nThis will permanently remove the order record and restore any deducted frame quantities back into inventory stock.`)) {
+      return;
+    }
+
+    try {
+      const res = await apiFetch(`/api/orders/${orderId}`, {
+        method: 'DELETE'
+      });
+      showToast(res.message || `Order ${orderNumber} deleted successfully.`, 'success');
+
+      // Close details modal if open
+      const detailsModal = document.getElementById('modal-order-details');
+      if (detailsModal) detailsModal.classList.remove('open');
+
+      // Refresh data across orders, dashboard, and inventory
+      await loadOrders();
+      if (typeof loadDashboard === 'function') loadDashboard();
+      if (typeof loadInventory === 'function') loadInventory();
+    } catch (err) {
+      showToast('Failed to delete order: ' + err.message, 'error');
+    }
   };
 
   window.promptRefund = async function (orderId) {
@@ -971,7 +1067,7 @@
             <input type="checkbox" class="frame-row-checkbox" data-id="${p.id}" ${isChecked ? 'checked' : ''} />
           </td>
           <td>
-            <img src="${escapeHtml(p.image_url || 'images/stockholm_noir.jpg')}" alt="${escapeHtml(p.name)}" class="frame-thumbnail-img" onerror="this.src='images/stockholm_noir.jpg'" />
+            <img src="${escapeHtml(p.image_url ? (p.image_url.startsWith('/') ? p.image_url : '/' + p.image_url) : '/images/stockholm_noir.jpg')}" alt="${escapeHtml(p.name)}" class="frame-thumbnail-img" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />
           </td>
           <td><strong>${escapeHtml(p.name)}</strong></td>
           <td><code style="font-weight:700; color:#111;">${escapeHtml(p.sku)}</code></td>
@@ -988,6 +1084,7 @@
           <td>
             <div style="display:flex; gap:4px;">
               <button class="btn-table-action" onclick="openStockAdjustModal('${p.id}')" title="Adjust Stock Balance">Stock</button>
+              <button class="btn-table-action btn-table-danger" onclick="deleteFramePrompt('${p.id}', '${escapeHtml(p.name)}', '${escapeHtml(p.sku)}')" title="Delete Optical Frame">Delete</button>
             </div>
           </td>
         </tr>
@@ -1008,10 +1105,37 @@
   function updateBatchStickersButton() {
     const btn = document.getElementById('btn-batch-stickers');
     const txt = document.getElementById('btn-batch-stickers-text');
+    const btnDel = document.getElementById('btn-batch-delete-frames');
+    const txtDel = document.getElementById('btn-batch-delete-frames-text');
     const count = state.selectedFrameIds.size;
     if (btn) btn.disabled = count === 0;
     if (txt) txt.textContent = `Print Selected Stickers (${count})`;
+    if (btnDel) {
+      btnDel.disabled = count === 0;
+      btnDel.style.display = count > 0 ? 'inline-flex' : 'none';
+    }
+    if (txtDel) txtDel.textContent = `Delete Selected (${count})`;
   }
+
+  // ── Delete Single Frame ───────────────────────────────────────────────────
+  window.deleteFramePrompt = async function (productId, name, sku) {
+    if (!confirm(`Are you sure you want to delete optical frame "${name}" (${sku}) from inventory?\n\nThis will remove the product and its QR codes.`)) {
+      return;
+    }
+
+    try {
+      const res = await apiFetch(`/api/products/${productId}`, {
+        method: 'DELETE'
+      });
+      showToast(res.message || `Frame "${name}" deleted successfully.`, 'success');
+      state.selectedFrameIds.delete(productId);
+      await loadInventory();
+      if (typeof loadDashboard === 'function') loadDashboard();
+      if (typeof loadPosCatalog === 'function') loadPosCatalog();
+    } catch (err) {
+      showToast('Failed to delete frame: ' + err.message, 'error');
+    }
+  };
 
   // ── + Add New Frame Modal & Actions ───────────────────────────────────────
   function setupAddFrameModal() {
@@ -1531,6 +1655,41 @@
       });
     }
 
+    // Batch Delete Selected Optical Frames
+    const btnBatchDelete = document.getElementById('btn-batch-delete-frames');
+    if (btnBatchDelete) {
+      btnBatchDelete.addEventListener('click', async () => {
+        const ids = Array.from(state.selectedFrameIds);
+        if (ids.length === 0) return;
+
+        if (!confirm(`Are you sure you want to delete ${ids.length} selected optical frame(s) from inventory?\n\nThis action cannot be undone.`)) {
+          return;
+        }
+
+        try {
+          btnBatchDelete.disabled = true;
+          const txtDel = document.getElementById('btn-batch-delete-frames-text');
+          if (txtDel) txtDel.textContent = 'Deleting...';
+
+          const res = await apiFetch('/api/products', {
+            method: 'DELETE',
+            body: JSON.stringify({ ids })
+          });
+
+          showToast(res.message || `Successfully deleted ${res.deletedCount || ids.length} frames.`, 'success');
+          state.selectedFrameIds.clear();
+          await loadInventory();
+          if (typeof loadDashboard === 'function') loadDashboard();
+          if (typeof loadPosCatalog === 'function') loadPosCatalog();
+        } catch (err) {
+          showToast('Failed to delete frames: ' + err.message, 'error');
+        } finally {
+          btnBatchDelete.disabled = false;
+          updateBatchStickersButton();
+        }
+      });
+    }
+
     // Print all eligible frame stickers
     const btnAll = document.getElementById('btn-print-all-stickers');
     if (btnAll) {
@@ -1963,7 +2122,7 @@
 
       return `
         <div class="pos-item-card" onclick="addFrameToPosCart('${p.id}')" title="Click to add to bill">
-          <img src="${escapeHtml(p.image_url || 'images/stockholm_noir.jpg')}" alt="${escapeHtml(p.name)}" class="pos-item-img" onerror="this.src='images/stockholm_noir.jpg'" />
+          <img src="${escapeHtml(p.image_url ? (p.image_url.startsWith('/') ? p.image_url : '/' + p.image_url) : '/images/stockholm_noir.jpg')}" alt="${escapeHtml(p.name)}" class="pos-item-img" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />
           <div class="pos-item-name">${escapeHtml(p.name)}</div>
           <div class="pos-item-sku">${escapeHtml(p.sku)}</div>
           <div class="pos-item-bottom">
@@ -1985,7 +2144,19 @@
       color_name: 'Standard'
     };
 
-    const stock = Number(frame.total_stock) || 0;
+    let stock = 0;
+    if (frame.total_stock !== undefined && frame.total_stock !== null) {
+      stock = Number(frame.total_stock);
+    } else if (Array.isArray(frame.variants) && frame.variants.length > 0) {
+      stock = frame.variants.reduce((acc, v) => acc + (Number(v.available_qty) || 0), 0);
+    } else if (frame.available_qty !== undefined && frame.available_qty !== null) {
+      stock = Number(frame.available_qty);
+    } else if (frame.stock !== undefined && frame.stock !== null) {
+      stock = Number(frame.stock);
+    } else {
+      stock = 50;
+    }
+
     if (stock <= 0) {
       showToast(`Cannot add "${frame.name}": Out of stock!`, 'warning');
       return;
@@ -1993,7 +2164,8 @@
 
     const existingIndex = state.posCart.findIndex(i => i.productId === frame.id);
     if (existingIndex > -1) {
-      // Increase quantity
+      // Refresh maxStock & increase quantity
+      state.posCart[existingIndex].maxStock = stock;
       if (state.posCart[existingIndex].quantity >= stock) {
         showToast(`Stock limit reached for "${frame.name}". Only ${stock} units available.`, 'warning');
         return;
@@ -2045,19 +2217,107 @@
     }
 
     try {
-      // If code is a full URL (e.g., https://nooroptics.vercel.app/qr/NOOR-OSLO-01 or /q/NOOR-OSLO-01), extract code
-      let skuOrId = cleanCode;
-      if (cleanCode.includes('/qr/')) {
-        skuOrId = cleanCode.split('/qr/')[1].split('?')[0].split('#')[0];
-      } else if (cleanCode.includes('/q/')) {
-        skuOrId = cleanCode.split('/q/')[1].split('?')[0].split('#')[0];
+      // Robust SKU extraction from URL (case-insensitive /Q/, /q/, /qr/, etc.) or raw text
+      let skuOrId = cleanCode.split('?')[0].split('#')[0];
+      if (/^https?:\/\//i.test(skuOrId) || skuOrId.includes('/')) {
+        const parts = skuOrId.split('/').filter(Boolean);
+        if (parts.length > 0) {
+          skuOrId = parts[parts.length - 1];
+        }
+      }
+      skuOrId = decodeURIComponent(skuOrId).trim();
+      const targetUpper = skuOrId.toUpperCase();
+
+      // ── 1. INSTANT LOCAL MEMORY RESOLUTION (0ms latency, zero delay!) ────────
+      const localFrame = (state.inventoryList || []).find(f => {
+        return (f.sku && f.sku.toUpperCase() === targetUpper) ||
+               (f.variant_sku && f.variant_sku.toUpperCase() === targetUpper) ||
+               (f.product_sku && f.product_sku.toUpperCase() === targetUpper) ||
+               (f.id && String(f.id).toUpperCase() === targetUpper) ||
+               (f.barcode && f.barcode === skuOrId);
+      });
+
+      if (localFrame) {
+        // Authoritative stock from inventory data: total_stock, variant balances, or stock field
+        let availableQty = 0;
+        if (localFrame.total_stock !== undefined && localFrame.total_stock !== null) {
+          availableQty = Number(localFrame.total_stock);
+        } else if (Array.isArray(localFrame.variants) && localFrame.variants.length > 0) {
+          availableQty = localFrame.variants.reduce((acc, v) => acc + (Number(v.available_qty) || 0), 0);
+        } else if (localFrame.available_qty !== undefined && localFrame.available_qty !== null) {
+          availableQty = Number(localFrame.available_qty);
+        } else if (localFrame.stock !== undefined && localFrame.stock !== null) {
+          availableQty = Number(localFrame.stock);
+        } else {
+          availableQty = 50;
+        }
+
+        if (availableQty <= 0) {
+          if (feedbackEl) {
+            feedbackEl.className = 'scan-status-notice error';
+            feedbackEl.textContent = `⚠️ Frame "${localFrame.name}" (${localFrame.sku}) is OUT OF STOCK.`;
+          }
+          showToast(`Frame "${localFrame.name}" is OUT OF STOCK.`, 'warning');
+          return;
+        }
+
+        const pricePaise = localFrame.selling_price_paise || (localFrame.selling_price_inr ? localFrame.selling_price_inr * 100 : 0);
+        const priceINR = localFrame.selling_price_inr || (pricePaise / 100);
+
+        const existingIndex = state.posCart.findIndex(i => i.sku === localFrame.sku || i.productId === localFrame.id);
+        if (existingIndex > -1) {
+          state.posCart[existingIndex].maxStock = availableQty;
+          if (state.posCart[existingIndex].quantity >= availableQty) {
+            showToast(`Maximum stock reached for "${localFrame.name}". Available in stock: ${availableQty}`, 'warning');
+            return;
+          }
+          state.posCart[existingIndex].quantity += 1;
+          state.posCart[existingIndex].lineTotalINR = state.posCart[existingIndex].quantity * state.posCart[existingIndex].priceINR;
+          state.posCart[existingIndex].lineTotalPaise = state.posCart[existingIndex].quantity * state.posCart[existingIndex].pricePaise;
+
+          playScannerBeep();
+          updatePosCartUI();
+
+          if (feedbackEl) {
+            feedbackEl.className = 'scan-status-notice success';
+            feedbackEl.textContent = `⚡ "${localFrame.name}" (${localFrame.sku}) quantity increased to ${state.posCart[existingIndex].quantity}!`;
+            setTimeout(() => { if (feedbackEl) feedbackEl.style.display = 'none'; }, 2000);
+          }
+          return;
+        } else {
+          state.posCart.push({
+            productId: localFrame.product_id || localFrame.id,
+            variantId: (localFrame.variants && localFrame.variants[0]?.id) || localFrame.variant_id || `var-${localFrame.id}-1`,
+            name: localFrame.name,
+            sku: localFrame.sku,
+            color: (localFrame.variants && localFrame.variants[0]?.color_name) || localFrame.color_name || 'Standard',
+            priceINR,
+            pricePaise,
+            quantity: 1,
+            maxStock: availableQty,
+            lineTotalINR: priceINR,
+            lineTotalPaise: pricePaise
+          });
+        }
+
+        playScannerBeep();
+        updatePosCartUI();
+
+        if (feedbackEl) {
+          feedbackEl.className = 'scan-status-notice success';
+          feedbackEl.textContent = `⚡ Added "${localFrame.name}" (${localFrame.sku}) to bill!`;
+          setTimeout(() => { if (feedbackEl) feedbackEl.style.display = 'none'; }, 2000);
+        }
+        return;
       }
 
+      // ── 2. FALLBACK TO NETWORK RESOLUTION IF NOT IN LOCAL CACHE ──────────────
       const res = await apiFetch(`/api/qr/resolve/${encodeURIComponent(skuOrId)}`);
       if (res.found && res.product) {
         const prod = res.product;
+        const availableQty = Number(prod.availableQty) || Number(prod.total_stock) || 50;
 
-        if (prod.availableQty <= 0) {
+        if (availableQty <= 0) {
           if (feedbackEl) {
             feedbackEl.className = 'scan-status-notice error';
             feedbackEl.textContent = `⚠️ Frame "${prod.name}" (${prod.sku}) is currently OUT OF STOCK.`;
@@ -2069,13 +2329,24 @@
         // Add to active cart
         const existingIndex = state.posCart.findIndex(i => i.productId === prod.productId || i.sku === prod.sku);
         if (existingIndex > -1) {
-          if (state.posCart[existingIndex].quantity >= prod.availableQty) {
-            showToast(`Maximum stock reached for "${prod.name}". Available: ${prod.availableQty}`, 'warning');
+          state.posCart[existingIndex].maxStock = availableQty;
+          if (state.posCart[existingIndex].quantity >= availableQty) {
+            showToast(`Maximum stock reached for "${prod.name}". Available in stock: ${availableQty}`, 'warning');
             return;
           }
           state.posCart[existingIndex].quantity += 1;
           state.posCart[existingIndex].lineTotalINR = state.posCart[existingIndex].quantity * state.posCart[existingIndex].priceINR;
           state.posCart[existingIndex].lineTotalPaise = state.posCart[existingIndex].quantity * state.posCart[existingIndex].pricePaise;
+
+          playScannerBeep();
+          updatePosCartUI();
+
+          if (feedbackEl) {
+            feedbackEl.className = 'scan-status-notice success';
+            feedbackEl.textContent = `⚡ "${prod.name}" (${prod.sku}) quantity increased to ${state.posCart[existingIndex].quantity}!`;
+            setTimeout(() => { if (feedbackEl) feedbackEl.style.display = 'none'; }, 2000);
+          }
+          return;
         } else {
           state.posCart.push({
             productId: prod.productId,
@@ -2086,20 +2357,20 @@
             priceINR: prod.sellingPriceINR,
             pricePaise: prod.sellingPricePaise,
             quantity: 1,
-            maxStock: prod.availableQty,
+            maxStock: availableQty,
             lineTotalINR: prod.sellingPriceINR,
             lineTotalPaise: prod.sellingPricePaise
           });
         }
 
         playScannerBeep();
+        updatePosCartUI();
+
         if (feedbackEl) {
           feedbackEl.className = 'scan-status-notice success';
-          feedbackEl.textContent = `✓ Added "${prod.name}" (${prod.sku}) — ${formatINR(prod.sellingPriceINR)}`;
-          setTimeout(() => { feedbackEl.style.display = 'none'; }, 3000);
+          feedbackEl.textContent = `⚡ Added "${prod.name}" (${prod.sku}) to bill!`;
+          setTimeout(() => { if (feedbackEl) feedbackEl.style.display = 'none'; }, 2000);
         }
-
-        updatePosCartUI();
       }
     } catch (err) {
       if (feedbackEl) {
@@ -2176,6 +2447,48 @@
     if (grandTotalEl) grandTotalEl.textContent = formatINR(grandTotalPaise, true);
     if (btnCheckout) btnCheckout.disabled = false;
 
+    // ── Update Selected Client Badge & Checkout Action in Active Bill ────────
+    const clientNameEl = document.getElementById('pos-client-name-display');
+    const clientPhoneEl = document.getElementById('pos-client-phone-display');
+    const btnEditClient = document.getElementById('btn-pos-edit-client');
+    const btnLabel = document.getElementById('pos-btn-checkout-label');
+    const btnIcon = document.getElementById('pos-checkout-btn-icon');
+    const rxBanner = document.getElementById('pos-rx-attached-badge');
+    const rxText = document.getElementById('pos-rx-badge-text');
+
+    if (state.posSelectedClient) {
+      if (clientNameEl) {
+        clientNameEl.textContent = `👤 ${state.posSelectedClient.name} ${state.posSelectedClient.client_code ? `(${state.posSelectedClient.client_code})` : ''}`;
+      }
+      if (clientPhoneEl) {
+        clientPhoneEl.textContent = `${state.posSelectedClient.phone || 'No phone'} • ${state.posSelectedClient.city || 'Store Client'}`;
+      }
+      if (btnEditClient) btnEditClient.style.display = 'inline-block';
+      if (btnLabel) btnLabel.textContent = 'Confirm Checkout & Print Invoice';
+      if (btnIcon) {
+        btnIcon.innerHTML = '<polyline points="20 6 9 17 4 12"/>';
+      }
+    } else {
+      if (clientNameEl) clientNameEl.textContent = 'Walk-in Client (No details attached)';
+      if (clientPhoneEl) clientPhoneEl.textContent = 'Click "Add Details" below to attach customer & RX';
+      if (btnEditClient) btnEditClient.style.display = 'none';
+      if (btnLabel) btnLabel.textContent = 'Add Details';
+      if (btnIcon) {
+        btnIcon.innerHTML = '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>';
+      }
+    }
+
+    // Prescription banner in active bill
+    const attachedRx = state.posDraftPrescription || state.posSelectedPrescription;
+    if (attachedRx && rxBanner && rxText) {
+      rxBanner.style.display = 'flex';
+      const odSph = attachedRx.od_sph || '0.00';
+      const osSph = attachedRx.os_sph || '0.00';
+      rxText.textContent = `RX Attached: OD ${odSph} / OS ${osSph}`;
+    } else if (rxBanner) {
+      rxBanner.style.display = 'none';
+    }
+
     // Update dynamic UPI QR if visible
     if (state.posPaymode === 'UPI_GPAY') {
       renderPosDynamicUpiQr(grandTotalPaise / 100);
@@ -2233,6 +2546,16 @@
 
     if (!btnToggle || !window.Html5Qrcode) return;
 
+    // Listen for manual camera device changes
+    if (cameraDropdown) {
+      cameraDropdown.addEventListener('change', async () => {
+        if (state.posScannerActive && state.html5QrScanner) {
+          await stopCameraScanner();
+          await startCameraScanner(cameraDropdown.value);
+        }
+      });
+    }
+
     btnToggle.addEventListener('click', async () => {
       if (state.posScannerActive) {
         // Stop Camera
@@ -2243,14 +2566,36 @@
       }
     });
 
-    async function startCameraScanner() {
+    async function startCameraScanner(preferredCameraId = null) {
       try {
-        state.html5QrScanner = new window.Html5Qrcode('html5-qr-reader');
-        const cameras = await window.Html5Qrcode.getCameras();
+        const formats = window.Html5QrcodeSupportedFormats
+          ? [window.Html5QrcodeSupportedFormats.QR_CODE]
+          : [11];
 
+        state.html5QrScanner = new window.Html5Qrcode('html5-qr-reader', {
+          formatsToSupport: formats,
+          verbose: false,
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true
+          }
+        });
+
+        const cameras = await window.Html5Qrcode.getCameras().catch(() => []);
         if (!cameras || cameras.length === 0) {
           showToast('No camera devices detected on this computer/device.', 'warning');
           return;
+        }
+
+        // Populate camera dropdown if multiple cameras are present
+        if (cameraDropdown && cameras.length > 1) {
+          cameraDropdown.innerHTML = '';
+          cameras.forEach((cam, idx) => {
+            const opt = document.createElement('option');
+            opt.value = cam.id;
+            opt.textContent = cam.label || `Camera ${idx + 1}`;
+            cameraDropdown.appendChild(opt);
+          });
+          cameraDropdown.style.display = 'inline-block';
         }
 
         viewportWrap.style.display = 'block';
@@ -2258,24 +2603,39 @@
         btnText.textContent = 'Close Camera';
         state.posScannerActive = true;
 
-        // Choose back camera (environment) if available, otherwise first camera
-        const backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear')) || cameras[0];
+        // Determine active camera: preferred ID -> back camera -> first camera
+        let activeCameraId = preferredCameraId;
+        if (!activeCameraId) {
+          const backCamera = cameras.find(c =>
+            c.label.toLowerCase().includes('back') ||
+            c.label.toLowerCase().includes('rear') ||
+            c.label.toLowerCase().includes('environment')
+          ) || cameras[0];
+          activeCameraId = backCamera.id;
+        }
 
+        if (cameraDropdown && activeCameraId) {
+          cameraDropdown.value = activeCameraId;
+        }
+
+        // Start scanner with FULL VIEWPORT scanning (no qrbox cropping, no aspect ratio squishing)
+        // This ensures the camera uses its full optical resolution and never clips the QR code!
         await state.html5QrScanner.start(
-          backCamera.id,
+          activeCameraId,
           {
-            fps: 20,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-              return { width: Math.floor(minEdge * 0.85), height: Math.floor(minEdge * 0.85) };
-            },
-            aspectRatio: 1.0
+            fps: 25,
+            videoConstraints: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280, min: 640 },
+              height: { ideal: 720, min: 480 },
+              focusMode: { ideal: 'continuous' }
+            }
           },
           (decodedText) => {
             resolveAndAddFrameToPos(decodedText);
           },
           (errorMessage) => {
-            // Ignore normal frame scanning cycle
+            // Normal scan frame cycle
           }
         );
       } catch (err) {
@@ -2371,13 +2731,16 @@
     const btnClearCart = document.getElementById('btn-clear-cart');
     const btnCheckout = document.getElementById('btn-pos-confirm-checkout');
     const discountInput = document.getElementById('pos-discount-amount');
+    const btnEditClient = document.getElementById('btn-pos-edit-client');
+    const btnRemoveRx = document.getElementById('btn-pos-remove-rx');
 
     if (btnNewBill) {
       btnNewBill.addEventListener('click', () => {
         state.posCart = [];
+        state.posSelectedClient = null;
+        state.posSelectedPrescription = null;
+        state.posDraftPrescription = null;
         if (discountInput) discountInput.value = 0;
-        document.getElementById('pos-cust-name').value = 'Walk-in Client';
-        document.getElementById('pos-cust-phone').value = '';
         updatePosCartUI();
         showToast('New in-store bill started.', 'info');
       });
@@ -2387,6 +2750,22 @@
       btnClearCart.addEventListener('click', () => {
         state.posCart = [];
         updatePosCartUI();
+      });
+    }
+
+    if (btnEditClient) {
+      btnEditClient.addEventListener('click', () => {
+        openClientDetailsModal();
+      });
+    }
+
+    if (btnRemoveRx) {
+      btnRemoveRx.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.posDraftPrescription = null;
+        state.posSelectedPrescription = null;
+        updatePosCartUI();
+        showToast('Prescription detached from current bill.', 'info');
       });
     }
 
@@ -2413,23 +2792,32 @@
       });
     });
 
-    // Confirm Checkout
+    // Action Button ("Add Details" when no client; "Confirm Checkout & Print Invoice" when attached)
     if (btnCheckout) {
       btnCheckout.addEventListener('click', async () => {
         if (state.posCart.length === 0) return;
 
+        // Step 1: If client details are not yet attached, open the Client Details modal
+        if (!state.posSelectedClient) {
+          openClientDetailsModal();
+          return;
+        }
+
+        // Step 2: Client is attached — proceed to authoritative checkout
         btnCheckout.disabled = true;
         btnCheckout.innerHTML = `<span>Processing Sale...</span>`;
 
         try {
-          const custName = document.getElementById('pos-cust-name').value.trim() || 'Walk-in Client';
-          const custPhone = document.getElementById('pos-cust-phone').value.trim();
           const discountINR = parseFloat(discountInput ? discountInput.value : 0) || 0;
           const claimedUtr = document.getElementById('pos-claimed-utr') ? document.getElementById('pos-claimed-utr').value.trim() : null;
 
           const payload = {
-            customerName: custName,
-            customerPhone: custPhone || null,
+            customerId: state.posSelectedClient.id || null,
+            clientDetails: state.posSelectedClient.id ? null : state.posSelectedClient,
+            prescriptionId: state.posSelectedPrescription ? state.posSelectedPrescription.id : null,
+            newPrescription: state.posDraftPrescription || null,
+            customerName: state.posSelectedClient.name,
+            customerPhone: state.posSelectedClient.phone || null,
             paymentMethod: state.posPaymode,
             discountINR,
             claimedUpiRef: claimedUtr,
@@ -2448,15 +2836,19 @@
 
           showToast(`Sale completed! Invoice: ${res.invoiceNumber} (Token #${res.tokenNumber})`, 'success');
 
-          // Reset cart
+          // Reset cart & client state
           state.posCart = [];
+          state.posSelectedClient = null;
+          state.posSelectedPrescription = null;
+          state.posDraftPrescription = null;
           if (discountInput) discountInput.value = 0;
           updatePosCartUI();
 
-          // Refresh live datasets
+          // Refresh live datasets across system
           loadInventory();
           loadDashboard();
           loadOrders();
+          if (typeof loadClients === 'function') loadClients();
 
           // Open thermal receipt preview
           if (res.orderId) {
@@ -2466,14 +2858,1198 @@
           showToast('Checkout failed: ' + err.message, 'error');
         } finally {
           btnCheckout.disabled = false;
-          btnCheckout.innerHTML = `
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            <span>Confirm Checkout & Print Invoice</span>
-          `;
+          updatePosCartUI();
         }
       });
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 6. SECTION: OPTICALTOOL DIOPTER SELECTOR BOTTOM SHEET (Reference Image 3)
+  // ═══════════════════════════════════════════════════════════════════════════
+  function setupDiopterSelector() {
+    const sheet = document.getElementById('sheet-diopter-selector');
+    const btnClose = document.getElementById('btn-close-diopter-sheet');
+    const manualInput = document.getElementById('diopter-manual-input');
+    const btnApplyManual = document.getElementById('btn-diopter-apply-manual');
+    const quickPills = document.querySelectorAll('.diopter-quick-pill');
+
+    if (btnClose && sheet) {
+      btnClose.addEventListener('click', () => sheet.classList.remove('open'));
+    }
+
+    if (btnApplyManual && manualInput) {
+      btnApplyManual.addEventListener('click', () => {
+        const val = manualInput.value.trim();
+        applyDiopterValue(val);
+      });
+      manualInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const val = manualInput.value.trim();
+          applyDiopterValue(val);
+        }
+      });
+    }
+
+    quickPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        const quick = pill.dataset.quick;
+        applyDiopterValue(quick === 'NONE' ? '' : quick);
+      });
+    });
+  }
+
+  window.openDiopterSelector = function (targetField, targetLabel, currentVal) {
+    const sheet = document.getElementById('sheet-diopter-selector');
+    const titleEl = document.getElementById('diopter-sheet-title');
+    const manualInput = document.getElementById('diopter-manual-input');
+    const gridEl = document.getElementById('diopter-grid-scroll');
+
+    if (!sheet || !gridEl) return;
+
+    state.activeDiopterTarget = { field: targetField, label: targetLabel, value: currentVal || '' };
+
+    if (titleEl) titleEl.textContent = `Select ${targetLabel}`;
+    if (manualInput) manualInput.value = currentVal || '';
+
+    // Generate dual-column diopter grid from +0.25 to +12.00 (Left) and -0.25 to -12.00 (Right)
+    const steps = [];
+    for (let i = 1; i <= 48; i++) {
+      const val = (i * 0.25).toFixed(2);
+      steps.push(val);
+    }
+
+    gridEl.innerHTML = steps.map(val => {
+      const posVal = `+${val}`;
+      const negVal = `-${val}`;
+      const isPosSelected = (currentVal === posVal);
+      const isNegSelected = (currentVal === negVal);
+
+      return `
+        <button type="button" class="diopter-val-btn ${isPosSelected ? 'selected' : ''}" onclick="applyDiopterValue('${posVal}')">${posVal}</button>
+        <button type="button" class="diopter-val-btn ${isNegSelected ? 'selected' : ''}" onclick="applyDiopterValue('${negVal}')">${negVal}</button>
+      `;
+    }).join('');
+
+    sheet.classList.add('open');
+  };
+
+  window.applyDiopterValue = function (val) {
+    const sheet = document.getElementById('sheet-diopter-selector');
+    if (!state.activeDiopterTarget) return;
+
+    const field = state.activeDiopterTarget.field;
+
+    // Update the corresponding button text and internal data attribute
+    let btnId = '';
+    if (field === 'od_sph') btnId = 'rx-od-sph-btn';
+    else if (field === 'od_cyl') btnId = 'rx-od-cyl-btn';
+    else if (field === 'os_sph') btnId = 'rx-os-sph-btn';
+    else if (field === 'os_cyl') btnId = 'rx-os-cyl-btn';
+    else if (field === 'addition') btnId = 'rx-addition-btn';
+
+    const btn = document.getElementById(btnId);
+    if (btn) {
+      btn.dataset.val = val;
+      const valSpan = btn.querySelector('.combobox-val');
+      if (valSpan) {
+        valSpan.textContent = val || 'Select';
+      }
+    }
+
+    if (sheet) sheet.classList.remove('open');
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 7. SECTION: OPTICALTOOL PRESCRIPTION MODAL (Reference Image 2)
+  // ═══════════════════════════════════════════════════════════════════════════
+  let activeRxSaveCallback = null;
+
+  function setupPrescriptionModal() {
+    const modal = document.getElementById('modal-prescription');
+    const radioValues = document.getElementById('rx-mode-values');
+    const radioUpload = document.getElementById('rx-mode-upload');
+    const sectionValues = document.getElementById('rx-mode-values-section');
+    const sectionUpload = document.getElementById('rx-mode-upload-section');
+    const fileInput = document.getElementById('rx-file-upload-input');
+    const dropzone = document.getElementById('rx-upload-dropzone');
+    const btnRemoveImg = document.getElementById('btn-remove-rx-image');
+    const btnSaveRx = document.getElementById('btn-save-rx');
+
+    // Radio Mode Switching
+    if (radioValues && radioUpload) {
+      radioValues.addEventListener('change', () => {
+        sectionValues.style.display = 'block';
+        sectionUpload.style.display = 'none';
+        document.getElementById('rx-mode-select-label')?.classList.add('active');
+        document.getElementById('rx-mode-upload-label')?.classList.remove('active');
+      });
+
+      radioUpload.addEventListener('change', () => {
+        sectionValues.style.display = 'none';
+        sectionUpload.style.display = 'block';
+        document.getElementById('rx-mode-select-label')?.classList.remove('active');
+        document.getElementById('rx-mode-upload-label')?.classList.add('active');
+      });
+    }
+
+    // Combobox pill click listeners to open Diopter Selector sheet
+    const comboboxBtns = [
+      { id: 'rx-od-sph-btn', field: 'od_sph', label: 'Right SPH' },
+      { id: 'rx-od-cyl-btn', field: 'od_cyl', label: 'Right CYL' },
+      { id: 'rx-os-sph-btn', field: 'os_sph', label: 'Left SPH' },
+      { id: 'rx-os-cyl-btn', field: 'os_cyl', label: 'Left CYL' },
+      { id: 'rx-addition-btn', field: 'addition', label: 'Addition' }
+    ];
+
+    comboboxBtns.forEach(item => {
+      const btn = document.getElementById(item.id);
+      if (btn) {
+        btn.addEventListener('click', () => {
+          const currentVal = btn.dataset.val || '';
+          openDiopterSelector(item.field, item.label, currentVal);
+        });
+      }
+    });
+
+    // File Upload handling
+    if (dropzone && fileInput) {
+      dropzone.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('image', file);
+
+        try {
+          showToast('Uploading prescription image...', 'info');
+          const token = state.token;
+          const headers = {};
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
+          const res = await fetch('/api/prescriptions/upload-image', {
+            method: 'POST',
+            headers,
+            body: formData
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.message || 'Image upload failed');
+
+          state.uploadedRxImageUrl = json.imageUrl;
+          const previewImg = document.getElementById('rx-image-preview');
+          const previewWrap = document.getElementById('rx-image-preview-wrap');
+          if (previewImg && previewWrap) {
+            previewImg.src = json.imageUrl;
+            previewWrap.style.display = 'block';
+          }
+          showToast('Prescription image uploaded successfully!', 'success');
+        } catch (err) {
+          showToast('Upload error: ' + err.message, 'error');
+        }
+      });
+    }
+
+    if (btnRemoveImg) {
+      btnRemoveImg.addEventListener('click', () => {
+        state.uploadedRxImageUrl = null;
+        const previewWrap = document.getElementById('rx-image-preview-wrap');
+        const fileInput = document.getElementById('rx-file-upload-input');
+        if (previewWrap) previewWrap.style.display = 'none';
+        if (fileInput) fileInput.value = '';
+      });
+    }
+
+    // Save RX Button Handler
+    if (btnSaveRx) {
+      btnSaveRx.addEventListener('click', async () => {
+        const odSph = document.getElementById('rx-od-sph-btn')?.dataset.val || '';
+        const odCyl = document.getElementById('rx-od-cyl-btn')?.dataset.val || '';
+        const odAxis = document.getElementById('rx-od-axis-input')?.value || null;
+        const osSph = document.getElementById('rx-os-sph-btn')?.dataset.val || '';
+        const osCyl = document.getElementById('rx-os-cyl-btn')?.dataset.val || '';
+        const osAxis = document.getElementById('rx-os-axis-input')?.value || null;
+        const addition = document.getElementById('rx-addition-btn')?.dataset.val || '';
+        const ipdD = document.getElementById('rx-ipd-d-input')?.value || null;
+        const ipdN = document.getElementById('rx-ipd-n-input')?.value || null;
+        const checkedBy = document.getElementById('rx-checked-by-input')?.value.trim() || (state.user?.name || 'Optometrist');
+        const prescriber = document.getElementById('rx-prescriber-input')?.value.trim() || null;
+        const notes = document.getElementById('rx-notes-input')?.value.trim() || null;
+        const imageUrl = state.uploadedRxImageUrl || null;
+
+        // Verify that at least one value or image is entered
+        if (!odSph && !odCyl && !osSph && !osCyl && !addition && !imageUrl) {
+          showToast('Please select at least one prescription diopter or upload an image.', 'warning');
+          return;
+        }
+
+        const rxData = {
+          od_sph: odSph || null,
+          od_cyl: odCyl || null,
+          od_axis: odAxis ? Number(odAxis) : null,
+          os_sph: osSph || null,
+          os_cyl: osCyl || null,
+          os_axis: osAxis ? Number(osAxis) : null,
+          addition: addition || null,
+          ipd_distance: ipdD ? Number(ipdD) : null,
+          ipd_near: ipdN ? Number(ipdN) : null,
+          checked_by: checkedBy,
+          prescriber_details: prescriber,
+          notes: notes,
+          image_url: imageUrl,
+          prescription_date: new Date().toISOString()
+        };
+
+        if (typeof activeRxSaveCallback === 'function') {
+          await activeRxSaveCallback(rxData);
+        } else {
+          // Default: Save to active POS draft
+          state.posDraftPrescription = rxData;
+          state.posSelectedPrescription = null;
+
+          // Update summary in client details modal
+          const rxSummary = document.getElementById('client-active-rx-summary');
+          if (rxSummary) {
+            rxSummary.style.display = 'block';
+            rxSummary.innerHTML = `
+              <strong>🩺 Draft Prescription Ready:</strong><br/>
+              Right (OD): SPH ${rxData.od_sph || '0.00'}, CYL ${rxData.od_cyl || '0.00'}, AXIS ${rxData.od_axis || '-'}<br/>
+              Left (OS): SPH ${rxData.os_sph || '0.00'}, CYL ${rxData.os_cyl || '0.00'}, AXIS ${rxData.os_axis || '-'}<br/>
+              ${rxData.addition ? `Addition: ${rxData.addition} • ` : ''}Checked by: ${escapeHtml(rxData.checked_by || '-')}
+            `;
+          }
+
+          showToast('Prescription recorded for this bill!', 'success');
+        }
+
+        modal.classList.remove('open');
+      });
+    }
+  }
+
+  window.openPrescriptionModal = function (existingRx = null, customSaveCallback = null) {
+    const modal = document.getElementById('modal-prescription');
+    if (!modal) return;
+
+    activeRxSaveCallback = customSaveCallback;
+    state.uploadedRxImageUrl = existingRx ? existingRx.image_url : null;
+
+    // Reset combobox buttons and inputs
+    const resetCombobox = (id, val) => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.dataset.val = val || '';
+        const span = btn.querySelector('.combobox-val');
+        if (span) span.textContent = val || 'Select';
+      }
+    };
+
+    resetCombobox('rx-od-sph-btn', existingRx?.od_sph);
+    resetCombobox('rx-od-cyl-btn', existingRx?.od_cyl);
+    resetCombobox('rx-os-sph-btn', existingRx?.os_sph);
+    resetCombobox('rx-os-cyl-btn', existingRx?.os_cyl);
+    resetCombobox('rx-addition-btn', existingRx?.addition);
+
+    const odAxisInput = document.getElementById('rx-od-axis-input');
+    const osAxisInput = document.getElementById('rx-os-axis-input');
+    const ipdDInput = document.getElementById('rx-ipd-d-input');
+    const ipdNInput = document.getElementById('rx-ipd-n-input');
+    const checkedByInput = document.getElementById('rx-checked-by-input');
+    const prescriberInput = document.getElementById('rx-prescriber-input');
+    const notesInput = document.getElementById('rx-notes-input');
+
+    if (odAxisInput) odAxisInput.value = existingRx?.od_axis || '';
+    if (osAxisInput) osAxisInput.value = existingRx?.os_axis || '';
+    if (ipdDInput) ipdDInput.value = existingRx?.ipd_distance || '';
+    if (ipdNInput) ipdNInput.value = existingRx?.ipd_near || '';
+    if (checkedByInput) checkedByInput.value = existingRx?.checked_by || (state.user?.name || 'Optometrist');
+    if (prescriberInput) prescriberInput.value = existingRx?.prescriber_details || '';
+    if (notesInput) notesInput.value = existingRx?.notes || '';
+
+    // Image preview
+    const previewWrap = document.getElementById('rx-image-preview-wrap');
+    const previewImg = document.getElementById('rx-image-preview');
+    if (previewWrap && previewImg) {
+      if (existingRx?.image_url) {
+        previewImg.src = existingRx.image_url;
+        previewWrap.style.display = 'block';
+      } else {
+        previewWrap.style.display = 'none';
+        previewImg.src = '';
+      }
+    }
+
+    // Default to Values tab
+    document.getElementById('rx-mode-values')?.click();
+    modal.classList.add('open');
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 8. SECTION: CUSTOMER DETAILS MODAL (Add / Search / Confirm Client)
+  // ═══════════════════════════════════════════════════════════════════════════
+  function setupClientDetailsModal() {
+    const modal = document.getElementById('modal-client-details');
+    const searchInput = document.getElementById('client-search-typeahead');
+    const dropdown = document.getElementById('client-typeahead-dropdown');
+    const btnOpenRx = document.getElementById('btn-open-rx-form');
+    const btnSaveClientWithRx = document.getElementById('btn-save-client-with-rx');
+    const rxSelect = document.getElementById('client-saved-rx-select');
+
+    // Real-time Typeahead search across existing clients
+    if (searchInput && dropdown) {
+      let debounceTimer = null;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const query = searchInput.value.trim().toLowerCase();
+
+        if (query.length < 1) {
+          dropdown.style.display = 'none';
+          return;
+        }
+
+        debounceTimer = setTimeout(async () => {
+          try {
+            const res = await apiFetch(`/api/customers?search=${encodeURIComponent(query)}`);
+            const clients = Array.isArray(res) ? res : (res.customers || []);
+
+            if (clients.length === 0) {
+              dropdown.innerHTML = `<div style="padding:10px; font-size:0.78rem; color:#9CA3AF; text-align:center;">No matching clients found in database. Fill form below to create new.</div>`;
+              dropdown.style.display = 'block';
+              return;
+            }
+
+            dropdown.innerHTML = clients.map(c => `
+              <div class="typeahead-item" onclick="selectTypeaheadClient('${c.id}')">
+                <div>
+                  <div class="typeahead-name">${escapeHtml(c.name)}</div>
+                  <div class="typeahead-sub">📞 ${escapeHtml(c.phone || '-')} • 📍 ${escapeHtml(c.city || '-')}</div>
+                </div>
+                <span class="typeahead-code">${escapeHtml(c.client_code || 'CLT')}</span>
+              </div>
+            `).join('');
+            dropdown.style.display = 'block';
+          } catch (err) {
+            console.error('Typeahead search error:', err);
+          }
+        }, 200);
+      });
+
+      // Close dropdown on outside click
+      document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+          dropdown.style.display = 'none';
+        }
+      });
+    }
+
+    // Saved RX dropdown change listener
+    if (rxSelect) {
+      rxSelect.addEventListener('change', () => {
+        const rxId = rxSelect.value;
+        const rxSummary = document.getElementById('client-active-rx-summary');
+        if (!rxId) {
+          state.posSelectedPrescription = null;
+          if (!state.posDraftPrescription && rxSummary) rxSummary.style.display = 'none';
+          return;
+        }
+
+        const clientRxList = rxSelect._rxList || [];
+        const found = clientRxList.find(r => r.id === rxId);
+        if (found) {
+          state.posSelectedPrescription = found;
+          state.posDraftPrescription = null;
+          if (rxSummary) {
+            rxSummary.style.display = 'block';
+            rxSummary.innerHTML = `
+              <strong>🩺 Selected Saved Prescription (${found.prescription_number || 'RX'}):</strong><br/>
+              Right (OD): SPH ${found.od_sph || '0.00'}, CYL ${found.od_cyl || '0.00'}, AXIS ${found.od_axis || '-'}<br/>
+              Left (OS): SPH ${found.os_sph || '0.00'}, CYL ${found.os_cyl || '0.00'}, AXIS ${found.os_axis || '-'}<br/>
+              ${found.addition ? `Addition: ${found.addition} • ` : ''}Checked by: ${escapeHtml(found.checked_by || '-')}
+            `;
+          }
+        }
+      });
+    }
+
+    // Open OpticalTool RX modal from client details
+    if (btnOpenRx) {
+      btnOpenRx.addEventListener('click', () => {
+        openPrescriptionModal(state.posDraftPrescription || state.posSelectedPrescription);
+      });
+    }
+
+    // Save Client & Return to Bill Button
+    if (btnSaveClientWithRx) {
+      btnSaveClientWithRx.addEventListener('click', () => {
+        const nameInput = document.getElementById('cust-full-name');
+        const ageInput = document.getElementById('cust-age');
+        const phoneInput = document.getElementById('cust-phone');
+        const cityInput = document.getElementById('cust-city');
+        const emailInput = document.getElementById('cust-email');
+        const dobInput = document.getElementById('cust-dob');
+        const addressInput = document.getElementById('cust-address');
+        const notesInput = document.getElementById('cust-notes');
+        const hiddenId = document.getElementById('cust-hidden-id')?.value || null;
+
+        const name = nameInput ? nameInput.value.trim() : '';
+        const age = ageInput ? parseInt(ageInput.value, 10) : null;
+        const phone = phoneInput ? phoneInput.value.trim() : '';
+        const city = cityInput ? cityInput.value.trim() : '';
+        const email = emailInput ? emailInput.value.trim() : '';
+        const dob = dobInput ? dobInput.value : null;
+        const address = addressInput ? addressInput.value.trim() : '';
+        const notes = notesInput ? notesInput.value.trim() : '';
+
+        // Validation for required customer information
+        if (!name) {
+          showToast('Please enter the client full name.', 'warning');
+          nameInput?.focus();
+          return;
+        }
+        if (!age || isNaN(age) || age < 1 || age > 120) {
+          showToast('Please enter a valid age between 1 and 120.', 'warning');
+          ageInput?.focus();
+          return;
+        }
+        if (!phone || phone.length < 5) {
+          showToast('Please enter a valid phone number.', 'warning');
+          phoneInput?.focus();
+          return;
+        }
+        if (!city) {
+          showToast('Please enter the client city.', 'warning');
+          cityInput?.focus();
+          return;
+        }
+
+        // Attach client to active POS state
+        state.posSelectedClient = {
+          id: hiddenId,
+          name,
+          age,
+          phone,
+          city,
+          email: email || null,
+          dob: dob || null,
+          address: address || null,
+          notes: notes || null
+        };
+
+        // Update active bill display
+        updatePosCartUI();
+
+        modal.classList.remove('open');
+        showToast(`Client "${name}" attached to bill. Review and confirm checkout when ready.`, 'success');
+      });
+    }
+  }
+
+  window.openClientDetailsModal = function () {
+    const modal = document.getElementById('modal-client-details');
+    const searchInput = document.getElementById('client-search-typeahead');
+    const dropdown = document.getElementById('client-typeahead-dropdown');
+    const nameInput = document.getElementById('cust-full-name');
+    const ageInput = document.getElementById('cust-age');
+    const phoneInput = document.getElementById('cust-phone');
+    const cityInput = document.getElementById('cust-city');
+    const emailInput = document.getElementById('cust-email');
+    const dobInput = document.getElementById('cust-dob');
+    const addressInput = document.getElementById('cust-address');
+    const notesInput = document.getElementById('cust-notes');
+    const hiddenId = document.getElementById('cust-hidden-id');
+    const rxSummary = document.getElementById('client-active-rx-summary');
+    const savedRxContainer = document.getElementById('client-saved-rx-container');
+
+    if (!modal) return;
+
+    if (searchInput) searchInput.value = '';
+    if (dropdown) dropdown.style.display = 'none';
+
+    // Pre-populate if client already selected in bill
+    if (state.posSelectedClient) {
+      if (hiddenId) hiddenId.value = state.posSelectedClient.id || '';
+      if (nameInput) nameInput.value = state.posSelectedClient.name || '';
+      if (ageInput) ageInput.value = state.posSelectedClient.age || '';
+      if (phoneInput) phoneInput.value = state.posSelectedClient.phone || '';
+      if (cityInput) cityInput.value = state.posSelectedClient.city || '';
+      if (emailInput) emailInput.value = state.posSelectedClient.email || '';
+      if (dobInput) dobInput.value = state.posSelectedClient.dob || '';
+      if (addressInput) addressInput.value = state.posSelectedClient.address || '';
+      if (notesInput) notesInput.value = state.posSelectedClient.notes || '';
+
+      if (state.posSelectedClient.id) {
+        loadClientPrescriptionsIntoSelect(state.posSelectedClient.id);
+      }
+    } else {
+      if (hiddenId) hiddenId.value = '';
+      if (nameInput) nameInput.value = '';
+      if (ageInput) ageInput.value = '';
+      if (phoneInput) phoneInput.value = '';
+      if (cityInput) cityInput.value = 'Bengaluru';
+      if (emailInput) emailInput.value = '';
+      if (dobInput) dobInput.value = '';
+      if (addressInput) addressInput.value = '';
+      if (notesInput) notesInput.value = '';
+      if (savedRxContainer) savedRxContainer.style.display = 'none';
+    }
+
+    // Prescription summary
+    const attachedRx = state.posDraftPrescription || state.posSelectedPrescription;
+    if (attachedRx && rxSummary) {
+      rxSummary.style.display = 'block';
+      rxSummary.innerHTML = `
+        <strong>🩺 Attached Prescription:</strong><br/>
+        Right (OD): SPH ${attachedRx.od_sph || '0.00'}, CYL ${attachedRx.od_cyl || '0.00'}, AXIS ${attachedRx.od_axis || '-'}<br/>
+        Left (OS): SPH ${attachedRx.os_sph || '0.00'}, CYL ${attachedRx.os_cyl || '0.00'}, AXIS ${attachedRx.os_axis || '-'}<br/>
+        ${attachedRx.addition ? `Addition: ${attachedRx.addition} • ` : ''}Checked by: ${escapeHtml(attachedRx.checked_by || '-')}
+      `;
+    } else if (rxSummary) {
+      rxSummary.style.display = 'none';
+    }
+
+    modal.classList.add('open');
+  };
+
+  window.selectTypeaheadClient = async function (clientId) {
+    const dropdown = document.getElementById('client-typeahead-dropdown');
+    if (dropdown) dropdown.style.display = 'none';
+
+    try {
+      const client = await apiFetch(`/api/customers/${clientId}`);
+      if (!client) return;
+
+      document.getElementById('cust-hidden-id').value = client.id;
+      document.getElementById('cust-full-name').value = client.name || '';
+      document.getElementById('cust-age').value = client.age || '';
+      document.getElementById('cust-phone').value = client.phone || '';
+      document.getElementById('cust-city').value = client.city || '';
+      document.getElementById('cust-email').value = client.email || '';
+      document.getElementById('cust-dob').value = client.dob || '';
+      document.getElementById('cust-address').value = client.address || '';
+      document.getElementById('cust-notes').value = client.notes || '';
+
+      await loadClientPrescriptionsIntoSelect(client.id);
+      showToast(`Loaded details for ${client.name}`, 'info');
+    } catch (err) {
+      showToast('Failed to load client details: ' + err.message, 'error');
+    }
+  };
+
+  async function loadClientPrescriptionsIntoSelect(clientId) {
+    const container = document.getElementById('client-saved-rx-container');
+    const select = document.getElementById('client-saved-rx-select');
+    if (!container || !select) return;
+
+    try {
+      const res = await apiFetch(`/api/customers/${clientId}/prescriptions`);
+      const rxList = Array.isArray(res) ? res : (res.prescriptions || []);
+
+      if (rxList.length === 0) {
+        container.style.display = 'none';
+        return;
+      }
+
+      select._rxList = rxList;
+      select.innerHTML = `<option value="">-- No Prescription Selected --</option>` +
+        rxList.map(r => `
+          <option value="${r.id}">
+            ${escapeHtml(r.prescription_number || 'RX')} • ${formatShortDate(r.prescription_date || r.created_at)} • OD: ${r.od_sph || '0.00'} / OS: ${r.os_sph || '0.00'}
+          </option>
+        `).join('');
+
+      container.style.display = 'block';
+
+      // Pre-select if already active
+      if (state.posSelectedPrescription) {
+        select.value = state.posSelectedPrescription.id || '';
+      }
+    } catch (err) {
+      console.error('Error loading client prescriptions:', err);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 9. SECTION: CLIENT DIRECTORY CRM & PROFILE MANAGEMENT
+  // ═══════════════════════════════════════════════════════════════════════════
+  function setupClientManagement() {
+    const subtabClients = document.getElementById('subtab-clients');
+    const subtabInStore = document.getElementById('subtab-in-store');
+    const subtabWebsite = document.getElementById('subtab-website');
+    const ordersContainer = document.getElementById('orders-content-container');
+    const clientsContainer = document.getElementById('clients-content-container');
+    const ordersActions = document.getElementById('orders-header-actions');
+    const clientsActions = document.getElementById('clients-header-actions');
+
+    const searchInput = document.getElementById('clients-search-input');
+    const statusFilter = document.getElementById('clients-status-filter');
+    const btnAddClient = document.getElementById('btn-open-add-client-modal');
+    const btnExportCsv = document.getElementById('btn-export-clients-csv');
+
+    // Subtab switching
+    if (subtabClients) {
+      subtabClients.addEventListener('click', () => {
+        subtabClients.classList.add('active');
+        subtabInStore?.classList.remove('active');
+        subtabWebsite?.classList.remove('active');
+        state.ordersActiveChannel = 'CLIENTS';
+
+        if (ordersContainer) ordersContainer.style.display = 'none';
+        if (clientsContainer) clientsContainer.style.display = 'block';
+        if (ordersActions) ordersActions.style.display = 'none';
+        if (clientsActions) clientsActions.style.display = 'flex';
+
+        loadClients();
+      });
+    }
+
+    if (subtabInStore) {
+      subtabInStore.addEventListener('click', () => {
+        subtabClients?.classList.remove('active');
+        if (ordersContainer) ordersContainer.style.display = 'block';
+        if (clientsContainer) clientsContainer.style.display = 'none';
+        if (ordersActions) ordersActions.style.display = 'flex';
+        if (clientsActions) clientsActions.style.display = 'none';
+      });
+    }
+
+    if (subtabWebsite) {
+      subtabWebsite.addEventListener('click', () => {
+        subtabClients?.classList.remove('active');
+        if (ordersContainer) ordersContainer.style.display = 'block';
+        if (clientsContainer) clientsContainer.style.display = 'none';
+        if (ordersActions) ordersActions.style.display = 'flex';
+        if (clientsActions) clientsActions.style.display = 'none';
+      });
+    }
+
+    if (searchInput) {
+      let debounce = null;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(debounce);
+        state.clientsSearchQuery = searchInput.value;
+        debounce = setTimeout(() => loadClients(), 250);
+      });
+    }
+
+    if (statusFilter) {
+      statusFilter.addEventListener('change', () => {
+        state.clientsStatusFilter = statusFilter.value;
+        loadClients();
+      });
+    }
+
+    if (btnAddClient) {
+      btnAddClient.addEventListener('click', () => {
+        openClientDetailsModal();
+      });
+    }
+
+    if (btnExportCsv) {
+      btnExportCsv.addEventListener('click', () => {
+        window.open('/api/customers/export/csv', '_blank');
+      });
+    }
+
+    setupClientProfileModal();
+  }
+
+  async function loadClients() {
+    const tbody = document.getElementById('clients-table-body');
+    const countBadge = document.getElementById('count-clients');
+    const countLabel = document.getElementById('clients-count-label');
+
+    if (!tbody) return;
+
+    try {
+      const q = encodeURIComponent(state.clientsSearchQuery || '');
+      const s = encodeURIComponent(state.clientsStatusFilter || 'active');
+      const res = await apiFetch(`/api/customers?search=${q}&status=${s}`);
+      state.clientsCache = Array.isArray(res) ? res : (res.customers || []);
+
+      if (countBadge) countBadge.textContent = state.clientsCache.length;
+      if (countLabel) countLabel.textContent = `Showing ${state.clientsCache.length} registered clients`;
+
+      if (state.clientsCache.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:3rem; color:#9CA3AF;">No clients found matching criteria.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = state.clientsCache.map(c => {
+        const isArchived = Boolean(c.is_archived);
+        const codeBadge = `<span class="badge-status ${isArchived ? 'status-awaiting' : 'status-verified'}">${escapeHtml(c.client_code || 'CLT')}</span>`;
+        const phone = escapeHtml(c.phone || '-');
+        const spendINR = formatINR(c.total_spent_inr || 0);
+
+        return `
+          <tr style="${isArchived ? 'opacity:0.6;' : ''}">
+            <td>${codeBadge}</td>
+            <td><strong>${escapeHtml(c.name)}</strong>${isArchived ? ' <small style="color:#DC2626;">(Archived)</small>' : ''}</td>
+            <td>${c.age || '-'}</td>
+            <td>${phone}</td>
+            <td>${escapeHtml(c.city || '-')}</td>
+            <td><strong>${c.order_count || 0}</strong></td>
+            <td><strong>${spendINR}</strong></td>
+            <td>${formatShortDate(c.last_order_date)}</td>
+            <td><span class="badge-status channel-online">🩺 ${c.prescription_count || 0}</span></td>
+            <td>${formatShortDate(c.created_at)}</td>
+            <td>
+              <div style="display:flex; gap:4px;">
+                <button type="button" class="btn-table-action" onclick="openClientProfile('${c.id}')" title="View Full Profile">👁️ View</button>
+                ${c.phone ? `<a href="tel:${c.phone}" class="btn-table-action" title="Call">📞</a>` : ''}
+                ${c.phone ? `<button type="button" class="btn-table-action" onclick="openWhatsAppDirect('${c.phone}', '${escapeHtml(c.name)}')" title="WhatsApp">💬</button>` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    } catch (err) {
+      console.error('Failed to load clients:', err);
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:2rem; color:#DC2626;">Error loading clients: ${err.message}</td></tr>`;
+    }
+  }
+
+  window.openWhatsAppDirect = function (rawPhone, clientName) {
+    const cleanDigits = String(rawPhone || '').replace(/[^0-9]/g, '');
+    if (!cleanDigits) {
+      showToast('No phone number on file for WhatsApp.', 'warning');
+      return;
+    }
+    const intlPhone = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
+    const storeName = state.storeSettings.store_name || 'Noor Optics';
+    const text = encodeURIComponent(`Hello ${clientName || 'Valued Customer'}, this is ${storeName}. We are contacting you regarding your optical eyewear and prescription records. Please let us know if you need any assistance.`);
+    window.open(`https://wa.me/${intlPhone}?text=${text}`, '_blank');
+  };
+
+  // ── Client Profile CRM Modal Tabs & Actions ───────────────────────────────
+  function setupClientProfileModal() {
+    const modal = document.getElementById('modal-client-profile');
+    const tabs = document.querySelectorAll('.profile-tab-btn');
+    const formEdit = document.getElementById('form-edit-client-profile');
+    const btnAddNewRx = document.getElementById('btn-cp-add-new-rx');
+    const btnArchive = document.getElementById('btn-cp-archive-client');
+    const btnPrintProfile = document.getElementById('btn-print-client-profile');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.tab;
+        document.querySelectorAll('.profile-tab-pane').forEach(p => p.style.display = 'none');
+        const activePane = document.getElementById(`tab-pane-${target}`);
+        if (activePane) activePane.style.display = 'block';
+      });
+    });
+
+    // Save Profile Changes
+    if (formEdit) {
+      formEdit.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const clientId = state.activeProfileClientId;
+        if (!clientId) return;
+
+        const payload = {
+          name: document.getElementById('cp-edit-name').value.trim(),
+          age: parseInt(document.getElementById('cp-edit-age').value, 10),
+          phone: document.getElementById('cp-edit-phone').value.trim(),
+          city: document.getElementById('cp-edit-city').value.trim(),
+          email: document.getElementById('cp-edit-email').value.trim() || null,
+          dob: document.getElementById('cp-edit-dob').value || null,
+          address: document.getElementById('cp-edit-address').value.trim() || null,
+          notes: document.getElementById('cp-edit-notes').value.trim() || null
+        };
+
+        try {
+          const res = await apiFetch(`/api/customers/${clientId}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+          });
+          showToast(res.message || 'Client details updated in database.', 'success');
+          loadClients();
+          openClientProfile(clientId);
+        } catch (err) {
+          showToast('Failed to save client details: ' + err.message, 'error');
+        }
+      });
+    }
+
+    // Add New RX to this Client from Profile
+    if (btnAddNewRx) {
+      btnAddNewRx.addEventListener('click', () => {
+        const clientId = state.activeProfileClientId;
+        if (!clientId) return;
+
+        openPrescriptionModal(null, async (rxData) => {
+          rxData.client_id = clientId;
+          try {
+            const res = await apiFetch('/api/prescriptions', {
+              method: 'POST',
+              body: JSON.stringify(rxData)
+            });
+            showToast(`Prescription ${res.prescriptionNumber || ''} saved permanently!`, 'success');
+            openClientProfile(clientId);
+          } catch (err) {
+            showToast('Failed to save prescription: ' + err.message, 'error');
+          }
+        });
+      });
+    }
+
+    // Safe Archive Client
+    if (btnArchive) {
+      btnArchive.addEventListener('click', async () => {
+        const clientId = state.activeProfileClientId;
+        if (!clientId) return;
+
+        const reason = prompt('Please enter archival reason (e.g. Inactive account, duplicate created by mistake):', 'Client requested archival');
+        if (reason === null) return;
+
+        try {
+          const res = await apiFetch(`/api/customers/${clientId}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ reason })
+          });
+          showToast(res.message || 'Client archived safely. All past invoices remain intact.', 'success');
+          modal.classList.remove('open');
+          loadClients();
+        } catch (err) {
+          showToast('Archival failed: ' + err.message, 'error');
+        }
+      });
+    }
+
+    // Print Profile
+    if (btnPrintProfile) {
+      btnPrintProfile.addEventListener('click', () => {
+        const clientId = state.activeProfileClientId;
+        if (clientId) printClientProfile(clientId);
+      });
+    }
+  }
+
+  window.openClientProfile = async function (clientId) {
+    const modal = document.getElementById('modal-client-profile');
+    if (!modal) return;
+
+    state.activeProfileClientId = clientId;
+
+    try {
+      const client = await apiFetch(`/api/customers/${clientId}`);
+      if (!client) return;
+
+      // Header
+      document.getElementById('cp-client-name').textContent = client.name || 'Client';
+      document.getElementById('cp-client-code').textContent = client.client_code || 'CLT';
+      document.getElementById('cp-client-meta').textContent = `Client ID: ${client.id} • Registered ${formatShortDate(client.created_at)}`;
+
+      // Tab 1: Personal Details
+      document.getElementById('cp-edit-name').value = client.name || '';
+      document.getElementById('cp-edit-age').value = client.age || '';
+      document.getElementById('cp-edit-phone').value = client.phone || '';
+      document.getElementById('cp-edit-city').value = client.city || '';
+      document.getElementById('cp-edit-email').value = client.email || '';
+      document.getElementById('cp-edit-dob').value = client.dob || '';
+      document.getElementById('cp-edit-address').value = client.address || '';
+      document.getElementById('cp-edit-notes').value = client.notes || '';
+
+      // Tab 2: Orders & Invoices
+      const orders = client.orders || [];
+      document.getElementById('cp-orders-count').textContent = orders.length;
+      const ordersTbody = document.getElementById('cp-orders-tbody');
+      if (ordersTbody) {
+        if (orders.length === 0) {
+          ordersTbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:2rem; color:#9CA3AF;">No purchase history recorded for this client.</td></tr>`;
+        } else {
+          ordersTbody.innerHTML = orders.map(o => `
+            <tr>
+              <td><strong>${escapeHtml(o.order_number)}</strong></td>
+              <td>${formatDateTime(o.created_at)}</td>
+              <td>${o.items?.length || 1} frame(s)</td>
+              <td><strong>${formatINR(o.total_payable_paise, true)}</strong></td>
+              <td><span class="badge-status ${o.payment_status === 'VERIFIED' ? 'status-verified' : 'status-awaiting'}">${escapeHtml(o.payment_status)}</span></td>
+              <td><span class="badge-status status-verified">${escapeHtml(o.status)}</span></td>
+              <td>
+                <button type="button" class="btn-table-action" onclick="viewOrderDetails('${o.id}')">View</button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      }
+
+      // Tab 3: Prescriptions
+      const rxList = client.prescriptions || [];
+      document.getElementById('cp-rx-count').textContent = rxList.length;
+      const rxContainer = document.getElementById('cp-rx-list-container');
+      if (rxContainer) {
+        if (rxList.length === 0) {
+          rxContainer.innerHTML = `<div style="text-align:center; padding:2rem; color:#9CA3AF; background:#F9FAFB; border-radius:8px;">No optical prescriptions recorded yet. Click "+ Add New Prescription" above.</div>`;
+        } else {
+          rxContainer.innerHTML = rxList.map(r => `
+            <div class="profile-rx-card">
+              <div class="profile-rx-header">
+                <div>
+                  <span class="profile-rx-number">🩺 ${escapeHtml(r.prescription_number || 'RX Record')}</span>
+                  <span class="profile-rx-date">• ${formatShortDate(r.prescription_date || r.created_at)}</span>
+                </div>
+                <div style="display:flex; gap:6px;">
+                  <button type="button" class="btn-table-action" onclick='printPrescriptionRecord(${JSON.stringify(r)})'>🖨️ Print RX</button>
+                  ${r.image_url ? `<a href="${r.image_url}" target="_blank" class="btn-table-action">View Image</a>` : ''}
+                </div>
+              </div>
+
+              <div class="profile-rx-grid-mini">
+                <div style="font-weight:700; color:#0A2540;">Eye</div>
+                <div style="font-weight:700; color:#0284C7;">SPH</div>
+                <div style="font-weight:700; color:#0284C7;">CYL</div>
+                <div style="font-weight:700; color:#0284C7;">AXIS</div>
+
+                <div><strong>OD (Right)</strong></div>
+                <div>${r.od_sph || '0.00'}</div>
+                <div>${r.od_cyl || '0.00'}</div>
+                <div>${r.od_axis !== null ? `${r.od_axis}°` : '-'}</div>
+
+                <div><strong>OS (Left)</strong></div>
+                <div>${r.os_sph || '0.00'}</div>
+                <div>${r.os_cyl || '0.00'}</div>
+                <div>${r.os_axis !== null ? `${r.os_axis}°` : '-'}</div>
+              </div>
+
+              <div style="font-size:0.75rem; color:#475569; display:flex; gap:16px; margin-top:4px;">
+                ${r.addition ? `<div><strong>Addition:</strong> ${r.addition}</div>` : ''}
+                ${r.ipd_distance ? `<div><strong>Distance IPD:</strong> ${r.ipd_distance} mm</div>` : ''}
+                ${r.ipd_near ? `<div><strong>Near IPD:</strong> ${r.ipd_near} mm</div>` : ''}
+                <div><strong>Checked by:</strong> ${escapeHtml(r.checked_by || 'Optometrist')}</div>
+              </div>
+              ${r.notes ? `<div style="font-size:0.72rem; color:#6B7280; margin-top:4px; font-style:italic;">Notes: ${escapeHtml(r.notes)}</div>` : ''}
+            </div>
+          `).join('');
+        }
+      }
+
+      // Tab 4: Communications
+      const phoneDigits = String(client.phone || '').replace(/[^0-9]/g, '');
+      const intlDigits = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+      const storeName = state.storeSettings.store_name || 'Noor Optics';
+      const defaultMsg = `Hello ${client.name || 'Valued Client'}, this is ${storeName}. We are contacting you regarding your recent purchase and optical eyewear. Please let us know if you need any assistance or lens fitting adjustments.`;
+
+      document.getElementById('cp-call-phone-label').textContent = client.phone || 'No phone';
+      document.getElementById('cp-btn-call').href = client.phone ? `tel:${client.phone}` : '#';
+
+      const waTemplate = document.getElementById('cp-wa-message-template');
+      const waBtn = document.getElementById('cp-btn-whatsapp');
+      if (waTemplate && waBtn) {
+        waTemplate.value = defaultMsg;
+        const updateWaLink = () => {
+          const encoded = encodeURIComponent(waTemplate.value);
+          waBtn.href = client.phone ? `https://wa.me/${intlDigits}?text=${encoded}` : '#';
+        };
+        updateWaLink();
+        waTemplate.oninput = updateWaLink;
+      }
+
+      // Tab 5: Record History & Safety
+      document.getElementById('cp-hist-id').textContent = client.id;
+      document.getElementById('cp-hist-code').textContent = client.client_code || 'CLT';
+      document.getElementById('cp-hist-created').textContent = formatDateTime(client.created_at);
+      document.getElementById('cp-hist-updated').textContent = formatDateTime(client.updated_at);
+      document.getElementById('cp-hist-spent').textContent = formatINR(client.total_spent_paise || 0, true);
+      document.getElementById('cp-hist-orders').textContent = orders.length;
+
+      // Default to details tab
+      document.querySelector('.profile-tab-btn[data-tab="details"]')?.click();
+      modal.classList.add('open');
+    } catch (err) {
+      showToast('Error opening client profile: ' + err.message, 'error');
+    }
+  };
+
+  // ── Print Functions (Profile & Optical RX) ────────────────────────────────
+  window.printPrescriptionRecord = function (rx) {
+    const printWin = window.open('', '_blank', 'width=650,height=600');
+    if (!printWin) {
+      showToast('Pop-up blocked. Please allow pop-ups to print prescription.', 'warning');
+      return;
+    }
+
+    const store = state.storeSettings;
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Prescription — ${rx.prescription_number || 'RX'}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; color: #111; line-height: 1.5; }
+          .rx-head { display: flex; justify-content: space-between; border-bottom: 2px solid #0A2540; padding-bottom: 12px; margin-bottom: 18px; }
+          .store-name { font-size: 1.4rem; font-weight: 800; color: #0A2540; }
+          .rx-title { font-size: 1.1rem; font-weight: 800; color: #0284C7; }
+          .grid { width: 100%; border-collapse: collapse; margin: 16px 0; }
+          .grid th, .grid td { border: 1px solid #CBD5E1; padding: 10px; text-align: center; font-size: 0.95rem; }
+          .grid th { background: #F0F7FD; color: #0A2540; font-weight: 800; }
+          .eye-badge { font-weight: 800; color: #0A2540; }
+          .footer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; background: #F8FAFC; padding: 12px; border-radius: 6px; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <div class="rx-head">
+          <div>
+            <div class="store-name">${escapeHtml(store.store_name)}</div>
+            <div style="font-size:0.8rem; color:#4B5563;">${escapeHtml(store.store_address)} • Phone: ${escapeHtml(store.store_phone)}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="rx-title">OPTICAL PRESCRIPTION</div>
+            <div style="font-size:0.85rem;"><strong>${escapeHtml(rx.prescription_number || 'RX')}</strong></div>
+            <div style="font-size:0.8rem; color:#6B7280;">Date: ${formatShortDate(rx.prescription_date || rx.created_at)}</div>
+          </div>
+        </div>
+
+        <table class="grid">
+          <thead>
+            <tr>
+              <th>Eye</th>
+              <th>SPH (Sphere)</th>
+              <th>CYL (Cylinder)</th>
+              <th>AXIS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="eye-badge">OD (Right Eye)</td>
+              <td>${rx.od_sph || '0.00'}</td>
+              <td>${rx.od_cyl || '0.00'}</td>
+              <td>${rx.od_axis !== null ? `${rx.od_axis}°` : '-'}</td>
+            </tr>
+            <tr>
+              <td class="eye-badge">OS (Left Eye)</td>
+              <td>${rx.os_sph || '0.00'}</td>
+              <td>${rx.os_cyl || '0.00'}</td>
+              <td>${rx.os_axis !== null ? `${rx.os_axis}°` : '-'}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="footer-grid">
+          <div>
+            ${rx.addition ? `<div><strong>Addition:</strong> ${rx.addition}</div>` : ''}
+            ${rx.ipd_distance ? `<div><strong>Distance IPD (D):</strong> ${rx.ipd_distance} mm</div>` : ''}
+            ${rx.ipd_near ? `<div><strong>Near IPD (N):</strong> ${rx.ipd_near} mm</div>` : ''}
+          </div>
+          <div style="text-align:right;">
+            <div><strong>Checked / Optometrist:</strong> ${escapeHtml(rx.checked_by || 'Optometrist')}</div>
+            ${rx.prescriber_details ? `<div><strong>Prescriber:</strong> ${escapeHtml(rx.prescriber_details)}</div>` : ''}
+          </div>
+        </div>
+
+        ${rx.notes ? `<div style="margin-top:12px; font-size:0.85rem; color:#4B5563;"><strong>Clinical Notes:</strong> ${escapeHtml(rx.notes)}</div>` : ''}
+      </body>
+      </html>
+    `);
+    printWin.document.close();
+    printWin.focus();
+    setTimeout(() => printWin.print(), 350);
+  };
+
+  window.printClientProfile = async function (clientId) {
+    try {
+      const client = await apiFetch(`/api/customers/${clientId}`);
+      if (!client) return;
+
+      const printWin = window.open('', '_blank', 'width=750,height=750');
+      if (!printWin) return;
+
+      const store = state.storeSettings;
+      printWin.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Client Profile — ${client.name}</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; color: #111; line-height: 1.5; }
+            .head { display: flex; justify-content: space-between; border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 20px; }
+            .grid { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            .grid th, .grid td { border: 1px solid #E5E7EB; padding: 8px; text-align: left; font-size: 0.85rem; }
+            .grid th { background: #F9FAFB; font-weight: 700; }
+            .meta-block { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: #F9FAFB; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 0.9rem; }
+          </style>
+        </head>
+        <body>
+          <div class="head">
+            <div>
+              <div style="font-size:1.4rem; font-weight:800;">${escapeHtml(store.store_name)}</div>
+              <div style="font-size:0.85rem; color:#6B7280;">Authoritative Client Record & Purchase History</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-weight:800; font-size:1.1rem;">${escapeHtml(client.client_code || 'CLT')}</div>
+              <div style="font-size:0.8rem; color:#6B7280;">Date: ${formatShortDate(new Date())}</div>
+            </div>
+          </div>
+
+          <div class="meta-block">
+            <div><strong>Client Name:</strong> ${escapeHtml(client.name)}</div>
+            <div><strong>Phone Number:</strong> ${escapeHtml(client.phone || '-')}</div>
+            <div><strong>Age / DOB:</strong> ${client.age || '-'} ${client.dob ? `(${formatShortDate(client.dob)})` : ''}</div>
+            <div><strong>City / Address:</strong> ${escapeHtml(client.city || '-')}, ${escapeHtml(client.address || '')}</div>
+            <div><strong>Total Recorded Spend:</strong> ${formatINR(client.total_spent_paise || 0, true)}</div>
+            <div><strong>Lifetime Orders:</strong> ${client.orders?.length || 0}</div>
+          </div>
+
+          <h3>Recent Orders (${client.orders?.length || 0})</h3>
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>Order / Invoice #</th>
+                <th>Date</th>
+                <th>Payment</th>
+                <th>Status</th>
+                <th>Total Payable</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(client.orders || []).map(o => `
+                <tr>
+                  <td>${escapeHtml(o.order_number)}</td>
+                  <td>${formatShortDate(o.created_at)}</td>
+                  <td>${escapeHtml(o.payment_method)} (${escapeHtml(o.payment_status)})</td>
+                  <td>${escapeHtml(o.status)}</td>
+                  <td><strong>${formatINR(o.total_payable_paise, true)}</strong></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <h3 style="margin-top:24px;">Optical Prescriptions (${client.prescriptions?.length || 0})</h3>
+          <table class="grid">
+            <thead>
+              <tr>
+                <th>RX #</th>
+                <th>Date</th>
+                <th>Right (OD) SPH / CYL / AXIS</th>
+                <th>Left (OS) SPH / CYL / AXIS</th>
+                <th>Checked By</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(client.prescriptions || []).map(r => `
+                <tr>
+                  <td>${escapeHtml(r.prescription_number)}</td>
+                  <td>${formatShortDate(r.prescription_date || r.created_at)}</td>
+                  <td>${r.od_sph || '0.00'} / ${r.od_cyl || '0.00'} / ${r.od_axis !== null ? `${r.od_axis}°` : '-'}</td>
+                  <td>${r.os_sph || '0.00'} / ${r.os_cyl || '0.00'} / ${r.os_axis !== null ? `${r.os_axis}°` : '-'}</td>
+                  <td>${escapeHtml(r.checked_by || '-')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+        </html>
+      `);
+      printWin.document.close();
+      printWin.focus();
+      setTimeout(() => printWin.print(), 350);
+    } catch (err) {
+      showToast('Print error: ' + err.message, 'error');
+    }
+  };
 
   // ── Receipt & Token Printing Preview ──────────────────────────────────────
   window.previewThermalReceipt = function (orderId) {
@@ -2742,6 +4318,49 @@
       });
     }
 
+    const btnDeleteAllOrders = document.getElementById('btn-delete-all-orders');
+    if (btnDeleteAllOrders) {
+      btnDeleteAllOrders.addEventListener('click', async () => {
+        const totalCount = state.ordersCache ? state.ordersCache.length : 0;
+        if (totalCount === 0) {
+          showToast('No orders found in the pipeline to delete.', 'warning');
+          return;
+        }
+
+        const confirmMsg = `⚠️ ARE YOU SURE YOU WANT TO DELETE ALL ORDERS?\n\n` +
+          `• Total orders to be deleted: ${totalCount}\n` +
+          `• Inventory stock balances for active frames will be safely restored.\n` +
+          `• This action permanently deletes in-store POS and website order records.\n\n` +
+          `Click OK to proceed with deleting all orders.`;
+
+        if (!confirm(confirmMsg)) {
+          return;
+        }
+
+        try {
+          btnDeleteAllOrders.disabled = true;
+          btnDeleteAllOrders.innerHTML = `<span>Deleting...</span>`;
+
+          const res = await apiFetch('/api/orders', {
+            method: 'DELETE'
+          });
+
+          showToast(res.message || `Successfully deleted ${res.deletedCount || totalCount} orders.`, 'success');
+          await loadOrders();
+          if (typeof loadDashboard === 'function') loadDashboard();
+          if (typeof loadInventory === 'function') loadInventory();
+        } catch (err) {
+          showToast('Failed to delete all orders: ' + err.message, 'error');
+        } finally {
+          btnDeleteAllOrders.disabled = false;
+          btnDeleteAllOrders.innerHTML = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            <span>Delete All Orders</span>
+          `;
+        }
+      });
+    }
+
     // 5. Total Inventory Search & Filters
     const invSearch = document.getElementById('inv-search-input');
     if (invSearch) {
@@ -2813,6 +4432,10 @@
     setupPosCameraScanner();
     setupKeyboardScannerListener();
     setupPosCheckout();
+    setupClientManagement();
+    setupClientDetailsModal();
+    setupPrescriptionModal();
+    setupDiopterSelector();
 
     // Verify session
     checkExistingAuth();

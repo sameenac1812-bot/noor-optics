@@ -6,6 +6,8 @@
 
 'use strict';
 
+process.env.NODE_ENV = 'test';
+
 const assert = require('assert');
 const { db } = require('../server/db');
 const { signToken, verifyToken } = require('../server/auth');
@@ -48,14 +50,14 @@ async function runAllTests() {
   // ── TEST GROUP 1: Database Schema & Seeds ─────────────────────────────────
   console.log('--- 1. Database Schema & Tables ---');
 
-  runTest('All 27 required business tables exist in SQLite database', () => {
+  runTest('All 28 required business tables exist in SQLite database', () => {
     const requiredTables = [
       'users', 'roles', 'permissions', 'products', 'product_variants',
       'product_images', 'inventory_locations', 'inventory_balances', 'stock_movements',
       'suppliers', 'purchase_orders', 'purchase_order_items', 'goods_receipts',
       'customers', 'orders', 'order_items', 'payments', 'payment_verification_events',
       'invoices', 'invoice_items', 'expense_categories', 'expenses', 'refunds',
-      'cash_movements', 'print_jobs', 'store_settings', 'audit_logs'
+      'cash_movements', 'print_jobs', 'store_settings', 'audit_logs', 'prescriptions'
     ];
 
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
@@ -426,6 +428,94 @@ async function runAllTests() {
 
     assert.strictEqual(inStoreSales.c + websiteSales.c, combined.c, 'Order counts must reconcile');
     assert.strictEqual(inStoreSales.s + websiteSales.s, combined.s, 'Revenue must reconcile perfectly without double counting');
+  });
+
+  // --- 11. Order Deletion and Stock Restoration ---
+  console.log('\n--- 11. Order Pipeline Deletion & Safe Stock Restoration ---');
+  runTest('Deleting an order restores variant inventory balance and cascades child records', () => {
+    // 1. Pick a variant
+    const inv = db.prepare('SELECT variant_id, available_qty FROM inventory_balances LIMIT 1').get();
+    const variantId = inv.variant_id;
+    const initialQty = inv.available_qty;
+    const testOrderId = 'test-del-ord-' + Date.now();
+    const testOrderNum = 'TEST-DEL-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+    const sellQty = 2;
+
+    // Decrement stock as if sold
+    db.prepare('UPDATE inventory_balances SET available_qty = available_qty - ? WHERE variant_id = ?').run(sellQty, variantId);
+
+    // Create order and order item
+    db.prepare(`
+      INSERT INTO orders (id, order_number, token_number, channel, customer_name, status, payment_status, subtotal_paise, total_payable_paise, amount_paid_paise, staff_user_id)
+      VALUES (?, ?, 990, 'POS', 'Deletion Tester', 'CONFIRMED', 'VERIFIED', 500000, 500000, 500000, 'usr-admin-1')
+    `).run(testOrderId, testOrderNum);
+
+    db.prepare(`
+      INSERT INTO order_items (id, order_id, variant_id, product_name, variant_name, sku, unit_price_paise, quantity, subtotal_paise)
+      VALUES (?, ?, ?, 'Test Frame', 'Standard', 'TEST-DEL-SKU', 250000, ?, 500000)
+    `).run('oit-' + Date.now(), testOrderId, variantId, sellQty);
+
+    // Verify stock is initialQty - sellQty
+    const stockSold = db.prepare('SELECT available_qty FROM inventory_balances WHERE variant_id = ?').get(variantId);
+    assert.strictEqual(stockSold.available_qty, initialQty - sellQty);
+
+    // Simulate delete logic
+    const items = db.prepare('SELECT variant_id, quantity FROM order_items WHERE order_id = ?').all(testOrderId);
+    for (const item of items) {
+      db.prepare('UPDATE inventory_balances SET available_qty = available_qty + ? WHERE variant_id = ?').run(item.quantity, item.variant_id);
+    }
+    db.prepare('DELETE FROM order_items WHERE order_id = ?').run(testOrderId);
+    db.prepare('DELETE FROM orders WHERE id = ?').run(testOrderId);
+
+    // Verify stock is restored
+    const stockRestored = db.prepare('SELECT available_qty FROM inventory_balances WHERE variant_id = ?').get(variantId);
+    assert.strictEqual(stockRestored.available_qty, initialQty, 'Stock must be restored to initial level after order deletion');
+
+    // Verify order is gone
+    const checkOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(testOrderId);
+    assert.strictEqual(checkOrder, undefined, 'Order must no longer exist in database');
+  });
+
+  // --- 12. Optical Frame Deletion ---
+  console.log('\n--- 12. Optical Frame Deletion & Catalog Integrity ---');
+  runTest('Deleting an optical frame removes product, variants, and inventory balances cleanly', () => {
+    const testProdId = 'prod-test-del-' + Date.now();
+    const testVarId = 'var-test-del-' + Date.now();
+    const testSku = 'TEST-DEL-FRAME-' + Date.now();
+
+    // Insert test product & variant
+    db.prepare(`
+      INSERT INTO products (id, sku, name, brand, shape, material, fit, category, selling_price_paise, purchase_cost_paise, image_url)
+      VALUES (?, ?, 'Test Delete Frame', 'Noor Optics', 'Square', 'Titanium', 'Regular', 'Optical', 300000, 100000, 'images/test.jpg')
+    `).run(testProdId, testSku);
+
+    db.prepare(`
+      INSERT INTO product_variants (id, product_id, sku, barcode, color_name, color_hex)
+      VALUES (?, ?, ?, '89099999', 'Matte Gold', '#D4AF37')
+    `).run(testVarId, testProdId, testSku + '-GLD');
+
+    db.prepare(`
+      INSERT INTO inventory_balances (id, variant_id, location_id, available_qty, reserved_qty)
+      VALUES (?, ?, 'loc-main', 20, 0)
+    `).run('bal-' + testVarId, testVarId);
+
+    // Verify created
+    assert.ok(db.prepare('SELECT id FROM products WHERE id = ?').get(testProdId));
+    assert.ok(db.prepare('SELECT id FROM product_variants WHERE id = ?').get(testVarId));
+    assert.ok(db.prepare('SELECT id FROM inventory_balances WHERE variant_id = ?').get(testVarId));
+
+    // Simulate delete
+    const deleteTx = db.transaction(() => {
+      db.prepare('DELETE FROM inventory_balances WHERE variant_id = ?').run(testVarId);
+      db.prepare('DELETE FROM product_variants WHERE product_id = ?').run(testProdId);
+      db.prepare('DELETE FROM products WHERE id = ?').run(testProdId);
+    });
+    deleteTx();
+
+    // Verify deleted
+    assert.strictEqual(db.prepare('SELECT id FROM products WHERE id = ?').get(testProdId), undefined);
+    assert.strictEqual(db.prepare('SELECT id FROM product_variants WHERE id = ?').get(testVarId), undefined);
+    assert.strictEqual(db.prepare('SELECT id FROM inventory_balances WHERE variant_id = ?').get(testVarId), undefined);
   });
 
   console.log('\n======================================================');

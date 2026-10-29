@@ -10,10 +10,12 @@ const fs = require('fs');
 const Database = require('better-sqlite3');
 
 const isVercel = Boolean(process.env.VERCEL);
-const SOURCE_DB = path.join(__dirname, '..', 'data', 'noor_optics.db');
-const DB_PATH = isVercel
-  ? path.join('/tmp', 'noor_optics.db')
-  : SOURCE_DB;
+const isTest = process.env.NODE_ENV === 'test' || Boolean(process.env.TEST_DB);
+const DB_FILENAME = isTest ? 'noor_optics_test.db' : 'noor_optics.db';
+const SOURCE_DB = path.join(__dirname, '..', 'data', DB_FILENAME);
+const DB_PATH = process.env.DATABASE_PATH || (isVercel
+  ? path.join('/tmp', DB_FILENAME)
+  : SOURCE_DB);
 
 // Ensure data folder exists
 const dataDir = path.dirname(DB_PATH);
@@ -229,22 +231,31 @@ function initializeDatabase() {
       FOREIGN KEY (received_by_user_id) REFERENCES users(id)
     );
 
-    -- 14. Customers
+    -- 14. Customers (Authoritative CRM)
     CREATE TABLE IF NOT EXISTS customers (
       id TEXT PRIMARY KEY,
+      client_code TEXT UNIQUE,
       name TEXT NOT NULL,
-      phone TEXT UNIQUE,
+      phone TEXT,
       email TEXT,
+      age INTEGER,
+      dob TEXT,
       address TEXT,
       city TEXT DEFAULT 'Bengaluru',
       pin_code TEXT,
       prescription_json TEXT DEFAULT '{}',
       notes TEXT,
       total_spent_paise INTEGER DEFAULT 0,
+      is_archived INTEGER DEFAULT 0,
+      archived_at TEXT,
+      archived_reason TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+    CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);
+    CREATE INDEX IF NOT EXISTS idx_customers_code ON customers(client_code);
+    CREATE INDEX IF NOT EXISTS idx_customers_archived ON customers(is_archived);
 
     -- 15. Orders (Shared by POS and Online Storefront)
     CREATE TABLE IF NOT EXISTS orders (
@@ -260,6 +271,7 @@ function initializeDatabase() {
       city TEXT,
       pin_code TEXT,
       prescription_pref TEXT DEFAULT 'zero-power',
+      prescription_id TEXT,
       status TEXT NOT NULL DEFAULT 'CONFIRMED', -- PENDING, CONFIRMED, PROCESSING, COMPLETED, CANCELLED
       payment_status TEXT NOT NULL DEFAULT 'UNPAID', -- UNPAID, AWAITING_VERIFICATION, VERIFIED, PARTIALLY_PAID, REFUNDED
       subtotal_paise INTEGER NOT NULL,
@@ -280,6 +292,8 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_orders_channel ON orders(channel);
     CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
     CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);
+    CREATE INDEX IF NOT EXISTS idx_orders_prescription ON orders(prescription_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
 
     -- 16. Order Items (Immutable Snapshots)
     CREATE TABLE IF NOT EXISTS order_items (
@@ -453,13 +467,59 @@ function initializeDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);
     CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
+
+    -- 28. Prescriptions (Clinical & Optometric Specs)
+    CREATE TABLE IF NOT EXISTS prescriptions (
+      id TEXT PRIMARY KEY,
+      prescription_number TEXT UNIQUE,
+      client_id TEXT NOT NULL,
+      prescription_date TEXT NOT NULL DEFAULT (date('now')),
+      od_sph TEXT,
+      od_cyl TEXT,
+      od_axis TEXT,
+      os_sph TEXT,
+      os_cyl TEXT,
+      os_axis TEXT,
+      addition TEXT,
+      ipd_distance TEXT,
+      ipd_near TEXT,
+      checked_by TEXT,
+      prescriber_details TEXT,
+      notes TEXT,
+      image_url TEXT,
+      created_by_user_id TEXT,
+      is_archived INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (client_id) REFERENCES customers(id),
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_prescriptions_client ON prescriptions(client_id);
+    CREATE INDEX IF NOT EXISTS idx_prescriptions_date ON prescriptions(prescription_date);
+    CREATE INDEX IF NOT EXISTS idx_prescriptions_archived ON prescriptions(is_archived);
   `);
+
+  // Automatic non-destructive column migrations
+  try {
+    const custCols = db.pragma('table_info(customers)').map(c => c.name);
+    if (!custCols.includes('client_code')) db.exec('ALTER TABLE customers ADD COLUMN client_code TEXT;');
+    if (!custCols.includes('age')) db.exec('ALTER TABLE customers ADD COLUMN age INTEGER;');
+    if (!custCols.includes('dob')) db.exec('ALTER TABLE customers ADD COLUMN dob TEXT;');
+    if (!custCols.includes('is_archived')) db.exec('ALTER TABLE customers ADD COLUMN is_archived INTEGER DEFAULT 0;');
+    if (!custCols.includes('archived_at')) db.exec('ALTER TABLE customers ADD COLUMN archived_at TEXT;');
+    if (!custCols.includes('archived_reason')) db.exec('ALTER TABLE customers ADD COLUMN archived_reason TEXT;');
+
+    const orderCols = db.pragma('table_info(orders)').map(c => c.name);
+    if (!orderCols.includes('prescription_id')) db.exec('ALTER TABLE orders ADD COLUMN prescription_id TEXT;');
+  } catch (migErr) {
+    console.warn('DB Migration check note:', migErr.message);
+  }
 
   const userRow = db.prepare('SELECT count(*) as c FROM users').get();
   if (!userRow || userRow.c === 0) {
     try {
       const { seedDatabase } = require('./seed');
-      seedDatabase();
+      seedDatabase(db);
     } catch (seedErr) {
       console.warn('Auto-seed note:', seedErr.message);
     }

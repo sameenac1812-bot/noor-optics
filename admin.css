@@ -507,6 +507,18 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   background-color: var(--bg-muted);
 }
 
+.btn-table-action.btn-table-danger {
+  color: #DC2626;
+  border-color: rgba(220, 38, 38, 0.25);
+  background-color: #FEF2F2;
+}
+
+.btn-table-action.btn-table-danger:hover {
+  background-color: #FEE2E2;
+  border-color: #DC2626;
+  color: #B91C1C;
+}
+
 /* ── POS REGISTER INTERFACE ──────────────────────────────────────────────── */
 .pos-layout-grid {
   display: grid;
@@ -1061,6 +1073,21 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .btn-header-action.btn-gold:hover {
   background: linear-gradient(135deg, #DFB943 0%, #C49B50 100%);
   box-shadow: 0 4px 14px rgba(184, 144, 71, 0.45);
+}
+
+.btn-header-action.btn-danger-soft {
+  background: #FEF2F2;
+  color: #DC2626;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-header-action.btn-danger-soft:hover {
+  background: #FEE2E2;
+  border-color: #DC2626;
+  color: #B91C1C;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.15);
 }
 
 /* ── DASHBOARD FILTER BAR ────────────────────────────────────────────────── */
@@ -2535,4 +2562,948 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   font-size: 0.72rem;
   color: var(--text-muted);
 }
+
+/* ==========================================================================
+   NOOR OPTICS – CLIENT MANAGEMENT, RX & OPTICALTOOL STYLES
+   ========================================================================== */
+
+/* ── Active Bill: Client Summary & RX Attached Card ──────────────────────── */
+.pos-customer-selection-wrap {
+  margin-bottom: 0.75rem;
+}
+
+.pos-client-summary-card {
+  background: #F9FAFB;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.85rem;
+  transition: all 0.2s ease;
+}
+
+.pos-client-summary-card:hover {
+  background: #FFFFFF;
+  border-color: #D1D5DB;
+}
+
+.pos-client-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.pos-client-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #E5E7EB;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.pos-client-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.pos-client-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #111111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pos-client-sub {
+  font-size: 0.72rem;
+  color: #6B7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-pos-edit-client {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #374151;
+  background: #E5E7EB;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btn-pos-edit-client:hover {
+  background: #D1D5DB;
+  color: #111111;
+}
+
+.pos-rx-attached-badge {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #E5E7EB;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rx-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  color: #1D4ED8;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.btn-rx-remove {
+  color: #9CA3AF;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 4px;
+  transition: color 0.15s ease;
+}
+
+.btn-rx-remove:hover {
+  color: #DC2626;
+}
+
+/* ── OpticalTool Prescription Modal (Matches Reference Screenshot 2) ───────── */
+.optical-rx-modal {
+  max-width: 440px;
+  width: 95%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #FFFFFF;
+  box-shadow: 0 20px 40px rgba(10, 37, 64, 0.2);
+  padding: 0;
+}
+
+.modal-drag-handle {
+  width: 38px;
+  height: 4px;
+  background: #CBD5E1;
+  border-radius: 2px;
+  margin: 10px auto 4px auto;
+}
+
+.optical-rx-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 18px 12px 18px;
+  border-bottom: none;
+}
+
+.optical-rx-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.optical-rx-stethoscope {
+  font-size: 1.25rem;
+}
+
+.optical-rx-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0A2540;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.optical-rx-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #0A2540;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  transition: opacity 0.2s;
+}
+
+.optical-rx-close-btn:hover {
+  opacity: 0.85;
+}
+
+.optical-rx-body {
+  padding: 0 16px 16px 16px;
+}
+
+/* Radio Mode Toggle */
+.rx-mode-toggle {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.rx-mode-radio {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #0A2540;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.rx-mode-radio.active {
+  border-color: #0A2540;
+  background: #F8FAFC;
+}
+
+.rx-mode-radio input[type="radio"] {
+  accent-color: #0A2540;
+  width: 16px;
+  height: 16px;
+}
+
+/* Optical Grid Card */
+.optical-grid-card {
+  background: #F0F7FD;
+  border: 1.5px solid #C9E2F8;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.optical-grid-header-row {
+  display: grid;
+  grid-template-columns: 85px 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.optical-col-eye {
+  /* spacer */
+}
+
+.optical-col-field {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #0284C7;
+  letter-spacing: 0.04em;
+}
+
+.optical-grid-row {
+  display: grid;
+  grid-template-columns: 85px 1fr 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.optical-eye-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.optical-eye-pill {
+  background: #0A2540;
+  color: #FFFFFF;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.optical-eye-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #0A2540;
+}
+
+.optical-cell {
+  position: relative;
+}
+
+/* Pill Combobox Button */
+.rx-combobox-btn {
+  width: 100%;
+  height: 36px;
+  background: #FFFFFF;
+  border: 1.5px solid #BAE6FD;
+  border-radius: 8px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #0369A1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rx-combobox-btn:hover, .rx-combobox-btn:focus {
+  border-color: #0284C7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.rx-combobox-btn .combobox-arrow {
+  font-size: 0.65rem;
+  color: #64748B;
+  margin-left: 2px;
+}
+
+.rx-axis-input {
+  width: 100%;
+  height: 36px;
+  background: #FFFFFF;
+  border: 1.5px solid #BAE6FD;
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #0369A1;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.rx-axis-input:focus {
+  border-color: #0284C7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.rx-axis-input::placeholder {
+  color: #94A3B8;
+  font-weight: 500;
+}
+
+/* Addition Row */
+.addition-row {
+  margin-top: 4px;
+}
+
+.optical-addition-label {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #0A2540;
+}
+
+/* IPD & Checked By Row */
+.optical-ipd-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #BAE6FD;
+}
+
+.optical-ipd-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ipd-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #0A2540;
+}
+
+.ipd-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ipd-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.ipd-field {
+  width: 44px;
+  height: 26px;
+  background: #FFFFFF;
+  border: 1px solid #BAE6FD;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #0369A1;
+  outline: none;
+}
+
+.ipd-unit {
+  font-size: 0.72rem;
+  color: #64748B;
+}
+
+.optical-checked-by-block {
+  display: flex;
+  align-items: center;
+}
+
+.checked-by-input-wrap {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  background: #FFFFFF;
+  border: 1.5px solid #BAE6FD;
+  border-radius: 8px;
+  padding: 4px 8px;
+  height: 38px;
+}
+
+.checked-by-icon {
+  font-size: 0.95rem;
+  margin-right: 6px;
+  color: #0284C7;
+}
+
+.checked-by-field {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 0.8rem;
+  color: #0F172A;
+  outline: none;
+}
+
+.checked-by-field::placeholder {
+  color: #94A3B8;
+}
+
+/* Notes area */
+.optical-notes-wrap {
+  margin-top: 10px;
+}
+
+.optical-notes-field {
+  width: 100%;
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  color: #334155;
+  outline: none;
+  resize: vertical;
+  min-height: 56px;
+}
+
+.optical-notes-field:focus {
+  border-color: #0A2540;
+}
+
+.optical-notes-field::placeholder {
+  color: #94A3B8;
+}
+
+/* Optical RX Footer */
+.optical-rx-footer {
+  padding: 0 16px 16px 16px;
+  border-top: none;
+}
+
+.btn-optical-save-rx {
+  width: 100%;
+  height: 48px;
+  background: #0A2540;
+  color: #FFFFFF;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-optical-save-rx:hover {
+  background: #0F3D64;
+}
+
+/* Image upload card */
+.rx-upload-dropzone {
+  border: 2px dashed #93C5FD;
+  border-radius: 12px;
+  padding: 2rem 1rem;
+  text-align: center;
+  background: #F0F7FD;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: #0284C7;
+}
+
+.rx-upload-dropzone svg {
+  color: #0284C7;
+}
+
+.rx-upload-dropzone span {
+  font-size: 0.72rem;
+  color: #64748B;
+}
+
+/* ── Diopter Selector Bottom Sheet (Matches Reference Screenshot 3) ───────── */
+.diopter-sheet-overlay {
+  align-items: flex-end;
+}
+
+@media (min-width: 640px) {
+  .diopter-sheet-overlay {
+    align-items: center;
+  }
+}
+
+.diopter-sheet-card {
+  width: 100%;
+  max-width: 440px;
+  background: #FFFFFF;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  animation: slideUpSheet 0.25s ease-out;
+  padding: 8px 16px 16px 16px;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 640px) {
+  .diopter-sheet-card {
+    border-radius: 16px;
+    animation: fadeInModal 0.2s ease-out;
+  }
+}
+
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.sheet-drag-handle {
+  width: 38px;
+  height: 4px;
+  background: #CBD5E1;
+  border-radius: 2px;
+  margin: 4px auto 10px auto;
+}
+
+.diopter-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.diopter-sheet-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0A2540;
+  margin: 0;
+}
+
+.diopter-sheet-close {
+  color: #EF4444;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.diopter-manual-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.diopter-manual-field {
+  flex: 1;
+  height: 38px;
+  border: 1.5px solid #BAE6FD;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0F172A;
+  outline: none;
+}
+
+.diopter-manual-field:focus {
+  border-color: #0284C7;
+}
+
+.btn-diopter-apply {
+  background: #0A2540;
+  color: #FFFFFF;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Quick Filter Pills Row */
+.diopter-quick-pills {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px;
+  border-bottom: 1px solid #E2E8F0;
+  margin-bottom: 10px;
+}
+
+.diopter-pill-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #0284C7;
+  letter-spacing: 0.04em;
+}
+
+.diopter-quick-pill {
+  background: #E0F2FE;
+  color: #0369A1;
+  border: 1px solid #BAE6FD;
+  border-radius: 6px;
+  padding: 4px 14px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.diopter-quick-pill:hover {
+  background: #BAE6FD;
+  color: #0284C7;
+}
+
+/* Dual Column Diopter Scroll Grid */
+.diopter-grid-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  padding-right: 4px;
+}
+
+.diopter-val-btn {
+  height: 38px;
+  background: #FFFFFF;
+  border: 1.5px solid #BAE6FD;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #0369A1;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.diopter-val-btn:hover {
+  background: #F0F9FF;
+  border-color: #0284C7;
+  transform: translateY(-1px);
+}
+
+.diopter-val-btn.selected {
+  background: #0284C7;
+  border-color: #0284C7;
+  color: #FFFFFF;
+}
+
+/* ── Customer Details Modal & Typeahead ───────────────────────────────────── */
+.client-search-block {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.client-typeahead-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 100;
+  margin-top: 4px;
+}
+
+.typeahead-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid #F1F5F9;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background 0.15s;
+}
+
+.typeahead-item:hover {
+  background: #F0F9FF;
+}
+
+.typeahead-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #0F172A;
+}
+
+.typeahead-sub {
+  font-size: 0.72rem;
+  color: #64748B;
+}
+
+.typeahead-code {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: #E2E8F0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #334155;
+}
+
+.client-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 12px 0;
+}
+
+.client-divider::before, .client-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.client-divider span {
+  padding: 0 10px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #94A3B8;
+  letter-spacing: 0.08em;
+}
+
+.client-rx-section {
+  background: #F0F7FD;
+  border: 1.5px solid #BAE6FD;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 12px;
+}
+
+.client-rx-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.active-rx-summary-card {
+  background: #FFFFFF;
+  border: 1px solid #BAE6FD;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  color: #0369A1;
+}
+
+/* ── Client Profile CRM Modal & Tabs ───────────────────────────────────────── */
+.client-profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-header-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.profile-avatar-large {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #0A2540;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+}
+
+.profile-tabs-bar {
+  display: flex;
+  border-bottom: 1px solid #E5E7EB;
+  background: #F9FAFB;
+  padding: 0 1.25rem;
+  overflow-x: auto;
+}
+
+.profile-tab-btn {
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #6B7280;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.profile-tab-btn:hover {
+  color: #111111;
+}
+
+.profile-tab-btn.active {
+  color: #0A2540;
+  font-weight: 700;
+  border-bottom-color: #0A2540;
+  background: #FFFFFF;
+}
+
+/* Communications Cards (Call & WhatsApp) */
+.comm-cards-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .comm-cards-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.comm-card {
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.comm-card-icon {
+  font-size: 1.75rem;
+  margin-bottom: 8px;
+}
+
+.comm-card-body h4 {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #111111;
+  margin-bottom: 4px;
+}
+
+.comm-card-body p {
+  font-size: 0.75rem;
+  color: #6B7280;
+  margin-bottom: 12px;
+}
+
+.btn-comm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.btn-call {
+  background: #0284C7;
+  color: #FFFFFF;
+}
+
+.btn-call:hover {
+  background: #0369A1;
+}
+
+.btn-wa {
+  background: #25D366;
+  color: #FFFFFF;
+}
+
+.btn-wa:hover {
+  background: #1EBE5D;
+}
+
+/* RX Card in Profile */
+.profile-rx-card {
+  background: #FFFFFF;
+  border: 1px solid #BAE6FD;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.profile-rx-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.profile-rx-number {
+  font-weight: 800;
+  color: #0A2540;
+  font-size: 0.88rem;
+}
+
+.profile-rx-date {
+  font-size: 0.75rem;
+  color: #64748B;
+}
+
+.profile-rx-grid-mini {
+  display: grid;
+  grid-template-columns: 70px 1fr 1fr 1fr;
+  gap: 6px;
+  font-size: 0.78rem;
+  text-align: center;
+  background: #F0F7FD;
+  padding: 8px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
 

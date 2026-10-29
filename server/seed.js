@@ -7,10 +7,10 @@
 'use strict';
 
 const bcrypt = require('bcryptjs');
-const { db } = require('./db');
 
-function seedDatabase() {
-  const insertMany = db.transaction(() => {
+function seedDatabase(customDb) {
+  const activeDb = customDb || require('./db').db;
+  const insertMany = activeDb.transaction(() => {
     // ── 1. Roles ─────────────────────────────────────────────────────────────
     const roles = [
       { id: 'role-owner', name: 'Owner / Super Admin', description: 'Full access to POS, financials, staff, settings, and stock' },
@@ -20,7 +20,7 @@ function seedDatabase() {
       { id: 'role-accountant', name: 'Accountant', description: 'Access to financial statements, profit & loss, expenses, and invoices' }
     ];
 
-    const insertRole = db.prepare('INSERT OR IGNORE INTO roles (id, name, description) VALUES (@id, @name, @description)');
+    const insertRole = activeDb.prepare('INSERT OR IGNORE INTO roles (id, name, description) VALUES (@id, @name, @description)');
     roles.forEach(r => insertRole.run(r));
 
     // ── 2. Permissions ───────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ function seedDatabase() {
       ]
     };
 
-    const insertPerm = db.prepare('INSERT OR IGNORE INTO permissions (id, role_id, code) VALUES (?, ?, ?)');
+    const insertPerm = activeDb.prepare('INSERT OR IGNORE INTO permissions (id, role_id, code) VALUES (?, ?, ?)');
     for (const [roleId, codes] of Object.entries(permissionsMap)) {
       codes.forEach(code => {
         insertPerm.run(`${roleId}-${code}`, roleId, code);
@@ -55,7 +55,7 @@ function seedDatabase() {
     }
 
     // ── 3. Initial Users (Hashed with bcrypt) ───────────────────────────────
-    const insertUser = db.prepare(`
+    const insertUser = activeDb.prepare(`
       INSERT OR IGNORE INTO users (id, name, email, password_hash, role_id, phone, is_active)
       VALUES (@id, @name, @email, @password_hash, @role_id, @phone, 1)
     `);
@@ -83,7 +83,7 @@ function seedDatabase() {
     });
 
     // ── 4. Inventory Location ────────────────────────────────────────────────
-    db.prepare(`
+    activeDb.prepare(`
       INSERT OR IGNORE INTO inventory_locations (id, code, name, address, is_active)
       VALUES ('loc-main', 'MAIN_BOUTIQUE', 'Noor Flagship Boutique, Indiranagar', '104, 100ft Road, Bengaluru - 560038', 1)
     `).run();
@@ -94,7 +94,7 @@ function seedDatabase() {
       { id: 'sup-2', name: 'Mazzucchelli 1849 Bio-Acetate S.p.A.', contact_person: 'Matteo Rossi', phone: '+39 0332 827111', email: 'sales@mazzucchelli1849.it', address: 'Castiglione Olona, Italy', gst_number: 'N/A (Import)' },
       { id: 'sup-3', name: 'Zeiss Vision Care India Pvt Ltd', contact_person: 'Pooja Nair', phone: '+91 80 4343 8888', email: 'bengaluru.lab@zeiss.com', address: 'Plot 3, Bommasandra Industrial Area, Bengaluru', gst_number: '29AAACZ1234F1Z8' }
     ];
-    const insertSupplier = db.prepare('INSERT OR IGNORE INTO suppliers (id, name, contact_person, phone, email, address, gst_number) VALUES (@id, @name, @contact_person, @phone, @email, @address, @gst_number)');
+    const insertSupplier = activeDb.prepare('INSERT OR IGNORE INTO suppliers (id, name, contact_person, phone, email, address, gst_number) VALUES (@id, @name, @contact_person, @phone, @email, @address, @gst_number)');
     suppliers.forEach(s => insertSupplier.run(s));
 
     // ── 6. Expense Categories ────────────────────────────────────────────────
@@ -106,7 +106,7 @@ function seedDatabase() {
       { id: 'exp-cat-5', name: 'Optometry Diagnostic Tools', description: 'Autorefractor servicing, trial lens set calibration, and sanitization' },
       { id: 'exp-cat-6', name: 'Utilities & High-Speed Internet', description: 'BESCOM electric power, water, and dedicated fiber Wi-Fi' }
     ];
-    const insertExpCat = db.prepare('INSERT OR IGNORE INTO expense_categories (id, name, description) VALUES (@id, @name, @description)');
+    const insertExpCat = activeDb.prepare('INSERT OR IGNORE INTO expense_categories (id, name, description) VALUES (@id, @name, @description)');
     categories.forEach(c => insertExpCat.run(c));
 
     // ── 7. Products & Variants (All 18 Handcrafted Optical Frames) ────────────
@@ -131,7 +131,7 @@ function seedDatabase() {
       { id: 'noor-18', sku: 'NOOR-BOR-18', name: 'The Bordeaux Edge', shape: 'Cat-Eye', material: 'Italian Bio-Acetate', fit: 'Regular', price: 4099, originalPrice: 4899, cost: 1700, supplier: 'sup-2', image: 'images/vienna_silhouette.jpg', colors: [{ name: 'Bordeaux Merlot', hex: '#4A1521' }, { name: 'Espresso', hex: '#2B1B17' }], desc: 'Deep burgundy hues polished to a mirror gloss with sculpted cheekbone bevels.' }
     ];
 
-    const insertProduct = db.prepare(`
+    const insertProduct = activeDb.prepare(`
       INSERT OR IGNORE INTO products (
         id, sku, name, brand, shape, material, fit, category,
         selling_price_paise, original_price_paise, purchase_cost_paise,
@@ -143,7 +143,7 @@ function seedDatabase() {
       )
     `);
 
-    const insertVariant = db.prepare(`
+    const insertVariant = activeDb.prepare(`
       INSERT OR IGNORE INTO product_variants (
         id, product_id, sku, barcode, color_name, color_hex, lens_type, dimensions_json, additional_price_paise
       ) VALUES (
@@ -151,7 +151,7 @@ function seedDatabase() {
       )
     `);
 
-    const insertInvBalance = db.prepare(`
+    const insertInvBalance = activeDb.prepare(`
       INSERT OR IGNORE INTO inventory_balances (
         id, variant_id, location_id, available_qty, reserved_qty
       ) VALUES (
@@ -159,7 +159,7 @@ function seedDatabase() {
       )
     `);
 
-    const insertMovement = db.prepare(`
+    const insertMovement = activeDb.prepare(`
       INSERT OR IGNORE INTO stock_movements (
         id, variant_id, location_id, change_qty, balance_after, movement_type, reference_id, reason, created_by_user_id
       ) VALUES (
@@ -232,11 +232,11 @@ function seedDatabase() {
       { key: 'gpay_qr_image_url', value: 'images/merchant_gpay_qr_sample.png' }
     ];
 
-    const insertSetting = db.prepare('INSERT OR IGNORE INTO store_settings (key, value) VALUES (@key, @value)');
+    const insertSetting = activeDb.prepare('INSERT OR IGNORE INTO store_settings (key, value) VALUES (@key, @value)');
     defaultSettings.forEach(s => insertSetting.run(s));
 
     // ── 9. Initial Audit Log Entry ───────────────────────────────────────────
-    db.prepare(`
+    activeDb.prepare(`
       INSERT OR IGNORE INTO audit_logs (id, user_id, user_email, action, entity_type, entity_id, details_json)
       VALUES ('aud-init-1', 'usr-admin-1', 'admin@nooroptics.com', 'SYSTEM_INITIALIZED', 'SYSTEM', 'DB_INIT', '{"message": "Complete platform initialized with 27 tables, 18 frames, and initial inventory."}')
     `).run();

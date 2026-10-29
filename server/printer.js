@@ -376,31 +376,33 @@ async function generateEscPosQrLabel(opts = {}) {
     qrPayload = `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku).toUpperCase()}`;
   }
 
-  // Create QR with Error Correction 'L' (Low redundancy = smallest version, crisp dots, no smudging)
+  // Create QR with Error Correction 'L' (strictly Version 2 = 25x25, preserving wide 26px quiet margins on scissors cut)
   const qr = QRCode.create(qrPayload, { errorCorrectionLevel: 'L' });
-  const rawSize = qr.modules.size; // 25 for short URL (Version 2), 21 for raw SKU (Version 1)
+  const rawSize = qr.modules.size; // Strictly 25 for short URL (Version 2), 21 for raw SKU (Version 1)
 
   // Full ISO/IEC 18004 compliant 4-module quiet zone on all sides
   // Mandatory for camera scanners to detect the 1:1:3:1:1 corner finder patterns
   const quiet = 4;
-  let scale = 4; // Crisp 4x4 printer dots (0.5mm)
+  let scale = 4; // Crisp 4x4 printer dots (0.50mm)
 
-  if (qrPreset === 'temple' || opts.qrSize === 'tiny' || opts.qrSize === 'temple') {
+  if (rawSize <= 21) {
+    scale = 5; // Extra large 5x5 dots (0.625mm) for Version 1
+  } else if (qrPreset === 'temple' || opts.qrSize === 'tiny' || opts.qrSize === 'temple') {
     scale = 3;
   }
 
   const totalModules = rawSize + quiet * 2;
-  const qrPixels = totalModules * scale; // 33 * 4 = 132 pixels (URL) or 29 * 4 = 116 pixels (SKU)
+  const qrPixels = totalModules * scale; // 33 * 4 = 132 pixels (URL) or 29 * 5 = 145 pixels (SKU)
 
-  // Label width: 152 pixels (19 bytes = 19mm) ensuring 26px (3.25mm) solid white margins on both sides
+  // Label width: 152 pixels (19 bytes = 19mm) ensuring wide protective paper margins on both sides
   // Guaranteed protection so cutting the strip with scissors never damages the quiet zone
   const labelWidth = 152;
-  const qrOffsetX = Math.floor((labelWidth - qrPixels) / 2); // 10px
+  const qrOffsetX = Math.max(0, Math.floor((labelWidth - qrPixels) / 2)); // Centered
   const qrOffsetY = 12; // Generous 12px white paper buffer at top
 
   // Typography layout: centered within 152px width with generous white gap below QR
   const skuScale = (sku.length * 12 <= labelWidth - 8) ? 2 : 1;
-  const skuOffsetY = qrOffsetY + qrPixels + 12; // Clean 28px white space between bottom finder patterns & SKU text
+  const skuOffsetY = qrOffsetY + qrPixels + 12; // Clean white space between bottom finder patterns & SKU text
   const skuHeight = 7 * skuScale;
   const nameOffsetY = skuOffsetY + skuHeight + 6;
   const priceOffsetY = nameOffsetY + 7 + 4;
@@ -418,7 +420,10 @@ async function generateEscPosQrLabel(opts = {}) {
 
   const grid = Array.from({ length: totalHeight }, () => new Array(labelWidth).fill(0));
 
-  // 1. Render QR into grid
+  // 1. Render QR into grid with Negative Bleed Compensation (Thermal Bleed Shaving)
+  // For each black module, detect if adjacent neighbors in printhead travel direction (right & down) are white.
+  // Shaving 1 pixel on borders touching white gaps ensures that physical thermal bloom perfectly fills the gap
+  // without invading the critical 1-module white separator in finder patterns or alternating data tracks!
   for (let my = 0; my < totalModules; my++) {
     const rawY = my - quiet;
     for (let mx = 0; mx < totalModules; mx++) {
@@ -427,10 +432,20 @@ async function generateEscPosQrLabel(opts = {}) {
         ? Boolean(qr.modules.data[rawY * rawSize + rawX])
         : false;
 
-      if (isBlack) {
-        for (let dy = 0; dy < scale; dy++) {
-          for (let dx = 0; dx < scale; dx++) {
-            grid[qrOffsetY + my * scale + dy][qrOffsetX + mx * scale + dx] = 1;
+      if (!isBlack) continue;
+
+      const botWhite = (rawY + 1 < 0 || rawY + 1 >= rawSize) ? true : !qr.modules.data[(rawY + 1) * rawSize + rawX];
+      const rightWhite = (rawX + 1 < 0 || rawX + 1 >= rawSize) ? true : !qr.modules.data[rawY * rawSize + (rawX + 1)];
+
+      const endY = (botWhite && scale >= 4) ? scale - 1 : scale;
+      const endX = (rightWhite && scale >= 4) ? scale - 1 : scale;
+
+      for (let dy = 0; dy < endY; dy++) {
+        for (let dx = 0; dx < endX; dx++) {
+          const py = qrOffsetY + my * scale + dy;
+          const px = qrOffsetX + mx * scale + dx;
+          if (py >= 0 && py < totalHeight && px >= 0 && px < labelWidth) {
+            grid[py][px] = 1;
           }
         }
       }

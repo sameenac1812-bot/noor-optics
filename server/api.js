@@ -52,6 +52,48 @@ function generateInvoiceNumber(prefix = 'NOOR-INV') {
   return `${prefix}-${year}-${nextSeq}`;
 }
 
+// ── Helper: Format Client Code (e.g. CLT-1001) ────────────────────────────────
+function getNextClientCode() {
+  const row = db.prepare("SELECT client_code FROM customers WHERE client_code LIKE 'CLT-%' ORDER BY client_code DESC LIMIT 1").get();
+  if (row && row.client_code) {
+    const num = parseInt(row.client_code.replace('CLT-', ''), 10);
+    if (!isNaN(num)) return `CLT-${num + 1}`;
+  }
+  const countRow = db.prepare('SELECT count(*) as c FROM customers').get();
+  return `CLT-${1001 + (countRow ? countRow.c : 0)}`;
+}
+
+// ── Helper: Format Prescription Number (e.g. RX-2026-0001) ────────────────────
+function getNextPrescriptionNumber() {
+  const year = new Date().getFullYear();
+  const countRow = db.prepare('SELECT count(*) as c FROM prescriptions').get();
+  const nextSeq = String((countRow ? countRow.c : 0) + 1).padStart(4, '0');
+  return `RX-${year}-${nextSeq}`;
+}
+
+// ── Helper: Normalize Phone Number ──────────────────────────────────────────
+function normalizePhoneNumber(phone) {
+  if (!phone) return '';
+  const cleaned = phone.replace(/[^\d+]/g, '');
+  if (/^\d{10}$/.test(cleaned)) {
+    return '+91' + cleaned;
+  }
+  if (/^91\d{10}$/.test(cleaned)) {
+    return '+' + cleaned;
+  }
+  return cleaned;
+}
+
+// ── Helper: Generate WhatsApp Click-to-Chat URL ─────────────────────────────
+function generateWhatsAppUrl(phone, clientName, storeName) {
+  const normalized = normalizePhoneNumber(phone).replace(/^\+/, '');
+  if (!normalized) return null;
+  const name = clientName || 'Valued Client';
+  const boutiqueName = storeName || 'Noor Optics Flagship Boutique';
+  const text = `Hello ${name}, this is ${boutiqueName}. We are contacting you regarding your recent purchase. Please let us know if you need any assistance.`;
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(text)}`;
+}
+
 // ==============================================================================
 // 1. AUTHENTICATION ENDPOINTS
 // ==============================================================================
@@ -315,6 +357,96 @@ router.put('/products/:id', authenticateToken, requirePermission('products:manag
   res.json({ success: true });
 });
 
+// ── DELETE /api/products/:id (Delete Single Frame & Cleanup Variants/Balances) ─
+router.delete('/products/:id', authenticateToken, (req, res) => {
+  if (!req.user.permissions.includes('products:manage') && !req.user.permissions.includes('inventory:adjust') && req.user.roleId !== 'role-owner') {
+    return res.status(403).json({ error: 'Forbidden: Insufficient privileges to delete optical frames.' });
+  }
+
+  const productId = req.params.id;
+  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
+  if (!product) {
+    return res.status(404).json({ error: 'Product not found.' });
+  }
+
+  const deleteTx = db.transaction(() => {
+    const variants = db.prepare('SELECT id FROM product_variants WHERE product_id = ?').all(productId);
+    const varIds = variants.map(v => v.id);
+
+    if (varIds.length > 0) {
+      const placeholders = varIds.map(() => '?').join(',');
+      // Nullify variant_id in historical order items to satisfy FKs while preserving receipt logs
+      db.prepare(`UPDATE order_items SET variant_id = NULL WHERE variant_id IN (${placeholders})`).run(...varIds);
+      db.prepare(`UPDATE purchase_order_items SET variant_id = NULL WHERE variant_id IN (${placeholders})`).run(...varIds);
+
+      // Clean up stock ledgers & inventory balances
+      db.prepare(`DELETE FROM stock_movements WHERE variant_id IN (${placeholders})`).run(...varIds);
+      db.prepare(`DELETE FROM inventory_balances WHERE variant_id IN (${placeholders})`).run(...varIds);
+      db.prepare('DELETE FROM product_variants WHERE product_id = ?').run(productId);
+    }
+
+    db.prepare('DELETE FROM product_images WHERE product_id = ?').run(productId);
+    db.prepare('DELETE FROM products WHERE id = ?').run(productId);
+
+    logAudit(req.user.id, req.user.email, 'PRODUCT_DELETED', 'PRODUCT', productId, { name: product.name, sku: product.sku }, req);
+  });
+
+  try {
+    deleteTx();
+    res.json({ success: true, message: `Optical frame "${product.name}" deleted successfully.` });
+  } catch (err) {
+    console.error('Failed to delete product:', err);
+    res.status(500).json({ error: 'Failed to delete product: ' + err.message });
+  }
+});
+
+// ── DELETE /api/products (Batch Delete Selected Optical Frames) ──────────────
+router.delete('/products', authenticateToken, (req, res) => {
+  if (!req.user.permissions.includes('products:manage') && !req.user.permissions.includes('inventory:adjust') && req.user.roleId !== 'role-owner') {
+    return res.status(403).json({ error: 'Forbidden: Insufficient privileges to delete optical frames.' });
+  }
+
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'Array of product IDs required for deletion.' });
+  }
+
+  const deleteBatchTx = db.transaction(() => {
+    let deletedCount = 0;
+    for (const productId of ids) {
+      const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
+      if (!product) continue;
+
+      const variants = db.prepare('SELECT id FROM product_variants WHERE product_id = ?').all(productId);
+      const varIds = variants.map(v => v.id);
+
+      if (varIds.length > 0) {
+        const placeholders = varIds.map(() => '?').join(',');
+        db.prepare(`UPDATE order_items SET variant_id = NULL WHERE variant_id IN (${placeholders})`).run(...varIds);
+        db.prepare(`UPDATE purchase_order_items SET variant_id = NULL WHERE variant_id IN (${placeholders})`).run(...varIds);
+        db.prepare(`DELETE FROM stock_movements WHERE variant_id IN (${placeholders})`).run(...varIds);
+        db.prepare(`DELETE FROM inventory_balances WHERE variant_id IN (${placeholders})`).run(...varIds);
+        db.prepare('DELETE FROM product_variants WHERE product_id = ?').run(productId);
+      }
+
+      db.prepare('DELETE FROM product_images WHERE product_id = ?').run(productId);
+      db.prepare('DELETE FROM products WHERE id = ?').run(productId);
+      deletedCount++;
+    }
+
+    logAudit(req.user.id, req.user.email, 'PRODUCTS_BATCH_DELETED', 'PRODUCT', 'BATCH', { count: deletedCount }, req);
+    return deletedCount;
+  });
+
+  try {
+    const count = deleteBatchTx();
+    res.json({ success: true, deletedCount: count, message: `Successfully deleted ${count} frame(s).` });
+  } catch (err) {
+    console.error('Failed to batch delete products:', err);
+    res.status(500).json({ error: 'Failed to delete products: ' + err.message });
+  }
+});
+
 // ==============================================================================
 // 4. INVENTORY & STOCK MANAGEMENT
 // ==============================================================================
@@ -556,42 +688,468 @@ router.post('/purchase-orders/:id/receive', authenticateToken, requirePermission
 });
 
 // ==============================================================================
-// 6. CUSTOMERS CRM
+// 6. CLIENT CRM & PRESCRIPTION MANAGEMENT
 // ==============================================================================
 
+// ── GET /api/customers (Directory with Search, Stats & Archival Filters) ───────
 router.get('/customers', authenticateToken, (req, res) => {
-  const search = req.query.search ? `%${req.query.search.trim()}%` : '%';
-  const customers = db.prepare(`
-    SELECT c.*, COUNT(o.id) as total_orders
+  const search = req.query.search ? req.query.search.trim() : '';
+  const searchPattern = `%${search}%`;
+  const includeArchived = req.query.includeArchived === 'true';
+  const archivedOnly = req.query.archivedOnly === 'true';
+
+  let sql = `
+    SELECT 
+      c.*,
+      COUNT(DISTINCT o.id) as total_orders,
+      COALESCE(SUM(o.total_payable_paise), c.total_spent_paise, 0) as total_purchases_paise,
+      MAX(o.created_at) as last_order_date,
+      (SELECT COUNT(*) FROM prescriptions p WHERE p.client_id = c.id AND p.is_archived = 0) as prescriptions_count
     FROM customers c
-    LEFT JOIN orders o ON c.id = o.customer_id
-    WHERE c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ?
+    LEFT JOIN orders o ON c.id = o.customer_id AND o.status != 'CANCELLED'
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (archivedOnly) {
+    sql += ' AND c.is_archived = 1';
+  } else if (!includeArchived) {
+    sql += ' AND c.is_archived = 0';
+  }
+
+  if (search) {
+    sql += ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.client_code LIKE ? OR c.id = ?)';
+    params.push(searchPattern, searchPattern, searchPattern, searchPattern, search);
+  }
+
+  sql += ' GROUP BY c.id ORDER BY c.created_at DESC';
+
+  const customers = db.prepare(sql).all(...params);
+  const storeSettings = getStoreSettings();
+  const storeName = storeSettings.store_name || 'Noor Optics Flagship Boutique';
+
+  const formatted = customers.map(c => ({
+    ...c,
+    total_purchases_inr: (c.total_purchases_paise || 0) / 100,
+    tel_link: c.phone ? `tel:${c.phone}` : null,
+    whatsapp_link: c.phone ? generateWhatsAppUrl(c.phone, c.name, storeName) : null
+  }));
+
+  res.json(formatted);
+});
+
+// ── GET /api/customers/export/csv (CSV Export of Directory) ───────────────────
+router.get('/customers/export/csv', authenticateToken, (req, res) => {
+  const customers = db.prepare(`
+    SELECT 
+      c.client_code, c.name, c.age, c.phone, c.email, c.city, c.address,
+      c.created_at,
+      COUNT(DISTINCT o.id) as total_orders,
+      COALESCE(SUM(o.total_payable_paise), c.total_spent_paise, 0) as total_spent_paise
+    FROM customers c
+    LEFT JOIN orders o ON c.id = o.customer_id AND o.status != 'CANCELLED'
+    WHERE c.is_archived = 0
     GROUP BY c.id
     ORDER BY c.created_at DESC
-  `).all(search, search, search);
-  res.json(customers);
+  `).all();
+
+  let csv = 'Client ID,Name,Age,Phone,Email,City,Address,Total Orders,Total Spent (INR),Created Date\r\n';
+  customers.forEach(c => {
+    const row = [
+      c.client_code || '',
+      `"${(c.name || '').replace(/"/g, '""')}"`,
+      c.age || '',
+      `"${c.phone || ''}"`,
+      `"${c.email || ''}"`,
+      `"${(c.city || '').replace(/"/g, '""')}"`,
+      `"${(c.address || '').replace(/"/g, '""')}"`,
+      c.total_orders || 0,
+      ((c.total_spent_paise || 0) / 100).toFixed(2),
+      c.created_at || ''
+    ];
+    csv += row.join(',') + '\r\n';
+  });
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="noor_optics_clients.csv"');
+  res.send(csv);
 });
 
+// ── GET /api/customers/:id (Complete Profile with Orders, RX & History) ─────────
+router.get('/customers/:id', authenticateToken, (req, res) => {
+  const client = db.prepare('SELECT * FROM customers WHERE id = ? OR client_code = ?').get(req.params.id, req.params.id);
+  if (!client) {
+    return res.status(404).json({ error: 'Client not found.' });
+  }
+
+  // Linked Orders
+  const orders = db.prepare(`
+    SELECT o.*, u.name as staff_name, inv.invoice_number
+    FROM orders o
+    LEFT JOIN users u ON o.staff_user_id = u.id
+    LEFT JOIN invoices inv ON o.id = inv.order_id
+    WHERE o.customer_id = ?
+    ORDER BY o.created_at DESC
+  `).all(client.id);
+
+  const getItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?');
+  const enrichedOrders = orders.map(o => ({
+    ...o,
+    total_payable_inr: o.total_payable_paise / 100,
+    amount_paid_inr: o.amount_paid_paise / 100,
+    items: getItems.all(o.id).map(i => ({
+      ...i,
+      unit_price_inr: i.unit_price_paise / 100,
+      subtotal_inr: i.subtotal_paise / 100
+    }))
+  }));
+
+  // Linked Prescriptions
+  const prescriptions = db.prepare(`
+    SELECT p.*, u.name as created_by_name
+    FROM prescriptions p
+    LEFT JOIN users u ON p.created_by_user_id = u.id
+    WHERE p.client_id = ?
+    ORDER BY p.prescription_date DESC, p.created_at DESC
+  `).all(client.id);
+
+  // Linked Invoices
+  const invoices = db.prepare(`
+    SELECT inv.*
+    FROM invoices inv
+    JOIN orders o ON inv.order_id = o.id
+    WHERE o.customer_id = ?
+    ORDER BY inv.created_at DESC
+  `).all(client.id).map(inv => ({
+    ...inv,
+    grand_total_inr: inv.grand_total_paise / 100
+  }));
+
+  // Audit Logs
+  const auditLogs = db.prepare(`
+    SELECT * FROM audit_logs
+    WHERE entity_id = ? OR (entity_type = 'CLIENT' AND details_json LIKE ?)
+    ORDER BY created_at DESC
+    LIMIT 25
+  `).all(client.id, `%${client.id}%`);
+
+  const storeSettings = getStoreSettings();
+  const storeName = storeSettings.store_name || 'Noor Optics Flagship Boutique';
+
+  res.json({
+    client: {
+      ...client,
+      total_spent_inr: (client.total_spent_paise || 0) / 100,
+      tel_link: client.phone ? `tel:${client.phone}` : null,
+      whatsapp_link: client.phone ? generateWhatsAppUrl(client.phone, client.name, storeName) : null
+    },
+    orders: enrichedOrders,
+    prescriptions,
+    invoices,
+    auditLogs
+  });
+});
+
+// ── POST /api/customers (Create New Client with Validation & Duplicate Check) ──
 router.post('/customers', authenticateToken, (req, res) => {
-  const { name, phone, email, address, city, pinCode, prescription, notes } = req.body;
-  if (!name) return res.status(400).json({ error: 'Customer name is required.' });
+  const { name, age, phone, city, email, address, dob, pinCode, notes, confirmDuplicate } = req.body;
 
-  const id = 'cust-' + Date.now();
+  const trimmedName = (name || '').trim();
+  if (!trimmedName) return res.status(400).json({ error: 'Client full name is required.' });
+
+  const numAge = age !== undefined && age !== '' && age !== null ? parseInt(age, 10) : null;
+  if (numAge !== null && (isNaN(numAge) || numAge < 1 || numAge > 125)) {
+    return res.status(400).json({ error: 'Please enter a valid age (1 - 125).' });
+  }
+
+  const trimmedPhone = (phone || '').trim();
+  if (!trimmedPhone) return res.status(400).json({ error: 'Client phone number is required.' });
+
+  const trimmedCity = (city || 'Bengaluru').trim();
+  if (!trimmedCity) return res.status(400).json({ error: 'City is required.' });
+
+  // Duplicate phone warning (explicit confirmation allows shared family numbers)
+  if (!confirmDuplicate) {
+    const existingWithPhone = db.prepare('SELECT id, client_code, name, phone, city FROM customers WHERE phone = ? AND is_archived = 0').all(trimmedPhone);
+    if (existingWithPhone.length > 0) {
+      return res.status(409).json({
+        duplicateWarning: true,
+        message: `A client with phone ${trimmedPhone} already exists: ${existingWithPhone[0].name} (${existingWithPhone[0].client_code}). Would you like to select this existing client or proceed with a new registration?`,
+        existingClients: existingWithPhone
+      });
+    }
+  }
+
+  const id = 'cust-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
+  const clientCode = getNextClientCode();
+
   db.prepare(`
-    INSERT INTO customers (id, name, phone, email, address, city, pin_code, prescription_json, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, name, phone, email, address, city || 'Bengaluru', pinCode, JSON.stringify(prescription || {}), notes);
+    INSERT INTO customers (
+      id, client_code, name, age, dob, phone, email, address, city, pin_code, notes, created_at, updated_at
+    ) VALUES (
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now')
+    )
+  `).run(
+    id, clientCode, trimmedName, numAge, dob || null, trimmedPhone,
+    email ? email.trim() : null, address ? address.trim() : null,
+    trimmedCity, pinCode ? pinCode.trim() : null, notes ? notes.trim() : null
+  );
 
-  res.json({ success: true, id });
+  logAudit(req.user.id, req.user.email, 'CLIENT_CREATED', 'CLIENT', id, {
+    clientCode, name: trimmedName, phone: trimmedPhone, city: trimmedCity
+  }, req);
+
+  const created = db.prepare('SELECT * FROM customers WHERE id = ?').get(id);
+  res.json({ success: true, client: created, id, clientCode });
+});
+
+// ── PUT /api/customers/:id (Edit Client Details) ───────────────────────────────
+router.put('/customers/:id', authenticateToken, (req, res) => {
+  const client = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
+  if (!client) return res.status(404).json({ error: 'Client not found.' });
+
+  const { name, age, dob, phone, email, address, city, pinCode, notes } = req.body;
+
+  const trimmedName = name !== undefined ? name.trim() : client.name;
+  if (!trimmedName) return res.status(400).json({ error: 'Client full name cannot be empty.' });
+
+  const numAge = age !== undefined && age !== '' && age !== null ? parseInt(age, 10) : client.age;
+  const trimmedPhone = phone !== undefined ? phone.trim() : client.phone;
+  if (!trimmedPhone) return res.status(400).json({ error: 'Client phone number cannot be empty.' });
+
+  const trimmedCity = city !== undefined ? city.trim() : client.city;
+  const trimmedEmail = email !== undefined ? (email ? email.trim() : null) : client.email;
+  const trimmedAddress = address !== undefined ? (address ? address.trim() : null) : client.address;
+  const trimmedPin = pinCode !== undefined ? (pinCode ? pinCode.trim() : null) : client.pin_code;
+  const trimmedNotes = notes !== undefined ? (notes ? notes.trim() : null) : client.notes;
+  const trimmedDob = dob !== undefined ? (dob ? dob.trim() : null) : client.dob;
+
+  db.prepare(`
+    UPDATE customers
+    SET name = ?, age = ?, dob = ?, phone = ?, email = ?, address = ?, city = ?, pin_code = ?, notes = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(trimmedName, numAge, trimmedDob, trimmedPhone, trimmedEmail, trimmedAddress, trimmedCity, trimmedPin, trimmedNotes, client.id);
+
+  logAudit(req.user.id, req.user.email, 'CLIENT_UPDATED', 'CLIENT', client.id, {
+    before: { name: client.name, phone: client.phone, city: client.city },
+    after: { name: trimmedName, phone: trimmedPhone, city: trimmedCity }
+  }, req);
+
+  const updated = db.prepare('SELECT * FROM customers WHERE id = ?').get(client.id);
+  res.json({ success: true, client: updated });
+});
+
+// ── DELETE /api/customers/:id (Safe Archival / Soft Deletion) ─────────────────
+router.delete('/customers/:id', authenticateToken, (req, res) => {
+  const client = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
+  if (!client) return res.status(404).json({ error: 'Client not found.' });
+
+  const reason = (req.body && req.body.reason) || req.query.reason || 'Archived by staff request';
+
+  db.prepare(`
+    UPDATE customers
+    SET is_archived = 1, archived_at = datetime('now'), archived_reason = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(reason, client.id);
+
+  logAudit(req.user.id, req.user.email, 'CLIENT_ARCHIVED', 'CLIENT', client.id, {
+    clientCode: client.client_code, name: client.name, reason
+  }, req);
+
+  res.json({ success: true, message: `Client ${client.name} (${client.client_code}) has been archived safely without deleting purchase history.` });
+});
+
+// ── POST /api/customers/:id/restore (Restore Archived Client) ───────────────────
+router.post('/customers/:id/restore', authenticateToken, (req, res) => {
+  const client = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
+  if (!client) return res.status(404).json({ error: 'Client not found.' });
+
+  db.prepare(`
+    UPDATE customers
+    SET is_archived = 0, archived_at = NULL, archived_reason = NULL, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(client.id);
+
+  logAudit(req.user.id, req.user.email, 'CLIENT_RESTORED', 'CLIENT', client.id, {
+    clientCode: client.client_code, name: client.name
+  }, req);
+
+  res.json({ success: true, message: `Client ${client.name} restored successfully.` });
+});
+
+// ── GET /api/customers/:clientId/prescriptions (Client Prescriptions History) ─
+router.get('/customers/:clientId/prescriptions', authenticateToken, (req, res) => {
+  const rxList = db.prepare(`
+    SELECT p.*, u.name as staff_name
+    FROM prescriptions p
+    LEFT JOIN users u ON p.created_by_user_id = u.id
+    WHERE p.client_id = ?
+    ORDER BY p.prescription_date DESC, p.created_at DESC
+  `).all(req.params.clientId);
+
+  res.json(rxList);
+});
+
+// ── POST /api/prescriptions (Create New Structured Prescription) ───────────────
+router.post('/prescriptions', authenticateToken, (req, res) => {
+  const targetClientId = req.body.clientId || req.body.client_id;
+  const prescriptionDate = req.body.prescriptionDate || req.body.prescription_date || new Date().toISOString().slice(0, 10);
+  const odSph = req.body.odSph !== undefined ? req.body.odSph : req.body.od_sph;
+  const odCyl = req.body.odCyl !== undefined ? req.body.odCyl : req.body.od_cyl;
+  const odAxis = req.body.odAxis !== undefined ? req.body.odAxis : req.body.od_axis;
+  const osSph = req.body.osSph !== undefined ? req.body.osSph : req.body.os_sph;
+  const osCyl = req.body.osCyl !== undefined ? req.body.osCyl : req.body.os_cyl;
+  const osAxis = req.body.osAxis !== undefined ? req.body.osAxis : req.body.os_axis;
+  const addition = req.body.addition;
+  const ipdDistance = req.body.ipdDistance !== undefined ? req.body.ipdDistance : req.body.ipd_distance;
+  const ipdNear = req.body.ipdNear !== undefined ? req.body.ipdNear : req.body.ipd_near;
+  const checkedBy = req.body.checkedBy || req.body.checked_by;
+  const prescriberDetails = req.body.prescriberDetails || req.body.prescriber_details;
+  const notes = req.body.notes;
+  const imageUrl = req.body.imageUrl || req.body.image_url;
+
+  if (!targetClientId) {
+    return res.status(400).json({ error: 'Client ID is required to record a prescription.' });
+  }
+
+  const client = db.prepare('SELECT id, name FROM customers WHERE id = ?').get(targetClientId);
+  if (!client) {
+    return res.status(404).json({ error: 'Client not found.' });
+  }
+
+  const id = 'rx-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
+  const rxNumber = getNextPrescriptionNumber();
+
+  db.prepare(`
+    INSERT INTO prescriptions (
+      id, prescription_number, client_id, prescription_date,
+      od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis,
+      addition, ipd_distance, ipd_near, checked_by, prescriber_details,
+      notes, image_url, created_by_user_id, created_at, updated_at
+    ) VALUES (
+      ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?,
+      ?, ?, ?, datetime('now'), datetime('now')
+    )
+  `).run(
+    id, rxNumber, targetClientId, prescriptionDate,
+    odSph || null, odCyl || null, odAxis || null,
+    osSph || null, osCyl || null, osAxis || null,
+    addition || null, ipdDistance || null, ipdNear || null,
+    checkedBy || req.user.name || null, prescriberDetails || null,
+    notes || null, imageUrl || null, req.user.id
+  );
+
+  logAudit(req.user.id, req.user.email, 'PRESCRIPTION_CREATED', 'PRESCRIPTION', id, {
+    prescriptionNumber: rxNumber, clientId: targetClientId, clientName: client.name
+  }, req);
+
+  const created = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(id);
+  res.json({ success: true, prescription: created, id, prescriptionNumber: rxNumber });
+});
+
+// ── GET /api/prescriptions/:id (Single Prescription Details) ───────────────────
+router.get('/prescriptions/:id', authenticateToken, (req, res) => {
+  const rx = db.prepare(`
+    SELECT p.*, c.name as client_name, c.client_code, c.phone as client_phone, c.age as client_age, c.city as client_city, u.name as staff_name
+    FROM prescriptions p
+    JOIN customers c ON p.client_id = c.id
+    LEFT JOIN users u ON p.created_by_user_id = u.id
+    WHERE p.id = ? OR p.prescription_number = ?
+  `).get(req.params.id, req.params.id);
+
+  if (!rx) return res.status(404).json({ error: 'Prescription not found.' });
+  res.json(rx);
+});
+
+// ── PUT /api/prescriptions/:id (Update Prescription) ──────────────────────────
+router.put('/prescriptions/:id', authenticateToken, (req, res) => {
+  const rx = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(req.params.id);
+  if (!rx) return res.status(404).json({ error: 'Prescription not found.' });
+
+  const {
+    prescriptionDate,
+    odSph, odCyl, odAxis,
+    osSph, osCyl, osAxis,
+    addition, ipdDistance, ipdNear,
+    checkedBy, prescriberDetails, notes, imageUrl
+  } = req.body;
+
+  db.prepare(`
+    UPDATE prescriptions
+    SET prescription_date = COALESCE(?, prescription_date),
+        od_sph = ?, od_cyl = ?, od_axis = ?,
+        os_sph = ?, os_cyl = ?, os_axis = ?,
+        addition = ?, ipd_distance = ?, ipd_near = ?,
+        checked_by = ?, prescriber_details = ?,
+        notes = ?, image_url = COALESCE(?, image_url),
+        updated_at = datetime('now')
+    WHERE id = ?
+  `).run(
+    prescriptionDate || null,
+    odSph !== undefined ? odSph : rx.od_sph,
+    odCyl !== undefined ? odCyl : rx.od_cyl,
+    odAxis !== undefined ? odAxis : rx.od_axis,
+    osSph !== undefined ? osSph : rx.os_sph,
+    osCyl !== undefined ? osCyl : rx.os_cyl,
+    osAxis !== undefined ? osAxis : rx.os_axis,
+    addition !== undefined ? addition : rx.addition,
+    ipdDistance !== undefined ? ipdDistance : rx.ipd_distance,
+    ipdNear !== undefined ? ipdNear : rx.ipd_near,
+    checkedBy !== undefined ? checkedBy : rx.checked_by,
+    prescriberDetails !== undefined ? prescriberDetails : rx.prescriber_details,
+    notes !== undefined ? notes : rx.notes,
+    imageUrl || null,
+    rx.id
+  );
+
+  logAudit(req.user.id, req.user.email, 'PRESCRIPTION_UPDATED', 'PRESCRIPTION', rx.id, {
+    prescriptionNumber: rx.prescription_number
+  }, req);
+
+  const updated = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(rx.id);
+  res.json({ success: true, prescription: updated });
+});
+
+// ── POST /api/prescriptions/upload-image (Save Uploaded RX Image Securely) ────
+router.post('/prescriptions/upload-image', authenticateToken, (req, res) => {
+  const { imageBase64 } = req.body;
+  if (!imageBase64) {
+    return res.status(400).json({ error: 'Image data is required.' });
+  }
+
+  try {
+    const rxDir = path.join(__dirname, '..', 'images', 'prescriptions');
+    if (!fs.existsSync(rxDir)) {
+      fs.mkdirSync(rxDir, { recursive: true });
+    }
+
+    const extMatch = imageBase64.match(/^data:image\/([a-zA-Z0-9]+);base64,/);
+    const ext = extMatch ? extMatch[1].replace('jpeg', 'jpg') : 'jpg';
+    const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9]+;base64,/, '');
+
+    const safeName = `rx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+    const filePath = path.join(rxDir, safeName);
+
+    fs.writeFileSync(filePath, Buffer.from(cleanBase64, 'base64'));
+    const relativeUrl = `images/prescriptions/${safeName}`;
+
+    res.json({ success: true, imageUrl: relativeUrl });
+  } catch (err) {
+    console.error('Image upload failed:', err);
+    res.status(500).json({ error: 'Failed to save prescription image: ' + err.message });
+  }
 });
 
 // ==============================================================================
-// 7. POINT OF SALE (POS) CHECKOUT (ATOMIC TRANSACTION)
+// 7. POINT OF SALE (POS) CHECKOUT (ATOMIC TRANSACTION WITH CLIENT INTEGRATION)
 // ==============================================================================
 
 router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'), (req, res) => {
   const {
-    customerId, customerName = 'Walk-in Client', customerPhone, customerEmail,
+    customerId, prescriptionId, customerName = 'Walk-in Client', customerPhone, customerEmail,
+    clientDetails, newPrescription,
     items, discountINR = 0, discount_paise, discountReason,
     notes
   } = req.body;
@@ -615,6 +1173,75 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
   const invoiceNumber = generateInvoiceNumber();
 
   const checkoutTx = db.transaction(() => {
+    // 0. Resolve or create customer permanently
+    let finalCustomerId = customerId || null;
+    let finalCustomerName = customerName;
+    let finalCustomerPhone = customerPhone || null;
+    let finalCustomerEmail = customerEmail || null;
+
+    if (!finalCustomerId && clientDetails && clientDetails.name) {
+      const existingClient = clientDetails.phone ? db.prepare('SELECT id, name, phone, email FROM customers WHERE phone = ? AND is_archived = 0').get(clientDetails.phone.trim()) : null;
+      if (existingClient) {
+        finalCustomerId = existingClient.id;
+        finalCustomerName = existingClient.name;
+        finalCustomerPhone = existingClient.phone;
+        finalCustomerEmail = existingClient.email;
+      } else {
+        finalCustomerId = 'cust-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
+        const clientCode = getNextClientCode();
+        db.prepare(`
+          INSERT INTO customers (id, client_code, name, age, phone, email, address, city, notes, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        `).run(
+          finalCustomerId, clientCode, clientDetails.name.trim(),
+          clientDetails.age ? parseInt(clientDetails.age, 10) : null,
+          clientDetails.phone ? clientDetails.phone.trim() : null,
+          clientDetails.email ? clientDetails.email.trim() : null,
+          clientDetails.address ? clientDetails.address.trim() : null,
+          clientDetails.city ? clientDetails.city.trim() : 'Bengaluru',
+          clientDetails.notes ? clientDetails.notes.trim() : 'Created during in-store POS billing'
+        );
+        finalCustomerName = clientDetails.name.trim();
+        finalCustomerPhone = clientDetails.phone ? clientDetails.phone.trim() : null;
+        finalCustomerEmail = clientDetails.email ? clientDetails.email.trim() : null;
+      }
+    } else if (finalCustomerId) {
+      const client = db.prepare('SELECT * FROM customers WHERE id = ?').get(finalCustomerId);
+      if (client) {
+        finalCustomerName = client.name;
+        finalCustomerPhone = client.phone;
+        finalCustomerEmail = client.email;
+      }
+    }
+
+    // 0b. Resolve or create new prescription if submitted
+    let finalPrescriptionId = prescriptionId || null;
+    if (newPrescription && finalCustomerId) {
+      finalPrescriptionId = 'rx-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
+      const rxNumber = getNextPrescriptionNumber();
+      db.prepare(`
+        INSERT INTO prescriptions (
+          id, prescription_number, client_id, prescription_date,
+          od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis,
+          addition, ipd_distance, ipd_near, checked_by, prescriber_details,
+          notes, image_url, created_by_user_id, created_at, updated_at
+        ) VALUES (
+          ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
+          ?, ?, ?, datetime('now'), datetime('now')
+        )
+      `).run(
+        finalPrescriptionId, rxNumber, finalCustomerId,
+        newPrescription.prescriptionDate || new Date().toISOString().slice(0, 10),
+        newPrescription.odSph || null, newPrescription.odCyl || null, newPrescription.odAxis || null,
+        newPrescription.osSph || null, newPrescription.osCyl || null, newPrescription.osAxis || null,
+        newPrescription.addition || null, newPrescription.ipdDistance || null, newPrescription.ipdNear || null,
+        newPrescription.checkedBy || req.user.name || null, newPrescription.prescriberDetails || null,
+        newPrescription.notes || null, newPrescription.imageUrl || null, req.user.id
+      );
+    }
+
     let subtotalPaise = 0;
     const preparedItems = [];
 
@@ -683,7 +1310,6 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     let outstandingPaise = 0;
 
     if (paymentMethod === 'UPI_GPAY') {
-      // If staff has confirmed verification right at POS counter
       paymentStatus = req.body.isVerifiedAtCounter ? 'VERIFIED' : 'AWAITING_VERIFICATION';
       if (paymentStatus === 'AWAITING_VERIFICATION') {
         amountPaidPaise = 0;
@@ -691,25 +1317,34 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       }
     }
 
-    // 2. Insert Order
+    // 2. Insert Order (With authoritative customer_id and prescription_id)
     db.prepare(`
       INSERT INTO orders (
         id, order_number, token_number, channel, customer_id, customer_name,
-        customer_phone, customer_email, status, payment_status, subtotal_paise,
+        customer_phone, customer_email, prescription_id, status, payment_status, subtotal_paise,
         discount_paise, discount_reason, tax_paise, total_payable_paise,
         amount_paid_paise, outstanding_paise, staff_user_id, notes
       ) VALUES (
         ?, ?, ?, 'POS', ?, ?,
-        ?, ?, 'CONFIRMED', ?, ?,
+        ?, ?, ?, 'CONFIRMED', ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?, ?
       )
     `).run(
-      orderId, orderNumber, tokenNumber, customerId || null, customerName,
-      customerPhone || null, customerEmail || null, paymentStatus, subtotalPaise,
+      orderId, orderNumber, tokenNumber, finalCustomerId, finalCustomerName,
+      finalCustomerPhone, finalCustomerEmail, finalPrescriptionId, paymentStatus, subtotalPaise,
       discountPaise, discountReason || null, taxPaise, totalPayablePaise,
       amountPaidPaise, outstandingPaise, req.user.id, notes || null
     );
+
+    // Update customer's total spent
+    if (finalCustomerId) {
+      db.prepare(`
+        UPDATE customers
+        SET total_spent_paise = total_spent_paise + ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(totalPayablePaise, finalCustomerId);
+    }
 
     // 3. Insert Order Items
     const insertItem = db.prepare(`
@@ -739,7 +1374,9 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     // 5. Generate Immutable Invoice
     const invoiceId = 'inv-' + Date.now();
     const snapshotJson = JSON.stringify({
-      orderNumber, tokenNumber, customerName, items: preparedItems, subtotalPaise, discountPaise, taxPaise, totalPayablePaise
+      orderNumber, tokenNumber, customerName: finalCustomerName, customerPhone: finalCustomerPhone,
+      items: preparedItems, subtotalPaise, discountPaise, taxPaise, totalPayablePaise,
+      prescriptionId: finalPrescriptionId
     });
 
     db.prepare(`
@@ -749,7 +1386,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
         payment_status, payment_method, snapshot_json
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      invoiceId, invoiceNumber, orderId, customerName, customerPhone || null, customerEmail || null,
+      invoiceId, invoiceNumber, orderId, finalCustomerName, finalCustomerPhone, finalCustomerEmail,
       subtotalPaise, discountPaise, taxPaise, totalPayablePaise, amountPaidPaise,
       paymentStatus, paymentMethod, snapshotJson
     );
@@ -773,13 +1410,18 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       invoiceId,
       totalPayableINR: totalPayablePaise / 100,
       paymentStatus,
-      printJobId: printJob.jobId
+      printJobId: printJob.jobId,
+      customerId: finalCustomerId,
+      customerName: finalCustomerName,
+      prescriptionId: finalPrescriptionId
     };
   });
 
   try {
     const result = checkoutTx();
-    logAudit(req.user.id, req.user.email, 'POS_SALE_COMPLETED', 'ORDER', result.orderId, { orderNumber, total: result.totalPayableINR }, req);
+    logAudit(req.user.id, req.user.email, 'POS_SALE_COMPLETED', 'ORDER', result.orderId, {
+      orderNumber, total: result.totalPayableINR, customerId: result.customerId
+    }, req);
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -853,20 +1495,46 @@ router.post('/orders/online', (req, res) => {
     const totalPayablePaise = subtotalPaise + shippingPaise;
     const taxPaise = Math.round(totalPayablePaise * 0.18 / 1.18);
 
+    // Resolve or create customer permanently
+    let customerId = null;
+    const existingCust = customerPhone
+      ? db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0').get(customerPhone.trim())
+      : (customerEmail ? db.prepare('SELECT id FROM customers WHERE email = ? AND is_archived = 0').get(customerEmail.trim()) : null);
+
+    if (existingCust) {
+      customerId = existingCust.id;
+      db.prepare(`
+        UPDATE customers
+        SET total_spent_paise = total_spent_paise + ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(totalPayablePaise, customerId);
+    } else {
+      customerId = 'cust-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
+      const clientCode = getNextClientCode();
+      db.prepare(`
+        INSERT INTO customers (id, client_code, name, phone, email, address, city, pin_code, notes, total_spent_paise, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Created via Online Storefront Order', ?, datetime('now'), datetime('now'))
+      `).run(
+        customerId, clientCode, customerName.trim(), customerPhone ? customerPhone.trim() : null,
+        customerEmail ? customerEmail.trim() : null, deliveryAddress ? deliveryAddress.trim() : null,
+        city || 'Bengaluru', pinCode ? pinCode.trim() : null, totalPayablePaise
+      );
+    }
+
     db.prepare(`
       INSERT INTO orders (
-        id, order_number, token_number, channel, customer_name, customer_phone,
+        id, order_number, token_number, channel, customer_id, customer_name, customer_phone,
         customer_email, delivery_address, city, pin_code, prescription_pref,
         status, payment_status, subtotal_paise, tax_paise, total_payable_paise,
         amount_paid_paise, outstanding_paise, notes
       ) VALUES (
-        ?, ?, ?, 'ONLINE', ?, ?,
+        ?, ?, ?, 'ONLINE', ?, ?, ?,
         ?, ?, ?, ?, ?,
         'CONFIRMED', 'AWAITING_VERIFICATION', ?, ?, ?,
         0, ?, 'Online Storefront Order'
       )
     `).run(
-      orderId, orderNumber, tokenNumber, customerName, customerPhone || null,
+      orderId, orderNumber, tokenNumber, customerId, customerName, customerPhone || null,
       customerEmail || null, deliveryAddress || null, city || 'Bengaluru', pinCode || null,
       prescriptionPref || 'call-optometrist', subtotalPaise, taxPaise, totalPayablePaise,
       totalPayablePaise
@@ -923,7 +1591,27 @@ router.post('/orders/online', (req, res) => {
 router.get('/orders', authenticateToken, requirePermission('orders:view'), (req, res) => {
   const { channel, paymentStatus, status, limit = 50 } = req.query;
 
-  let sql = 'SELECT o.*, u.name as staff_name FROM orders o LEFT JOIN users u ON o.staff_user_id = u.id WHERE 1=1';
+  let sql = `
+    SELECT
+      o.*,
+      u.name as staff_name,
+      c.client_code,
+      c.age as client_age,
+      c.city as client_city,
+      pr.prescription_number,
+      pr.od_sph, pr.od_cyl, pr.od_axis,
+      pr.os_sph, pr.os_cyl, pr.os_axis,
+      pr.addition,
+      pr.ipd_distance, pr.ipd_near,
+      pr.checked_by as rx_checked_by,
+      pr.notes as rx_notes,
+      pr.image_url as rx_image_url
+    FROM orders o
+    LEFT JOIN users u ON o.staff_user_id = u.id
+    LEFT JOIN customers c ON o.customer_id = c.id
+    LEFT JOIN prescriptions pr ON o.prescription_id = pr.id
+    WHERE 1=1
+  `;
   const params = [];
 
   if (channel) {
@@ -963,10 +1651,27 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), (req,
 
 router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), (req, res) => {
   const order = db.prepare(`
-    SELECT o.*, u.name as staff_name, inv.invoice_number, inv.id as invoice_id
+    SELECT
+      o.*,
+      u.name as staff_name,
+      inv.invoice_number,
+      inv.id as invoice_id,
+      c.client_code,
+      c.age as client_age,
+      c.city as client_city,
+      pr.prescription_number,
+      pr.od_sph, pr.od_cyl, pr.od_axis,
+      pr.os_sph, pr.os_cyl, pr.os_axis,
+      pr.addition,
+      pr.ipd_distance, pr.ipd_near,
+      pr.checked_by as rx_checked_by,
+      pr.notes as rx_notes,
+      pr.image_url as rx_image_url
     FROM orders o
     LEFT JOIN users u ON o.staff_user_id = u.id
     LEFT JOIN invoices inv ON o.id = inv.order_id
+    LEFT JOIN customers c ON o.customer_id = c.id
+    LEFT JOIN prescriptions pr ON o.prescription_id = pr.id
     WHERE o.id = ?
   `).get(req.params.id);
 
@@ -997,6 +1702,155 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
   db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, req.params.id);
   logAudit(req.user.id, req.user.email, 'ORDER_STATUS_CHANGED', 'ORDER', req.params.id, { newStatus: status }, req);
   res.json({ success: true });
+});
+
+// ── DELETE /api/orders/:id (Delete Single Order with Safe Restocking) ────────
+router.delete('/orders/:id', authenticateToken, (req, res) => {
+  if (!req.user.permissions.includes('orders:manage') && !req.user.permissions.includes('pos:checkout') && req.user.roleId !== 'role-owner') {
+    return res.status(403).json({ error: 'Forbidden: Insufficient privileges to delete orders.' });
+  }
+
+  const orderId = req.params.id;
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  if (!order) {
+    return res.status(404).json({ error: 'Order not found.' });
+  }
+
+  const deleteTx = db.transaction(() => {
+    // 1. Restore stock if the order was active (not already cancelled or refunded)
+    if (order.status !== 'REFUNDED' && order.status !== 'CANCELLED') {
+      const items = db.prepare('SELECT variant_id, quantity FROM order_items WHERE order_id = ?').all(orderId);
+      for (const item of items) {
+        if (item.variant_id) {
+          db.prepare(`
+            UPDATE inventory_balances
+            SET available_qty = available_qty + ?, updated_at = datetime('now')
+            WHERE variant_id = ?
+          `).run(item.quantity, item.variant_id);
+
+          const balAfter = db.prepare('SELECT available_qty FROM inventory_balances WHERE variant_id = ?').get(item.variant_id);
+          db.prepare(`
+            INSERT INTO stock_movements (id, variant_id, location_id, change_qty, balance_after, movement_type, reference_id, reason, created_by_user_id)
+            VALUES (?, ?, 'loc-main', ?, ?, 'RETURN', ?, 'Order Deleted - Stock Restored', ?)
+          `).run(
+            'mov-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+            item.variant_id,
+            item.quantity,
+            balAfter ? balAfter.available_qty : 0,
+            order.order_number,
+            req.user.id
+          );
+        }
+      }
+    }
+
+    // 2. Cascade delete dependent child records
+    db.prepare('DELETE FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE order_id = ?)').run(orderId);
+    db.prepare('DELETE FROM invoices WHERE order_id = ?').run(orderId);
+    db.prepare('DELETE FROM payment_verification_events WHERE payment_id IN (SELECT id FROM payments WHERE order_id = ?)').run(orderId);
+    db.prepare('DELETE FROM payments WHERE order_id = ?').run(orderId);
+    db.prepare('DELETE FROM refunds WHERE order_id = ?').run(orderId);
+    db.prepare('DELETE FROM print_jobs WHERE order_id = ?').run(orderId);
+    db.prepare('DELETE FROM order_items WHERE order_id = ?').run(orderId);
+    db.prepare('DELETE FROM orders WHERE id = ?').run(orderId);
+
+    logAudit(req.user.id, req.user.email, 'ORDER_DELETED', 'ORDER', orderId, {
+      orderNumber: order.order_number,
+      totalPayablePaise: order.total_payable_paise,
+      channel: order.channel
+    }, req);
+  });
+
+  try {
+    deleteTx();
+    res.json({ success: true, message: `Order ${order.order_number} deleted successfully.` });
+  } catch (err) {
+    console.error('Failed to delete order:', err);
+    res.status(500).json({ error: 'Failed to delete order: ' + err.message });
+  }
+});
+
+// ── DELETE /api/orders (Delete All Orders with Safe Restocking) ───────────────
+router.delete('/orders', authenticateToken, (req, res) => {
+  if (!req.user.permissions.includes('orders:manage') && !req.user.permissions.includes('pos:checkout') && req.user.roleId !== 'role-owner') {
+    return res.status(403).json({ error: 'Forbidden: Insufficient privileges to delete all orders.' });
+  }
+
+  const { channel } = req.query; // optional: 'POS' or 'WEBSITE'
+
+  const deleteTx = db.transaction(() => {
+    let sql = 'SELECT id, order_number, status, channel FROM orders';
+    const params = [];
+    if (channel === 'POS') {
+      sql += ' WHERE channel = ?';
+      params.push('POS');
+    } else if (channel === 'WEBSITE' || channel === 'ONLINE') {
+      sql += " WHERE channel IN ('ONLINE', 'WEBSITE')";
+    }
+
+    const ordersToDelete = db.prepare(sql).all(...params);
+    if (ordersToDelete.length === 0) {
+      return { count: 0 };
+    }
+
+    for (const order of ordersToDelete) {
+      // 1. Restore stock if active
+      if (order.status !== 'REFUNDED' && order.status !== 'CANCELLED') {
+        const items = db.prepare('SELECT variant_id, quantity FROM order_items WHERE order_id = ?').all(order.id);
+        for (const item of items) {
+          if (item.variant_id) {
+            db.prepare(`
+              UPDATE inventory_balances
+              SET available_qty = available_qty + ?, updated_at = datetime('now')
+              WHERE variant_id = ?
+            `).run(item.quantity, item.variant_id);
+
+            const balAfter = db.prepare('SELECT available_qty FROM inventory_balances WHERE variant_id = ?').get(item.variant_id);
+            db.prepare(`
+              INSERT INTO stock_movements (id, variant_id, location_id, change_qty, balance_after, movement_type, reference_id, reason, created_by_user_id)
+              VALUES (?, ?, 'loc-main', ?, ?, 'RETURN', ?, 'All Orders Deleted - Stock Restored', ?)
+            `).run(
+              'mov-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+              item.variant_id,
+              item.quantity,
+              balAfter ? balAfter.available_qty : 0,
+              order.order_number,
+              req.user.id
+            );
+          }
+        }
+      }
+
+      // 2. Cascade delete
+      db.prepare('DELETE FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE order_id = ?)').run(order.id);
+      db.prepare('DELETE FROM invoices WHERE order_id = ?').run(order.id);
+      db.prepare('DELETE FROM payment_verification_events WHERE payment_id IN (SELECT id FROM payments WHERE order_id = ?)').run(order.id);
+      db.prepare('DELETE FROM payments WHERE order_id = ?').run(order.id);
+      db.prepare('DELETE FROM refunds WHERE order_id = ?').run(order.id);
+      db.prepare('DELETE FROM print_jobs WHERE order_id = ?').run(order.id);
+      db.prepare('DELETE FROM order_items WHERE order_id = ?').run(order.id);
+      db.prepare('DELETE FROM orders WHERE id = ?').run(order.id);
+    }
+
+    logAudit(req.user.id, req.user.email, 'ALL_ORDERS_DELETED', 'ORDERS', 'ALL', {
+      deletedCount: ordersToDelete.length,
+      channel: channel || 'ALL'
+    }, req);
+
+    return { count: ordersToDelete.length };
+  });
+
+  try {
+    const result = deleteTx();
+    res.json({
+      success: true,
+      deletedCount: result.count,
+      message: `Successfully deleted ${result.count} order(s).`
+    });
+  } catch (err) {
+    console.error('Failed to delete all orders:', err);
+    res.status(500).json({ error: 'Failed to delete orders: ' + err.message });
+  }
 });
 
 // ==============================================================================
@@ -1588,10 +2442,20 @@ router.get('/settings', (req, res) => {
 
 // ── GET /api/qr/resolve/:code (Permanent Frame QR Code Resolution) ────────────
 router.get('/qr/resolve/:code', (req, res) => {
-  const rawCode = (req.params.code || '').trim();
+  let rawCode = (req.params.code || '').trim();
   if (!rawCode) {
     return res.status(400).json({ error: 'Frame identifier or SKU required.' });
   }
+
+  // Strip query parameters, hashes, and any URL prefix (e.g. HTTPS://.../Q/<SKU>)
+  rawCode = rawCode.split('?')[0].split('#')[0];
+  if (/^https?:\/\//i.test(rawCode) || rawCode.includes('/')) {
+    const parts = rawCode.split('/').filter(Boolean);
+    if (parts.length > 0) {
+      rawCode = parts[parts.length - 1];
+    }
+  }
+  rawCode = decodeURIComponent(rawCode).trim();
 
   // Look up product and primary variant by SKU, barcode, variant SKU, or ID
   const item = db.prepare(`
@@ -1615,7 +2479,11 @@ router.get('/qr/resolve/:code', (req, res) => {
       pv.barcode,
       pv.color_name,
       pv.color_hex,
-      COALESCE(ib.available_qty, 0) as available_qty
+      COALESCE(ib.available_qty, 0) as available_qty,
+      (SELECT SUM(ib2.available_qty)
+       FROM product_variants pv2
+       JOIN inventory_balances ib2 ON pv2.id = ib2.variant_id
+       WHERE pv2.product_id = p.id) as total_stock
     FROM products p
     JOIN product_variants pv ON p.id = pv.product_id
     LEFT JOIN inventory_balances ib ON pv.id = ib.variant_id
@@ -1633,6 +2501,10 @@ router.get('/qr/resolve/:code', (req, res) => {
       error: `No optical frame found matching code "${rawCode}".`
     });
   }
+
+  const effectiveQty = item.available_qty > 0 
+    ? item.available_qty 
+    : (item.total_stock !== null && item.total_stock !== undefined ? item.total_stock : item.available_qty);
 
   res.json({
     found: true,
@@ -1653,8 +2525,9 @@ router.get('/qr/resolve/:code', (req, res) => {
       sellingPricePaise: item.selling_price_paise,
       sellingPriceINR: item.selling_price_paise / 100,
       originalPriceINR: item.original_price_paise ? item.original_price_paise / 100 : null,
-      availableQty: item.available_qty,
-      inStock: item.available_qty > 0
+      availableQty: effectiveQty,
+      total_stock: item.total_stock,
+      inStock: effectiveQty > 0
     }
   });
 });

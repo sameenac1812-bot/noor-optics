@@ -732,36 +732,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  content-visibility: auto;
-  contain-intrinsic-size: auto none auto 420px;
-  contain: layout style;
-  transform: translateZ(0);
-  backface-visibility: hidden;
 }
 
 .product-card:hover {
   border-color: #D8D8DF;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
-}
-
-/* ── Scroll-Driven Card Reveal Animation (Zero-JS Compositor Thread) ─ */
-@supports ((animation-timeline: view()) and (animation-range: 0% 100%)) {
-  .product-card {
-    animation: card-scroll-reveal ease-out both;
-    animation-timeline: view();
-    animation-range: entry 10% cover 30%;
-  }
-
-  @keyframes card-scroll-reveal {
-    from {
-      opacity: 0.15;
-      transform: translateY(22px) scale(0.985);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
 }
 
 /* Fallback for browsers without animation-timeline: view() using IntersectionObserver */
@@ -803,9 +778,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .card-img {
   width: 82%;
   height: 82%;
+  display: block;
   object-fit: contain;
   transition: transform var(--transition-normal);
   transform: translateZ(0);
+  will-change: transform;
   backface-visibility: hidden;
 }
 

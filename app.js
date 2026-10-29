@@ -285,10 +285,11 @@
               </svg>
             </button>
             <img class="card-img"
-                 src="${product.image}"
+                 src="${(product.image && product.image.startsWith('/')) ? product.image : ('/' + (product.image || 'images/stockholm_noir.jpg'))}"
                  alt="${product.name} - ${product.shape} Eyeglasses"
                  loading="lazy"
                  decoding="async"
+                 onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';"
                  id="img-${product.id}">
             <div class="card-quick-action">
               <button class="btn-card-quickview" data-action="quickview" data-id="${product.id}">Quick View</button>
@@ -528,7 +529,7 @@
       if (!product) return '';
       return `
         <div class="wishlist-item-card">
-          <img class="wishlist-item-img" src="${product.image}" alt="${product.name}">
+          <img class="wishlist-item-img" src="${(product.image && product.image.startsWith('/')) ? product.image : ('/' + (product.image || 'images/stockholm_noir.jpg'))}" alt="${product.name}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
           <div class="wishlist-item-info">
             <h5 class="wishlist-item-name">${product.name}</h5>
             <div class="wishlist-item-price">${formatINR(product.price)}</div>
@@ -670,7 +671,7 @@
 
     const html = state.cart.map(item => `
       <div class="cart-item-card" data-cart-key="${item.cartKey}">
-        <img class="cart-item-img" src="${item.image}" alt="${item.name}">
+        <img class="cart-item-img" src="${(item.image && item.image.startsWith('/')) ? item.image : ('/' + (item.image || 'images/stockholm_noir.jpg'))}" alt="${item.name}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
         <div class="cart-item-details">
           <h5 class="cart-item-title">${item.name}</h5>
           <span class="cart-item-variant">Color: ${item.color}</span>
@@ -781,7 +782,7 @@
     DOM.quickViewContainer.innerHTML = `
       <div class="quickview-grid">
         <div class="quickview-gallery">
-          <img class="quickview-img" src="${product.image}" alt="${product.name}" id="qv-main-img">
+          <img class="quickview-img" src="${(product.image && product.image.startsWith('/')) ? product.image : ('/' + (product.image || 'images/stockholm_noir.jpg'))}" alt="${product.name}" id="qv-main-img" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
         </div>
         <div class="quickview-info">
           <div>
@@ -888,7 +889,7 @@
     if (DOM.checkoutItemsPreview) {
       DOM.checkoutItemsPreview.innerHTML = state.cart.map(item => `
         <div class="checkout-preview-item">
-          <img class="checkout-preview-img" src="${item.image}" alt="${item.name}">
+          <img class="checkout-preview-img" src="${(item.image && item.image.startsWith('/')) ? item.image : ('/' + (item.image || 'images/stockholm_noir.jpg'))}" alt="${item.name}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
           <div>
             <div class="checkout-preview-title">${item.name}</div>
             <div class="checkout-preview-meta">Qty: ${item.quantity} · ${item.color}</div>
@@ -1489,6 +1490,74 @@
     refreshCardScrollObserver();
   }
 
+  // ── Sync Live Catalog from SQLite API ──────────────────────────────────────
+  async function loadLiveCatalog() {
+    try {
+      const resp = await fetch('/api/products');
+      if (!resp.ok) return;
+      const cloudProducts = await resp.json();
+      if (!Array.isArray(cloudProducts) || cloudProducts.length === 0) return;
+
+      const staticList = window.EYEWEAR_CATALOG || [];
+
+      state.catalog = cloudProducts.map(p => {
+        const staticMatch = staticList.find(sc => sc.id === p.id || (sc.sku && p.sku && sc.sku.toUpperCase() === p.sku.toUpperCase()) || sc.name.toLowerCase() === p.name.toLowerCase());
+
+        let colors = [];
+        if (Array.isArray(p.variants) && p.variants.length > 0) {
+          colors = p.variants.map(v => ({
+            name: v.color_name || 'Standard',
+            hex: v.color_hex || '#111111'
+          }));
+        } else if (staticMatch && staticMatch.colors) {
+          colors = staticMatch.colors;
+        } else {
+          colors = [{ name: 'Standard', hex: '#111111' }];
+        }
+
+        let dimensions = { lens: '52mm', bridge: '18mm', temple: '145mm', weight: '15g' };
+        if (staticMatch && staticMatch.dimensions) {
+          dimensions = staticMatch.dimensions;
+        } else if (p.variants && p.variants[0] && p.variants[0].dimensions_json) {
+          try { dimensions = JSON.parse(p.variants[0].dimensions_json); } catch (_) {}
+        }
+
+        const price = p.selling_price_inr !== undefined ? p.selling_price_inr : (p.selling_price_paise ? p.selling_price_paise / 100 : (staticMatch ? staticMatch.price : 2999));
+        const originalPrice = p.original_price_inr !== undefined ? p.original_price_inr : (p.original_price_paise ? p.original_price_paise / 100 : (staticMatch ? staticMatch.originalPrice : null));
+        const stock = Number(p.total_stock !== undefined ? p.total_stock : (p.stock || 10));
+
+        let badge = staticMatch ? staticMatch.badge : '';
+        if (stock <= 0) badge = 'Out of Stock';
+        else if (!badge && !staticMatch) badge = 'New Arrival';
+
+        return {
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          collection: staticMatch ? staticMatch.collection : (p.brand || 'Nordic Collection'),
+          price: price,
+          originalPrice: originalPrice,
+          badge: badge,
+          shape: p.shape || (staticMatch ? staticMatch.shape : 'Rectangular'),
+          material: p.material || (staticMatch ? staticMatch.material : 'Italian Bio-Acetate'),
+          fit: p.fit || (staticMatch ? staticMatch.fit : 'Regular'),
+          category: p.category || (staticMatch ? staticMatch.category : 'Optical'),
+          rating: staticMatch ? staticMatch.rating : 4.9,
+          reviewsCount: staticMatch ? staticMatch.reviewsCount : 24,
+          image: p.image_url || (staticMatch ? staticMatch.image : 'images/stockholm_noir.jpg'),
+          colors: colors,
+          dimensions: dimensions,
+          description: p.description || (staticMatch ? staticMatch.description : 'Bespoke Scandinavian eyewear engineered with optical precision.')
+        };
+      });
+
+      renderProductGrid();
+      console.log(`✓ Live catalog synced from /api/products: ${state.catalog.length} frames active.`);
+    } catch (err) {
+      console.warn('Live catalog sync warning:', err);
+    }
+  }
+
   // ── Initialization ────────────────────────────────────────────────────────
   function init() {
     initDOMCache();
@@ -1500,6 +1569,9 @@
     renderCartDrawer();
     renderWishlistDrawer();
     attachEventHandlers();
+
+    // Fetch live inventory items so newly added frames appear immediately on the webpage
+    loadLiveCatalog();
 
     // Optional catalog sync from Supabase if connected
     if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {

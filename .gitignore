@@ -12,3 +12,5 @@ data/*.db*
 uploads/
 
 .vercel
+.agents/
+skills-lock.json

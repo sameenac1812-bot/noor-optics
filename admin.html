@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="apple-touch-icon" href="/images/favicon.png" />
-  <link rel="stylesheet" href="/admin.css?v=5.5.0" />
+  <link rel="stylesheet" href="/admin.css?v=5.9.0" />
 </head>
 <body>
 
@@ -20,7 +20,7 @@
   <div class="login-overlay" id="login-overlay">
     <div class="login-card">
       <div class="login-header">
-        <img src="images/noor_logo_black.png" alt="NOOR OPTIC" style="height:38px;width:auto;margin:0 auto 0.75rem auto;display:block;" />
+        <img src="/images/noor_logo_black.png" alt="NOOR OPTIC" style="height:38px;width:auto;margin:0 auto 0.75rem auto;display:block;" />
         <p class="login-sub">Retail Business Management, Inventory & In-Store POS</p>
       </div>
       <form id="login-form">
@@ -49,7 +49,7 @@
     <aside class="admin-sidebar" id="admin-sidebar">
       <div class="sidebar-header">
         <div class="sidebar-brand">
-          <img src="images/noor_logo_white.png" alt="NOOR OPTIC" style="height:26px;width:auto;margin-bottom:0.35rem;display:block;" />
+          <img src="/images/noor_logo_white.png" alt="NOOR OPTIC" style="height:26px;width:auto;margin-bottom:0.35rem;display:block;" />
           <span>RETAIL OPS & POS</span>
         </div>
       </div>
@@ -370,70 +370,141 @@
                   <span>🌐 Website Orders</span>
                   <span class="subtab-count" id="count-website-orders">0</span>
                 </button>
+                <button class="subtab-btn" id="subtab-clients" data-order-channel="CLIENTS">
+                  <span>👥 Client Directory</span>
+                  <span class="subtab-count" id="count-clients">3</span>
+                </button>
               </div>
 
-              <!-- Export Daily Sales Report Button -->
-              <div class="orders-header-actions">
+              <!-- Orders Header Actions: Delete All & Export Daily Sales Report -->
+              <div class="orders-header-actions" id="orders-header-actions" style="display:flex; align-items:center; gap:8px;">
+                <button class="btn-header-action btn-danger-soft" id="btn-delete-all-orders" title="Delete all orders in the pipeline">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                  <span>Delete All Orders</span>
+                </button>
                 <button class="btn-header-action btn-gold" id="btn-open-daily-report-modal">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   <span>Export Daily Sales Report</span>
                 </button>
               </div>
-            </div>
 
-            <!-- Orders Search & Filter Controls -->
-            <div class="orders-filter-row">
-              <div class="search-input-wrap">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" id="orders-search-input" class="form-control" placeholder="Search invoice #, order ref, customer name, or phone..." />
-              </div>
-              <div class="filter-dropdowns">
-                <select id="orders-status-filter" class="form-control">
-                  <option value="">All Order Statuses</option>
-                  <option value="CONFIRMED">Confirmed</option>
-                  <option value="PROCESSING">Processing</option>
-                  <option value="DISPATCHED">Dispatched</option>
-                  <option value="DELIVERED">Delivered</option>
-                  <option value="REFUNDED">Refunded</option>
-                  <option value="CANCELLED">Cancelled</option>
-                </select>
-                <select id="orders-payment-filter" class="form-control">
-                  <option value="">All Payment Statuses</option>
-                  <option value="VERIFIED">Verified (Paid)</option>
-                  <option value="AWAITING_VERIFICATION">Awaiting Review</option>
-                  <option value="UNPAID">Unpaid</option>
-                  <option value="REFUNDED">Refunded</option>
-                </select>
+              <!-- Clients Header Actions (Shown when Client Directory subtab is active) -->
+              <div class="orders-header-actions" id="clients-header-actions" style="display:none; align-items:center; gap:8px;">
+                <button class="btn-header-action btn-gold" id="btn-open-add-client-modal">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span>+ Add New Client</span>
+                </button>
+                <button class="btn-header-action" id="btn-export-clients-csv">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>Export Clients CSV</span>
+                </button>
               </div>
             </div>
 
-            <!-- Orders Data Table -->
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Invoice / Token</th>
-                    <th>Date & Time</th>
-                    <th>Customer</th>
-                    <th>Items & Qty</th>
-                    <th>Subtotal</th>
-                    <th>Discount</th>
-                    <th>Total Payable</th>
-                    <th>Payment</th>
-                    <th>Fulfillment</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="orders-table-body">
-                  <tr><td colspan="10" style="text-align:center; padding:2.5rem; color:#9CA3AF;">Loading orders...</td></tr>
-                </tbody>
-              </table>
+            <!-- 2.A ORDERS CONTENT CONTAINER -->
+            <div id="orders-content-container">
+              <!-- Orders Search & Filter Controls -->
+              <div class="orders-filter-row">
+                <div class="search-input-wrap">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input type="text" id="orders-search-input" class="form-control" placeholder="Search invoice #, order ref, customer name, or phone..." />
+                </div>
+                <div class="filter-dropdowns">
+                  <select id="orders-status-filter" class="form-control">
+                    <option value="">All Order Statuses</option>
+                    <option value="CONFIRMED">Confirmed</option>
+                    <option value="PROCESSING">Processing</option>
+                    <option value="DISPATCHED">Dispatched</option>
+                    <option value="DELIVERED">Delivered</option>
+                    <option value="REFUNDED">Refunded</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </select>
+                  <select id="orders-payment-filter" class="form-control">
+                    <option value="">All Payment Statuses</option>
+                    <option value="VERIFIED">Verified (Paid)</option>
+                    <option value="AWAITING_VERIFICATION">Awaiting Review</option>
+                    <option value="UNPAID">Unpaid</option>
+                    <option value="REFUNDED">Refunded</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Orders Data Table -->
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Invoice / Token</th>
+                      <th>Date & Time</th>
+                      <th>Customer</th>
+                      <th>Items & Qty</th>
+                      <th>Subtotal</th>
+                      <th>Discount</th>
+                      <th>Total Payable</th>
+                      <th>Payment</th>
+                      <th>Fulfillment</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="orders-table-body">
+                    <tr><td colspan="10" style="text-align:center; padding:2.5rem; color:#9CA3AF;">Loading orders...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Orders Pagination / Summary -->
+              <div class="table-footer-bar">
+                <span id="orders-count-label">Showing 0 orders</span>
+                <div class="pagination-controls" id="orders-pagination"></div>
+              </div>
             </div>
 
-            <!-- Orders Pagination / Summary -->
-            <div class="table-footer-bar">
-              <span id="orders-count-label">Showing 0 orders</span>
-              <div class="pagination-controls" id="orders-pagination"></div>
+            <!-- 2.B CLIENTS DIRECTORY CONTENT CONTAINER (Strictly inside Orders Panel) -->
+            <div id="clients-content-container" style="display:none;">
+              <!-- Clients Search & Filter Row -->
+              <div class="orders-filter-row">
+                <div class="search-input-wrap">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input type="text" id="clients-search-input" class="form-control" placeholder="Search client name, phone number, city, or CLT ID..." />
+                </div>
+                <div class="filter-dropdowns">
+                  <select id="clients-status-filter" class="form-control">
+                    <option value="active">Active Clients Only</option>
+                    <option value="all">All Clients (Inc. Archived)</option>
+                    <option value="archived">Archived Only</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Clients Data Table -->
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Client ID</th>
+                      <th>Client Name</th>
+                      <th>Age</th>
+                      <th>Phone Number</th>
+                      <th>City</th>
+                      <th>Orders</th>
+                      <th>Total Spend</th>
+                      <th>Last Order</th>
+                      <th>Prescriptions</th>
+                      <th>Registered</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="clients-table-body">
+                    <tr><td colspan="11" style="text-align:center; padding:2.5rem; color:#9CA3AF;">Loading client directory...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Clients Table Footer -->
+              <div class="table-footer-bar">
+                <span id="clients-count-label">Showing 0 clients</span>
+                <div class="pagination-controls" id="clients-pagination"></div>
+              </div>
             </div>
           </div>
         </section>
@@ -485,6 +556,12 @@
                 <button class="btn-header-action btn-gold" id="btn-batch-stickers" disabled>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                   <span id="btn-batch-stickers-text">Print Selected Stickers (0)</span>
+                </button>
+
+                <!-- Batch Delete Frames Button -->
+                <button class="btn-header-action btn-danger-soft" id="btn-batch-delete-frames" disabled style="display:none;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                  <span id="btn-batch-delete-frames-text">Delete Selected (0)</span>
                 </button>
               </div>
             </div>
@@ -636,10 +713,30 @@
                   <button class="btn-table-action" id="btn-clear-cart" title="Clear all items from bill">Clear</button>
                 </div>
 
-                <!-- Customer Details Input -->
-                <div class="pos-customer-row">
-                  <input type="text" id="pos-cust-name" class="form-control" placeholder="Client Name (Walk-in Client)" value="Walk-in Client" />
-                  <input type="tel" id="pos-cust-phone" class="form-control" placeholder="Phone Number" />
+                <!-- Customer Details & Selected Client Badge -->
+                <div class="pos-customer-selection-wrap">
+                  <div class="pos-client-summary-card" id="pos-client-summary-card">
+                    <div class="pos-client-summary-header">
+                      <div class="pos-client-avatar" id="pos-client-avatar">👤</div>
+                      <div class="pos-client-meta">
+                        <div class="pos-client-name" id="pos-client-name-display">No Client Selected</div>
+                        <div class="pos-client-sub" id="pos-client-phone-display">Click "Add Details" below to attach client & RX</div>
+                      </div>
+                      <button type="button" class="btn-pos-edit-client" id="btn-pos-edit-client" style="display:none;" title="Edit or change client">
+                        <span>✏️ Edit</span>
+                      </button>
+                    </div>
+                    <div class="pos-rx-attached-badge" id="pos-rx-attached-badge" style="display:none;">
+                      <div class="rx-badge-pill">
+                        <span class="rx-badge-icon">🩺</span>
+                        <span class="rx-badge-text" id="pos-rx-badge-text">RX Attached</span>
+                      </div>
+                      <button type="button" class="btn-rx-remove" id="btn-pos-remove-rx" title="Detach prescription">&times;</button>
+                    </div>
+                  </div>
+                  <!-- Hidden inputs for fallback compatibility -->
+                  <input type="hidden" id="pos-cust-name" value="Walk-in Client" />
+                  <input type="hidden" id="pos-cust-phone" value="" />
                 </div>
 
                 <!-- Cart Line Items -->
@@ -703,11 +800,11 @@
                   </div>
                 </div>
 
-                <!-- Checkout Action Button -->
+                <!-- Checkout Action Button (Renamed to "Add Details") -->
                 <div class="pos-checkout-actions">
                   <button class="btn-pos-checkout" id="btn-pos-confirm-checkout" disabled>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span>Confirm Checkout & Print Invoice</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="pos-checkout-btn-icon"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                    <span id="pos-btn-checkout-label">Add Details</span>
                   </button>
                 </div>
               </div>
@@ -846,52 +943,16 @@
             <h4 class="settings-sec-title" style="margin-bottom:0.75rem;">Choose Label Preset</h4>
 
             <div class="stk-presets-wrapper" style="display:flex; flex-direction:column; gap:0.65rem;">
-              <!-- Preset 1: Web Link QR (Version 2, 25x25 — Instant Phone Camera & POS) -->
-              <label class="stk-preset-card active" data-preset="url" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:2px solid #000; background:#FFFDE7; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
-                <input type="radio" name="stk-preset-choice" value="url" checked style="margin-top:0.25rem; accent-color:#000;" />
+              <!-- Single Verified Preset: Zero-Bleed High-Contrast Official QR -->
+              <label class="stk-preset-card active" data-preset="url" style="display:flex; align-items:flex-start; gap:0.75rem; padding:1rem; border:2px solid #000; background:#FFFDE7; border-radius:10px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                <input type="radio" name="stk-preset-choice" value="url" checked style="margin-top:0.3rem; accent-color:#000;" />
                 <div style="flex:1;">
-                  <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <strong style="font-size:0.88rem; color:#000;">🌐 Web Link QR (Recommended — Phone Camera & POS)</strong>
-                    <span style="font-size:0.7rem; font-weight:800; background:#000; color:#FFE500; padding:2px 6px; border-radius:4px;">INSTANT CAMERA SCAN</span>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+                    <strong style="font-size:0.95rem; color:#000;">✨ Official Noor Frame Tag (Zero-Bleed QR)</strong>
+                    <span style="font-size:0.72rem; font-weight:800; background:#000; color:#FFE500; padding:3px 8px; border-radius:4px;">INSTANT SCAN VERIFIED</span>
                   </div>
-                  <p style="font-size:0.75rem; color:#475569; margin-top:0.25rem; line-height:1.35;">
-                    Uppercase short link (HTTPS://NOOROPTICS.VERCEL.APP/Q/...). Instantly recognized by iPhone & Android cameras with clickable popup banner, and adds directly to bill in POS scanner. Full 4-module quiet zone.
-                  </p>
-                </div>
-              </label>
-
-              <!-- Preset 2: Pure Frame SKU (Version 1, 21x21) -->
-              <label class="stk-preset-card" data-preset="sku" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:1px solid #CBD5E1; background:#FFFFFF; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
-                <input type="radio" name="stk-preset-choice" value="sku" style="margin-top:0.25rem; accent-color:#000;" />
-                <div style="flex:1;">
-                  <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <strong style="font-size:0.88rem; color:#1E293B;">🏷️ Pure Frame SKU (21×21 — USB/Bluetooth Scanners)</strong>
-                    <span style="font-size:0.7rem; font-weight:700; background:#E2E8F0; color:#1E293B; padding:2px 6px; border-radius:4px;">HARDWARE SCANNERS</span>
-                  </div>
-                  <p style="font-size:0.75rem; color:#64748B; margin-top:0.25rem; line-height:1.35;">
-                    Encodes raw SKU string (e.g. NOOR-AMB-11). Recommended for dedicated handheld USB/Bluetooth barcode guns. Note: phone cameras do not pop up link banners for raw text.
-                  </p>
-                </div>
-              </label>
-
-              <!-- Preset 3: Compact Temple Arm Tag -->
-              <label class="stk-preset-card" data-preset="temple" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:1px solid #CBD5E1; background:#FFFFFF; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
-                <input type="radio" name="stk-preset-choice" value="temple" style="margin-top:0.25rem; accent-color:#000;" />
-                <div style="flex:1;">
-                  <strong style="font-size:0.88rem; color:#1E293B;">🏷️ Compact Frame Temple (14mm)</strong>
-                  <p style="font-size:0.75rem; color:#64748B; margin-top:0.25rem; line-height:1.35;">
-                    Narrow 14mm tag designed for slim sunglasses temples and delicate wire arms.
-                  </p>
-                </div>
-              </label>
-
-              <!-- Preset 4: A4 Label Sheet -->
-              <label class="stk-preset-card" data-preset="a4_sheet" style="display:flex; align-items:flex-start; gap:0.75rem; padding:0.85rem; border:1px solid #CBD5E1; background:#FFFFFF; border-radius:8px; cursor:pointer; transition:all 0.15s ease;">
-                <input type="radio" name="stk-preset-choice" value="a4_sheet" style="margin-top:0.25rem; accent-color:#000;" />
-                <div style="flex:1;">
-                  <strong style="font-size:0.88rem; color:#1E293B;">📑 A4 Adhesive Sheet (Grid)</strong>
-                  <p style="font-size:0.75rem; color:#64748B; margin-top:0.25rem; line-height:1.35;">
-                    Grid layout with cut guides for printing batches onto standard A4 sticker paper.
+                  <p style="font-size:0.78rem; color:#334155; line-height:1.4; margin:0;">
+                    High-contrast negative bleed compensated QR. Designed specifically for thermal paper so dots never bleed together. Instantly recognized by phone cameras and POS scanner with zero delay.
                   </p>
                 </div>
               </label>
@@ -1123,6 +1184,483 @@
     </div>
   </div>
 
+  <!-- ── MODAL H: CUSTOMER DETAILS & PRESCRIPTION SELECTION ─────────────── -->
+  <div class="modal-overlay" id="modal-client-details">
+    <div class="admin-modal modal-md">
+      <div class="modal-header">
+        <div>
+          <h3>Client Details & Glasses Prescription</h3>
+          <p class="modal-sub">Authoritative customer record & prescription linking</p>
+        </div>
+        <button type="button" class="btn-close-modal" data-close-modal>&times;</button>
+      </div>
+
+      <div class="modal-body modal-scrollable" style="max-height:75vh;">
+        <!-- Search Existing Client (Typeahead) -->
+        <div class="client-search-block">
+          <label style="font-weight:700; font-size:0.8rem; text-transform:uppercase; color:#6B7280; margin-bottom:4px; display:block;">
+            🔍 Search Existing Client
+          </label>
+          <div style="position:relative;">
+            <input type="text" id="client-search-typeahead" class="form-control" placeholder="Type name, phone number, or CLT-1001..." autocomplete="off" />
+            <div id="client-typeahead-dropdown" class="client-typeahead-dropdown" style="display:none;"></div>
+          </div>
+          <small class="form-hint">Select a matching customer above to auto-populate details, or fill new client details below.</small>
+        </div>
+
+        <div class="client-divider"><span>OR ENTER / CONFIRM DETAILS</span></div>
+
+        <!-- Form fields -->
+        <form id="form-client-details">
+          <input type="hidden" id="cust-hidden-id" value="" />
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="cust-full-name">Client's Full Name <span class="req">*</span></label>
+              <input type="text" id="cust-full-name" class="form-control" placeholder="e.g. Aarav Patel" required />
+            </div>
+            <div class="form-group">
+              <label for="cust-age">Age <span class="req">*</span></label>
+              <input type="number" id="cust-age" class="form-control" placeholder="e.g. 34" min="1" max="120" required />
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="cust-phone">Phone Number <span class="req">*</span></label>
+              <input type="tel" id="cust-phone" class="form-control" placeholder="e.g. 98765 43210" required />
+              <small class="form-hint">Family shared numbers supported</small>
+            </div>
+            <div class="form-group">
+              <label for="cust-city">City <span class="req">*</span></label>
+              <input type="text" id="cust-city" class="form-control" placeholder="e.g. Bengaluru" required />
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="cust-email">Email Address (Optional)</label>
+              <input type="email" id="cust-email" class="form-control" placeholder="client@example.com" />
+            </div>
+            <div class="form-group">
+              <label for="cust-dob">Date of Birth (Optional)</label>
+              <input type="date" id="cust-dob" class="form-control" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="cust-address">Delivery / Street Address (Optional)</label>
+            <input type="text" id="cust-address" class="form-control" placeholder="House/Flat #, Street, Area" />
+          </div>
+
+          <div class="form-group">
+            <label for="cust-notes">General Customer Notes (Internal)</label>
+            <textarea id="cust-notes" class="form-control" rows="2" placeholder="e.g. Prefers lightweight titanium frames..."></textarea>
+          </div>
+
+          <!-- Prescription Section in Client Modal -->
+          <div class="client-rx-section">
+            <div class="client-rx-header">
+              <span style="font-weight:700; font-size:0.85rem; color:#0F3D64;">👓 Glasses Prescription (RX)</span>
+              <button type="button" class="btn-table-action" id="btn-open-rx-form" style="background:#EFF6FF; color:#2563EB; border-color:#BFDBFE;">
+                + Add / Create New RX
+              </button>
+            </div>
+
+            <!-- Existing Prescriptions list for this client -->
+            <div id="client-saved-rx-container" style="display:none; margin-top:8px;">
+              <label style="font-size:0.75rem; color:#6B7280; font-weight:600;">Select Saved Prescription for this Order:</label>
+              <select id="client-saved-rx-select" class="form-control">
+                <option value="">-- No Prescription Selected --</option>
+              </select>
+            </div>
+
+            <div id="client-active-rx-summary" class="active-rx-summary-card" style="display:none; margin-top:8px;">
+              <!-- Dynamic RX summary displayed here -->
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" class="btn-header-action" data-close-modal>Back to Bill</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn-header-action btn-gold" id="btn-save-client-with-rx">
+            Save Details & Return to Bill
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL I: OPTICALTOOL "CREATE NEW RX" PRESCRIPTION FORM ────────────── -->
+  <div class="modal-overlay" id="modal-prescription">
+    <div class="admin-modal optical-rx-modal">
+      <div class="modal-drag-handle"></div>
+      <div class="modal-header optical-rx-header">
+        <div class="optical-rx-title-wrap">
+          <span class="optical-rx-stethoscope">🩺</span>
+          <h3 class="optical-rx-title">Create New RX</h3>
+        </div>
+        <button type="button" class="optical-rx-close-btn" data-close-modal>&times;</button>
+      </div>
+
+      <div class="modal-body optical-rx-body">
+        <!-- Input Mode Selector -->
+        <div class="rx-mode-toggle">
+          <label class="rx-mode-radio active" id="rx-mode-select-label">
+            <input type="radio" name="rx-entry-mode" value="VALUES" id="rx-mode-values" checked />
+            <span>Select Values</span>
+          </label>
+          <label class="rx-mode-radio" id="rx-mode-upload-label">
+            <input type="radio" name="rx-entry-mode" value="UPLOAD" id="rx-mode-upload" />
+            <span>Take/Upload Image</span>
+          </label>
+        </div>
+
+        <!-- Mode 1: Structured Diopter Values Grid (OpticalTool reference) -->
+        <div id="rx-mode-values-section" class="rx-section-active">
+          <div class="optical-grid-card">
+            <div class="optical-grid-header-row">
+              <div class="optical-col-eye"></div>
+              <div class="optical-col-field">SPH</div>
+              <div class="optical-col-field">CYL</div>
+              <div class="optical-col-field">AXIS</div>
+            </div>
+
+            <!-- OD (Right Eye) -->
+            <div class="optical-grid-row">
+              <div class="optical-eye-badge-wrap">
+                <span class="optical-eye-pill">OD</span>
+                <span class="optical-eye-label">Right</span>
+              </div>
+              <div class="optical-cell">
+                <button type="button" class="rx-combobox-btn" id="rx-od-sph-btn" data-field="od_sph" data-label="Right SPH">
+                  <span class="combobox-val">Select</span>
+                  <span class="combobox-arrow">⌵</span>
+                </button>
+              </div>
+              <div class="optical-cell">
+                <button type="button" class="rx-combobox-btn" id="rx-od-cyl-btn" data-field="od_cyl" data-label="Right CYL">
+                  <span class="combobox-val">Select</span>
+                  <span class="combobox-arrow">⌵</span>
+                </button>
+              </div>
+              <div class="optical-cell">
+                <input type="number" id="rx-od-axis-input" class="rx-axis-input" placeholder="Axis" min="0" max="180" step="1" />
+              </div>
+            </div>
+
+            <!-- OS (Left Eye) -->
+            <div class="optical-grid-row">
+              <div class="optical-eye-badge-wrap">
+                <span class="optical-eye-pill">OS</span>
+                <span class="optical-eye-label">Left</span>
+              </div>
+              <div class="optical-cell">
+                <button type="button" class="rx-combobox-btn" id="rx-os-sph-btn" data-field="os_sph" data-label="Left SPH">
+                  <span class="combobox-val">Select</span>
+                  <span class="combobox-arrow">⌵</span>
+                </button>
+              </div>
+              <div class="optical-cell">
+                <button type="button" class="rx-combobox-btn" id="rx-os-cyl-btn" data-field="os_cyl" data-label="Left CYL">
+                  <span class="combobox-val">Select</span>
+                  <span class="combobox-arrow">⌵</span>
+                </button>
+              </div>
+              <div class="optical-cell">
+                <input type="number" id="rx-os-axis-input" class="rx-axis-input" placeholder="Axis" min="0" max="180" step="1" />
+              </div>
+            </div>
+
+            <!-- Addition Row -->
+            <div class="optical-grid-row addition-row">
+              <div class="optical-addition-label">Addition</div>
+              <div class="optical-cell">
+                <button type="button" class="rx-combobox-btn" id="rx-addition-btn" data-field="addition" data-label="Addition">
+                  <span class="combobox-val">Select</span>
+                  <span class="combobox-arrow">⌵</span>
+                </button>
+              </div>
+              <div class="optical-cell"></div>
+              <div class="optical-cell"></div>
+            </div>
+
+            <!-- IPD & Checked By Row -->
+            <div class="optical-ipd-row">
+              <div class="optical-ipd-block">
+                <div class="ipd-title">I.P.D</div>
+                <div class="ipd-inputs">
+                  <div class="ipd-sub-row">
+                    <span class="ipd-label">D -</span>
+                    <input type="number" id="rx-ipd-d-input" class="ipd-field" placeholder="__" step="0.5" min="40" max="85" />
+                    <span class="ipd-unit">mm</span>
+                  </div>
+                  <div class="ipd-sub-row">
+                    <span class="ipd-label">N -</span>
+                    <input type="number" id="rx-ipd-n-input" class="ipd-field" placeholder="__" step="0.5" min="40" max="85" />
+                    <span class="ipd-unit">mm</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="optical-checked-by-block">
+                <div class="checked-by-input-wrap">
+                  <span class="checked-by-icon">🩺</span>
+                  <input type="text" id="rx-checked-by-input" class="checked-by-field" placeholder="Checked by" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notes Area -->
+          <div class="optical-notes-wrap">
+            <textarea id="rx-notes-input" class="optical-notes-field" rows="2" placeholder="Notes (not printed or shared)..."></textarea>
+          </div>
+        </div>
+
+        <!-- Mode 2: Take / Upload Image Section -->
+        <div id="rx-mode-upload-section" class="rx-section-inactive" style="display:none;">
+          <div class="rx-upload-card">
+            <input type="file" id="rx-file-upload-input" accept="image/*" capture="environment" style="display:none;" />
+            <div class="rx-upload-dropzone" id="rx-upload-dropzone">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <strong>Tap to Take Photo or Upload RX Image</strong>
+              <span>JPG, PNG, WebP up to 10MB</span>
+            </div>
+            <div id="rx-image-preview-wrap" style="display:none; margin-top:10px; text-align:center;">
+              <img id="rx-image-preview" src="" alt="RX Preview" style="max-height:180px; max-width:100%; border-radius:6px; border:1px solid #D1D5DB;" />
+              <div style="margin-top:6px;">
+                <button type="button" class="btn-table-action btn-table-danger" id="btn-remove-rx-image">Remove Image</button>
+              </div>
+            </div>
+            <div class="form-group" style="margin-top:12px;">
+              <label>Prescriber / Clinic / Doctor Details</label>
+              <input type="text" id="rx-prescriber-input" class="form-control" placeholder="e.g. Dr. R. Sharma (Narayana Nethralaya)" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer optical-rx-footer">
+        <button type="button" class="btn-optical-save-rx" id="btn-save-rx">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          <span id="btn-save-rx-text">Save & Add RX to Bill</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BOTTOM SHEET / MODAL: OPTICALTOOL SELECT DIOPTER (SPH / CYL / ADD) ── -->
+  <div class="modal-overlay diopter-sheet-overlay" id="sheet-diopter-selector">
+    <div class="diopter-sheet-card">
+      <div class="sheet-drag-handle"></div>
+      <div class="diopter-sheet-header">
+        <h3 class="diopter-sheet-title" id="diopter-sheet-title">Select SPH</h3>
+        <button type="button" class="diopter-sheet-close" id="btn-close-diopter-sheet">✕ Close</button>
+      </div>
+
+      <!-- Quick Manual Keyboard Entry Bar (Fulfills Requirement 7.C) -->
+      <div class="diopter-manual-bar">
+        <input type="text" id="diopter-manual-input" class="diopter-manual-field" placeholder="Type custom value e.g. -2.75" />
+        <button type="button" class="btn-diopter-apply" id="btn-diopter-apply-manual">Apply</button>
+      </div>
+
+      <!-- Quick Filter Pills Row (Exact match to Reference Screenshot 3) -->
+      <div class="diopter-quick-pills">
+        <span class="diopter-pill-label">POSITIVE (+)</span>
+        <button type="button" class="diopter-quick-pill" data-quick="NONE">NONE</button>
+        <button type="button" class="diopter-quick-pill" data-quick="0.00">0.00</button>
+        <span class="diopter-pill-label">NEGATIVE (-)</span>
+      </div>
+
+      <!-- Dual Column Grid: Positive Left, Negative Right (Exact match to Reference Screenshot 3) -->
+      <div class="diopter-grid-scroll" id="diopter-grid-scroll">
+        <!-- Injected via JavaScript -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL J: COMPLETE CLIENT PROFILE CRM (5 TABS) ──────────────────────── -->
+  <div class="modal-overlay" id="modal-client-profile">
+    <div class="admin-modal modal-lg">
+      <div class="modal-header client-profile-header">
+        <div class="profile-header-main">
+          <div class="profile-avatar-large">👤</div>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <h3 id="cp-client-name" style="margin:0;">Client Profile</h3>
+              <span class="badge-status status-verified" id="cp-client-code">CLT-1001</span>
+            </div>
+            <p class="modal-sub" id="cp-client-meta">Registered Client • Created 29 Oct 2026</p>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn-header-action" id="btn-print-client-profile">🖨️ Print Profile</button>
+          <button type="button" class="btn-close-modal" data-close-modal>&times;</button>
+        </div>
+      </div>
+
+      <!-- Client Profile Subtabs -->
+      <div class="profile-tabs-bar">
+        <button type="button" class="profile-tab-btn active" data-tab="details">Personal Details</button>
+        <button type="button" class="profile-tab-btn" data-tab="orders">Orders & Invoices (<span id="cp-orders-count">0</span>)</button>
+        <button type="button" class="profile-tab-btn" data-tab="prescriptions">Glasses Prescriptions (<span id="cp-rx-count">0</span>)</button>
+        <button type="button" class="profile-tab-btn" data-tab="communications">Communications (Call & WA)</button>
+        <button type="button" class="profile-tab-btn" data-tab="history">Record History & Safety</button>
+      </div>
+
+      <div class="modal-body modal-scrollable" style="max-height:70vh; padding:1.25rem;">
+        <!-- Tab 1: Personal Details (Editable) -->
+        <div class="profile-tab-pane active" id="tab-pane-details">
+          <form id="form-edit-client-profile">
+            <div class="form-row-2">
+              <div class="form-group">
+                <label>Full Name <span class="req">*</span></label>
+                <input type="text" id="cp-edit-name" class="form-control" required />
+              </div>
+              <div class="form-group">
+                <label>Age <span class="req">*</span></label>
+                <input type="number" id="cp-edit-age" class="form-control" min="1" max="120" required />
+              </div>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label>Phone Number <span class="req">*</span></label>
+                <input type="tel" id="cp-edit-phone" class="form-control" required />
+              </div>
+              <div class="form-group">
+                <label>City <span class="req">*</span></label>
+                <input type="text" id="cp-edit-city" class="form-control" required />
+              </div>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" id="cp-edit-email" class="form-control" />
+              </div>
+              <div class="form-group">
+                <label>Date of Birth</label>
+                <input type="date" id="cp-edit-dob" class="form-control" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Delivery / Street Address</label>
+              <input type="text" id="cp-edit-address" class="form-control" />
+            </div>
+            <div class="form-group">
+              <label>Customer Notes</label>
+              <textarea id="cp-edit-notes" class="form-control" rows="2"></textarea>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+              <button type="submit" class="btn-header-action btn-primary" id="btn-save-profile-edits">
+                💾 Save Changes to Database
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Tab 2: Orders & Purchase History -->
+        <div class="profile-tab-pane" id="tab-pane-orders" style="display:none;">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Invoice / Order</th>
+                  <th>Date & Time</th>
+                  <th>Frames / Items</th>
+                  <th>Total Payable</th>
+                  <th>Payment</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="cp-orders-tbody">
+                <tr><td colspan="7" style="text-align:center; padding:1.5rem; color:#9CA3AF;">Loading customer orders...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 3: Glasses Prescriptions -->
+        <div class="profile-tab-pane" id="tab-pane-prescriptions" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <span style="font-weight:700; color:#111;">Prescription History & Clinical Records</span>
+            <button type="button" class="btn-header-action btn-gold" id="btn-cp-add-new-rx">
+              + Add New Prescription
+            </button>
+          </div>
+          <div id="cp-rx-list-container">
+            <!-- Rendered prescriptions cards -->
+          </div>
+        </div>
+
+        <!-- Tab 4: Communications (Call & WhatsApp) -->
+        <div class="profile-tab-pane" id="tab-pane-communications" style="display:none;">
+          <div class="comm-cards-grid">
+            <!-- Call Card -->
+            <div class="comm-card">
+              <div class="comm-card-icon">📞</div>
+              <div class="comm-card-body">
+                <h4>One-Click Phone Call</h4>
+                <p>Launches phone dialer with client's saved number without modifying the stored record.</p>
+                <a id="cp-btn-call" href="#" class="btn-comm btn-call">
+                  <span>📞 Call</span> <strong id="cp-call-phone-label">-</strong>
+                </a>
+              </div>
+            </div>
+
+            <!-- WhatsApp Card -->
+            <div class="comm-card">
+              <div class="comm-card-icon">💬</div>
+              <div class="comm-card-body">
+                <h4>One-Click WhatsApp Chat</h4>
+                <p>Opens WhatsApp conversation with prefilled message for cashier review before sending.</p>
+                <div class="form-group" style="margin:8px 0;">
+                  <label style="font-size:0.75rem; font-weight:700;">Editable Message Template:</label>
+                  <textarea id="cp-wa-message-template" class="form-control" rows="3"></textarea>
+                </div>
+                <a id="cp-btn-whatsapp" href="#" target="_blank" class="btn-comm btn-wa">
+                  <span>💬 Open Chat in WhatsApp</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 5: Record History & Safety -->
+        <div class="profile-tab-pane" id="tab-pane-history" style="display:none;">
+          <div style="background:#F9FAFB; padding:1rem; border-radius:6px; border:1px solid #E5E7EB; margin-bottom:1rem;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.85rem;">
+              <div><strong>Client ID:</strong> <span id="cp-hist-id">-</span></div>
+              <div><strong>Client Code:</strong> <span id="cp-hist-code">-</span></div>
+              <div><strong>Created Date:</strong> <span id="cp-hist-created">-</span></div>
+              <div><strong>Last Updated:</strong> <span id="cp-hist-updated">-</span></div>
+              <div><strong>Lifetime Recorded Purchases:</strong> <span id="cp-hist-spent">₹0.00</span></div>
+              <div><strong>Total Linked Orders:</strong> <span id="cp-hist-orders">0</span></div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid #E5E7EB; padding-top:1rem; margin-top:1rem;">
+            <h4 style="font-size:0.85rem; font-weight:700; color:#DC2626; margin-bottom:4px;">Safe Client Archival / Removal</h4>
+            <p style="font-size:0.75rem; color:#6B7280; margin-bottom:10px;">
+              Archiving a client removes them from active autocomplete while permanently preserving all past invoices, financial ledgers, and order history.
+            </p>
+            <div id="cp-archive-actions">
+              <button type="button" class="btn-table-action btn-table-danger" id="btn-cp-archive-client">
+                🗄️ Archive Client
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-header-action" data-close-modal>Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── 4. DEDICATED PRINT STICKER CONTAINER (ISOLATED @MEDIA PRINT) ──────── -->
   <div id="print-sticker-container" style="display:none;" aria-hidden="true"></div>
 
@@ -1133,6 +1671,6 @@
   <script src="/vendor/chart.umd.min.js?v=5.3.0"></script>
 
   <!-- ── 6. APPLICATION CONTROLLER ─────────────────────────────────────────── -->
-  <script src="/admin.js?v=5.5.0"></script>
+  <script src="/admin.js?v=5.10.0"></script>
 </body>
 </html>
