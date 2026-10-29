@@ -28,6 +28,8 @@ const { generateInvoicePDF } = require('./pdfInvoice');
 const {
   syncSupabaseOrders,
   pushOrderToSupabase,
+  pushCustomerToSupabase,
+  pushPrescriptionToSupabase,
   deleteOrderFromSupabase,
   deleteAllOrdersFromSupabase,
   startBackgroundSync
@@ -913,6 +915,7 @@ router.post('/customers', authenticateToken, (req, res) => {
   }, req);
 
   const created = db.prepare('SELECT * FROM customers WHERE id = ?').get(id);
+  pushCustomerToSupabase(created).catch(console.warn);
   res.json({ success: true, client: created, id, clientCode });
 });
 
@@ -949,6 +952,7 @@ router.put('/customers/:id', authenticateToken, (req, res) => {
   }, req);
 
   const updated = db.prepare('SELECT * FROM customers WHERE id = ?').get(client.id);
+  pushCustomerToSupabase(updated).catch(console.warn);
   res.json({ success: true, client: updated });
 });
 
@@ -1072,6 +1076,11 @@ router.post('/prescriptions', authenticateToken, (req, res) => {
   }, req);
 
   const created = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(id);
+  pushPrescriptionToSupabase({
+    ...created,
+    client_name: client.name,
+    client_phone: client.phone
+  }).catch(console.warn);
   res.json({ success: true, prescription: created, id, prescriptionNumber: rxNumber });
 });
 

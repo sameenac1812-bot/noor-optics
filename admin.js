@@ -500,6 +500,7 @@
 
       state.ordersCache = incoming;
       renderOrdersTable();
+      loadClients(true);
 
       // Update live order count badge on desktop sidebar and mobile bottom nav
       const totalCount = incoming.length;
@@ -4122,6 +4123,31 @@
           return;
         }
 
+        // If saving from Client Directory tab, persist directly to /api/customers
+        if (state.ordersActiveChannel === 'CLIENTS') {
+          apiFetch('/api/customers', {
+            method: 'POST',
+            body: JSON.stringify({
+              name,
+              age,
+              phone,
+              city,
+              email: email || null,
+              dob: dob || null,
+              address: address || null,
+              notes: notes || null,
+              confirmDuplicate: true
+            })
+          }).then(res => {
+            showToast(`Client "${name}" registered successfully (${res.clientCode || 'CLT'}).`, 'success');
+            modal.classList.remove('open');
+            loadClients();
+          }).catch(err => {
+            showToast('Failed to save client: ' + err.message, 'error');
+          });
+          return;
+        }
+
         // Attach client to active POS state
         state.posSelectedClient = {
           id: hiddenId,
@@ -4372,21 +4398,51 @@
     setupClientProfileModal();
   }
 
-  async function loadClients() {
+  async function loadClients(silent = false) {
     const tbody = document.getElementById('clients-table-body');
     const countBadge = document.getElementById('count-clients');
     const countLabel = document.getElementById('clients-count-label');
-
-    if (!tbody) return;
 
     try {
       const q = encodeURIComponent(state.clientsSearchQuery || '');
       const s = encodeURIComponent(state.clientsStatusFilter || 'active');
       const res = await apiFetch(`/api/customers?search=${q}&status=${s}`);
-      state.clientsCache = Array.isArray(res) ? res : (res.customers || []);
+      let serverClients = Array.isArray(res) ? res : (res.customers || []);
+
+      // Filter out dummy/test clients
+      serverClients = serverClients.filter(c => c.name && !/Walk-in Client|Concierge Test/i.test(c.name));
+
+      // Local storage persistence caching for resilience
+      let localCache = [];
+      try {
+        const raw = localStorage.getItem('noor_clients_cache');
+        if (raw) localCache = JSON.parse(raw);
+      } catch (e) {}
+
+      if (serverClients.length > 0) {
+        state.clientsCache = serverClients;
+        localStorage.setItem('noor_clients_cache', JSON.stringify(serverClients));
+      } else if (localCache.length > 0 && !q && s === 'active') {
+        // Cold-start self-healing: re-sync cached clients to serverless database
+        state.clientsCache = localCache;
+        for (const c of localCache) {
+          apiFetch('/api/customers', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: c.name, age: c.age, phone: c.phone, city: c.city,
+              email: c.email, address: c.address, notes: c.notes,
+              confirmDuplicate: true
+            })
+          }).catch(console.warn);
+        }
+      } else {
+        state.clientsCache = [];
+      }
 
       if (countBadge) countBadge.textContent = state.clientsCache.length;
       if (countLabel) countLabel.textContent = `Showing ${state.clientsCache.length} registered clients`;
+
+      if (!tbody) return;
 
       if (state.clientsCache.length === 0) {
         tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:3rem; color:#9CA3AF;">No clients found matching criteria.</td></tr>`;
@@ -4423,8 +4479,10 @@
         `;
       }).join('');
     } catch (err) {
-      console.error('Failed to load clients:', err);
-      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:2rem; color:#DC2626;">Error loading clients: ${err.message}</td></tr>`;
+      if (!silent) {
+        console.error('Failed to load clients:', err);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:2rem; color:#DC2626;">Error loading clients: ${err.message}</td></tr>`;
+      }
     }
   }
 
@@ -5140,34 +5198,45 @@
     const btnRefresh = document.getElementById('btn-refresh-dash');
     if (btnRefresh) btnRefresh.addEventListener('click', () => { loadDashboard(); showToast('Dashboard refreshed.', 'info'); });
 
-    // 4. OpticTool Orders 3-Channel Navigation (All, In-Store, Website)
+    // 4. OpticTool Orders 4-Channel Navigation (All, In-Store, Website, Clients)
     document.querySelectorAll('.optic-orders-channel-tabs .channel-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.optic-orders-channel-tabs .channel-tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         state.ordersActiveChannel = btn.dataset.channel;
-        renderOrdersTable();
+
+        const searchBox = document.getElementById('orders-search-box-wrap') || document.querySelector('.optic-search-box');
+        const billsList = document.getElementById('orders-bills-list');
+        const clientsContainer = document.getElementById('clients-content-container');
+        const btnAdd = document.getElementById('btn-open-add-client-modal');
+        const btnExport = document.getElementById('btn-export-clients-csv');
+        const btnDeleteAll = document.getElementById('btn-delete-all-orders');
+        const tabSaved = document.getElementById('tab-saved-bills');
+        const btnNewBill = document.getElementById('btn-orders-new-bill');
+
+        if (state.ordersActiveChannel === 'CLIENTS') {
+          if (searchBox) searchBox.style.display = 'none';
+          if (billsList) billsList.style.display = 'none';
+          if (clientsContainer) clientsContainer.style.display = 'block';
+          if (btnAdd) btnAdd.style.display = 'inline-flex';
+          if (btnExport) btnExport.style.display = 'inline-flex';
+          if (btnDeleteAll) btnDeleteAll.style.display = 'none';
+          if (tabSaved) tabSaved.style.display = 'none';
+          if (btnNewBill) btnNewBill.style.display = 'none';
+          loadClients();
+        } else {
+          if (searchBox) searchBox.style.display = 'flex';
+          if (billsList) billsList.style.display = 'flex';
+          if (clientsContainer) clientsContainer.style.display = 'none';
+          if (btnAdd) btnAdd.style.display = 'none';
+          if (btnExport) btnExport.style.display = 'none';
+          if (btnDeleteAll) btnDeleteAll.style.display = 'inline-flex';
+          if (tabSaved) tabSaved.style.display = 'inline-flex';
+          if (btnNewBill) btnNewBill.style.display = 'inline-flex';
+          renderOrdersTable();
+        }
       });
     });
-
-    const subtabInStore = document.getElementById('subtab-in-store');
-    const subtabWebsite = document.getElementById('subtab-website');
-    if (subtabInStore) {
-      subtabInStore.addEventListener('click', () => {
-        subtabInStore.classList.add('active');
-        subtabWebsite?.classList.remove('active');
-        state.ordersActiveChannel = 'POS';
-        renderOrdersTable();
-      });
-    }
-    if (subtabWebsite) {
-      subtabWebsite.addEventListener('click', () => {
-        subtabWebsite.classList.add('active');
-        subtabInStore?.classList.remove('active');
-        state.ordersActiveChannel = 'WEBSITE';
-        renderOrdersTable();
-      });
-    }
 
     const ordersSearch = document.getElementById('orders-search-input');
     if (ordersSearch) {

@@ -334,3 +334,90 @@ ON CONFLICT (id) DO UPDATE SET
     colors = EXCLUDED.colors,
     dimensions = EXCLUDED.dimensions,
     description = EXCLUDED.description;
+
+-- ── 7. Customers Table ────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.customers (
+    id TEXT PRIMARY KEY,
+    client_code TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    age INTEGER,
+    dob DATE,
+    phone TEXT,
+    email TEXT,
+    address TEXT,
+    city TEXT DEFAULT 'Bengaluru',
+    pin_code TEXT,
+    notes TEXT,
+    is_archived BOOLEAN DEFAULT FALSE,
+    archived_at TIMESTAMPTZ,
+    archived_reason TEXT,
+    total_spent_paise BIGINT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()),
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+CREATE INDEX IF NOT EXISTS idx_customers_phone ON public.customers (phone);
+CREATE INDEX IF NOT EXISTS idx_customers_client_code ON public.customers (client_code);
+CREATE INDEX IF NOT EXISTS idx_customers_name ON public.customers (name);
+
+-- ── 8. Prescriptions Table ────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.prescriptions (
+    id TEXT PRIMARY KEY,
+    prescription_number TEXT UNIQUE NOT NULL,
+    client_id TEXT REFERENCES public.customers(id) ON DELETE SET NULL,
+    client_name TEXT NOT NULL,
+    client_phone TEXT,
+    prescription_date DATE DEFAULT CURRENT_DATE,
+    prescription_type TEXT DEFAULT 'SPECTACLE',
+    od_sph NUMERIC(4,2) DEFAULT 0.00,
+    od_cyl NUMERIC(4,2) DEFAULT 0.00,
+    od_axis INTEGER,
+    od_va TEXT,
+    os_sph NUMERIC(4,2) DEFAULT 0.00,
+    os_cyl NUMERIC(4,2) DEFAULT 0.00,
+    os_axis INTEGER,
+    os_va TEXT,
+    addition NUMERIC(4,2),
+    pd NUMERIC(4,1),
+    r_pd NUMERIC(4,1),
+    l_pd NUMERIC(4,1),
+    lens_type TEXT,
+    lens_material TEXT,
+    coatings TEXT,
+    notes TEXT,
+    checked_by TEXT,
+    image_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()),
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW())
+);
+
+CREATE INDEX IF NOT EXISTS idx_prescriptions_client_id ON public.prescriptions (client_id);
+CREATE INDEX IF NOT EXISTS idx_prescriptions_rx_number ON public.prescriptions (prescription_number);
+
+-- ── 9. Row Level Security Policies for Customers and Prescriptions ────────────
+ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.prescriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can view customers" ON public.customers;
+CREATE POLICY "Public can view customers" ON public.customers FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public can insert customers" ON public.customers;
+CREATE POLICY "Public can insert customers" ON public.customers FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public can update customers" ON public.customers;
+CREATE POLICY "Public can update customers" ON public.customers FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Public can delete customers" ON public.customers;
+CREATE POLICY "Public can delete customers" ON public.customers FOR DELETE USING (true);
+
+DROP POLICY IF EXISTS "Public can view prescriptions" ON public.prescriptions;
+CREATE POLICY "Public can view prescriptions" ON public.prescriptions FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public can insert prescriptions" ON public.prescriptions;
+CREATE POLICY "Public can insert prescriptions" ON public.prescriptions FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public can update prescriptions" ON public.prescriptions;
+CREATE POLICY "Public can update prescriptions" ON public.prescriptions FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Public can delete prescriptions" ON public.prescriptions;
+CREATE POLICY "Public can delete prescriptions" ON public.prescriptions FOR DELETE USING (true);

@@ -261,6 +261,93 @@ async function pushOrderToSupabase(orderPayload) {
 }
 
 /**
+ * Push or update customer record in Supabase cloud
+ */
+async function pushCustomerToSupabase(cust) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !cust) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify({
+        id: cust.id,
+        client_code: cust.client_code,
+        name: cust.name,
+        age: cust.age || null,
+        dob: cust.dob || null,
+        phone: cust.phone || null,
+        email: cust.email || null,
+        address: cust.address || null,
+        city: cust.city || 'Bengaluru',
+        pin_code: cust.pin_code || null,
+        notes: cust.notes || null,
+        is_archived: Boolean(cust.is_archived),
+        total_spent_paise: cust.total_spent_paise || 0,
+        updated_at: new Date().toISOString()
+      })
+    });
+    if (res.ok) {
+      console.log(`[SupabaseSync] Customer ${cust.name} (${cust.client_code}) synced to Supabase.`);
+    }
+  } catch (err) {
+    console.warn('[SupabaseSync] Customer sync skipped:', err.message);
+  }
+}
+
+/**
+ * Push prescription record to Supabase cloud
+ */
+async function pushPrescriptionToSupabase(rx) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !rx) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/prescriptions`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify({
+        id: rx.id,
+        prescription_number: rx.prescription_number,
+        client_id: rx.client_id || null,
+        client_name: rx.client_name,
+        client_phone: rx.client_phone || null,
+        prescription_date: rx.prescription_date || new Date().toISOString().split('T')[0],
+        prescription_type: rx.prescription_type || 'SPECTACLE',
+        od_sph: rx.od_sph || 0.00,
+        od_cyl: rx.od_cyl || 0.00,
+        od_axis: rx.od_axis || null,
+        od_va: rx.od_va || null,
+        os_sph: rx.os_sph || 0.00,
+        os_cyl: rx.os_cyl || 0.00,
+        os_axis: rx.os_axis || null,
+        os_va: rx.os_va || null,
+        addition: rx.addition || null,
+        pd: rx.pd || null,
+        lens_type: rx.lens_type || null,
+        lens_material: rx.lens_material || null,
+        coatings: rx.coatings || null,
+        notes: rx.notes || null,
+        checked_by: rx.checked_by || null,
+        updated_at: new Date().toISOString()
+      })
+    });
+    if (res.ok) {
+      console.log(`[SupabaseSync] Prescription ${rx.prescription_number} synced to Supabase.`);
+    }
+  } catch (err) {
+    console.warn('[SupabaseSync] Prescription sync skipped:', err.message);
+  }
+}
+
+/**
  * Start recurring background synchronization
  */
 function startBackgroundSync(db, intervalMs = 10000) {
@@ -279,6 +366,8 @@ function startBackgroundSync(db, intervalMs = 10000) {
 module.exports = {
   syncSupabaseOrders,
   pushOrderToSupabase,
+  pushCustomerToSupabase,
+  pushPrescriptionToSupabase,
   deleteOrderFromSupabase,
   deleteAllOrdersFromSupabase,
   startBackgroundSync

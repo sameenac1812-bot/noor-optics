@@ -378,9 +378,17 @@
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                 <span>Delete All</span>
               </button>
+              <button type="button" class="optic-tab-pill secondary" id="btn-open-add-client-modal" style="display:none;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>+ Add Client</span>
+              </button>
+              <button type="button" class="optic-tab-pill" id="btn-export-clients-csv" style="display:none;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Export Clients CSV</span>
+              </button>
             </div>
 
-            <!-- ── 3 Strict Channel Sections (Image 3 OpticTool Workflow) ──── -->
+            <!-- ── 4 Channel Sections (All, In-Store, Website, Clients) ──────── -->
             <div class="optic-orders-channel-tabs">
               <button type="button" class="channel-tab-btn active" data-channel="ALL" id="channel-tab-all">
                 <span>All Orders</span>
@@ -394,19 +402,71 @@
                 <span>🌐 Website Orders</span>
                 <span class="channel-count" id="count-website-orders">0</span>
               </button>
+              <button type="button" class="channel-tab-btn" data-channel="CLIENTS" id="channel-tab-clients">
+                <span>👥 Client Directory</span>
+                <span class="channel-count" id="count-clients">0</span>
+              </button>
             </div>
 
-            <!-- ── Search Input (Image 3) ──────────────────────────────────── -->
-            <div class="optic-search-box">
+            <!-- ── Search Input (Orders) ──────────────────────────────────── -->
+            <div class="optic-search-box" id="orders-search-box-wrap">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input type="text" id="orders-search-input" placeholder="Search by name, phone, or invoice #" autocomplete="off" />
             </div>
 
-            <!-- ── Saved Bills Cards Feed (Image 3) ────────────────────────── -->
+            <!-- ── Saved Bills Cards Feed ─────────────────────────────────── -->
             <div class="optic-saved-bills-list" id="orders-bills-list">
               <div style="text-align:center; padding:3rem 1rem; color:#64748B;">
                 <div style="font-size:1.5rem; margin-bottom:8px;">⏳</div>
                 <div>Loading live orders & saved bills...</div>
+              </div>
+            </div>
+
+            <!-- ── Client Directory CRM Table ─────────────────────────────── -->
+            <div id="clients-content-container" style="display:none; margin-top:1rem;">
+              <!-- Clients Search & Filter Row -->
+              <div class="orders-filter-row" style="display:flex; gap:10px; margin-bottom:1rem; flex-wrap:wrap;">
+                <div class="search-input-wrap" style="flex:1; min-width:260px; position:relative;">
+                  <input type="text" id="clients-search-input" class="form-control" placeholder="Search client name, phone number, city, or CLT ID..." style="width:100%; padding:0.6rem 0.75rem 0.6rem 2.25rem; border:1px solid #CBD5E1; border-radius:8px; font-size:0.875rem;" />
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); pointer-events:none;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </div>
+                <div class="filter-dropdowns" style="display:flex; gap:8px;">
+                  <select id="clients-status-filter" class="form-control" style="padding:0.6rem 0.75rem; border:1px solid #CBD5E1; border-radius:8px; font-size:0.875rem; background:#fff;">
+                    <option value="active">Active Clients Only</option>
+                    <option value="all">All Clients (Inc. Archived)</option>
+                    <option value="archived">Archived Only</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Clients Data Table -->
+              <div class="table-responsive" style="background:#fff; border-radius:8px; border:1px solid #E2E8F0; overflow-x:auto;">
+                <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.875rem;">
+                  <thead>
+                    <tr style="background:#F8FAFC; border-bottom:1px solid #E2E8F0; text-align:left;">
+                      <th style="padding:10px 14px;">Client ID</th>
+                      <th style="padding:10px 14px;">Client Name</th>
+                      <th style="padding:10px 14px;">Age</th>
+                      <th style="padding:10px 14px;">Phone Number</th>
+                      <th style="padding:10px 14px;">City</th>
+                      <th style="padding:10px 14px;">Orders</th>
+                      <th style="padding:10px 14px;">Total Spend</th>
+                      <th style="padding:10px 14px;">Last Order</th>
+                      <th style="padding:10px 14px;">Prescriptions</th>
+                      <th style="padding:10px 14px;">Registered</th>
+                      <th style="padding:10px 14px;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="clients-table-body">
+                    <tr><td colspan="11" style="text-align:center; padding:2.5rem; color:#9CA3AF;">Loading client directory...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Clients Table Footer -->
+              <div class="table-footer-bar" style="display:flex; justify-content:space-between; align-items:center; margin-top:0.75rem; color:#64748B; font-size:0.85rem;">
+                <span id="clients-count-label">Showing 0 clients</span>
+                <div class="pagination-controls" id="clients-pagination"></div>
               </div>
             </div>
           </div>
