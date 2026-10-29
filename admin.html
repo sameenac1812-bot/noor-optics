@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="apple-touch-icon" href="/images/favicon.png" />
-  <link rel="stylesheet" href="/admin.css?v=7.0.0" />
+  <link rel="stylesheet" href="/admin.css?v=7.1.0" />
 </head>
 <body>
 
@@ -363,153 +363,46 @@
         <!-- 2. VIEW: ORDERS — IN-STORE AND WEBSITE WITH DAILY EXPORT         -->
         <!-- ═════════════════════════════════════════════════════════════════ -->
         <section class="view-section" id="view-orders">
-          <div class="panel-card">
-            <!-- Orders Header with Sub-tabs and Export Button -->
-            <div class="panel-header orders-top-header">
-              <!-- Internal Sub-Tabs (Strictly inside Orders) -->
-              <div class="subtabs-container">
-                <button class="subtab-btn active" id="subtab-in-store" data-order-channel="POS">
-                  <span>🏪 In-store Orders</span>
-                  <span class="subtab-count" id="count-instore-orders">0</span>
-                </button>
-                <button class="subtab-btn" id="subtab-website" data-order-channel="WEBSITE">
-                  <span>🌐 Website Orders</span>
-                  <span class="subtab-count" id="count-website-orders">0</span>
-                </button>
-                <button class="subtab-btn" id="subtab-clients" data-order-channel="CLIENTS">
-                  <span>👥 Client Directory</span>
-                  <span class="subtab-count" id="count-clients">3</span>
-                </button>
-              </div>
-
-              <!-- Orders Header Actions: Delete All & Export Daily Sales Report -->
-              <div class="orders-header-actions" id="orders-header-actions" style="display:flex; align-items:center; gap:8px;">
-                <button class="btn-header-action btn-danger-soft" id="btn-delete-all-orders" title="Delete all orders in the pipeline">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                  <span>Delete All Orders</span>
-                </button>
-                <button class="btn-header-action btn-gold" id="btn-open-daily-report-modal">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  <span>Export Daily Sales Report</span>
-                </button>
-              </div>
-
-              <!-- Clients Header Actions (Shown when Client Directory subtab is active) -->
-              <div class="orders-header-actions" id="clients-header-actions" style="display:none; align-items:center; gap:8px;">
-                <button class="btn-header-action btn-gold" id="btn-open-add-client-modal">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  <span>+ Add New Client</span>
-                </button>
-                <button class="btn-header-action" id="btn-export-clients-csv">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  <span>Export Clients CSV</span>
-                </button>
-              </div>
+          <div class="optic-orders-wrap">
+            <!-- ── Top Toggle Bar (Saved Bills vs + New Bill) ───────────────── -->
+            <div class="optic-top-pills-bar">
+              <button type="button" class="optic-tab-pill active" id="tab-saved-bills">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>Saved Bills</span>
+              </button>
+              <button type="button" class="optic-tab-pill secondary" id="btn-orders-new-bill" onclick="switchNav('pos')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>+ New Bill</span>
+              </button>
             </div>
 
-            <!-- 2.A ORDERS CONTENT CONTAINER -->
-            <div id="orders-content-container">
-              <!-- Orders Search & Filter Controls -->
-              <div class="orders-filter-row">
-                <div class="search-input-wrap">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  <input type="text" id="orders-search-input" class="form-control" placeholder="Search invoice #, order ref, customer name, or phone..." />
-                </div>
-                <div class="filter-dropdowns">
-                  <select id="orders-status-filter" class="form-control">
-                    <option value="">All Order Statuses</option>
-                    <option value="CONFIRMED">Confirmed</option>
-                    <option value="PROCESSING">Processing</option>
-                    <option value="DISPATCHED">Dispatched</option>
-                    <option value="DELIVERED">Delivered</option>
-                    <option value="REFUNDED">Refunded</option>
-                    <option value="CANCELLED">Cancelled</option>
-                  </select>
-                  <select id="orders-payment-filter" class="form-control">
-                    <option value="">All Payment Statuses</option>
-                    <option value="VERIFIED">Verified (Paid)</option>
-                    <option value="AWAITING_VERIFICATION">Awaiting Review</option>
-                    <option value="UNPAID">Unpaid</option>
-                    <option value="REFUNDED">Refunded</option>
-                  </select>
-                </div>
-              </div>
-
-              <!-- Orders Data Table -->
-              <div class="table-responsive">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>Invoice / Token</th>
-                      <th>Date & Time</th>
-                      <th>Customer</th>
-                      <th>Items & Qty</th>
-                      <th>Subtotal</th>
-                      <th>Discount</th>
-                      <th>Total Payable</th>
-                      <th>Payment</th>
-                      <th>Fulfillment</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="orders-table-body">
-                    <tr><td colspan="10" style="text-align:center; padding:2.5rem; color:#9CA3AF;">Loading orders...</td></tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <!-- Orders Pagination / Summary -->
-              <div class="table-footer-bar">
-                <span id="orders-count-label">Showing 0 orders</span>
-                <div class="pagination-controls" id="orders-pagination"></div>
-              </div>
+            <!-- ── 3 Strict Channel Sections (Image 3 OpticTool Workflow) ──── -->
+            <div class="optic-orders-channel-tabs">
+              <button type="button" class="channel-tab-btn active" data-channel="ALL" id="channel-tab-all">
+                <span>All Orders</span>
+                <span class="channel-count" id="count-all-orders">0</span>
+              </button>
+              <button type="button" class="channel-tab-btn" data-channel="POS" id="channel-tab-pos">
+                <span>🏪 In-Store Orders</span>
+                <span class="channel-count" id="count-instore-orders">0</span>
+              </button>
+              <button type="button" class="channel-tab-btn" data-channel="WEBSITE" id="channel-tab-website">
+                <span>🌐 Website Orders</span>
+                <span class="channel-count" id="count-website-orders">0</span>
+              </button>
             </div>
 
-            <!-- 2.B CLIENTS DIRECTORY CONTENT CONTAINER (Strictly inside Orders Panel) -->
-            <div id="clients-content-container" style="display:none;">
-              <!-- Clients Search & Filter Row -->
-              <div class="orders-filter-row">
-                <div class="search-input-wrap">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  <input type="text" id="clients-search-input" class="form-control" placeholder="Search client name, phone number, city, or CLT ID..." />
-                </div>
-                <div class="filter-dropdowns">
-                  <select id="clients-status-filter" class="form-control">
-                    <option value="active">Active Clients Only</option>
-                    <option value="all">All Clients (Inc. Archived)</option>
-                    <option value="archived">Archived Only</option>
-                  </select>
-                </div>
-              </div>
+            <!-- ── Search Input (Image 3) ──────────────────────────────────── -->
+            <div class="optic-search-box">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="orders-search-input" placeholder="Search by name, phone, or invoice #" autocomplete="off" />
+            </div>
 
-              <!-- Clients Data Table -->
-              <div class="table-responsive">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>Client ID</th>
-                      <th>Client Name</th>
-                      <th>Age</th>
-                      <th>Phone Number</th>
-                      <th>City</th>
-                      <th>Orders</th>
-                      <th>Total Spend</th>
-                      <th>Last Order</th>
-                      <th>Prescriptions</th>
-                      <th>Registered</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="clients-table-body">
-                    <tr><td colspan="11" style="text-align:center; padding:2.5rem; color:#9CA3AF;">Loading client directory...</td></tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <!-- Clients Table Footer -->
-              <div class="table-footer-bar">
-                <span id="clients-count-label">Showing 0 clients</span>
-                <div class="pagination-controls" id="clients-pagination"></div>
+            <!-- ── Saved Bills Cards Feed (Image 3) ────────────────────────── -->
+            <div class="optic-saved-bills-list" id="orders-bills-list">
+              <div style="text-align:center; padding:3rem 1rem; color:#64748B;">
+                <div style="font-size:1.5rem; margin-bottom:8px;">⏳</div>
+                <div>Loading live orders & saved bills...</div>
               </div>
             </div>
           </div>
@@ -519,114 +412,63 @@
         <!-- 3. VIEW: TOTAL INVENTORY — COMPLETE FRAME MANAGEMENT             -->
         <!-- ═════════════════════════════════════════════════════════════════ -->
         <section class="view-section" id="view-inventory">
-          <!-- Inventory Metrics Summary Row -->
-          <div class="inv-summary-row">
-            <div class="inv-metric-badge">
-              <span class="badge-num" id="inv-total-distinct">0</span>
-              <span class="badge-text">Unique Frame Records</span>
-            </div>
-            <div class="inv-metric-badge">
-              <span class="badge-num" id="inv-total-physical">0</span>
-              <span class="badge-text">Physical Frames in Stock</span>
-            </div>
-            <div class="inv-metric-badge warning">
-              <span class="badge-num" id="inv-low-stock-count">0</span>
-              <span class="badge-text">Low Stock (≤ Threshold)</span>
-            </div>
-            <div class="inv-metric-badge danger">
-              <span class="badge-num" id="inv-out-stock-count">0</span>
-              <span class="badge-text">Out of Stock (0 units)</span>
-            </div>
-          </div>
-
-          <div class="panel-card">
-            <div class="panel-header inventory-top-header">
-              <div>
-                <span class="panel-title">Optical Frame Inventory</span>
-                <div class="panel-subtitle">Authoritative optical frames catalog, stock ledger & QR sticker generator</div>
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <!-- 3. VIEW: TOTAL INVENTORY — OPTICTOOL WORKFLOW (Image 1)           -->
+        <!-- ═════════════════════════════════════════════════════════════════ -->
+        <section class="view-section" id="view-inventory">
+          <div class="optic-inventory-wrap">
+            <!-- ── Top Gradient Stock Value Card (Image 1) ───────────────── -->
+            <div class="optic-inv-stock-card">
+              <div class="optic-stock-col-left">
+                <div class="optic-stock-badge-lbl">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="14" x2="6.01" y2="14"/></svg>
+                  <span>STOCK VALUE RS</span>
+                </div>
+                <div class="optic-stock-big-val" id="optic-inv-stock-val">0</div>
               </div>
-              <div class="inv-header-actions">
-                <!-- + Add New Frame Button (Mandatory Prominent Action) -->
-                <button class="btn-header-action btn-primary" id="btn-open-add-frame">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  <span>Add New Frame</span>
-                </button>
-
-                <!-- Import Frame Data Button (CSV/Excel) -->
-                <button class="btn-header-action btn-secondary" id="btn-open-import-modal">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  <span>Import Frame Data</span>
-                </button>
-
-                <!-- Batch QR Stickers Button -->
-                <button class="btn-header-action btn-gold" id="btn-batch-stickers" disabled>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                  <span id="btn-batch-stickers-text">Print Selected Stickers (0)</span>
-                </button>
-
-                <!-- Batch Delete Frames Button -->
-                <button class="btn-header-action btn-danger-soft" id="btn-batch-delete-frames" disabled style="display:none;">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                  <span id="btn-batch-delete-frames-text">Delete Selected (0)</span>
-                </button>
+              <div class="optic-stock-col-right">
+                <div class="optic-stock-stat-row">
+                  <span class="optic-stat-name">ITEMS</span>
+                  <span class="optic-stat-num" id="optic-inv-items-count">0</span>
+                </div>
+                <div class="optic-stock-stat-row">
+                  <span class="optic-stat-name">IN STOCK</span>
+                  <span class="optic-stat-num" id="optic-inv-instock-count">0</span>
+                </div>
+                <div class="optic-stock-stat-row">
+                  <span class="optic-stat-name">LOW STOCK</span>
+                  <span class="optic-stat-num" id="optic-inv-lowstock-count">0</span>
+                </div>
               </div>
             </div>
 
-            <!-- Inventory Search, Shape, Brand & Stock Filters -->
-            <div class="inventory-filter-row">
-              <div class="search-input-wrap">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" id="inv-search-input" class="form-control" placeholder="Search by frame code, SKU, brand, model, or product name..." />
-              </div>
-              <div class="filter-dropdowns">
-                <select id="inv-filter-shape" class="form-control">
-                  <option value="">All Frame Shapes</option>
-                  <option value="Rectangular">Rectangular</option>
-                  <option value="Round">Round</option>
-                  <option value="Square">Square</option>
-                  <option value="Geometric">Geometric</option>
-                  <option value="Aviator">Aviator</option>
-                  <option value="Cat-Eye">Cat-Eye</option>
-                </select>
-                <select id="inv-filter-stock" class="form-control">
-                  <option value="">All Stock Statuses</option>
-                  <option value="in_stock">In Stock (&gt; 0)</option>
-                  <option value="low_stock">Low Stock (≤ Threshold)</option>
-                  <option value="out_of_stock">Out of Stock (0 units)</option>
-                </select>
+            <!-- ── Category Filter Pills Bar (Image 1) ────────────────────── -->
+            <div class="optic-category-pills">
+              <button type="button" class="optic-cat-pill active" data-inv-cat="ALL">Frames</button>
+              <button type="button" class="optic-cat-pill" data-inv-cat="Glasses">Glasses</button>
+              <button type="button" class="optic-cat-pill" data-inv-cat="Lenses">Lenses</button>
+              <button type="button" class="optic-cat-pill" data-inv-cat="Accessories">Accessories</button>
+            </div>
+
+            <!-- ── Search Input (Image 1) ─────────────────────────────────── -->
+            <div class="optic-search-box">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="inv-search-input" placeholder="Search by name or SKU" autocomplete="off" />
+            </div>
+
+            <!-- ── Inventory Items Cards Container (Image 1) ──────────────── -->
+            <div class="optic-inv-card-list" id="inv-cards-list">
+              <div style="text-align:center; padding:3rem 1rem; color:#64748B;">
+                <div style="font-size:1.5rem; margin-bottom:8px;">⏳</div>
+                <div>Loading frame inventory ledger...</div>
               </div>
             </div>
 
-            <!-- Inventory Table -->
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th style="width:36px;"><input type="checkbox" id="inv-select-all" title="Select All Frames" /></th>
-                    <th>Image</th>
-                    <th>Frame Name</th>
-                    <th>SKU / Frame Code</th>
-                    <th>Internal ID</th>
-                    <th>Brand & Model</th>
-                    <th>Color & Shape</th>
-                    <th>Cost Price</th>
-                    <th>Selling Price</th>
-                    <th>Stock Units</th>
-                    <th>Stock Status</th>
-                    <th>QR Sticker</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="inventory-table-body">
-                  <tr><td colspan="13" style="text-align:center; padding:2.5rem; color:#9CA3AF;">Loading inventory...</td></tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="table-footer-bar">
-              <span id="inv-count-label">Showing 0 frames</span>
-              <button class="btn-table-action" id="btn-print-all-stickers">Print All Eligible Frame Stickers</button>
-            </div>
+            <!-- ── Floating + Add Button (Image 1) ────────────────────────── -->
+            <button type="button" class="optic-fab-add" id="btn-open-add-frame">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Add</span>
+            </button>
           </div>
         </section>
 
@@ -940,109 +782,144 @@
   <!-- 3. MODAL DIALOGS                                                      -->
   <!-- ═════════════════════════════════════════════════════════════════════ -->
 
-  <!-- ── MODAL A: + ADD NEW FRAME (With Save & Save & Print QR Sticker) ── -->
+  <!-- ── MODAL A: + ADD NEW FRAME (Image 2 OpticTool Mobile Layout) ── -->
   <div class="modal-overlay" id="modal-add-frame">
-    <div class="admin-modal modal-lg">
-      <div class="modal-header">
-        <div>
-          <h3>+ Add New Optical Frame</h3>
-          <p class="modal-sub">Register frame details, authoritative pricing & permanent QR identity</p>
-        </div>
-        <button class="btn-close-modal" data-close-modal>&times;</button>
+    <div class="admin-modal optic-add-frame-modal">
+      <div class="modal-header optic-modal-header">
+        <h3 class="optic-modal-title">Add Frame</h3>
+        <button type="button" class="optic-modal-close-btn" data-close-modal>&times;</button>
       </div>
       <form id="form-add-frame">
-        <div class="modal-body modal-scrollable">
-          <div class="form-row-2">
-            <div class="form-group">
-              <label for="frm-name">Frame Name <span class="req">*</span></label>
-              <input type="text" id="frm-name" class="form-control" placeholder="e.g. The Oslo Crystal" required />
+        <div class="modal-body optic-modal-body">
+          <!-- PHOTO Selection Boxes (Image 2) -->
+          <div class="optic-form-section-title">PHOTO</div>
+          <div class="optic-photo-boxes-grid">
+            <label class="optic-photo-box" id="box-take-image">
+              <input type="file" id="frm-file-camera" accept="image/*" capture="environment" style="display:none;" />
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0A2540" stroke-width="1.8"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              <span>TAKE IMAGE</span>
+            </label>
+            <label class="optic-photo-box" id="box-upload-image">
+              <input type="file" id="frm-file-upload" accept="image/*" style="display:none;" />
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0A2540" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="10" y1="10" x2="14" y2="10"/></svg>
+              <span>UPLOAD IMAGE</span>
+            </label>
+          </div>
+          <div id="frm-photo-preview-wrap" style="display:none; margin-bottom:12px; text-align:center;">
+            <img id="frm-photo-preview" src="" style="max-height:120px; border-radius:10px; border:1px solid #CBD5E1; box-shadow:0 4px 10px rgba(0,0,0,0.06);" />
+          </div>
+
+          <!-- Form Fields Grid (Image 2) -->
+          <div class="optic-input-row">
+            <div class="optic-input-col">
+              <label class="optic-input-lbl">BRAND *</label>
+              <input type="text" id="frm-brand" class="optic-text-field" placeholder="e.g. Ray-Ban" required />
             </div>
-            <div class="form-group">
-              <label for="frm-sku">Unique SKU / Frame Code <span class="req">*</span></label>
-              <input type="text" id="frm-sku" class="form-control" placeholder="e.g. NOOR-OSLO-01" required />
-              <small class="form-hint">Must be unique. Encoded into the permanent yellow QR sticker.</small>
+            <div class="optic-input-col">
+              <label class="optic-input-lbl">MODEL</label>
+              <input type="text" id="frm-model" class="optic-text-field" placeholder="e.g. RB3025" />
             </div>
           </div>
 
-          <div class="form-row-3">
-            <div class="form-group">
-              <label for="frm-brand">Brand</label>
-              <input type="text" id="frm-brand" class="form-control" value="Noor Optics" />
+          <div class="optic-input-row">
+            <div class="optic-input-col">
+              <label class="optic-input-lbl">COLOR</label>
+              <input type="text" id="frm-color" class="optic-text-field" placeholder="Black" />
             </div>
-            <div class="form-group">
-              <label for="frm-model">Model</label>
-              <input type="text" id="frm-model" class="form-control" placeholder="e.g. Oslo" />
-            </div>
-            <div class="form-group">
-              <label for="frm-shape">Frame Shape</label>
-              <select id="frm-shape" class="form-control">
-                <option value="Rectangular">Rectangular</option>
-                <option value="Round">Round</option>
-                <option value="Square">Square</option>
-                <option value="Geometric">Geometric</option>
-                <option value="Aviator">Aviator</option>
-                <option value="Cat-Eye">Cat-Eye</option>
-              </select>
+            <div class="optic-input-col">
+              <label class="optic-input-lbl">SIZE</label>
+              <input type="text" id="frm-size" class="optic-text-field" placeholder="52-18" />
             </div>
           </div>
 
-          <div class="form-row-3">
-            <div class="form-group">
-              <label for="frm-color-name">Colour Name</label>
-              <input type="text" id="frm-color-name" class="form-control" placeholder="e.g. Crystal Clear" value="Classic Black" />
-            </div>
-            <div class="form-group">
-              <label for="frm-color-hex">Colour Hex</label>
-              <div style="display:flex; gap:6px;">
-                <input type="color" id="frm-color-picker" value="#111111" style="height:38px; width:45px; border-radius:6px; border:1px solid #CCC; cursor:pointer;" />
-                <input type="text" id="frm-color-hex" class="form-control" value="#111111" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="frm-size">Size Specifications</label>
-              <input type="text" id="frm-size" class="form-control" placeholder="e.g. Medium - 49-20-145" value="Medium - 49-20-145" />
+          <div class="optic-input-row single-col">
+            <div class="optic-input-col">
+              <label class="optic-input-lbl">SKU</label>
+              <input type="text" id="frm-sku" class="optic-text-field" placeholder="Optional" />
             </div>
           </div>
 
-          <div class="form-row-3">
-            <div class="form-group">
-              <label for="frm-selling-price">Retail Selling Price (₹) <span class="req">*</span></label>
-              <input type="number" id="frm-selling-price" class="form-control" min="1" step="1" placeholder="3499" required />
+          <div class="optic-input-row">
+            <div class="optic-input-col">
+              <label class="optic-input-lbl">WHOLESALE</label>
+              <input type="number" id="frm-wholesale" class="optic-text-field" placeholder="0" min="0" step="1" />
             </div>
-            <div class="form-group">
-              <label for="frm-cost-price">Cost Price (₹)</label>
-              <input type="number" id="frm-cost-price" class="form-control" min="0" step="1" placeholder="1200" />
-            </div>
-            <div class="form-group">
-              <label for="frm-stock-qty">Initial Stock Quantity <span class="req">*</span></label>
-              <input type="number" id="frm-stock-qty" class="form-control" min="0" step="1" value="10" required />
+            <div class="optic-input-col">
+              <label class="optic-input-lbl">RETAIL</label>
+              <input type="number" id="frm-retail" class="optic-text-field" placeholder="0" min="0" step="1" />
             </div>
           </div>
 
-          <div class="form-group">
-            <label for="frm-material">Frame Material</label>
-            <input type="text" id="frm-material" class="form-control" placeholder="e.g. Japanese Beta-Titanium / Mazzucchelli Bio-Acetate" value="Japanese Pure Titanium" />
+          <div class="optic-input-row">
+            <div class="optic-input-col">
+              <label class="optic-input-lbl">QUANTITY</label>
+              <input type="number" id="frm-quantity" class="optic-text-field" placeholder="0" min="0" step="1" />
+            </div>
+            <div class="optic-input-col">
+              <label class="optic-input-lbl">LOW-STOCK ALERT</label>
+              <input type="number" id="frm-low-stock" class="optic-text-field" placeholder="e.g. 2" min="1" step="1" />
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="frm-image-url">Product Image URL / Relative Path</label>
-            <input type="text" id="frm-image-url" class="form-control" placeholder="images/oslo_crystal.jpg" value="images/stockholm_noir.jpg" />
-          </div>
-
-          <div class="form-group">
-            <label for="frm-description">Description</label>
-            <textarea id="frm-description" class="form-control" rows="2" placeholder="Handcrafted optical frame engineered for ultra-lightweight durability..."></textarea>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn-header-action" data-close-modal>Cancel</button>
-          <!-- Action 1: Save Frame -->
-          <button type="submit" class="btn-header-action btn-secondary" id="btn-submit-save-only">Save Frame</button>
-          <!-- Action 2: Save & Print QR Sticker -->
-          <button type="button" class="btn-header-action btn-gold" id="btn-submit-save-print">Save & Print QR Sticker</button>
+          <!-- Add to Stock Submit Button (Image 2) -->
+          <button type="submit" class="optic-btn-submit-stock" id="btn-submit-add-frame">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <span>Add to Stock</span>
+          </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ── MODAL A2: SAVED BILL ACTION SHEET (Image 3B Action Drawer) ────────── -->
+  <div class="modal-overlay" id="modal-bill-action-sheet">
+    <div class="admin-modal optic-action-sheet-modal">
+      <div class="action-sheet-header">
+        <div class="action-sheet-bill-title" id="action-sheet-bill-title">INV-ATIB-1026-0002</div>
+        <button type="button" class="optic-modal-close-btn" data-close-modal>&times;</button>
+      </div>
+      <div class="action-sheet-grid">
+        <button type="button" class="action-chip" id="action-sheet-view">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>View</span>
+        </button>
+        <button type="button" class="action-chip" id="action-sheet-save">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Save</span>
+        </button>
+        <button type="button" class="action-chip" id="action-sheet-share">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          <span>Share</span>
+        </button>
+        <button type="button" class="action-chip" id="action-sheet-edit">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          <span>Edit</span>
+        </button>
+        <button type="button" class="action-chip chip-danger" id="action-sheet-delete">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          <span>Delete</span>
+        </button>
+        <button type="button" class="action-chip" id="action-sheet-print">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          <span>Print</span>
+        </button>
+        <button type="button" class="action-chip" id="action-sheet-call">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <span>Call</span>
+        </button>
+        <button type="button" class="action-chip chip-wa" id="action-sheet-wa">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          <span>WA</span>
+        </button>
+        <button type="button" class="action-chip chip-pay" id="action-sheet-pay">
+          <span style="font-size:16px; font-weight:800;">₹</span>
+          <span>Pay</span>
+        </button>
+        <button type="button" class="action-chip chip-close" data-close-modal>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <span>Close</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -1847,6 +1724,6 @@
   <script src="/vendor/chart.umd.min.js?v=5.3.0"></script>
 
   <!-- ── 6. APPLICATION CONTROLLER ─────────────────────────────────────────── -->
-  <script src="/admin.js?v=7.0.0"></script>
+  <script src="/admin.js?v=7.1.0"></script>
 </body>
 </html>

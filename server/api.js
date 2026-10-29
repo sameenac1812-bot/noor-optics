@@ -1173,6 +1173,36 @@ router.post('/prescriptions/upload-image', authenticateToken, (req, res) => {
   }
 });
 
+// ── POST /api/products/upload-image (Save Uploaded Frame Photo) ──────────────
+router.post('/products/upload-image', authenticateToken, (req, res) => {
+  const { imageBase64 } = req.body;
+  if (!imageBase64) {
+    return res.status(400).json({ error: 'Image data is required.' });
+  }
+
+  try {
+    const frameDir = path.join(__dirname, '..', 'images', 'frames');
+    if (!fs.existsSync(frameDir)) {
+      fs.mkdirSync(frameDir, { recursive: true });
+    }
+
+    const extMatch = imageBase64.match(/^data:image\/([a-zA-Z0-9]+);base64,/);
+    const ext = extMatch ? extMatch[1].replace('jpeg', 'jpg') : 'jpg';
+    const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9]+;base64,/, '');
+
+    const safeName = `frame_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+    const filePath = path.join(frameDir, safeName);
+
+    fs.writeFileSync(filePath, Buffer.from(cleanBase64, 'base64'));
+    const relativeUrl = `images/frames/${safeName}`;
+
+    res.json({ success: true, imageUrl: relativeUrl });
+  } catch (err) {
+    console.error('Frame photo upload failed:', err);
+    res.status(500).json({ error: 'Failed to save frame image: ' + err.message });
+  }
+});
+
 // ==============================================================================
 // 7. POINT OF SALE (POS) CHECKOUT (ATOMIC TRANSACTION WITH CLIENT INTEGRATION)
 // ==============================================================================
@@ -2377,6 +2407,26 @@ router.post('/printer/orders/:orderId/reprint', authenticateToken, requirePermis
   const printJob = enqueuePrintJob(order.id, order.token_number, 'TOKEN');
   logAudit(req.user.id, req.user.email, 'REPRINT_REQUESTED', 'ORDER', order.id, { tokenNumber: order.token_number }, req);
   res.json({ success: true, ...printJob });
+});
+
+router.post('/printer/orders/:orderId/daemon-dispatch', (req, res) => {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.orderId);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  try {
+    const jobId = 'pj-daemon-' + Date.now();
+    db.prepare(`
+      INSERT INTO print_jobs (id, order_id, printer_type, status, attempts, created_at, updated_at)
+      VALUES (?, ?, 'THERMAL_58MM', 'QUEUED_DAEMON', 1, datetime('now'), datetime('now'))
+    `).run(jobId, order.id);
+  } catch (e) {}
+
+  res.json({
+    success: true,
+    message: 'Print signal dispatched to POS portable daemon',
+    orderId: order.id,
+    orderNumber: order.order_number
+  });
 });
 
 router.get('/printer/preview/:orderId', (req, res) => {

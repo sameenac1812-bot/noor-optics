@@ -3160,6 +3160,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .optical-rx-modal {
   max-width: 440px;
   width: 95%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   border-radius: 18px;
   overflow: hidden;
   background: #FFFFFF;
@@ -3173,6 +3176,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   background: #CBD5E1;
   border-radius: 2px;
   margin: 10px auto 4px auto;
+  flex-shrink: 0;
 }
 
 .optical-rx-header {
@@ -3181,6 +3185,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   justify-content: space-between;
   padding: 4px 18px 12px 18px;
   border-bottom: none;
+  flex-shrink: 0;
 }
 
 .optical-rx-title-wrap {
@@ -3221,6 +3226,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
 .optical-rx-body {
   padding: 0 16px 16px 16px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: calc(90vh - 65px);
 }
 
 /* Radio Mode Toggle */
@@ -3262,14 +3270,15 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   background: #F0F7FD;
   border: 1.5px solid #C9E2F8;
   border-radius: 12px;
-  padding: 10px 12px;
+  padding: 10px 10px;
   margin-bottom: 12px;
+  overflow: hidden;
 }
 
 .optical-grid-header-row {
   display: grid;
-  grid-template-columns: 85px 1fr 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: 66px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 5px;
   margin-bottom: 8px;
   text-align: center;
 }
@@ -3279,7 +3288,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 .optical-col-field {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 800;
   color: #0284C7;
   letter-spacing: 0.04em;
@@ -3287,8 +3296,8 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
 .optical-grid-row {
   display: grid;
-  grid-template-columns: 85px 1fr 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: 66px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 5px;
   align-items: center;
   margin-bottom: 8px;
 }
@@ -3296,41 +3305,45 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .optical-eye-badge-wrap {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .optical-eye-pill {
   background: #0A2540;
   color: #FFFFFF;
-  font-size: 0.72rem;
+  font-size: 0.70rem;
   font-weight: 800;
-  padding: 3px 6px;
+  padding: 3px 5px;
   border-radius: 4px;
   letter-spacing: 0.05em;
+  flex-shrink: 0;
 }
 
 .optical-eye-label {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 700;
   color: #0A2540;
 }
 
 .optical-cell {
   position: relative;
+  min-width: 0;
 }
 
 /* Pill Combobox Button */
 .rx-combobox-btn {
   width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
   height: 36px;
   background: #FFFFFF;
   border: 1.5px solid #BAE6FD;
   border-radius: 8px;
-  padding: 0 8px;
+  padding: 0 6px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.82rem;
+  font-size: 0.80rem;
   font-weight: 700;
   color: #0369A1;
   cursor: pointer;
@@ -3350,12 +3363,14 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
 .rx-axis-input {
   width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
   height: 36px;
   background: #FFFFFF;
   border: 1.5px solid #BAE6FD;
   border-radius: 8px;
-  padding: 0 6px;
-  font-size: 0.82rem;
+  padding: 0 4px;
+  font-size: 0.80rem;
   font-weight: 700;
   color: #0369A1;
   text-align: center;
@@ -4901,3 +4916,787 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   }
 
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OPTICTOOL SUITE: INVENTORY, SAVED BILLS, ADD FRAME MODAL & ACTIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+body.modal-open {
+  overflow: hidden !important;
+  touch-action: none !important;
+}
+
+/* ── 1. INVENTORY VIEW (Image 1 OpticTool Mobile Layout) ─────────────────── */
+.optic-inventory-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  min-height: calc(100vh - 120px);
+  padding-bottom: 72px;
+}
+
+.optic-inv-stock-card {
+  background: linear-gradient(135deg, #0A3A60 0%, #001E36 100%);
+  border-radius: 16px;
+  padding: 18px 20px;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 8px 20px rgba(10, 37, 64, 0.15);
+}
+
+.optic-stock-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.optic-stock-badge-lbl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.80rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #93C5FD;
+}
+
+.optic-stock-big-val {
+  font-size: 2.2rem;
+  font-weight: 900;
+  line-height: 1.1;
+  color: #FFFFFF;
+}
+
+.optic-stock-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 110px;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  padding-left: 16px;
+}
+
+.optic-stock-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.optic-stat-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #94A3B8;
+  letter-spacing: 0.04em;
+}
+
+.optic-stat-num {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #FFFFFF;
+}
+
+/* Category Filter Pills Bar (Image 1) */
+.optic-category-pills {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.optic-category-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.optic-cat-pill {
+  flex: 1;
+  min-width: 78px;
+  height: 38px;
+  border-radius: 20px;
+  border: 1.5px solid #CBD5E1;
+  background: #FFFFFF;
+  color: #0A2540;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.optic-cat-pill.active {
+  background: #0A2540;
+  color: #FFFFFF;
+  border-color: #0A2540;
+  box-shadow: 0 3px 8px rgba(10, 37, 64, 0.2);
+}
+
+/* Search Box (Common across OpticTool screens) */
+.optic-search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 12px;
+  padding: 0 14px;
+  height: 44px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.optic-search-box input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #0A2540;
+}
+
+.optic-search-box input::placeholder {
+  color: #94A3B8;
+  font-weight: 500;
+}
+
+/* Inventory Item Cards List (Image 1) */
+.optic-inv-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.optic-inv-card {
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.optic-inv-card:hover {
+  border-color: #CBD5E1;
+  box-shadow: 0 4px 14px rgba(10, 37, 64, 0.08);
+}
+
+.optic-inv-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  background: #F0F7FD;
+  border: 1px solid #BAE6FD;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.optic-inv-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.optic-inv-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.optic-inv-name {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0A2540;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.optic-inv-sku {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748B;
+}
+
+.optic-inv-qty {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748B;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.optic-inv-qty .qty-bold {
+  font-weight: 800;
+  color: #0284C7;
+}
+
+.optic-inv-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.optic-inv-date {
+  font-size: 0.68rem;
+  color: #94A3B8;
+  font-weight: 500;
+  text-align: right;
+}
+
+.optic-inv-price {
+  font-size: 0.92rem;
+  font-weight: 900;
+  color: #0A2540;
+  margin-top: 2px;
+}
+
+.optic-dots-btn {
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 14px;
+  font-weight: 900;
+  color: #0A2540;
+  letter-spacing: 2px;
+  cursor: pointer;
+  margin-top: 4px;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.optic-dots-btn:hover {
+  background: #F1F5F9;
+  border-color: #94A3B8;
+}
+
+/* Floating Action Button (+ Add) (Image 1) */
+.optic-fab-add {
+  position: fixed;
+  bottom: 68px;
+  right: 20px;
+  background: #0A2540;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 28px;
+  padding: 10px 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  box-shadow: 0 8px 24px rgba(10, 37, 64, 0.35);
+  cursor: pointer;
+  z-index: 50;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.optic-fab-add:hover {
+  background: #001E36;
+  transform: translateY(-2px);
+}
+
+/* ── 2. ADD FRAME MODAL (Image 2 OpticTool Mobile Layout) ────────────────── */
+.optic-add-frame-modal {
+  max-width: 440px;
+  width: 95%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #FFFFFF;
+  box-shadow: 0 20px 40px rgba(10, 37, 64, 0.2);
+  padding: 0;
+}
+
+.optic-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #E2E8F0;
+  flex-shrink: 0;
+}
+
+.optic-modal-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0A2540;
+  margin: 0;
+}
+
+.optic-modal-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #F1F5F9;
+  color: #64748B;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.optic-modal-close-btn:hover {
+  background: #E2E8F0;
+  color: #0A2540;
+}
+
+.optic-modal-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: calc(90vh - 65px);
+}
+
+.optic-form-section-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #0369A1;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.optic-photo-boxes-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.optic-photo-box {
+  border: 1.8px dashed #CBD5E1;
+  border-radius: 12px;
+  height: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  background: #FFFFFF;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.optic-photo-box:hover {
+  border-color: #0284C7;
+  background: #F0F7FD;
+}
+
+.optic-photo-box span {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #0A2540;
+  letter-spacing: 0.04em;
+}
+
+.optic-input-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.optic-input-row.single-col {
+  grid-template-columns: 1fr;
+}
+
+.optic-input-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.optic-input-lbl {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #0369A1;
+  letter-spacing: 0.04em;
+}
+
+.optic-text-field {
+  width: 100%;
+  height: 42px;
+  box-sizing: border-box;
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #0A2540;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.optic-text-field:focus {
+  border-color: #0284C7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.optic-text-field::placeholder {
+  color: #94A3B8;
+  font-weight: 500;
+}
+
+.optic-btn-submit-stock {
+  width: 100%;
+  height: 46px;
+  background: #0A2540;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-top: 10px;
+  box-shadow: 0 6px 16px rgba(10, 37, 64, 0.25);
+  transition: all 0.15s ease;
+}
+
+.optic-btn-submit-stock:hover {
+  background: #001E36;
+}
+
+/* ── 3. SAVED BILLS & ORDERS (Image 3 OpticTool Layout) ──────────────────── */
+.optic-orders-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 72px;
+}
+
+.optic-top-pills-bar {
+  display: flex;
+  gap: 10px;
+}
+
+.optic-tab-pill {
+  flex: 1;
+  height: 40px;
+  border-radius: 8px;
+  border: 1.5px solid #0A2540;
+  background: #FFFFFF;
+  color: #0A2540;
+  font-size: 0.86rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.optic-tab-pill.active {
+  background: #0A2540;
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(10, 37, 64, 0.2);
+}
+
+.optic-tab-pill.secondary {
+  border-color: #CBD5E1;
+  color: #0A2540;
+  background: #FFFFFF;
+}
+
+/* 3 Channel Tabs (Strict: All Orders, In-Store Orders, Website Orders) */
+.optic-orders-channel-tabs {
+  display: flex;
+  gap: 8px;
+  background: #F1F5F9;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.channel-tab-btn {
+  flex: 1;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.channel-tab-btn.active {
+  background: #FFFFFF;
+  color: #0A2540;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.channel-count {
+  background: #E2E8F0;
+  color: #0A2540;
+  font-size: 0.70rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.channel-tab-btn.active .channel-count {
+  background: #0A2540;
+  color: #FFFFFF;
+}
+
+/* Saved Bill Card (Image 3) */
+.optic-saved-bills-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.optic-saved-bill-card {
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  transition: all 0.15s ease;
+}
+
+.optic-saved-bill-card:hover {
+  border-color: #94A3B8;
+  box-shadow: 0 6px 18px rgba(10, 37, 64, 0.1);
+}
+
+.bill-card-header {
+  background: #0A2540;
+  color: #FFFFFF;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bill-header-inv {
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.bill-header-time {
+  font-size: 0.72rem;
+  color: #93C5FD;
+  font-weight: 600;
+}
+
+.bill-card-body {
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bill-card-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bill-client-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #0A2540;
+}
+
+.bill-phone-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.80rem;
+  font-weight: 600;
+  color: #64748B;
+}
+
+.bill-card-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.bill-due-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bill-due-amount {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #DC2626;
+}
+
+.bill-paid-amount {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #16A34A;
+}
+
+.badge-due-red {
+  background: #DC2626;
+  color: #FFFFFF;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.badge-paid-green {
+  background: #16A34A;
+  color: #FFFFFF;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.bill-sub-badges-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge-rx-pill {
+  background: #F0F7FD;
+  border: 1px solid #BAE6FD;
+  color: #0284C7;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.bill-total-lbl {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748B;
+}
+
+/* ── 4. SAVED BILL ACTION SHEET (Image 3B) ───────────────────────────────── */
+.optic-action-sheet-modal {
+  max-width: 420px;
+  width: 95%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #FFFFFF;
+  box-shadow: 0 20px 40px rgba(10, 37, 64, 0.25);
+  padding: 0;
+}
+
+.action-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #E2E8F0;
+  background: #F8FAFC;
+}
+
+.action-sheet-bill-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0A2540;
+}
+
+.action-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  padding: 16px;
+}
+
+.action-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 64px;
+  border-radius: 12px;
+  border: 1.5px solid #CBD5E1;
+  background: #FFFFFF;
+  color: #0A2540;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.action-chip:hover {
+  border-color: #0284C7;
+  background: #F0F7FD;
+  color: #0284C7;
+}
+
+.action-chip.chip-danger {
+  color: #DC2626;
+  border-color: #FCA5A5;
+}
+
+.action-chip.chip-danger:hover {
+  background: #FEF2F2;
+}
+
+.action-chip.chip-wa {
+  color: #16A34A;
+  border-color: #86EFAC;
+}
+
+.action-chip.chip-wa:hover {
+  background: #F0FDF4;
+}
+
+.action-chip.chip-pay {
+  color: #0284C7;
+  border-color: #BAE6FD;
+}
+
+.action-chip.chip-close {
+  color: #64748B;
+  border-color: #E2E8F0;
+}
+

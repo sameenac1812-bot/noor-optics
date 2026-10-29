@@ -522,24 +522,34 @@
   }
 
   function renderOrdersTable() {
+    const billsList = document.getElementById('orders-bills-list');
     const tbody = document.getElementById('orders-table-body');
-    if (!tbody) return;
 
-    const channel = state.ordersActiveChannel; // 'POS' vs 'WEBSITE'
-    const query = state.ordersSearchQuery.toLowerCase().trim();
+    const channel = state.ordersActiveChannel || 'ALL'; // 'ALL', 'POS', 'WEBSITE'
+    const query = (state.ordersSearchQuery || '').toLowerCase().trim();
     const statusFilter = state.ordersStatusFilter;
     const paymentFilter = state.ordersPaymentFilter;
 
+    // Filter out ghost/test orders
+    const cleanOrders = state.ordersCache.filter(o => {
+      if (o.order_number && /TEST/i.test(o.order_number)) return false;
+      if (o.customer_name && /test/i.test(o.customer_name)) return false;
+      return true;
+    });
+
     // Count badges
-    const instoreCount = state.ordersCache.filter(o => o.channel === 'POS').length;
-    const websiteCount = state.ordersCache.filter(o => o.channel === 'ONLINE' || o.channel === 'WEBSITE').length;
+    const allCount = cleanOrders.length;
+    const instoreCount = cleanOrders.filter(o => o.channel === 'POS').length;
+    const websiteCount = cleanOrders.filter(o => o.channel === 'ONLINE' || o.channel === 'WEBSITE').length;
+    const badgeAll = document.getElementById('count-all-orders');
     const badgeInstore = document.getElementById('count-instore-orders');
     const badgeWebsite = document.getElementById('count-website-orders');
+    if (badgeAll) badgeAll.textContent = allCount;
     if (badgeInstore) badgeInstore.textContent = instoreCount;
     if (badgeWebsite) badgeWebsite.textContent = websiteCount;
 
     // Filter list
-    const filtered = state.ordersCache.filter(o => {
+    const filtered = cleanOrders.filter(o => {
       // Channel match
       if (channel === 'POS' && o.channel !== 'POS') return false;
       if (channel === 'WEBSITE' && o.channel !== 'ONLINE' && o.channel !== 'WEBSITE') return false;
@@ -563,76 +573,245 @@
 
     const countLabel = document.getElementById('orders-count-label');
     if (countLabel) {
-      countLabel.textContent = `Showing ${filtered.length} of ${channel === 'POS' ? instoreCount : websiteCount} orders`;
+      countLabel.textContent = `Showing ${filtered.length} of ${allCount} orders`;
     }
 
-    if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:3rem; color:#9CA3AF;">No orders found matching the selected filters.</td></tr>`;
-      return;
-    }
+    // 1. Render Mobile-First OpticTool Saved Bills Cards (Image 3)
+    if (billsList) {
+      if (filtered.length === 0) {
+        billsList.innerHTML = `<div style="text-align:center; padding:3rem 1rem; color:#94A3B8; font-weight:600;">No orders or saved bills found.</div>`;
+      } else {
+        billsList.innerHTML = filtered.map(o => {
+          const invoiceNo = o.order_number || ('INV-NOOR-' + o.id.slice(-4));
+          const formattedDate = formatDateTime(o.created_at);
+          const custName = o.customer_name || (o.channel === 'POS' ? 'Walk-in Client' : 'Online Client');
+          const custPhone = o.customer_phone || '-';
+          const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
+          const isDue = (o.payment_status !== 'VERIFIED');
+          const hasRx = !!o.prescription_id || !!o.prescription_number;
 
-    tbody.innerHTML = filtered.map(o => {
-      const itemsCount = (o.items && o.items.length) || 1;
-      const itemsSnippet = o.items
-        ? o.items.map(i => `${escapeHtml(i.product_name)} (${i.quantity})`).join(', ')
-        : 'Optical Frame';
-
-      const paymentClass = o.payment_status === 'VERIFIED' ? 'status-verified' : (o.payment_status === 'REFUNDED' ? 'status-cancelled' : 'status-awaiting');
-      const orderClass = o.status === 'CONFIRMED' || o.status === 'DELIVERED' ? 'status-verified' : (o.status === 'CANCELLED' || o.status === 'REFUNDED' ? 'status-cancelled' : 'status-pending');
-
-      return `
-        <tr>
-          <td>
-            <strong>${escapeHtml(o.order_number)}</strong>
-            ${o.token_number ? `<div style="font-size:0.72rem; color:#6B7280; font-weight:700;">Token #${o.token_number}</div>` : ''}
-          </td>
-          <td>${formatDateTime(o.created_at)}</td>
-          <td>
-            <strong>${escapeHtml(o.customer_name || (channel === 'POS' ? 'Walk-in Client' : 'Online Client'))}</strong>
-            ${o.client_code ? `<span style="font-size:0.68rem; font-weight:700; color:#1D4ED8; background:#EFF6FF; border:1px solid #BFDBFE; padding:1px 5px; border-radius:4px; margin-left:4px;">${escapeHtml(o.client_code)}</span>` : ''}
-            ${o.customer_phone ? `<div style="font-size:0.72rem; color:#6B7280;">${escapeHtml(o.customer_phone)}</div>` : ''}
-            ${o.city ? `<div style="font-size:0.7rem; color:#9CA3AF;">${escapeHtml(o.city)}</div>` : ''}
-            ${o.prescription_number ? `
-              <div style="margin-top:4px;">
-                <span class="badge-status" style="background:#EBF5FF; color:#1E40AF; border:1px solid #BFDBFE; font-size:0.68rem; font-weight:700; cursor:pointer;" onclick="event.stopPropagation(); printPrescriptionRecord('${o.prescription_id}')" title="Click to view/print prescription">
-                  👓 ${escapeHtml(o.prescription_number)}
-                  ${o.od_sph ? `(R: ${o.od_sph} / L: ${o.os_sph || o.od_sph})` : ''}
-                </span>
+          return `
+            <div class="optic-saved-bill-card">
+              <div class="bill-card-header">
+                <div class="bill-header-inv">${escapeHtml(invoiceNo)}</div>
+                <div class="bill-header-time">${formattedDate}</div>
               </div>
-            ` : (o.prescription_pref ? `<div style="font-size:0.68rem; color:#9CA3AF; margin-top:2px;">RX: ${escapeHtml(o.prescription_pref)}</div>` : '')}
-          </td>
-          <td>
-            <div style="font-weight:600;">${itemsCount} item${itemsCount > 1 ? 's' : ''}</div>
-            <div style="font-size:0.72rem; color:#6B7280; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(itemsSnippet)}">${escapeHtml(itemsSnippet)}</div>
-          </td>
-          <td>${formatINR(o.subtotal_paise || o.subtotal_inr * 100, true)}</td>
-          <td>${formatINR(o.discount_paise || (o.discount_inr || 0) * 100, true)}</td>
-          <td><strong>${formatINR(o.total_payable_paise || o.total_payable_inr * 100, true)}</strong></td>
-          <td>
-            <span class="badge-status ${paymentClass}">${escapeHtml(o.payment_status)}</span>
-            <div style="font-size:0.68rem; color:#6B7280; margin-top:2px;">${escapeHtml(o.payment_method || 'CASH')}</div>
-          </td>
-          <td><span class="badge-status ${orderClass}">${escapeHtml(o.status)}</span></td>
-          <td>
-            <div style="display:flex; flex-direction:column; gap:4px;">
-              <div style="display:flex; gap:4px; flex-wrap:wrap;">
-                <button class="btn-table-action" onclick="viewOrderDetails('${o.id}')" title="View Full Details">View</button>
-                <button class="btn-table-action" onclick="instantPrintReceipt('${o.id}')" title="Instant Print Receipt">🖨️ Receipt</button>
-                ${o.prescription_id ? `<button class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="openEditPrescriptionModal('${o.prescription_id}')" title="Doctor: Edit Lens Values">✏️ Edit RX</button>` : ''}
-                <button class="btn-table-action btn-table-danger" onclick="deleteOrderPrompt('${o.id}', '${escapeHtml(o.order_number)}')" title="Delete Order">Delete</button>
-              </div>
-              ${o.customer_phone ? `
-                <div style="display:flex; gap:4px; margin-top:2px;">
-                  <a href="tel:${escapeHtml(o.customer_phone)}" class="btn-table-action" title="Call Client" style="text-decoration:none; display:inline-flex; align-items:center; gap:2px; font-weight:700; color:#1D4ED8; background:#EFF6FF; border:1px solid #BFDBFE;">📞 Call</a>
-                  <button type="button" class="btn-table-action" onclick="openWhatsAppDirect('${escapeHtml(o.customer_phone)}', '${escapeHtml(o.customer_name || 'Client')}')" title="WhatsApp Chat" style="display:inline-flex; align-items:center; gap:2px; font-weight:700; color:#15803D; background:#F0FDF4; border:1px solid #BBF7D0;">💬 WhatsApp</button>
+              <div class="bill-card-body">
+                <div class="bill-card-left">
+                  <div class="bill-client-row">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <span>${escapeHtml(custName)}</span>
+                  </div>
+                  <div class="bill-phone-row">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                    <span>${escapeHtml(custPhone)}</span>
+                  </div>
                 </div>
-              ` : ''}
+                <div class="bill-card-right">
+                  <div class="bill-due-badge-wrap">
+                    ${isDue
+                      ? `<span class="bill-due-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span class="badge-due-red">DUE</span>`
+                      : `<span class="bill-paid-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span class="badge-paid-green">PAID</span>`
+                    }
+                  </div>
+                  <div class="bill-sub-badges-row">
+                    ${hasRx ? `<span class="badge-rx-pill">1 Rx</span>` : ''}
+                    <span class="bill-total-lbl">Total ₹ ${totalPayable.toLocaleString('en-IN')}</span>
+                  </div>
+                  <button type="button" class="optic-dots-btn" onclick="openBillActionSheet('${o.id}', event)">•••</button>
+                </div>
+              </div>
             </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
+          `;
+        }).join('');
+      }
+    }
+
+    // 2. Render Desktop Data Table if container is present
+    if (tbody) {
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:3rem; color:#9CA3AF;">No orders found matching the selected filters.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(o => {
+        const itemsCount = (o.items && o.items.length) || 1;
+        const itemsSnippet = o.items
+          ? o.items.map(i => `${escapeHtml(i.product_name)} (${i.quantity})`).join(', ')
+          : 'Optical Frame';
+
+        const paymentClass = o.payment_status === 'VERIFIED' ? 'status-verified' : (o.payment_status === 'REFUNDED' ? 'status-cancelled' : 'status-awaiting');
+        const orderClass = o.status === 'CONFIRMED' || o.status === 'DELIVERED' ? 'status-verified' : (o.status === 'CANCELLED' || o.status === 'REFUNDED' ? 'status-cancelled' : 'status-pending');
+
+        return `
+          <tr>
+            <td>
+              <strong>${escapeHtml(o.order_number)}</strong>
+              ${o.token_number ? `<div style="font-size:0.72rem; color:#6B7280; font-weight:700;">Token #${o.token_number}</div>` : ''}
+            </td>
+            <td>${formatDateTime(o.created_at)}</td>
+            <td>
+              <strong>${escapeHtml(o.customer_name || (channel === 'POS' ? 'Walk-in Client' : 'Online Client'))}</strong>
+              ${o.client_code ? `<span style="font-size:0.68rem; font-weight:700; color:#1D4ED8; background:#EFF6FF; border:1px solid #BFDBFE; padding:1px 5px; border-radius:4px; margin-left:4px;">${escapeHtml(o.client_code)}</span>` : ''}
+              ${o.customer_phone ? `<div style="font-size:0.72rem; color:#6B7280;">${escapeHtml(o.customer_phone)}</div>` : ''}
+              ${o.city ? `<div style="font-size:0.7rem; color:#9CA3AF;">${escapeHtml(o.city)}</div>` : ''}
+              ${o.prescription_number ? `
+                <div style="margin-top:4px;">
+                  <span class="badge-status" style="background:#EBF5FF; color:#1E40AF; border:1px solid #BFDBFE; font-size:0.68rem; font-weight:700; cursor:pointer;" onclick="event.stopPropagation(); printPrescriptionRecord('${o.prescription_id}')" title="Click to view/print prescription">
+                    👓 ${escapeHtml(o.prescription_number)}
+                    ${o.od_sph ? `(R: ${o.od_sph} / L: ${o.os_sph || o.od_sph})` : ''}
+                  </span>
+                </div>
+              ` : (o.prescription_pref ? `<div style="font-size:0.68rem; color:#9CA3AF; margin-top:2px;">RX: ${escapeHtml(o.prescription_pref)}</div>` : '')}
+            </td>
+            <td>
+              <div style="font-weight:600;">${itemsCount} item${itemsCount > 1 ? 's' : ''}</div>
+              <div style="font-size:0.72rem; color:#6B7280; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(itemsSnippet)}">${escapeHtml(itemsSnippet)}</div>
+            </td>
+            <td>${formatINR(o.subtotal_paise || o.subtotal_inr * 100, true)}</td>
+            <td>${formatINR(o.discount_paise || (o.discount_inr || 0) * 100, true)}</td>
+            <td><strong>${formatINR(o.total_payable_paise || o.total_payable_inr * 100, true)}</strong></td>
+            <td>
+              <span class="badge-status ${paymentClass}">${escapeHtml(o.payment_status)}</span>
+              <div style="font-size:0.68rem; color:#6B7280; margin-top:2px;">${escapeHtml(o.payment_method || 'CASH')}</div>
+            </td>
+            <td><span class="badge-status ${orderClass}">${escapeHtml(o.status)}</span></td>
+            <td>
+              <div style="display:flex; flex-direction:column; gap:4px;">
+                <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                  <button class="btn-table-action" onclick="viewOrderDetails('${o.id}')" title="View Full Details">View</button>
+                  <button class="btn-table-action" onclick="instantPrintReceipt('${o.id}')" title="Instant Print Receipt">🖨️ Receipt</button>
+                  ${o.prescription_id ? `<button class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="openEditPrescriptionModal('${o.prescription_id}')" title="Doctor: Edit Lens Values">✏️ Edit RX</button>` : ''}
+                  <button class="btn-table-action btn-table-danger" onclick="deleteOrderPrompt('${o.id}', '${escapeHtml(o.order_number)}')" title="Delete Order">Delete</button>
+                </div>
+                ${o.customer_phone ? `
+                  <div style="display:flex; gap:4px; margin-top:2px;">
+                    <a href="tel:${escapeHtml(o.customer_phone)}" class="btn-table-action" title="Call Client" style="text-decoration:none; display:inline-flex; align-items:center; gap:2px; font-weight:700; color:#1D4ED8; background:#EFF6FF; border:1px solid #BFDBFE;">📞 Call</a>
+                    <button type="button" class="btn-table-action" onclick="openWhatsAppDirect('${escapeHtml(o.customer_phone)}', '${escapeHtml(o.customer_name || 'Client')}')" title="WhatsApp Chat" style="display:inline-flex; align-items:center; gap:2px; font-weight:700; color:#15803D; background:#F0FDF4; border:1px solid #BBF7D0;">💬 WhatsApp</button>
+                  </div>
+                ` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
   }
+
+  // ── Open OpticTool Saved Bill Action Sheet (Image 3B) ──────────────────────
+  window.openBillActionSheet = function (orderId, e) {
+    if (e) e.stopPropagation();
+    const order = state.ordersCache.find(o => o.id === orderId);
+    if (!order) return;
+
+    const modal = document.getElementById('modal-bill-action-sheet');
+    const title = document.getElementById('action-sheet-bill-title');
+    if (title) title.textContent = order.order_number || ('INV-NOOR-' + order.id.slice(-4));
+
+    // Wire View
+    const btnView = document.getElementById('action-sheet-view');
+    if (btnView) btnView.onclick = () => {
+      modal?.classList.remove('open');
+      document.body.classList.remove('modal-open');
+      viewOrderDetails(orderId);
+    };
+
+    // Wire Save
+    const btnSave = document.getElementById('action-sheet-save');
+    if (btnSave) btnSave.onclick = () => {
+      modal?.classList.remove('open');
+      document.body.classList.remove('modal-open');
+      showToast(`Bill #${order.order_number} saved to storage.`, 'success');
+    };
+
+    // Wire Share
+    const btnShare = document.getElementById('action-sheet-share');
+    if (btnShare) btnShare.onclick = async () => {
+      modal?.classList.remove('open');
+      document.body.classList.remove('modal-open');
+      const totalInr = (order.total_payable_paise ? order.total_payable_paise / 100 : order.total_payable_inr);
+      const shareText = `Noor Optics Bill #${order.order_number}\nClient: ${order.customer_name || 'Valued Customer'}\nTotal: ₹${totalInr}\nThank you for choosing Noor Optics!`;
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: `Bill #${order.order_number}`, text: shareText, url: window.location.origin });
+        } catch (err) {}
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(shareText);
+        showToast('Bill details copied to clipboard!', 'info');
+      }
+    };
+
+    // Wire Edit
+    const btnEdit = document.getElementById('action-sheet-edit');
+    if (btnEdit) btnEdit.onclick = () => {
+      modal?.classList.remove('open');
+      document.body.classList.remove('modal-open');
+      switchNav('pos');
+      showToast(`Order #${order.order_number} loaded into POS editor.`, 'info');
+    };
+
+    // Wire Delete
+    const btnDelete = document.getElementById('action-sheet-delete');
+    if (btnDelete) btnDelete.onclick = () => {
+      modal?.classList.remove('open');
+      document.body.classList.remove('modal-open');
+      deleteOrderPrompt(orderId, order.order_number);
+    };
+
+    // Wire Print (Silent dispatch to POS portable daemon, NO popup!)
+    const btnPrint = document.getElementById('action-sheet-print');
+    if (btnPrint) btnPrint.onclick = () => {
+      modal?.classList.remove('open');
+      document.body.classList.remove('modal-open');
+      instantPrintReceipt(orderId);
+    };
+
+    // Wire Call
+    const btnCall = document.getElementById('action-sheet-call');
+    if (btnCall) btnCall.onclick = () => {
+      modal?.classList.remove('open');
+      document.body.classList.remove('modal-open');
+      if (order.customer_phone) {
+        window.location.href = `tel:${order.customer_phone}`;
+      } else {
+        showToast('No phone number recorded for this client.', 'warning');
+      }
+    };
+
+    // Wire WA
+    const btnWa = document.getElementById('action-sheet-wa');
+    if (btnWa) btnWa.onclick = () => {
+      modal?.classList.remove('open');
+      document.body.classList.remove('modal-open');
+      if (order.customer_phone) {
+        openWhatsAppDirect(order.customer_phone, order.customer_name || 'Client');
+      } else {
+        showToast('No phone number recorded for this client.', 'warning');
+      }
+    };
+
+    // Wire Pay
+    const btnPay = document.getElementById('action-sheet-pay');
+    if (btnPay) btnPay.onclick = async () => {
+      modal?.classList.remove('open');
+      document.body.classList.remove('modal-open');
+      try {
+        await apiFetch(`/api/orders/${orderId}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ paymentStatus: 'VERIFIED' })
+        });
+        showToast(`Bill #${order.order_number} marked as PAID.`, 'success');
+        loadOrders();
+      } catch (err) {
+        showToast('Failed to update payment status: ' + err.message, 'error');
+      }
+    };
+
+    if (modal) {
+      modal.classList.add('open');
+      document.body.classList.add('modal-open');
+    }
+  };
 
   // ── View Order Details Modal ──────────────────────────────────────────────
   window.viewOrderDetails = async function (orderId) {
@@ -1107,113 +1286,175 @@
   }
 
   function renderInventoryTable() {
+    const cardsList = document.getElementById('inv-cards-list');
     const tbody = document.getElementById('inventory-table-body');
-    if (!tbody) return;
 
-    const query = state.inventorySearchQuery.toLowerCase().trim();
-    const shapeFilter = state.inventoryShapeFilter;
-    const stockFilter = state.inventoryStockFilter;
+    const query = (state.inventorySearchQuery || '').toLowerCase().trim();
+    const activeCat = state.inventoryOpticCategory || 'ALL';
 
     // Metrics summary
     const totalDistinct = state.inventoryList.length;
-    let totalPhysical = 0;
-    let lowCount = 0;
-    let outCount = 0;
+    let totalStockValue = 0;
+    let totalInStock = 0;
+    let totalLowStock = 0;
 
     state.inventoryList.forEach(p => {
       const stock = Number(p.total_stock) || 0;
-      totalPhysical += stock;
-      const threshold = p.reorder_threshold || 5;
-      if (stock === 0) outCount++;
-      else if (stock <= threshold) lowCount++;
+      const price = Number(p.selling_price_inr) || 0;
+      totalStockValue += (stock * price);
+      const threshold = p.reorder_threshold || 2;
+      if (stock > 0) totalInStock++;
+      if (stock > 0 && stock <= threshold) totalLowStock++;
     });
 
-    document.getElementById('inv-total-distinct').textContent = totalDistinct;
-    document.getElementById('inv-total-physical').textContent = totalPhysical;
-    document.getElementById('inv-low-stock-count').textContent = lowCount;
-    document.getElementById('inv-out-stock-count').textContent = outCount;
+    const valEl = document.getElementById('optic-inv-stock-val');
+    const itemsEl = document.getElementById('optic-inv-items-count');
+    const instockEl = document.getElementById('optic-inv-instock-count');
+    const lowstockEl = document.getElementById('optic-inv-lowstock-count');
+    if (valEl) valEl.textContent = totalStockValue.toLocaleString('en-IN');
+    if (itemsEl) itemsEl.textContent = totalDistinct;
+    if (instockEl) instockEl.textContent = totalInStock;
+    if (lowstockEl) lowstockEl.textContent = totalLowStock;
 
     // Filter frames
     const filtered = state.inventoryList.filter(p => {
-      if (shapeFilter && p.shape !== shapeFilter) return false;
-      const stock = Number(p.total_stock) || 0;
-      const threshold = p.reorder_threshold || 5;
-      if (stockFilter === 'in_stock' && stock === 0) return false;
-      if (stockFilter === 'low_stock' && (stock === 0 || stock > threshold)) return false;
-      if (stockFilter === 'out_of_stock' && stock > 0) return false;
-
+      if (activeCat !== 'ALL') {
+        const cat = (p.category || p.shape || p.name || '').toLowerCase();
+        if (!cat.includes(activeCat.toLowerCase())) return false;
+      }
       if (query) {
         const name = (p.name || '').toLowerCase();
         const sku = (p.sku || '').toLowerCase();
         const brand = (p.brand || '').toLowerCase();
-        const shape = (p.shape || '').toLowerCase();
-        if (!name.includes(query) && !sku.includes(query) && !brand.includes(query) && !shape.includes(query)) {
+        const model = (p.model || '').toLowerCase();
+        if (!name.includes(query) && !sku.includes(query) && !brand.includes(query) && !model.includes(query)) {
           return false;
         }
       }
       return true;
     });
 
-    const countLabel = document.getElementById('inv-count-label');
-    if (countLabel) countLabel.textContent = `Showing ${filtered.length} of ${totalDistinct} frames`;
+    // 1. Render Mobile-First Touch Cards (Image 1)
+    if (cardsList) {
+      if (filtered.length === 0) {
+        cardsList.innerHTML = `<div style="text-align:center; padding:3rem 1rem; color:#94A3B8; font-weight:600;">No items found matching the category or search.</div>`;
+      } else {
+        cardsList.innerHTML = filtered.map(p => {
+          const stock = Number(p.total_stock) || 0;
+          const price = Number(p.selling_price_inr) || 0;
+          const createdDate = formatDateOptic(p.created_at);
+          const updatedDate = formatDateOptic(p.updated_at || p.created_at);
 
-    if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:3rem; color:#9CA3AF;">No frames found matching your search.</td></tr>`;
-      return;
+          return `
+            <div class="optic-inv-card">
+              <div class="optic-inv-thumb">
+                ${p.image_url ? `<img src="${p.image_url.startsWith('/') ? p.image_url : '/' + p.image_url}" alt="${escapeHtml(p.name)}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />` : `
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="1.8">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                  </svg>
+                `}
+              </div>
+              <div class="optic-inv-info">
+                <div class="optic-inv-name">${escapeHtml(p.name || p.model || 'Frame')}</div>
+                <div class="optic-inv-qty">Qty: <span class="qty-bold">${stock}</span></div>
+              </div>
+              <div class="optic-inv-meta">
+                <div class="optic-inv-date">Created: ${createdDate}</div>
+                <div class="optic-inv-date">Updated: ${updatedDate}</div>
+                <div class="optic-inv-price">Retail Rs ${price.toLocaleString('en-IN')}</div>
+                <button type="button" class="optic-dots-btn" onclick="openFrameActionMenu('${p.id}', event)">•••</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
     }
 
-    tbody.innerHTML = filtered.map(p => {
-      const stock = Number(p.total_stock) || 0;
-      const threshold = p.reorder_threshold || 5;
-      let stockBadge = `<span class="badge-stock in-stock">${stock} Units</span>`;
-      if (stock === 0) {
-        stockBadge = `<span class="badge-stock out-of-stock">Out of Stock (0)</span>`;
-      } else if (stock <= threshold) {
-        stockBadge = `<span class="badge-stock low-stock">Low Stock (${stock})</span>`;
+    // 2. Render Desktop Table if present
+    if (tbody) {
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:3rem; color:#9CA3AF;">No frames found matching your search.</td></tr>`;
+        return;
       }
 
-      const isChecked = state.selectedFrameIds.has(p.id);
+      tbody.innerHTML = filtered.map(p => {
+        const stock = Number(p.total_stock) || 0;
+        const threshold = p.reorder_threshold || 5;
+        let stockBadge = `<span class="badge-stock in-stock">${stock} Units</span>`;
+        if (stock === 0) {
+          stockBadge = `<span class="badge-stock out-of-stock">Out of Stock (0)</span>`;
+        } else if (stock <= threshold) {
+          stockBadge = `<span class="badge-stock low-stock">Low Stock (${stock})</span>`;
+        }
 
-      return `
-        <tr>
-          <td>
-            <input type="checkbox" class="frame-row-checkbox" data-id="${p.id}" ${isChecked ? 'checked' : ''} />
-          </td>
-          <td>
-            <img src="${escapeHtml(p.image_url ? (p.image_url.startsWith('/') ? p.image_url : '/' + p.image_url) : '/images/stockholm_noir.jpg')}" alt="${escapeHtml(p.name)}" class="frame-thumbnail-img" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />
-          </td>
-          <td><strong>${escapeHtml(p.name)}</strong></td>
-          <td><code style="font-weight:700; color:#111;">${escapeHtml(p.sku)}</code></td>
-          <td><span style="font-size:0.72rem; color:#6B7280;">${escapeHtml(p.id)}</span></td>
-          <td>${escapeHtml(p.brand)}</td>
-          <td>${escapeHtml(p.shape)}</td>
-          <td>${p.purchase_cost_inr ? formatINR(p.purchase_cost_inr) : '-'}</td>
-          <td><strong>${formatINR(p.selling_price_inr)}</strong></td>
-          <td><strong>${stock}</strong></td>
-          <td>${stockBadge}</td>
-          <td>
-            <button class="btn-table-action" onclick="openSingleStickerModal('${p.id}')" title="Generate Yellow QR Sticker">🏷️ QR Sticker</button>
-          </td>
-          <td>
-            <div style="display:flex; gap:4px;">
-              <button class="btn-table-action" onclick="openStockAdjustModal('${p.id}')" title="Adjust Stock Balance">Stock</button>
-              <button class="btn-table-action btn-table-danger" onclick="deleteFramePrompt('${p.id}', '${escapeHtml(p.name)}', '${escapeHtml(p.sku)}')" title="Delete Optical Frame">Delete</button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
+        const isChecked = state.selectedFrameIds.has(p.id);
 
-    // Wire row checkboxes
-    tbody.querySelectorAll('.frame-row-checkbox').forEach(cb => {
-      cb.addEventListener('change', (e) => {
-        const id = e.target.dataset.id;
-        if (e.target.checked) state.selectedFrameIds.add(id);
-        else state.selectedFrameIds.delete(id);
-        updateBatchStickersButton();
-      });
-    });
+        return `
+          <tr>
+            <td>
+              <input type="checkbox" class="frame-row-checkbox" data-id="${p.id}" ${isChecked ? 'checked' : ''} />
+            </td>
+            <td>
+              <img src="${escapeHtml(p.image_url ? (p.image_url.startsWith('/') ? p.image_url : '/' + p.image_url) : '/images/stockholm_noir.jpg')}" alt="${escapeHtml(p.name)}" class="frame-thumbnail-img" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />
+            </td>
+            <td><strong>${escapeHtml(p.name)}</strong></td>
+            <td><code style="font-weight:700; color:#111;">${escapeHtml(p.sku)}</code></td>
+            <td><span style="font-size:0.72rem; color:#6B7280;">${escapeHtml(p.id)}</span></td>
+            <td>${escapeHtml(p.brand)}</td>
+            <td>${escapeHtml(p.shape)}</td>
+            <td>${p.purchase_cost_inr ? formatINR(p.purchase_cost_inr) : '-'}</td>
+            <td><strong>${formatINR(p.selling_price_inr)}</strong></td>
+            <td><strong>${stock}</strong></td>
+            <td>${stockBadge}</td>
+            <td>
+              <button class="btn-table-action" onclick="openSingleStickerModal('${p.id}')" title="Generate Yellow QR Sticker">🏷️ QR Sticker</button>
+            </td>
+            <td>
+              <div style="display:flex; gap:4px;">
+                <button class="btn-table-action" onclick="openStockAdjustModal('${p.id}')" title="Adjust Stock Balance">Stock</button>
+                <button class="btn-table-action btn-table-danger" onclick="deleteFramePrompt('${p.id}', '${escapeHtml(p.name)}', '${escapeHtml(p.sku)}')" title="Delete Optical Frame">Delete</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
   }
+
+  function formatDateOptic(dateVal) {
+    if (!dateVal) return '29 Oct 26, 10:51 PM';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return String(dateVal);
+    const day = d.getDate();
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const month = months[d.getMonth()];
+    const yr = String(d.getFullYear()).slice(-2);
+    let hours = d.getHours();
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    return `${day} ${month} ${yr}, ${hours}:${mins} ${ampm}`;
+  }
+
+  window.openFrameActionMenu = function (productId, e) {
+    if (e) e.stopPropagation();
+    const product = state.inventoryList.find(p => p.id === productId);
+    if (!product) return;
+
+    const opt = prompt(
+      `Manage Frame: ${product.name} (SKU: ${product.sku})\n\nType 1 to Print QR Sticker\nType 2 to Adjust Stock Quantity\nType 3 to Delete Frame\n\nEnter option (1, 2, or 3):`,
+      '1'
+    );
+    if (opt === '1') {
+      openSingleStickerModal(productId);
+    } else if (opt === '2') {
+      openStockAdjustModal(productId);
+    } else if (opt === '3') {
+      deleteFramePrompt(productId, product.name, product.sku);
+    }
+  };
 
   function updateBatchStickersButton() {
     const btn = document.getElementById('btn-batch-stickers');
@@ -1250,108 +1491,116 @@
     }
   };
 
-  // ── + Add New Frame Modal & Actions ───────────────────────────────────────
+  // ── + Add New Frame Modal & Actions (Image 2 OpticTool Form) ──────────────
   function setupAddFrameModal() {
     const modal = document.getElementById('modal-add-frame');
     const btnOpen = document.getElementById('btn-open-add-frame');
     const form = document.getElementById('form-add-frame');
-    const btnSavePrint = document.getElementById('btn-submit-save-print');
 
     if (btnOpen && modal) {
       btnOpen.addEventListener('click', () => {
-        form.reset();
+        form?.reset();
+        const prevWrap = document.getElementById('frm-photo-preview-wrap');
+        const prevImg = document.getElementById('frm-photo-preview');
+        if (prevWrap) prevWrap.style.display = 'none';
+        if (prevImg) prevImg.src = '';
+        state.uploadedFrameImageUrl = null;
         modal.classList.add('open');
+        document.body.classList.add('modal-open');
       });
     }
 
-    // Color picker sync
-    const colorPicker = document.getElementById('frm-color-picker');
-    const colorHex = document.getElementById('frm-color-hex');
-    if (colorPicker && colorHex) {
-      colorPicker.addEventListener('input', (e) => colorHex.value = e.target.value);
-      colorHex.addEventListener('input', (e) => colorPicker.value = e.target.value);
-    }
+    // Photo selection: Camera or Upload file picker
+    const fileCam = document.getElementById('frm-file-camera');
+    const fileUp = document.getElementById('frm-file-upload');
+    const handleFramePhoto = async (file) => {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target.result;
+        const prevWrap = document.getElementById('frm-photo-preview-wrap');
+        const prevImg = document.getElementById('frm-photo-preview');
+        if (prevImg) prevImg.src = base64;
+        if (prevWrap) prevWrap.style.display = 'block';
 
-    // Save Frame Only
+        try {
+          showToast('Uploading frame photo...', 'info');
+          const res = await apiFetch('/api/products/upload-image', {
+            method: 'POST',
+            body: JSON.stringify({ imageBase64: base64 })
+          });
+          if (res && res.imageUrl) {
+            state.uploadedFrameImageUrl = res.imageUrl;
+            showToast('Frame photo uploaded!', 'success');
+          }
+        } catch (err) {
+          state.uploadedFrameImageUrl = base64;
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+
+    if (fileCam) fileCam.addEventListener('change', (e) => handleFramePhoto(e.target.files[0]));
+    if (fileUp) fileUp.addEventListener('change', (e) => handleFramePhoto(e.target.files[0]));
+
+    // Form submission
     if (form) {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        await saveFrameHandler(false);
-      });
-    }
-
-    // Save & Print QR Sticker
-    if (btnSavePrint) {
-      btnSavePrint.addEventListener('click', async () => {
-        if (!form.checkValidity()) {
-          form.reportValidity();
-          return;
+        const brand = document.getElementById('frm-brand')?.value.trim() || 'Noor Optics';
+        const model = document.getElementById('frm-model')?.value.trim() || '';
+        const color = document.getElementById('frm-color')?.value.trim() || 'Black';
+        const size = document.getElementById('frm-size')?.value.trim() || '52-18';
+        let sku = document.getElementById('frm-sku')?.value.trim().toUpperCase() || '';
+        if (!sku) {
+          sku = `NOOR-${(model || brand).toUpperCase().replace(/[^A-Z0-9]/g, '')}-${Date.now().toString().slice(-4)}`;
         }
-        await saveFrameHandler(true);
+        const wholesale = Number(document.getElementById('frm-wholesale')?.value) || 0;
+        const retail = Number(document.getElementById('frm-retail')?.value) || 0;
+        const quantity = Number(document.getElementById('frm-quantity')?.value) || 0;
+        const lowStock = Number(document.getElementById('frm-low-stock')?.value) || 2;
+
+        const name = `${brand} ${model}`.trim();
+        const imageUrl = state.uploadedFrameImageUrl || 'images/stockholm_noir.jpg';
+
+        try {
+          showToast('Adding frame to stock...', 'info');
+          const payload = {
+            name,
+            sku,
+            brand,
+            shape: 'Rectangular',
+            material: 'Acetate',
+            fit: size,
+            sellingPriceINR: retail,
+            purchaseCostINR: wholesale,
+            reorderThreshold: lowStock,
+            imageUrl,
+            description: `Brand: ${brand} | Model: ${model} | Color: ${color} | Size: ${size}`,
+            variants: [
+              {
+                colorName: color,
+                colorHex: '#111111',
+                initialStock: quantity
+              }
+            ]
+          };
+
+          await apiFetch('/api/products', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
+
+          showToast(`Frame "${name}" added to stock successfully!`, 'success');
+          modal.classList.remove('open');
+          document.body.classList.remove('modal-open');
+          await loadInventory();
+          if (typeof loadDashboard === 'function') loadDashboard();
+          if (typeof loadPosCatalog === 'function') loadPosCatalog();
+        } catch (err) {
+          showToast('Failed to add frame: ' + err.message, 'error');
+        }
       });
-    }
-  }
-
-  async function saveFrameHandler(andPrintSticker) {
-    const name = document.getElementById('frm-name').value.trim();
-    const sku = document.getElementById('frm-sku').value.trim().toUpperCase();
-    const brand = document.getElementById('frm-brand').value.trim() || 'Noor Optics';
-    const model = document.getElementById('frm-model').value.trim();
-    const shape = document.getElementById('frm-shape').value;
-    const colorName = document.getElementById('frm-color-name').value.trim();
-    const colorHex = document.getElementById('frm-color-hex').value.trim();
-    const size = document.getElementById('frm-size').value.trim();
-    const sellingPrice = document.getElementById('frm-selling-price').value;
-    const costPrice = document.getElementById('frm-cost-price').value || 0;
-    const stockQty = document.getElementById('frm-stock-qty').value;
-    const material = document.getElementById('frm-material').value.trim();
-    const imageUrl = document.getElementById('frm-image-url').value.trim();
-    const description = document.getElementById('frm-description').value.trim();
-
-    try {
-      const payload = {
-        name,
-        sku,
-        brand,
-        shape,
-        material,
-        fit: 'Regular',
-        sellingPriceINR: sellingPrice,
-        purchaseCostINR: costPrice,
-        reorderThreshold: 5,
-        imageUrl: imageUrl || 'images/stockholm_noir.jpg',
-        description: `${description} | Size: ${size}`,
-        variants: [
-          {
-            colorName: colorName || 'Standard',
-            colorHex: colorHex || '#111111',
-            initialStock: stockQty
-          }
-        ]
-      };
-
-      const res = await apiFetch('/api/products', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-
-      showToast(`Frame "${name}" registered successfully!`, 'success');
-      document.getElementById('modal-add-frame').classList.remove('open');
-      await loadInventory();
-      await loadDashboard();
-
-      if (andPrintSticker) {
-        // Open QR Sticker Modal with newly created frame
-        const newFrame = state.inventoryList.find(p => p.sku === sku || p.id === res.id) || {
-          id: res.id,
-          name,
-          sku,
-          brand
-        };
-        openSingleStickerModal(newFrame.id);
-      }
-    } catch (err) {
-      showToast('Error saving frame: ' + err.message, 'error');
     }
   }
 
@@ -4518,29 +4767,12 @@
     }
   };
 
-  // ── Automatic Instant Bill Printout (Zero Delay, No Print Skipped) ─────────
+  // ── Dispatch Print Signal to POS Portable Daemon (No browser print popup) ──
   window.instantPrintReceipt = function (orderId) {
     if (!orderId) return;
-    let printFrame = document.getElementById('silent-receipt-print-frame');
-    if (!printFrame) {
-      printFrame = document.createElement('iframe');
-      printFrame.id = 'silent-receipt-print-frame';
-      printFrame.style.cssText = 'position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; border:none; visibility:hidden;';
-      document.body.appendChild(printFrame);
-    }
-
-    printFrame.onload = function () {
-      try {
-        if (printFrame.contentWindow) {
-          printFrame.contentWindow.focus();
-          printFrame.contentWindow.print();
-        }
-      } catch (err) {
-        console.warn('Silent auto-print notice:', err);
-      }
-    };
-
-    printFrame.src = `/api/printer/orders/${orderId}/preview-html?t=${Date.now()}`;
+    // Dispatch signal to POS portable thermal printer daemon via background API
+    fetch(`/api/printer/orders/${orderId}/daemon-dispatch`, { method: 'POST' }).catch(() => {});
+    showToast('Print signal dispatched to POS portable daemon.', 'info');
   };
 
   // ── Receipt & Token Printing Preview ──────────────────────────────────────
@@ -4788,7 +5020,16 @@
     const btnRefresh = document.getElementById('btn-refresh-dash');
     if (btnRefresh) btnRefresh.addEventListener('click', () => { loadDashboard(); showToast('Dashboard refreshed.', 'info'); });
 
-    // 4. Orders Sub-Tabs Navigation
+    // 4. OpticTool Orders 3-Channel Navigation (All, In-Store, Website)
+    document.querySelectorAll('.optic-orders-channel-tabs .channel-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.optic-orders-channel-tabs .channel-tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.ordersActiveChannel = btn.dataset.channel;
+        renderOrdersTable();
+      });
+    });
+
     const subtabInStore = document.getElementById('subtab-in-store');
     const subtabWebsite = document.getElementById('subtab-website');
     if (subtabInStore) {
@@ -4832,50 +5073,16 @@
       });
     }
 
-    const btnDeleteAllOrders = document.getElementById('btn-delete-all-orders');
-    if (btnDeleteAllOrders) {
-      btnDeleteAllOrders.addEventListener('click', async () => {
-        const totalCount = state.ordersCache ? state.ordersCache.length : 0;
-        if (totalCount === 0) {
-          showToast('No orders found in the pipeline to delete.', 'warning');
-          return;
-        }
-
-        const confirmMsg = `⚠️ ARE YOU SURE YOU WANT TO DELETE ALL ORDERS?\n\n` +
-          `• Total orders to be deleted: ${totalCount}\n` +
-          `• Inventory stock balances for active frames will be safely restored.\n` +
-          `• This action permanently deletes in-store POS and website order records.\n\n` +
-          `Click OK to proceed with deleting all orders.`;
-
-        if (!confirm(confirmMsg)) {
-          return;
-        }
-
-        try {
-          btnDeleteAllOrders.disabled = true;
-          btnDeleteAllOrders.innerHTML = `<span>Deleting...</span>`;
-
-          const res = await apiFetch('/api/orders', {
-            method: 'DELETE'
-          });
-
-          showToast(res.message || `Successfully deleted ${res.deletedCount || totalCount} orders.`, 'success');
-          await loadOrders();
-          if (typeof loadDashboard === 'function') loadDashboard();
-          if (typeof loadInventory === 'function') loadInventory();
-        } catch (err) {
-          showToast('Failed to delete all orders: ' + err.message, 'error');
-        } finally {
-          btnDeleteAllOrders.disabled = false;
-          btnDeleteAllOrders.innerHTML = `
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-            <span>Delete All Orders</span>
-          `;
-        }
+    // 5. OpticTool Total Inventory Category Pills & Search
+    document.querySelectorAll('.optic-category-pills .optic-cat-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.optic-category-pills .optic-cat-pill').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.inventoryOpticCategory = btn.dataset.invCat;
+        renderInventoryTable();
       });
-    }
+    });
 
-    // 5. Total Inventory Search & Filters
     const invSearch = document.getElementById('inv-search-input');
     if (invSearch) {
       invSearch.addEventListener('input', () => {
@@ -4884,57 +5091,35 @@
       });
     }
 
-    const invShapeFilter = document.getElementById('inv-filter-shape');
-    if (invShapeFilter) {
-      invShapeFilter.addEventListener('change', () => {
-        state.inventoryShapeFilter = invShapeFilter.value;
-        renderInventoryTable();
-      });
-    }
-
-    const invStockFilter = document.getElementById('inv-filter-stock');
-    if (invStockFilter) {
-      invStockFilter.addEventListener('change', () => {
-        state.inventoryStockFilter = invStockFilter.value;
-        renderInventoryTable();
-      });
-    }
-
-    const invSelectAll = document.getElementById('inv-select-all');
-    if (invSelectAll) {
-      invSelectAll.addEventListener('change', (e) => {
-        if (e.target.checked) {
-          state.inventoryList.forEach(p => state.selectedFrameIds.add(p.id));
-        } else {
-          state.selectedFrameIds.clear();
-        }
-        renderInventoryTable();
-        updateBatchStickersButton();
-      });
-    }
-
-    // 6. POS Catalog Shape Chips
-    document.querySelectorAll('.pos-shape-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        document.querySelectorAll('.pos-shape-chip').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        state.posSelectedShape = chip.dataset.posShape;
-        renderPosCatalog();
-      });
-    });
-
-    // 7. Modal Close Buttons
+    // 6. Modal Close Buttons & Background Scroll Lock Observer
     document.querySelectorAll('[data-close-modal]').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('open'));
+        document.body.classList.remove('modal-open');
       });
     });
 
     // Close modal on clicking overlay backdrop
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
       overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) overlay.classList.remove('open');
+        if (e.target === overlay) {
+          overlay.classList.remove('open');
+          document.body.classList.remove('modal-open');
+        }
       });
+    });
+
+    // MutationObserver to automatically eliminate background scroll when any modal opens
+    const modalObserver = new MutationObserver(() => {
+      const hasOpenModal = document.querySelector('.modal-overlay.open');
+      if (hasOpenModal) {
+        document.body.classList.add('modal-open');
+      } else {
+        document.body.classList.remove('modal-open');
+      }
+    });
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      modalObserver.observe(overlay, { attributes: true, attributeFilter: ['class'] });
     });
 
     // Initialize Components

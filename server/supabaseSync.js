@@ -36,6 +36,8 @@ async function syncSupabaseOrders(db) {
 
     for (const co of cloudOrders) {
       if (!co.order_ref) continue;
+      // Filter out dummy/test ghost orders
+      if (/TEST/i.test(co.order_ref) || (co.customer_name && /Test/i.test(co.customer_name))) continue;
 
       const existing = db.prepare('SELECT id FROM orders WHERE order_number = ?').get(co.order_ref);
       if (existing) continue;
@@ -47,30 +49,15 @@ async function syncSupabaseOrders(db) {
       const name = co.customer_name ? String(co.customer_name).trim() : 'Online Customer';
       const orderDate = co.created_at || new Date().toISOString();
 
-      // Resolve or create customer
+      // Only link if this matches an authoritative existing customer
       let customerId = null;
       if (phone) {
         const cust = db.prepare('SELECT id FROM customers WHERE phone = ?').get(phone);
-        if (cust) customerId = cust.id;
-      }
-
-      if (!customerId) {
-        customerId = 'cust-onl-' + Date.now() + '-' + Math.floor(100 + Math.random() * 900);
-        const codeRow = db.prepare('SELECT COUNT(*) as c FROM customers').get();
-        const code = 'CLT-' + (1000 + (codeRow ? codeRow.c + 1 : 1));
-
-        db.prepare(`
-          INSERT INTO customers (
-            id, client_code, name, phone, email, address, city, pin_code, notes, total_spent_paise, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Synced from Supabase online order', ?, ?, ?)
-        `).run(
-          customerId, code, name, phone, co.customer_email || null,
-          co.delivery_address || null, co.city || 'Bengaluru', co.pin_code || null,
-          grandTotalPaise, orderDate, orderDate
-        );
-      } else {
-        db.prepare("UPDATE customers SET total_spent_paise = total_spent_paise + ?, updated_at = datetime('now') WHERE id = ?")
-          .run(grandTotalPaise, customerId);
+        if (cust) {
+          customerId = cust.id;
+          db.prepare("UPDATE customers SET total_spent_paise = total_spent_paise + ?, updated_at = datetime('now') WHERE id = ?")
+            .run(grandTotalPaise, customerId);
+        }
       }
 
       // Generate order ID
