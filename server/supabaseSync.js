@@ -39,15 +39,36 @@ async function syncSupabaseOrders(db) {
       // Filter out dummy/test ghost orders
       if (/TEST/i.test(co.order_ref) || (co.customer_name && /Test/i.test(co.customer_name))) continue;
 
-      const existing = db.prepare('SELECT id FROM orders WHERE order_number = ?').get(co.order_ref);
-      if (existing) continue;
-
       const grandTotalPaise = Math.round((Number(co.grand_total) || 0) * 100);
       const subtotalPaise = Math.round((Number(co.subtotal) || 0) * 100);
       const taxPaise = Math.round(grandTotalPaise * 0.18 / 1.18);
       const phone = co.customer_phone ? String(co.customer_phone).trim() : null;
-      const name = co.customer_name ? String(co.customer_name).trim() : 'Online Customer';
+      const name = co.customer_name ? String(co.customer_name).trim() : 'Customer';
       const orderDate = co.created_at || new Date().toISOString();
+
+      // Detect whether order is In-Store POS or Website
+      const isPos = Boolean(
+        (co.delivery_address && (co.delivery_address.toLowerCase().includes('pos') || co.delivery_address.toLowerCase().includes('boutique'))) ||
+        (co.payment_method && co.payment_method.toUpperCase() === 'CASH')
+      );
+      const channel = isPos ? 'POS' : 'WEBSITE';
+
+      // Detect payment status and amount paid
+      const isPaid = isPos || co.status === 'confirmed' || (co.payment_method && co.payment_method.toUpperCase() === 'CASH') || co.payment_status === 'VERIFIED';
+      const paymentStatus = isPaid ? 'VERIFIED' : 'AWAITING_VERIFICATION';
+      const amountPaidPaise = isPaid ? grandTotalPaise : 0;
+      const outstandingPaise = isPaid ? 0 : grandTotalPaise;
+
+      const existing = db.prepare('SELECT id FROM orders WHERE order_number = ?').get(co.order_ref);
+      if (existing) {
+        // Ensure channel and payment status are kept accurate
+        db.prepare(`
+          UPDATE orders
+          SET channel = ?, payment_status = ?, amount_paid_paise = ?, outstanding_paise = ?
+          WHERE id = ?
+        `).run(channel, paymentStatus, amountPaidPaise, outstandingPaise, existing.id);
+        continue;
+      }
 
       // Only link if this matches an authoritative existing customer
       let customerId = null;
@@ -70,16 +91,16 @@ async function syncSupabaseOrders(db) {
           status, payment_status, subtotal_paise, tax_paise, total_payable_paise,
           amount_paid_paise, outstanding_paise, notes, created_at, updated_at
         ) VALUES (
-          ?, ?, 1, 'WEBSITE', ?, ?, ?,
+          ?, ?, 1, ?, ?, ?, ?,
           ?, ?, ?, ?, ?,
-          'CONFIRMED', 'AWAITING_VERIFICATION', ?, ?, ?,
-          0, ?, 'Online Website Order (Synced)', ?, ?
+          'CONFIRMED', ?, ?, ?, ?,
+          ?, ?, ?, ?, ?
         )
       `).run(
-        orderId, co.order_ref, customerId, name, phone,
+        orderId, co.order_ref, channel, customerId, name, phone,
         co.customer_email || null, co.delivery_address || null, co.city || null, co.pin_code || null,
-        co.prescription_pref || 'call-optometrist', subtotalPaise, taxPaise, grandTotalPaise,
-        grandTotalPaise, orderDate, orderDate
+        co.prescription_pref || 'Standard', paymentStatus, subtotalPaise, taxPaise, grandTotalPaise,
+        amountPaidPaise, outstandingPaise, isPos ? 'In-Store POS Bill (Synced)' : 'Online Website Order (Synced)', orderDate, orderDate
       );
 
       // Parse and insert items
@@ -89,25 +110,37 @@ async function syncSupabaseOrders(db) {
       }
       if (Array.isArray(items)) {
         items.forEach((item, idx) => {
-          const itemPrice = Math.round((Number(item.unitPrice || item.price) || 3499) * 100);
-          const itemQty = parseInt(item.quantity || 1, 10);
-          
           let variantId = item.variantId || item.id;
-          const varCheck = db.prepare('SELECT id FROM product_variants WHERE id = ?').get(variantId);
-          if (!varCheck) {
-            const prodCheck = db.prepare('SELECT id FROM product_variants WHERE product_id = ? LIMIT 1').get(variantId);
-            variantId = prodCheck ? prodCheck.id : 'var-noor-01-1';
-          }
+          const varInfo = (variantId ? db.prepare(`
+            SELECT pv.id, pv.color_name, pv.sku, p.name as product_name, p.selling_price_paise, p.purchase_cost_paise
+            FROM product_variants pv
+            JOIN products p ON pv.product_id = p.id
+            WHERE pv.id = ?
+          `).get(variantId) : null) || db.prepare(`
+            SELECT pv.id, pv.color_name, pv.sku, p.name as product_name, p.selling_price_paise, p.purchase_cost_paise
+            FROM product_variants pv
+            JOIN products p ON pv.product_id = p.id
+            LIMIT 1
+          `).get();
+
+          const resolvedVarId = varInfo ? varInfo.id : (variantId || 'var-noor-01-1');
+          const prodName = item.name || (varInfo ? varInfo.product_name : 'Noor Optical Frame');
+          const varColor = item.color || item.variant_name || (varInfo ? varInfo.color_name : 'Standard');
+          const varSku = item.sku || (varInfo ? varInfo.sku : 'NOOR-FRAME');
+          const unitPrice = item.unitPricePaise ? Number(item.unitPricePaise) : (item.unitPrice ? Math.round(Number(item.unitPrice) * 100) : (varInfo ? varInfo.selling_price_paise : grandTotalPaise));
+          const purchaseCost = varInfo ? varInfo.purchase_cost_paise : 145000;
+          const itemQty = parseInt(item.quantity || 1, 10);
+          const itemSubtotal = unitPrice * itemQty;
 
           db.prepare(`
             INSERT INTO order_items (
               id, order_id, variant_id, product_name, variant_name, sku, lens_name, unit_price_paise, purchase_cost_paise, quantity, subtotal_paise
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 145000, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
-            'oit-' + orderId + '-' + idx, orderId, variantId,
-            item.name || 'Noor Optical Frame', item.color || 'Matte Black',
-            item.sku || 'NOOR-STK-01-MAT', item.lensName || item.lens || 'Blue-Light Filter',
-            itemPrice, itemQty, itemPrice * itemQty
+            'oit-' + orderId + '-' + idx, orderId, resolvedVarId,
+            prodName, varColor, varSku,
+            item.lensName || item.lens || 'Blue-Light Filter',
+            unitPrice, purchaseCost, itemQty, itemSubtotal
           );
         });
       }
@@ -121,19 +154,59 @@ async function syncSupabaseOrders(db) {
             id, invoice_number, order_id, customer_name, customer_phone, customer_email, customer_address,
             subtotal_paise, discount_paise, tax_paise, grand_total_paise, amount_paid_paise,
             payment_status, payment_method, snapshot_json, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0, 'AWAITING_VERIFICATION', ?, '{}', ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, '{}', ?)
         `).run(
           'inv-' + orderId, invoiceNum, orderId, name, phone, co.customer_email || null, co.delivery_address || null,
-          subtotalPaise, taxPaise, grandTotalPaise, co.payment_method || 'UPI_GPAY', orderDate
+          subtotalPaise, taxPaise, grandTotalPaise, amountPaidPaise, paymentStatus, co.payment_method || (isPos ? 'CASH' : 'UPI_GPAY'), orderDate
         );
       }
 
-      console.log(`[SupabaseSync] Synced cloud order ${co.order_ref} for ${name}`);
+      console.log(`[SupabaseSync] Synced cloud order ${co.order_ref} (${channel}) for ${name}`);
     }
   } catch (err) {
     console.warn('[SupabaseSync] Error syncing orders from Supabase:', err.message);
   } finally {
     isSyncing = false;
+  }
+}
+
+/**
+ * Delete single order from Supabase cloud by order reference
+ */
+async function deleteOrderFromSupabase(orderRef) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !orderRef) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?order_ref=eq.${encodeURIComponent(orderRef)}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    console.log(`[SupabaseSync] Deleted order ${orderRef} from Supabase, status: ${res.status}`);
+    return res.ok;
+  } catch (err) {
+    console.warn('[SupabaseSync] Error deleting order from Supabase:', err.message);
+  }
+}
+
+/**
+ * Delete all orders from Supabase cloud
+ */
+async function deleteAllOrdersFromSupabase() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=not.is.null`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    console.log(`[SupabaseSync] Deleted all orders from Supabase, status: ${res.status}`);
+    return res.ok;
+  } catch (err) {
+    console.warn('[SupabaseSync] Error deleting all orders from Supabase:', err.message);
   }
 }
 
@@ -200,5 +273,7 @@ function startBackgroundSync(db, intervalMs = 10000) {
 module.exports = {
   syncSupabaseOrders,
   pushOrderToSupabase,
+  deleteOrderFromSupabase,
+  deleteAllOrdersFromSupabase,
   startBackgroundSync
 };

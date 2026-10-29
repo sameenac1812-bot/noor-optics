@@ -28,6 +28,8 @@ const { generateInvoicePDF } = require('./pdfInvoice');
 const {
   syncSupabaseOrders,
   pushOrderToSupabase,
+  deleteOrderFromSupabase,
+  deleteAllOrdersFromSupabase,
   startBackgroundSync
 } = require('./supabaseSync');
 
@@ -1840,21 +1842,31 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
 });
 
 // ── DELETE /api/orders/:id (Delete Single Order with Safe Restocking) ────────
-router.delete('/orders/:id', authenticateToken, (req, res) => {
-  if (!req.user.permissions.includes('orders:manage') && !req.user.permissions.includes('pos:checkout') && req.user.roleId !== 'role-owner') {
+router.delete('/orders/:id', authenticateToken, async (req, res) => {
+  if (!req.user.permissions.includes('orders:manage') && !req.user.permissions.includes('pos:checkout') && req.user.roleId !== 'role-owner' && !req.user.permissions.includes('*')) {
     return res.status(403).json({ error: 'Forbidden: Insufficient privileges to delete orders.' });
   }
 
   const orderId = req.params.id;
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  let order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   if (!order) {
+    order = db.prepare('SELECT * FROM orders WHERE order_number = ?').get(orderId);
+  }
+  if (!order) {
+    // Attempt deletion from Supabase directly in case it's a cloud order ref
+    await deleteOrderFromSupabase(orderId).catch(() => {});
     return res.status(404).json({ error: 'Order not found.' });
   }
+
+  // Delete from Supabase cloud first so next sync won't resurrect it
+  await deleteOrderFromSupabase(order.order_number).catch(err => console.warn('Supabase delete warning:', err.message));
+
+  const actualOrderId = order.id;
 
   const deleteTx = db.transaction(() => {
     // 1. Restore stock if the order was active (not already cancelled or refunded)
     if (order.status !== 'REFUNDED' && order.status !== 'CANCELLED') {
-      const items = db.prepare('SELECT variant_id, quantity FROM order_items WHERE order_id = ?').all(orderId);
+      const items = db.prepare('SELECT variant_id, quantity FROM order_items WHERE order_id = ?').all(actualOrderId);
       for (const item of items) {
         if (item.variant_id) {
           db.prepare(`
@@ -1880,16 +1892,16 @@ router.delete('/orders/:id', authenticateToken, (req, res) => {
     }
 
     // 2. Cascade delete dependent child records
-    db.prepare('DELETE FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE order_id = ?)').run(orderId);
-    db.prepare('DELETE FROM invoices WHERE order_id = ?').run(orderId);
-    db.prepare('DELETE FROM payment_verification_events WHERE payment_id IN (SELECT id FROM payments WHERE order_id = ?)').run(orderId);
-    db.prepare('DELETE FROM payments WHERE order_id = ?').run(orderId);
-    db.prepare('DELETE FROM refunds WHERE order_id = ?').run(orderId);
-    db.prepare('DELETE FROM print_jobs WHERE order_id = ?').run(orderId);
-    db.prepare('DELETE FROM order_items WHERE order_id = ?').run(orderId);
-    db.prepare('DELETE FROM orders WHERE id = ?').run(orderId);
+    db.prepare('DELETE FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE order_id = ?)').run(actualOrderId);
+    db.prepare('DELETE FROM invoices WHERE order_id = ?').run(actualOrderId);
+    db.prepare('DELETE FROM payment_verification_events WHERE payment_id IN (SELECT id FROM payments WHERE order_id = ?)').run(actualOrderId);
+    db.prepare('DELETE FROM payments WHERE order_id = ?').run(actualOrderId);
+    db.prepare('DELETE FROM refunds WHERE order_id = ?').run(actualOrderId);
+    db.prepare('DELETE FROM print_jobs WHERE order_id = ?').run(actualOrderId);
+    db.prepare('DELETE FROM order_items WHERE order_id = ?').run(actualOrderId);
+    db.prepare('DELETE FROM orders WHERE id = ?').run(actualOrderId);
 
-    logAudit(req.user.id, req.user.email, 'ORDER_DELETED', 'ORDER', orderId, {
+    logAudit(req.user.id, req.user.email, 'ORDER_DELETED', 'ORDER', actualOrderId, {
       orderNumber: order.order_number,
       totalPayablePaise: order.total_payable_paise,
       channel: order.channel
@@ -1906,12 +1918,15 @@ router.delete('/orders/:id', authenticateToken, (req, res) => {
 });
 
 // ── DELETE /api/orders (Delete All Orders with Safe Restocking) ───────────────
-router.delete('/orders', authenticateToken, (req, res) => {
-  if (!req.user.permissions.includes('orders:manage') && !req.user.permissions.includes('pos:checkout') && req.user.roleId !== 'role-owner') {
+router.delete('/orders', authenticateToken, async (req, res) => {
+  if (!req.user.permissions.includes('orders:manage') && !req.user.permissions.includes('pos:checkout') && req.user.roleId !== 'role-owner' && !req.user.permissions.includes('*')) {
     return res.status(403).json({ error: 'Forbidden: Insufficient privileges to delete all orders.' });
   }
 
   const { channel } = req.query; // optional: 'POS' or 'WEBSITE'
+
+  // Delete from Supabase cloud first
+  await deleteAllOrdersFromSupabase().catch(err => console.warn('Supabase delete all warning:', err.message));
 
   const deleteTx = db.transaction(() => {
     let sql = 'SELECT id, order_number, status, channel FROM orders';

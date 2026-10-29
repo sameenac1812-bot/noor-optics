@@ -24,7 +24,7 @@
     dashCustomEnd: '',
     dashChartInstance: null,
     // Orders state
-    ordersActiveChannel: 'POS', // 'POS' (In-store) vs 'WEBSITE' (Online)
+    ordersActiveChannel: 'ALL', // 'ALL', 'POS' (In-store), 'WEBSITE' (Online)
     ordersCache: [],
     ordersSearchQuery: '',
     ordersStatusFilter: '',
@@ -589,11 +589,20 @@
           const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
           const isDue = (o.payment_status !== 'VERIFIED');
           const hasRx = !!o.prescription_id || !!o.prescription_number;
+          const itemsSummary = (o.items && o.items.length)
+            ? o.items.map(i => escapeHtml(i.product_name) + (i.quantity > 1 ? ` ×${i.quantity}` : '')).join(', ')
+            : 'Frame Order';
+          const channelBadge = o.channel === 'POS'
+            ? `<span class="badge-channel-pos">🏪 In-Store</span>`
+            : `<span class="badge-channel-web">🌐 Website</span>`;
 
           return `
-            <div class="optic-saved-bill-card">
+            <div class="optic-saved-bill-card" onclick="viewOrderDetails('${o.id}')">
               <div class="bill-card-header">
-                <div class="bill-header-inv">${escapeHtml(invoiceNo)}</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <div class="bill-header-inv">${escapeHtml(invoiceNo)}</div>
+                  ${channelBadge}
+                </div>
                 <div class="bill-header-time">${formattedDate}</div>
               </div>
               <div class="bill-card-body">
@@ -606,6 +615,7 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
                     <span>${escapeHtml(custPhone)}</span>
                   </div>
+                  <div class="bill-items-summary" title="${escapeHtml(itemsSummary)}">${itemsSummary}</div>
                 </div>
                 <div class="bill-card-right">
                   <div class="bill-due-badge-wrap">
@@ -616,9 +626,10 @@
                   </div>
                   <div class="bill-sub-badges-row">
                     ${hasRx ? `<span class="badge-rx-pill">1 Rx</span>` : ''}
+                    <span class="badge-status status-${(o.status || 'confirmed').toLowerCase()}" style="font-size:0.68rem; padding:2px 6px;">${escapeHtml(o.status || 'CONFIRMED')}</span>
                     <span class="bill-total-lbl">Total ₹ ${totalPayable.toLocaleString('en-IN')}</span>
                   </div>
-                  <button type="button" class="optic-dots-btn" onclick="openBillActionSheet('${o.id}', event)">•••</button>
+                  <button type="button" class="optic-dots-btn" onclick="openBillActionSheet('${o.id}', event)" title="Manage bill options">•••</button>
                 </div>
               </div>
             </div>
@@ -982,11 +993,15 @@
 
   // ── Delete Single Order with Inventory Restocking ──────────────────────────
   window.deleteOrderPrompt = async function (orderId, orderNumber) {
-    if (!confirm(`Are you sure you want to delete order "${orderNumber}"?\n\nThis will permanently remove the order record and restore any deducted frame quantities back into inventory stock.`)) {
+    if (!confirm(`Are you sure you want to delete order "${orderNumber}"?\n\nThis will permanently remove the order record from database and cloud, and restore any deducted frame quantities back into inventory stock.`)) {
       return;
     }
 
     try {
+      // Optimistically remove from UI
+      state.ordersCache = state.ordersCache.filter(o => o.id !== orderId && o.order_number !== orderNumber);
+      renderOrdersTable();
+
       const res = await apiFetch(`/api/orders/${orderId}`, {
         method: 'DELETE'
       });
@@ -997,11 +1012,39 @@
       if (detailsModal) detailsModal.classList.remove('open');
 
       // Refresh data across orders, dashboard, and inventory
-      await loadOrders();
+      await loadOrders(true);
       if (typeof loadDashboard === 'function') loadDashboard();
       if (typeof loadInventory === 'function') loadInventory();
     } catch (err) {
       showToast('Failed to delete order: ' + err.message, 'error');
+      loadOrders(true);
+    }
+  };
+
+  // ── Delete All Orders Pipeline ──────────────────────────────────────────────
+  window.deleteAllOrdersPrompt = async function () {
+    const channel = state.ordersActiveChannel || 'ALL';
+    const channelLabel = channel === 'ALL' ? 'ALL orders' : (channel === 'POS' ? 'all IN-STORE orders' : 'all WEBSITE orders');
+    if (!confirm(`Are you sure you want to delete ${channelLabel}?\n\nThis will permanently delete the orders from both the local database and Supabase cloud.`)) {
+      return;
+    }
+
+    try {
+      const url = channel === 'ALL' ? '/api/orders' : `/api/orders?channel=${channel}`;
+      const res = await apiFetch(url, { method: 'DELETE' });
+      showToast(res.message || 'Orders deleted successfully.', 'success');
+      state.ordersCache = channel === 'ALL' ? [] : state.ordersCache.filter(o => {
+        if (channel === 'POS') return o.channel !== 'POS';
+        if (channel === 'WEBSITE') return o.channel !== 'WEBSITE' && o.channel !== 'ONLINE';
+        return true;
+      });
+      renderOrdersTable();
+
+      await loadOrders(true);
+      if (typeof loadDashboard === 'function') loadDashboard();
+      if (typeof loadInventory === 'function') loadInventory();
+    } catch (err) {
+      showToast('Failed to delete orders: ' + err.message, 'error');
     }
   };
 

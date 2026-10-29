@@ -5481,6 +5481,18 @@ body.modal-open {
   gap: 12px;
 }
 
+.optic-tab-pill.btn-danger-pill {
+  border-color: #FCA5A5;
+  color: #DC2626;
+  background: #FEF2F2;
+}
+
+.optic-tab-pill.btn-danger-pill:hover {
+  background: #DC2626;
+  color: #FFFFFF;
+  border-color: #DC2626;
+}
+
 .optic-saved-bill-card {
   background: #FFFFFF;
   border: 1.5px solid #CBD5E1;
@@ -5488,6 +5500,43 @@ body.modal-open {
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
   transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.badge-channel-pos {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #F0FDF4;
+  color: #166534;
+  border: 1px solid #BBF7D0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.badge-channel-web {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #EFF6FF;
+  color: #1E40AF;
+  border: 1px solid #BFDBFE;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.bill-items-summary {
+  font-size: 0.76rem;
+  color: #475569;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
 }
 
 .optic-saved-bill-card:hover {
