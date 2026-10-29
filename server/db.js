@@ -511,6 +511,14 @@ function initializeDatabase() {
 
     const orderCols = db.pragma('table_info(orders)').map(c => c.name);
     if (!orderCols.includes('prescription_id')) db.exec('ALTER TABLE orders ADD COLUMN prescription_id TEXT;');
+    if (!orderCols.includes('customer_age')) db.exec('ALTER TABLE orders ADD COLUMN customer_age INTEGER;');
+
+    const oiCols = db.pragma('table_info(order_items)').map(c => c.name);
+    if (!oiCols.includes('brand')) db.exec('ALTER TABLE order_items ADD COLUMN brand TEXT;');
+    if (!oiCols.includes('model')) db.exec('ALTER TABLE order_items ADD COLUMN model TEXT;');
+    if (!oiCols.includes('shape')) db.exec('ALTER TABLE order_items ADD COLUMN shape TEXT;');
+    if (!oiCols.includes('color')) db.exec('ALTER TABLE order_items ADD COLUMN color TEXT;');
+    if (!oiCols.includes('size')) db.exec('ALTER TABLE order_items ADD COLUMN size TEXT;');
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS deleted_orders (

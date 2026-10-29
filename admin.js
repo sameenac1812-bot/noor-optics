@@ -856,37 +856,71 @@
     titleEl.textContent = `Invoice / Order: ${order.order_number}`;
     subEl.textContent = `Channel: ${order.channel === 'POS' ? 'In-Store POS' : 'Website Online'} • ${formatDateTime(order.created_at)}`;
 
-    // Items list
+    // Items list with complete frame specifications
     const items = order.items || [];
-    const itemsRows = items.map(i => `
+    const itemsRows = items.map(i => {
+      const specBits = [];
+      if (i.brand) specBits.push(`Brand: <strong>${escapeHtml(i.brand)}</strong>`);
+      if (i.model) specBits.push(`Model: ${escapeHtml(i.model)}`);
+      if (i.shape) specBits.push(`Shape: ${escapeHtml(i.shape)}`);
+      if (i.color || i.variant_name) specBits.push(`Color: ${escapeHtml(i.color || i.variant_name)}`);
+      if (i.size) specBits.push(`Size: ${escapeHtml(i.size)}`);
+      if (i.lens_package_name) specBits.push(`Lens: ${escapeHtml(i.lens_package_name)}`);
+      if (i.sku) specBits.push(`SKU: <code style="font-size:0.72rem; background:#F1F5F9; padding:2px 4px; border-radius:4px;">${escapeHtml(i.sku)}</code>`);
+      if (i.product_id) specBits.push(`ID: <span style="font-size:0.7rem; color:#94A3B8;">${escapeHtml(i.product_id)}</span>`);
+
+      return `
       <tr>
-        <td><strong>${escapeHtml(i.product_name)}</strong><br/><span style="font-size:0.72rem; color:#6B7280;">Color: ${escapeHtml(i.variant_name || 'Standard')} • SKU: ${escapeHtml(i.sku || '-')}</span></td>
-        <td>${i.quantity}</td>
+        <td>
+          <div style="font-size:0.92rem; font-weight:700; color:#0F172A;">${escapeHtml(i.product_name || 'Optical Frame')}</div>
+          <div style="font-size:0.75rem; color:#475569; margin-top:3px; display:flex; flex-wrap:wrap; gap:8px;">
+            ${specBits.join(' • ')}
+          </div>
+        </td>
+        <td style="text-align:center; font-weight:700;">${i.quantity || 1}</td>
         <td>${formatINR(i.unit_price_paise, true)}</td>
         <td style="text-align:right;"><strong>${formatINR(i.subtotal_paise, true)}</strong></td>
       </tr>
-    `).join('');
+      `;
+    }).join('');
 
     contentEl.innerHTML = `
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem; background:#FAFAFC; padding:1.25rem; border-radius:6px; border:1px solid #E5E7EB;">
         <div>
-          <h4 style="font-size:0.78rem; text-transform:uppercase; color:#6B7280; margin-bottom:6px;">Customer & Delivery</h4>
-          <div style="font-size:0.95rem; font-weight:700;">${escapeHtml(order.customer_name || 'Walk-in Client')}</div>
-          ${order.customer_phone ? `
-            <div style="margin-top:4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <span>Phone: ${escapeHtml(order.customer_phone)}</span>
-              <a href="tel:${escapeHtml(order.customer_phone)}" class="btn-table-action" style="text-decoration:none; padding:2px 8px; font-size:0.75rem; background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE;">📞 Call</a>
-              <button type="button" class="btn-table-action" onclick="openWhatsAppDirect('${escapeHtml(order.customer_phone)}', '${escapeHtml(order.customer_name || 'Client')}')" style="padding:2px 8px; font-size:0.75rem; background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0;">💬 WhatsApp</button>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <h4 style="font-size:0.78rem; text-transform:uppercase; color:#6B7280; margin:0;">Customer Information</h4>
+            ${order.customer_client_code || order.client_code ? `<span style="background:#0F172A; color:#FFF; font-size:0.70rem; font-weight:800; padding:2px 8px; border-radius:4px; letter-spacing:0.04em;">${escapeHtml(order.customer_client_code || order.client_code)}</span>` : ''}
+          </div>
+          <div style="font-size:1.05rem; font-weight:800; color:#0F172A;">${escapeHtml(order.customer_name || 'Walk-in Client')}</div>
+          
+          <div style="margin-top:4px; font-size:0.83rem; color:#334155; display:flex; flex-direction:column; gap:3px;">
+            ${order.customer_phone ? `
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:2px;">
+                <span><strong>Phone:</strong> ${escapeHtml(order.customer_phone)}</span>
+                <a href="tel:${escapeHtml(order.customer_phone)}" class="btn-table-action" style="text-decoration:none; padding:2px 8px; font-size:0.75rem; background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE;">📞 Call</a>
+                <button type="button" class="btn-table-action" onclick="openWhatsAppDirect('${escapeHtml(order.customer_phone)}', '${escapeHtml(order.customer_name || 'Client')}')" style="padding:2px 8px; font-size:0.75rem; background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0;">💬 WhatsApp</button>
+              </div>
+            ` : ''}
+            ${order.customer_age ? `<div><strong>Age:</strong> ${escapeHtml(order.customer_age)} yrs</div>` : ''}
+            ${order.city ? `<div><strong>City:</strong> ${escapeHtml(order.city)}</div>` : ''}
+            ${order.customer_email ? `<div><strong>Email:</strong> ${escapeHtml(order.customer_email)}</div>` : ''}
+            ${order.delivery_address ? `<div style="font-size:0.8rem; color:#64748B;"><strong>Address:</strong> ${escapeHtml(order.delivery_address)}${order.city ? ', ' + escapeHtml(order.city) : ''} ${order.pin_code ? '- ' + escapeHtml(order.pin_code) : ''}</div>` : ''}
+          </div>
+
+          ${order.customer_id ? `
+            <div style="margin-top:10px;">
+              <button type="button" class="btn-table-action" onclick="openClientProfile('${order.customer_id}')" style="background:#F1F5F9; color:#0F172A; border:1px solid #CBD5E1; font-weight:700; font-size:0.75rem; padding:4px 10px;">
+                👤 View Client Profile & Prescriptions
+              </button>
             </div>
           ` : ''}
-          ${order.customer_email ? `<div>Email: ${escapeHtml(order.customer_email)}</div>` : ''}
-          ${order.delivery_address ? `<div style="margin-top:4px; font-size:0.8rem; color:#4B5563;">${escapeHtml(order.delivery_address)}, ${escapeHtml(order.city || '')} - ${escapeHtml(order.pin_code || '')}</div>` : ''}
         </div>
         <div>
           <h4 style="font-size:0.78rem; text-transform:uppercase; color:#6B7280; margin-bottom:6px;">Payment & Status</h4>
-          <div><strong>Payment Method:</strong> ${escapeHtml(order.payment_method || 'CASH')}</div>
-          <div><strong>Payment Status:</strong> <span class="badge-status status-${order.payment_status?.toLowerCase()}">${escapeHtml(order.payment_status)}</span></div>
-          <div><strong>Order Status:</strong> <span class="badge-status status-${order.status?.toLowerCase()}">${escapeHtml(order.status)}</span></div>
+          <div><strong>Order Source:</strong> <span class="badge-status status-completed">${order.channel === 'POS' ? 'IN-STORE POS' : 'WEBSITE'}</span></div>
+          <div style="margin-top:4px;"><strong>Payment Method:</strong> ${escapeHtml(order.payment_method || 'CASH')}</div>
+          <div style="margin-top:2px;"><strong>Payment Status:</strong> <span class="badge-status status-${order.payment_status?.toLowerCase()}">${escapeHtml(order.payment_status)}</span></div>
+          <div style="margin-top:2px;"><strong>Order Status:</strong> <span class="badge-status status-${order.status?.toLowerCase()}">${escapeHtml(order.status)}</span></div>
         </div>
       </div>
 
@@ -898,7 +932,7 @@
               <span style="font-size:1.25rem;">👓</span>
               <div>
                 <strong style="color:#166534; font-size:0.95rem;">Glasses Prescription: ${escapeHtml(order.prescription_number)}</strong>
-                <div style="font-size:0.72rem; color:#15803D;">Checked by: ${escapeHtml(order.rx_checked_by || 'Optometrist')}</div>
+                <div style="font-size:0.72rem; color:#15803D;">Date: ${formatShortDate(order.prescription_date || order.created_at)} • Checked by: ${escapeHtml(order.rx_checked_by || order.checked_by || 'Optometrist')}${order.prescriber_details ? ` • Prescriber: ${escapeHtml(order.prescriber_details)}` : ''}</div>
               </div>
             </div>
             <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -926,8 +960,8 @@
             <div>
               <span style="color:#6B7280; font-size:0.72rem; text-transform:uppercase; font-weight:700; display:block;">Optics & IPD</span>
               ${order.addition ? `<div><strong>ADD:</strong> ${escapeHtml(order.addition)}</div>` : ''}
-              ${order.ipd_distance ? `<div><strong>IPD Dist:</strong> ${order.ipd_distance} mm</div>` : ''}
-              ${order.ipd_near ? `<div><strong>IPD Near:</strong> ${order.ipd_near} mm</div>` : ''}
+              ${order.ipd_distance ? `<div><strong>Distance IPD:</strong> ${order.ipd_distance} mm</div>` : ''}
+              ${order.ipd_near ? `<div><strong>Near IPD:</strong> ${order.ipd_near} mm</div>` : ''}
             </div>
           </div>
           ${order.rx_notes ? `<div style="font-size:0.75rem; color:#374151; margin-top:8px; font-style:italic;"><strong>Clinical Notes:</strong> ${escapeHtml(order.rx_notes)}</div>` : ''}
@@ -944,11 +978,11 @@
         </div>
       `}
 
-      <h4 style="font-size:0.85rem; font-weight:800; margin-bottom:8px;">Purchased Frames</h4>
+      <h4 style="font-size:0.85rem; font-weight:800; margin-bottom:8px;">Purchased Frames & Products</h4>
       <table class="data-table" style="margin-bottom:1.5rem;">
         <thead>
           <tr>
-            <th>Frame Item</th>
+            <th>Frame Item & Specifications</th>
             <th>Qty</th>
             <th>Unit Price</th>
             <th style="text-align:right;">Line Total</th>
@@ -4860,7 +4894,22 @@
   };
 
   // ── Print Functions (Profile & Optical RX) ────────────────────────────────
-  window.printPrescriptionRecord = function (rx) {
+  window.printPrescriptionRecord = async function (rxOrId) {
+    let rx = rxOrId;
+    if (typeof rxOrId === 'string') {
+      try {
+        rx = await apiFetch(`/api/prescriptions/${encodeURIComponent(rxOrId)}`);
+      } catch (err) {
+        console.error('Failed to load prescription for print:', err);
+        showToast('Failed to load prescription record.', 'error');
+        return;
+      }
+    }
+    if (!rx) {
+      showToast('Prescription record not found.', 'error');
+      return;
+    }
+
     const printWin = window.open('', '_blank', 'width=650,height=600');
     if (!printWin) {
       showToast('Pop-up blocked. Please allow pop-ups to print prescription.', 'warning');

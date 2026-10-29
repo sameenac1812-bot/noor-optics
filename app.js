@@ -567,6 +567,11 @@
         cartKey: cartKey,
         id: product.id,
         name: product.name,
+        brand: product.brand || 'Noor Optics',
+        model: product.model || product.name,
+        shape: product.shape || 'Optical',
+        material: product.material || 'Acetate',
+        fit: product.fit || 'Regular',
         image: product.image,
         basePrice: product.price,
         lensPrice: lensPkg.price,
@@ -909,6 +914,7 @@
     e.preventDefault();
 
     const name = (document.getElementById('checkout-name')?.value || '').trim() || 'Valued Client';
+    const age = parseInt(document.getElementById('checkout-age')?.value || '', 10) || null;
     const email = (document.getElementById('checkout-email')?.value || '').trim() || 'client@example.com';
     const phone = (document.getElementById('checkout-phone')?.value || '').trim() || '+91 98765 43210';
     const address = (document.getElementById('checkout-address')?.value || '').trim() || 'Standard Delivery';
@@ -916,6 +922,23 @@
     const pin = (document.getElementById('checkout-pin')?.value || '').trim() || '560038';
     const rxChoice = document.querySelector('input[name="checkout-rx"]:checked')?.value || 'call-optometrist';
     const payChoice = document.querySelector('input[name="checkout-pay"]:checked')?.value || 'cod';
+
+    let prescriptionData = null;
+    if (rxChoice === 'enter-rx') {
+      prescriptionData = {
+        od_sph: document.getElementById('checkout-rx-od-sph')?.value.trim() || '0.00',
+        od_cyl: document.getElementById('checkout-rx-od-cyl')?.value.trim() || '0.00',
+        od_axis: document.getElementById('checkout-rx-od-axis')?.value.trim() || null,
+        os_sph: document.getElementById('checkout-rx-os-sph')?.value.trim() || '0.00',
+        os_cyl: document.getElementById('checkout-rx-os-cyl')?.value.trim() || '0.00',
+        os_axis: document.getElementById('checkout-rx-os-axis')?.value.trim() || null,
+        addition: document.getElementById('checkout-rx-add')?.value.trim() || null,
+        ipd_distance: document.getElementById('checkout-rx-pd')?.value.trim() || null,
+        ipd_near: document.getElementById('checkout-rx-near-pd')?.value.trim() || null,
+        prescriber_details: document.getElementById('checkout-rx-prescriber')?.value.trim() || null,
+        notes: document.getElementById('checkout-rx-notes')?.value.trim() || null
+      };
+    }
 
     const subtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
     const threshold = (window.NOOR_BRAND && window.NOOR_BRAND.freeShippingThreshold) || 1999;
@@ -927,6 +950,7 @@
     const orderData = {
       order_ref: orderId,
       customer_name: name,
+      customer_age: age,
       customer_email: email,
       customer_phone: phone,
       delivery_address: address,
@@ -935,13 +959,18 @@
       items: state.cart.map(item => ({
         id: item.id,
         name: item.name,
+        brand: item.brand || 'Noor Optics',
+        model: item.model || item.name,
+        shape: item.shape || 'Optical',
         color: item.color,
+        size: item.fit || 'Regular',
         lens: item.lensName,
         quantity: item.quantity,
         unit_price: item.unitPrice,
         subtotal: item.unitPrice * item.quantity
       })),
       prescription_pref: rxChoice,
+      prescription: prescriptionData,
       payment_method: payChoice,
       subtotal: subtotal,
       shipping_fee: shipping,
@@ -952,24 +981,30 @@
     let authoritativeOrderId = orderId;
     let authoritativeTokenNum = null;
 
-    // 1. Submit to Unified Local Authoritative Retail Backend (in background)
+    // 1. Submit to Unified Local Authoritative Retail Backend
     try {
       const backendResp = await fetch('/api/orders/online', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName: name,
+          customerAge: age,
           customerEmail: email,
           customerPhone: phone,
           deliveryAddress: address,
           city: city,
           pinCode: pin,
           prescriptionPref: rxChoice,
+          prescription: prescriptionData,
           paymentMethod: payChoice === 'upi' ? 'UPI_GPAY' : (payChoice === 'card' ? 'CARD' : 'CASH'),
           items: state.cart.map(item => ({
             id: item.id,
             name: item.name,
+            brand: item.brand || 'Noor Optics',
+            model: item.model || item.name,
+            shape: item.shape || 'Optical',
             color: item.color,
+            size: item.fit || 'Regular',
             lensName: item.lensName,
             quantity: item.quantity,
             unitPrice: item.unitPrice
@@ -1288,6 +1323,15 @@
 
     if (DOM.checkoutForm) {
       DOM.checkoutForm.addEventListener('submit', handleDemoOrderSubmit);
+
+      DOM.checkoutForm.querySelectorAll('input[name="checkout-rx"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+          const rxPanel = document.getElementById('checkout-rx-structured-panel');
+          if (rxPanel) {
+            rxPanel.style.display = radio.value === 'enter-rx' ? 'block' : 'none';
+          }
+        });
+      });
     }
 
     const btnCloseSuccess = document.getElementById('btn-close-success-order');

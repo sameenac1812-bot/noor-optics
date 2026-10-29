@@ -477,46 +477,124 @@
           <h3 class="checkout-heading">Noor Optics Concierge Checkout</h3>
           <p class="checkout-subtext">Complimentary doorstep delivery & 14-day in-home trial. (Demonstration Checkout)</p>
 
-          <h4 class="checkout-section-title">1. Shipping Destination</h4>
+          <h4 class="checkout-section-title">1. Shipping Destination & Customer Profile</h4>
           <div class="checkout-inputs-row">
-            <div class="checkout-input-group">
-              <label for="checkout-name">Full Name</label>
+            <div class="checkout-input-group" style="flex:2;">
+              <label for="checkout-name">Full Name <span style="color:#DC2626;">*</span></label>
               <input type="text" id="checkout-name" class="checkout-input-field" placeholder="Aarav Sharma" required />
             </div>
+            <div class="checkout-input-group" style="flex:1;">
+              <label for="checkout-age">Age (Optional)</label>
+              <input type="number" id="checkout-age" class="checkout-input-field" placeholder="e.g. 32" min="1" max="120" />
+            </div>
+          </div>
+          <div class="checkout-inputs-row">
             <div class="checkout-input-group">
-              <label for="checkout-phone">Phone Number</label>
+              <label for="checkout-phone">Phone Number <span style="color:#DC2626;">*</span></label>
               <input type="tel" id="checkout-phone" class="checkout-input-field" placeholder="+91 98765 43210" required />
+            </div>
+            <div class="checkout-input-group">
+              <label for="checkout-email">Email Address</label>
+              <input type="email" id="checkout-email" class="checkout-input-field" placeholder="aarav@example.com" />
             </div>
           </div>
           <div class="checkout-input-group">
-            <label for="checkout-email">Email Address</label>
-            <input type="email" id="checkout-email" class="checkout-input-field" placeholder="aarav@example.com" required />
-          </div>
-          <div class="checkout-input-group">
-            <label for="checkout-address">Delivery Address</label>
+            <label for="checkout-address">Delivery Address <span style="color:#DC2626;">*</span></label>
             <input type="text" id="checkout-address" class="checkout-input-field" placeholder="104, Scandinavian Residency, 12th Main" required />
           </div>
           <div class="checkout-inputs-row">
             <div class="checkout-input-group">
-              <label for="checkout-city">City</label>
+              <label for="checkout-city">City <span style="color:#DC2626;">*</span></label>
               <input type="text" id="checkout-city" class="checkout-input-field" placeholder="Bengaluru" required />
             </div>
             <div class="checkout-input-group">
-              <label for="checkout-pin">PIN Code</label>
+              <label for="checkout-pin">PIN Code <span style="color:#DC2626;">*</span></label>
               <input type="text" id="checkout-pin" class="checkout-input-field" placeholder="560038" required />
             </div>
           </div>
 
-          <h4 class="checkout-section-title">2. Lens Prescription Option</h4>
+          <h4 class="checkout-section-title">2. Glasses Prescription</h4>
           <div class="checkout-prescription-choice">
             <label class="prescription-radio">
-              <input type="radio" name="checkout-rx" value="call-optometrist" checked />
+              <input type="radio" name="checkout-rx" value="enter-rx" checked />
+              <span><strong>Enter Optical Prescription</strong> (Enter OD/OS Power & Cylinder)</span>
+            </label>
+            <label class="prescription-radio">
+              <input type="radio" name="checkout-rx" value="call-optometrist" />
               <span>Call me after order to confirm power / WhatsApp prescription</span>
             </label>
             <label class="prescription-radio">
               <input type="radio" name="checkout-rx" value="zero-power" />
               <span>Zero Power (Fashion / Blue-Light Screen Filter only)</span>
             </label>
+          </div>
+
+          <!-- Structured Prescription Form Panel -->
+          <div id="checkout-rx-structured-panel" style="background:#F8FAFC; border:1px solid #CBD5E1; border-radius:8px; padding:12px; margin-bottom:1rem;">
+            <div style="font-size:0.75rem; font-weight:800; text-transform:uppercase; color:#0A2540; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+              <span>🩺 Optical Eyewear Prescription Specification</span>
+              <span style="font-weight:400; color:#64748B;">Signs (+ / -) & Decimals Preserved</span>
+            </div>
+            
+            <!-- OD (Right Eye) -->
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+              <div>
+                <label style="font-size:0.7rem; font-weight:700; color:#1E293B; display:block;">OD SPH (Right)</label>
+                <input type="text" id="checkout-rx-od-sph" class="checkout-input-field" placeholder="-1.50" style="padding:6px; font-size:0.8rem;" />
+              </div>
+              <div>
+                <label style="font-size:0.7rem; font-weight:700; color:#1E293B; display:block;">OD CYL (Right)</label>
+                <input type="text" id="checkout-rx-od-cyl" class="checkout-input-field" placeholder="-0.50" style="padding:6px; font-size:0.8rem;" />
+              </div>
+              <div>
+                <label style="font-size:0.7rem; font-weight:700; color:#1E293B; display:block;">OD AXIS (°)</label>
+                <input type="number" id="checkout-rx-od-axis" class="checkout-input-field" placeholder="90" min="0" max="180" style="padding:6px; font-size:0.8rem;" />
+              </div>
+            </div>
+
+            <!-- OS (Left Eye) -->
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+              <div>
+                <label style="font-size:0.7rem; font-weight:700; color:#1E293B; display:block;">OS SPH (Left)</label>
+                <input type="text" id="checkout-rx-os-sph" class="checkout-input-field" placeholder="-1.25" style="padding:6px; font-size:0.8rem;" />
+              </div>
+              <div>
+                <label style="font-size:0.7rem; font-weight:700; color:#1E293B; display:block;">OS CYL (Left)</label>
+                <input type="text" id="checkout-rx-os-cyl" class="checkout-input-field" placeholder="-0.25" style="padding:6px; font-size:0.8rem;" />
+              </div>
+              <div>
+                <label style="font-size:0.7rem; font-weight:700; color:#1E293B; display:block;">OS AXIS (°)</label>
+                <input type="number" id="checkout-rx-os-axis" class="checkout-input-field" placeholder="85" min="0" max="180" style="padding:6px; font-size:0.8rem;" />
+              </div>
+            </div>
+
+            <!-- Addition & IPD -->
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+              <div>
+                <label style="font-size:0.7rem; font-weight:700; color:#1E293B; display:block;">Addition (ADD)</label>
+                <input type="text" id="checkout-rx-add" class="checkout-input-field" placeholder="+1.75" style="padding:6px; font-size:0.8rem;" />
+              </div>
+              <div>
+                <label style="font-size:0.7rem; font-weight:700; color:#1E293B; display:block;">Distance PD (mm)</label>
+                <input type="text" id="checkout-rx-pd" class="checkout-input-field" placeholder="63" style="padding:6px; font-size:0.8rem;" />
+              </div>
+              <div>
+                <label style="font-size:0.7rem; font-weight:700; color:#1E293B; display:block;">Near PD (mm)</label>
+                <input type="text" id="checkout-rx-near-pd" class="checkout-input-field" placeholder="60" style="padding:6px; font-size:0.8rem;" />
+              </div>
+            </div>
+
+            <!-- Doctor / Prescriber & Notes -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <div>
+                <label style="font-size:0.7rem; font-weight:700; color:#1E293B; display:block;">Prescriber / Clinic</label>
+                <input type="text" id="checkout-rx-prescriber" class="checkout-input-field" placeholder="Dr. Sarah / Apollo Eye" style="padding:6px; font-size:0.8rem;" />
+              </div>
+              <div>
+                <label style="font-size:0.7rem; font-weight:700; color:#1E293B; display:block;">Prescription Notes</label>
+                <input type="text" id="checkout-rx-notes" class="checkout-input-field" placeholder="Progressive lenses recommended" style="padding:6px; font-size:0.8rem;" />
+              </div>
+            </div>
           </div>
 
           <h4 class="checkout-section-title">3. Payment Preference</h4>
@@ -643,6 +721,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js"></script>
   <script src="data.js"></script>
-  <script src="app.js?v=20261029_live_catalog_v1"></script>
+  <script src="app.js?v=20261030_rx_persistence_v2"></script>
 </body>
 </html>
