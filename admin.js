@@ -991,6 +991,41 @@
     modal.classList.add('open');
   };
 
+  // ── Direct Cloud Supabase Deletion Helper ──────────────────────────────────
+  const CLOUD_SYNC_CFG = {
+    url: 'https://czajxtgwsxbrrymrhauz.supabase.co',
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk'
+  };
+
+  async function directDeleteSupabaseOrder(orderRef) {
+    if (!orderRef) return;
+    try {
+      await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/orders?order_ref=eq.${encodeURIComponent(orderRef)}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': CLOUD_SYNC_CFG.key,
+          'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}`
+        }
+      });
+    } catch (e) {
+      console.warn('Direct cloud delete note:', e);
+    }
+  }
+
+  async function directDeleteAllSupabaseOrders() {
+    try {
+      await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/orders?id=not.is.null`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': CLOUD_SYNC_CFG.key,
+          'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}`
+        }
+      });
+    } catch (e) {
+      console.warn('Direct cloud delete all note:', e);
+    }
+  }
+
   // ── Delete Single Order with Inventory Restocking ──────────────────────────
   window.deleteOrderPrompt = async function (orderId, orderNumber) {
     if (!confirm(`Are you sure you want to delete order "${orderNumber}"?\n\nThis will permanently remove the order record from database and cloud, and restore any deducted frame quantities back into inventory stock.`)) {
@@ -1001,6 +1036,9 @@
       // Optimistically remove from UI
       state.ordersCache = state.ordersCache.filter(o => o.id !== orderId && o.order_number !== orderNumber);
       renderOrdersTable();
+
+      // Direct cloud deletion
+      await directDeleteSupabaseOrder(orderNumber);
 
       const res = await apiFetch(`/api/orders/${orderId}`, {
         method: 'DELETE'
@@ -1030,15 +1068,20 @@
     }
 
     try {
-      const url = channel === 'ALL' ? '/api/orders' : `/api/orders?channel=${channel}`;
-      const res = await apiFetch(url, { method: 'DELETE' });
-      showToast(res.message || 'Orders deleted successfully.', 'success');
+      // Optimistically clear UI
       state.ordersCache = channel === 'ALL' ? [] : state.ordersCache.filter(o => {
         if (channel === 'POS') return o.channel !== 'POS';
         if (channel === 'WEBSITE') return o.channel !== 'WEBSITE' && o.channel !== 'ONLINE';
         return true;
       });
       renderOrdersTable();
+
+      // Direct cloud deletion
+      await directDeleteAllSupabaseOrders();
+
+      const url = channel === 'ALL' ? '/api/orders' : `/api/orders?channel=${channel}`;
+      const res = await apiFetch(url, { method: 'DELETE' });
+      showToast(res.message || 'Orders deleted successfully.', 'success');
 
       await loadOrders(true);
       if (typeof loadDashboard === 'function') loadDashboard();
