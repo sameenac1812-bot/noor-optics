@@ -87,6 +87,18 @@ CREATE POLICY "Public can view own order by ref"
     ON public.orders FOR SELECT
     USING (true);
 
+-- Orders: Allow deletion from admin portal
+DROP POLICY IF EXISTS "Public can delete orders" ON public.orders;
+CREATE POLICY "Public can delete orders"
+    ON public.orders FOR DELETE
+    USING (true);
+
+-- Orders: Allow status updates
+DROP POLICY IF EXISTS "Public can update orders" ON public.orders;
+CREATE POLICY "Public can update orders"
+    ON public.orders FOR UPDATE
+    USING (true);
+
 -- Newsletter: Anyone can subscribe
 DROP POLICY IF EXISTS "Public can subscribe to newsletter" ON public.newsletter_subscribers;
 CREATE POLICY "Public can subscribe to newsletter"

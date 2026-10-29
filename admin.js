@@ -530,10 +530,23 @@
     const statusFilter = state.ordersStatusFilter;
     const paymentFilter = state.ordersPaymentFilter;
 
-    // Filter out ghost/test orders
+    // Filter out ghost/test orders & client-side deleted orders
+    let localDeleted = [];
+    try {
+      localDeleted = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
+    } catch (e) {}
+    const localDeletedSet = new Set(localDeleted);
+    const purgedAt = Number(localStorage.getItem('noor_orders_purged_at') || 0);
+
     const cleanOrders = state.ordersCache.filter(o => {
       if (o.order_number && /TEST/i.test(o.order_number)) return false;
       if (o.customer_name && /test/i.test(o.customer_name)) return false;
+      if (o.order_number && localDeletedSet.has(o.order_number)) return false;
+      if (o.id && localDeletedSet.has(o.id)) return false;
+      if (purgedAt && o.created_at) {
+        const t = new Date(o.created_at).getTime();
+        if (t <= purgedAt) return false;
+      }
       return true;
     });
 
@@ -1033,6 +1046,14 @@
     }
 
     try {
+      // Save to client tombstone immediately
+      try {
+        const del = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
+        if (orderNumber && !del.includes(orderNumber)) del.push(orderNumber);
+        if (orderId && !del.includes(orderId)) del.push(orderId);
+        localStorage.setItem('noor_deleted_orders', JSON.stringify(del));
+      } catch (e) {}
+
       // Optimistically remove from UI
       state.ordersCache = state.ordersCache.filter(o => o.id !== orderId && o.order_number !== orderNumber);
       renderOrdersTable();
@@ -1068,6 +1089,19 @@
     }
 
     try {
+      // Save all to client tombstone immediately
+      try {
+        const del = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
+        state.ordersCache.forEach(o => {
+          if (o.order_number && !del.includes(o.order_number)) del.push(o.order_number);
+          if (o.id && !del.includes(o.id)) del.push(o.id);
+        });
+        localStorage.setItem('noor_deleted_orders', JSON.stringify(del));
+        if (channel === 'ALL') {
+          localStorage.setItem('noor_orders_purged_at', Date.now().toString());
+        }
+      } catch (e) {}
+
       // Optimistically clear UI
       state.ordersCache = channel === 'ALL' ? [] : state.ordersCache.filter(o => {
         if (channel === 'POS') return o.channel !== 'POS';

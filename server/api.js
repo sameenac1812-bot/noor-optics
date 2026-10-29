@@ -1901,6 +1901,11 @@ router.delete('/orders/:id', authenticateToken, async (req, res) => {
     db.prepare('DELETE FROM order_items WHERE order_id = ?').run(actualOrderId);
     db.prepare('DELETE FROM orders WHERE id = ?').run(actualOrderId);
 
+    // 3. Record in tombstone register so it never re-syncs from cloud
+    try {
+      db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(order.order_number);
+    } catch (tErr) {}
+
     logAudit(req.user.id, req.user.email, 'ORDER_DELETED', 'ORDER', actualOrderId, {
       orderNumber: order.order_number,
       totalPayablePaise: order.total_payable_paise,
@@ -1980,6 +1985,11 @@ router.delete('/orders', authenticateToken, async (req, res) => {
       db.prepare('DELETE FROM print_jobs WHERE order_id = ?').run(order.id);
       db.prepare('DELETE FROM order_items WHERE order_id = ?').run(order.id);
       db.prepare('DELETE FROM orders WHERE id = ?').run(order.id);
+
+      // Record in tombstone register
+      try {
+        db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(order.order_number);
+      } catch (tErr) {}
     }
 
     logAudit(req.user.id, req.user.email, 'ALL_ORDERS_DELETED', 'ORDERS', 'ALL', {

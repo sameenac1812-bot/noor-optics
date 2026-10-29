@@ -511,6 +511,13 @@ function initializeDatabase() {
 
     const orderCols = db.pragma('table_info(orders)').map(c => c.name);
     if (!orderCols.includes('prescription_id')) db.exec('ALTER TABLE orders ADD COLUMN prescription_id TEXT;');
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS deleted_orders (
+        order_number TEXT PRIMARY KEY,
+        deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
   } catch (migErr) {
     console.warn('DB Migration check note:', migErr.message);
   }

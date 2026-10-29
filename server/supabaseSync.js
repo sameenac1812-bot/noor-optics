@@ -39,6 +39,12 @@ async function syncSupabaseOrders(db) {
       // Filter out dummy/test ghost orders
       if (/TEST/i.test(co.order_ref) || (co.customer_name && /Test/i.test(co.customer_name))) continue;
 
+      // Check if this order was deleted / tombstoned by admin
+      try {
+        const isTombstoned = db.prepare('SELECT order_number FROM deleted_orders WHERE order_number = ?').get(co.order_ref);
+        if (isTombstoned) continue;
+      } catch (e) {}
+
       const grandTotalPaise = Math.round((Number(co.grand_total) || 0) * 100);
       const subtotalPaise = Math.round((Number(co.subtotal) || 0) * 100);
       const taxPaise = Math.round(grandTotalPaise * 0.18 / 1.18);
