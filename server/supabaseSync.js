@@ -412,8 +412,11 @@ async function syncSupabaseCustomers(db) {
 
       // Check if client was deleted / tombstoned by admin
       try {
-        const isTombstoned = db.prepare('SELECT customer_id FROM deleted_customers WHERE customer_id = ? OR (phone IS NOT NULL AND phone = ?)').get(c.id, c.phone);
-        if (isTombstoned) continue;
+        const isTombstoned = db.prepare('SELECT customer_id FROM deleted_customers WHERE customer_id = ? OR (phone IS NOT NULL AND phone = ?) OR (name IS NOT NULL AND LOWER(name) = LOWER(?))').get(c.id, c.phone, c.name);
+        if (isTombstoned) {
+          deleteCustomerFromSupabase(c.id, c.phone).catch(() => {});
+          continue;
+        }
       } catch (e) {}
 
       const existing = db.prepare('SELECT id FROM customers WHERE id = ? OR (phone IS NOT NULL AND phone = ?)').get(c.id, c.phone);

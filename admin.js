@@ -4437,16 +4437,18 @@
       serverClients = serverClients.filter(c => c.name && !/Walk-in Client|Concierge Test/i.test(c.name));
 
       // 2. Filter out tombstoned deleted clients
-      let deletedIds = new Set();
+      let deletedSet = new Set();
       try {
         const raw = localStorage.getItem('noor_deleted_clients');
-        if (raw) deletedIds = new Set(JSON.parse(raw));
+        if (raw) deletedSet = new Set(JSON.parse(raw));
       } catch (e) {}
 
       const purgedAt = parseInt(localStorage.getItem('noor_clients_purged_at') || '0', 10);
 
       serverClients = serverClients.filter(c => {
-        if (deletedIds.has(c.id)) return false;
+        if (deletedSet.has(c.id)) return false;
+        if (c.phone && deletedSet.has(c.phone)) return false;
+        if (c.name && deletedSet.has(c.name.toLowerCase())) return false;
         if (purgedAt > 0 && c.created_at) {
           const clientTime = new Date(c.created_at).getTime();
           if (clientTime < purgedAt) return false;
@@ -4527,6 +4529,9 @@
         if (raw) deletedSet = new Set(JSON.parse(raw));
       } catch (e) {}
       deletedSet.add(clientId);
+      if (clientName) deletedSet.add(clientName.toLowerCase());
+      const targetClient = state.clientsCache.find(c => c.id === clientId);
+      if (targetClient && targetClient.phone) deletedSet.add(targetClient.phone);
       localStorage.setItem('noor_deleted_clients', JSON.stringify([...deletedSet]));
 
       // 2. Remove from local cache
@@ -4568,8 +4573,13 @@
       showToast('Deleting all clients...', 'info');
 
       // 1. Tombstone all currently loaded clients in localStorage
-      const allIds = state.clientsCache.map(c => c.id);
-      localStorage.setItem('noor_deleted_clients', JSON.stringify(allIds));
+      const allTokens = [];
+      state.clientsCache.forEach(c => {
+        if (c.id) allTokens.push(c.id);
+        if (c.phone) allTokens.push(c.phone);
+        if (c.name) allTokens.push(c.name.toLowerCase());
+      });
+      localStorage.setItem('noor_deleted_clients', JSON.stringify(allTokens));
       localStorage.setItem('noor_clients_purged_at', Date.now().toString());
       localStorage.removeItem('noor_clients_cache');
 

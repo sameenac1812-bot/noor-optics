@@ -520,10 +520,13 @@ function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS deleted_customers (
         customer_id TEXT PRIMARY KEY,
         client_code TEXT,
+        name TEXT,
         phone TEXT,
         deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    const delCustCols = db.pragma('table_info(deleted_customers)').map(c => c.name);
+    if (!delCustCols.includes('name')) db.exec('ALTER TABLE deleted_customers ADD COLUMN name TEXT;');
   } catch (migErr) {
     console.warn('DB Migration check note:', migErr.message);
   }

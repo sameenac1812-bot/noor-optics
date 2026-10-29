@@ -725,6 +725,9 @@ router.get('/customers', authenticateToken, async (req, res) => {
     FROM customers c
     LEFT JOIN orders o ON c.id = o.customer_id AND o.status != 'CANCELLED'
     WHERE 1=1
+      AND c.id NOT IN (SELECT customer_id FROM deleted_customers WHERE customer_id IS NOT NULL)
+      AND (c.phone IS NULL OR c.phone NOT IN (SELECT phone FROM deleted_customers WHERE phone IS NOT NULL))
+      AND (c.name IS NULL OR LOWER(c.name) NOT IN (SELECT LOWER(name) FROM deleted_customers WHERE name IS NOT NULL))
   `;
   const params = [];
 
@@ -968,9 +971,9 @@ router.delete('/customers/:id', authenticateToken, (req, res) => {
     // 1. Tombstone in SQLite so background sync never resurrects it
     try {
       db.prepare(`
-        INSERT OR REPLACE INTO deleted_customers (customer_id, client_code, phone, deleted_at)
-        VALUES (?, ?, ?, datetime('now'))
-      `).run(client.id, client.client_code, client.phone || null);
+        INSERT OR REPLACE INTO deleted_customers (customer_id, client_code, name, phone, deleted_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+      `).run(client.id, client.client_code, client.name || null, client.phone || null);
     } catch (e) {
       console.warn('Tombstone insert note:', e.message);
     }
@@ -1014,15 +1017,15 @@ router.delete('/customers', authenticateToken, (req, res) => {
   }
 
   try {
-    const allClients = db.prepare('SELECT id, client_code, phone FROM customers').all();
+    const allClients = db.prepare('SELECT id, client_code, name, phone FROM customers').all();
 
     // 1. Tombstone all customers in deleted_customers
     const insertTombstone = db.prepare(`
-      INSERT OR REPLACE INTO deleted_customers (customer_id, client_code, phone, deleted_at)
-      VALUES (?, ?, ?, datetime('now'))
+      INSERT OR REPLACE INTO deleted_customers (customer_id, client_code, name, phone, deleted_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
     `);
     allClients.forEach(c => {
-      try { insertTombstone.run(c.id, c.client_code, c.phone || null); } catch (e) {}
+      try { insertTombstone.run(c.id, c.client_code, c.name || null, c.phone || null); } catch (e) {}
     });
 
     // 2. Delete all from Supabase cloud
@@ -1674,30 +1677,37 @@ router.post('/orders/online', (req, res) => {
     const totalPayablePaise = subtotalPaise + shippingPaise;
     const taxPaise = Math.round(totalPayablePaise * 0.18 / 1.18);
 
-    // Resolve or create customer permanently
+    // Resolve or create customer permanently (unless customer is tombstoned/deleted)
     let customerId = null;
-    const existingCust = customerPhone
-      ? db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0').get(customerPhone.trim())
-      : (customerEmail ? db.prepare('SELECT id FROM customers WHERE email = ? AND is_archived = 0').get(customerEmail.trim()) : null);
+    const isTombstoned = Boolean(
+      (customerPhone && db.prepare('SELECT customer_id FROM deleted_customers WHERE phone = ?').get(customerPhone.trim())) ||
+      (customerName && db.prepare('SELECT customer_id FROM deleted_customers WHERE LOWER(name) = LOWER(?)').get(customerName.trim()))
+    );
 
-    if (existingCust) {
-      customerId = existingCust.id;
-      db.prepare(`
-        UPDATE customers
-        SET total_spent_paise = total_spent_paise + ?, updated_at = datetime('now')
-        WHERE id = ?
-      `).run(totalPayablePaise, customerId);
-    } else {
-      customerId = 'cust-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
-      const clientCode = getNextClientCode();
-      db.prepare(`
-        INSERT INTO customers (id, client_code, name, phone, email, address, city, pin_code, notes, total_spent_paise, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Created via Online Storefront Order', ?, datetime('now'), datetime('now'))
-      `).run(
-        customerId, clientCode, customerName.trim(), customerPhone ? customerPhone.trim() : null,
-        customerEmail ? customerEmail.trim() : null, deliveryAddress ? deliveryAddress.trim() : null,
-        city || 'Bengaluru', pinCode ? pinCode.trim() : null, totalPayablePaise
-      );
+    if (!isTombstoned) {
+      const existingCust = customerPhone
+        ? db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0').get(customerPhone.trim())
+        : (customerEmail ? db.prepare('SELECT id FROM customers WHERE email = ? AND is_archived = 0').get(customerEmail.trim()) : null);
+
+      if (existingCust) {
+        customerId = existingCust.id;
+        db.prepare(`
+          UPDATE customers
+          SET total_spent_paise = total_spent_paise + ?, updated_at = datetime('now')
+          WHERE id = ?
+        `).run(totalPayablePaise, customerId);
+      } else {
+        customerId = 'cust-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
+        const clientCode = getNextClientCode();
+        db.prepare(`
+          INSERT INTO customers (id, client_code, name, phone, email, address, city, pin_code, notes, total_spent_paise, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Created via Online Storefront Order', ?, datetime('now'), datetime('now'))
+        `).run(
+          customerId, clientCode, customerName.trim(), customerPhone ? customerPhone.trim() : null,
+          customerEmail ? customerEmail.trim() : null, deliveryAddress ? deliveryAddress.trim() : null,
+          city || 'Bengaluru', pinCode ? pinCode.trim() : null, totalPayablePaise
+        );
+      }
     }
 
     db.prepare(`
