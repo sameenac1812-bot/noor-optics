@@ -86,7 +86,7 @@
         .insert([{
           order_ref: orderData.order_ref,
           customer_name: orderData.customer_name,
-          customer_email: orderData.customer_email,
+          customer_email: orderData.customer_email || (orderData.customer_phone ? `${String(orderData.customer_phone).replace(/[^0-9]/g, '')}@nooroptics.in` : 'client@nooroptics.in'),
           customer_phone: orderData.customer_phone,
           delivery_address: orderData.delivery_address,
           city: orderData.city,

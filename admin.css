@@ -48,6 +48,8 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  /* Remove the grey tap flash on mobile for all interactive elements */
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -57,7 +59,10 @@ body {
   font-size: 13.5px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  /* Prevent bounce scroll on iOS from showing ugly background */
+  overscroll-behavior-y: none;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -83,6 +88,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   left: 0;
   z-index: 50;
   transition: transform 0.25s ease;
+  will-change: transform;       /* GPU-composite the sidebar slide */
+  overflow-y: auto;
+  overscroll-behavior: contain; /* Stop scroll from leaking to the page */
 }
 
 .sidebar-header {
@@ -2082,7 +2090,10 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   gap: 0.75rem;
   max-height: 480px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding-right: 4px;
+  padding-bottom: 0.5rem;
 }
 
 .pos-item-card {
@@ -2094,8 +2105,11 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   flex-direction: column;
   gap: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   position: relative;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
 }
 
 .pos-item-card:hover {
@@ -2104,27 +2118,490 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   box-shadow: var(--shadow-md);
 }
 
+.pos-item-card:active {
+  transform: scale(0.96);
+  background: #F3F4F6;
+}
+
 .pos-item-img {
   width: 100%;
-  height: 65px;
+  aspect-ratio: 4/3;
   object-fit: contain;
   background: #F9FAFB;
   border-radius: 4px;
 }
 
-.pos-item-name {
-  font-size: 0.82rem;
+/* ── POS CUSTOMER INLINE SECTION ──────────────────────────────────────────── */
+
+/* ==========================================================================
+   OPTICTOOL POS SYSTEM STYLES (MATCHES REFERENCE SCREENSHOTS)
+   ========================================================================== */
+.optic-billing-container {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 95px;
+}
+
+/* 1. Top Tab Toggle Bar: Saved Bills vs + New Bill */
+.optic-tab-toggle-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.optic-toggle-btn {
+  flex: 1;
+  height: 44px;
+  border-radius: 99px;
+  border: 1.5px solid #BAE6FD;
+  background: #FFFFFF;
+  color: #0369A1;
+  font-size: 0.88rem;
   font-weight: 700;
-  line-height: 1.2;
-  color: #111111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.optic-toggle-btn.active {
+  background: #0A2540;
+  color: #FFFFFF;
+  border-color: #0A2540;
+  box-shadow: 0 4px 12px rgba(10, 37, 64, 0.2);
+}
+
+.optic-toggle-btn:active {
+  transform: scale(0.98);
+}
+
+/* 2. Deep Navy Invoice Header Banner */
+.optic-invoice-banner {
+  background: #0A2540;
+  color: #FFFFFF;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 14px rgba(10, 37, 64, 0.15);
+}
+
+.optic-inv-token {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #F0F9FF;
+}
+
+.optic-inv-clock {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #93C5FD;
+}
+
+/* 3. Base Optic Card */
+.optic-card {
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.15s ease;
+}
+
+.optic-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.optic-section-title {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #0A2540;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 4. Scanner Card */
+.optic-scanner-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-color: #BAE6FD;
+  background: linear-gradient(180deg, #FFFFFF, #F8FAFC);
+}
+
+.btn-optic-camera-main {
+  width: 100%;
+  height: 48px;
+  background: linear-gradient(135deg, #0A2540, #0F3D64);
+  color: #FFFFFF;
+  border-radius: 10px;
+  border: none;
+  font-size: 0.92rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(10, 37, 64, 0.22);
+  transition: all 0.15s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-optic-camera-main:active {
+  transform: scale(0.98);
+  background: #07192C;
+}
+
+.camera-pulse-icon {
+  font-size: 1.15rem;
+}
+
+.camera-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94A3B8;
+  display: inline-block;
+  transition: background 0.2s;
+}
+
+.camera-indicator-dot.active {
+  background: #10B981;
+  box-shadow: 0 0 8px #10B981;
+}
+
+/* Search input row */
+.optic-search-row {
+  width: 100%;
+}
+
+.optic-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.optic-input-wrap svg,
+.optic-input-icon {
+  position: absolute;
+  left: 12px;
+  color: #0284C7;
+  font-size: 0.95rem;
+  pointer-events: none;
+}
+
+.optic-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px 0 38px;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  color: #0F172A;
+  background: #F8FAFC;
+  outline: none;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+
+.optic-input:focus {
+  border-color: #0284C7;
+  background: #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+}
+
+.btn-input-browse {
+  position: absolute;
+  right: 8px;
+  height: 28px;
+  padding: 0 8px;
+  background: #E0F2FE;
+  color: #0369A1;
+  border: 1px solid #BAE6FD;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 5. Customer Details Form Grid */
+.optic-customer-card .optic-form-group {
+  margin-top: 8px;
+}
+
+.optic-customer-card .optic-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* 6. Prescription RX & Bill Image Subcards */
+.optic-rx-cards-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 420px) {
+  .optic-rx-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.optic-subcard {
+  background: #F0F7FD;
+  border: 1.5px solid #BAE6FD;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.optic-subcard-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #0A2540;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.optic-subcard-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.btn-subcard-action {
+  height: 40px;
+  background: #FFFFFF;
+  border: 1.5px solid #BAE6FD;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0369A1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-subcard-action:active {
+  background: #E0F2FE;
+  transform: scale(0.97);
+}
+
+.btn-rx-remove-img {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  background: rgba(220, 38, 38, 0.85);
+  color: #FFFFFF;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Attached Prescription Badge */
+.optic-attached-rx-card {
+  background: #0A2540;
+  color: #FFFFFF;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 4px;
+}
+
+.optic-rx-badge-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.optic-rx-badge-num {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #93C5FD;
+}
+
+.optic-rx-mini-table {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: #F8FAFC;
+}
+
+/* 7. Items / Cart & Catalog Section */
+.optic-items-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.optic-badge-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #E2E8F0;
+  color: #334155;
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+
+.btn-optic-stock-toggle {
+  height: 32px;
+  padding: 0 12px;
+  background: #E0F2FE;
+  color: #0369A1;
+  border: 1.5px solid #BAE6FD;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.btn-optic-stock-toggle:active {
+  background: #BAE6FD;
+}
+
+.optic-stock-catalog-wrap {
+  margin-top: 8px;
+  padding: 8px 0;
+  border-top: 1px dashed #E2E8F0;
+}
+
+.pos-shape-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 0 8px 0;
+}
+.pos-shape-chips::-webkit-scrollbar { display: none; }
+
+.pos-shape-chip {
+  padding: 5px 12px;
+  border-radius: 99px;
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  color: #475569;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pos-shape-chip.active {
+  background: #0A2540;
+  color: #FFFFFF;
+  border-color: #0A2540;
+}
+
+/* 2-Column Catalog Grid — Exactly 2 Equal Columns, Never Pushed Out of Frame! */
+.pos-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  max-height: 380px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  padding: 4px 1px 8px 1px !important;
+}
+
+.pos-item-card {
+  min-width: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  background: #FFFFFF !important;
+  border: 1.5px solid #E2E8F0 !important;
+  border-radius: 10px !important;
+  padding: 8px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: transparent !important;
+  transition: all 0.15s ease !important;
+  overflow: hidden !important;
+}
+
+.pos-item-card:hover {
+  border-color: #0284C7 !important;
+  transform: translateY(-1px);
+}
+
+.pos-item-card:active {
+  transform: scale(0.97) !important;
+  background: #F0F9FF !important;
+  border-color: #0284C7 !important;
+}
+
+.pos-item-img {
+  width: 100% !important;
+  height: 85px !important;
+  aspect-ratio: 4/3 !important;
+  object-fit: contain !important;
+  background: #F8FAFC !important;
+  border-radius: 6px !important;
+  padding: 2px !important;
+  box-sizing: border-box !important;
+}
+
+.pos-item-name {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #0F172A;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .pos-item-sku {
-  font-size: 0.7rem;
-  color: var(--text-muted);
+  font-size: 0.68rem;
+  color: #64748B;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pos-item-bottom {
@@ -2132,206 +2609,218 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   justify-content: space-between;
   align-items: baseline;
   margin-top: auto;
+  padding-top: 2px;
 }
 
 .pos-item-price {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 800;
-  color: #111111;
+  color: #0A2540;
 }
 
 .pos-item-stock {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 700;
   color: #059669;
 }
+.pos-item-stock.low { color: #D97706; }
+.pos-item-stock.out { color: #DC2626; }
 
-.pos-item-stock.low {
-  color: #D97706;
-}
-
-.pos-item-stock.out {
-  color: #DC2626;
-}
-
-/* ── POS CART PANEL ──────────────────────────────────────────────────────── */
-.pos-cart-card {
-  background: #FFFFFF;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  flex-direction: column;
-  position: sticky;
-  top: 75px;
-}
-
-.pos-cart-header {
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-light);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.pos-cart-title {
-  font-size: 0.95rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  color: #111111;
-}
-
-.pos-cart-subtitle {
-  font-size: 0.74rem;
-  color: var(--text-muted);
-}
-
-.pos-customer-row {
+/* Items Table Header & Rows */
+.optic-items-table-header {
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  background: #FAFAFC;
-  border-bottom: 1px solid var(--border-light);
+  grid-template-columns: 2.2fr 0.9fr 1fr 1.2fr;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #64748B;
+  padding: 8px 6px;
+  border-bottom: 1.5px solid #E2E8F0;
+  background: #F8FAFC;
+  border-radius: 6px;
+  margin: 8px 0 4px 0;
+  text-align: center;
 }
-
-.pos-customer-row input {
-  font-size: 0.78rem;
-  padding: 5px 8px;
-}
+.optic-items-table-header .col-name { text-align: left; }
+.optic-items-table-header .col-qty { text-align: center; }
+.optic-items-table-header .col-price { text-align: center; }
+.optic-items-table-header .col-total { text-align: right; }
 
 .pos-cart-items-list {
-  padding: 0.75rem 1.25rem;
-  max-height: 240px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-}
-
-.pos-cart-empty {
-  text-align: center;
-  padding: 2.5rem 1rem;
-  color: #9CA3AF;
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
-
-.pos-cart-empty svg {
-  margin-bottom: 0.5rem;
-  stroke: #CBD5E1;
 }
 
 .pos-cart-line-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: 2.2fr 0.9fr 1fr 1.2fr;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 0;
-  border-bottom: 1px dashed var(--border-light);
-  font-size: 0.82rem;
+  padding: 8px 6px;
+  border-bottom: 1px solid #F1F5F9;
+  font-size: 0.8rem;
+  gap: 4px;
 }
 
 .cart-item-info {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  min-width: 0;
   overflow: hidden;
-  padding-right: 8px;
 }
 
 .cart-item-name {
   font-weight: 700;
-  color: #111111;
+  color: #0F172A;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.8rem;
+}
+
+.cart-item-sku {
+  font-size: 0.68rem;
+  color: #64748B;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.cart-item-sku {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-}
-
 .cart-item-qty-ctrl {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 2px;
 }
 
 .btn-qty {
   width: 22px;
   height: 22px;
-  background: #F3F4F6;
-  border-radius: 3px;
+  background: #F1F5F9;
+  border: 1px solid #CBD5E1;
+  border-radius: 4px;
+  font-weight: 800;
+  font-size: 0.82rem;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  color: #111;
 }
 
-.btn-qty:hover {
-  background: #E5E7EB;
+.cart-item-price {
+  font-size: 0.8rem;
+  color: #475569;
+  text-align: center;
 }
 
 .cart-item-total {
+  font-size: 0.85rem;
   font-weight: 800;
-  min-width: 65px;
+  color: #0A2540;
   text-align: right;
-  color: #111111;
 }
 
 .btn-remove-cart-item {
   color: #EF4444;
-  margin-left: 6px;
   font-size: 1.1rem;
-  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 4px;
+  background: none;
+  border: none;
 }
 
-.pos-totals-block {
-  padding: 0.85rem 1.25rem;
-  background: #FAFAFC;
-  border-top: 1px solid var(--border-light);
-  border-bottom: 1px solid var(--border-light);
+/* 8. Notes Textarea */
+.optic-notes-card .optic-textarea {
+  width: 100%;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+  background: #F8FAFC;
+  outline: none;
+  box-sizing: border-box;
+  min-height: 54px;
+  color: #0F172A;
+}
+
+.optic-notes-card .optic-textarea:focus {
+  border-color: #0284C7;
+  background: #FFFFFF;
+}
+
+/* 9. Totals & Remaining Due (OpticTool Highlight) */
+.optic-totals-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  background: #FFFFFF;
 }
 
-.pos-total-row {
+.optic-total-row {
   display: flex;
   justify-content: space-between;
-  font-size: 0.8rem;
-  color: #4B5563;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 0.86rem;
+  color: #334155;
 }
 
-.pos-discount-field {
-  width: 65px;
-  font-size: 0.78rem;
-  padding: 2px 4px;
-  text-align: right;
-  border: 1px solid var(--border-light);
-  border-radius: 3px;
-}
-
-.pos-total-row.final-total-row {
-  margin-top: 4px;
-  padding-top: 6px;
-  border-top: 1px solid var(--border-light);
-  font-size: 1.15rem;
+.optic-total-row .val {
   font-weight: 800;
-  color: #111111;
+  color: #0F172A;
 }
 
-.pos-payment-methods-block {
-  padding: 0.85rem 1.25rem;
+.optic-discount-input {
+  width: 75px;
+  height: 28px;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  padding: 0 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: right;
+  outline: none;
+}
+
+/* Bright Red Remaining Due Block (From OpticTool media_1793291411721_4aa3a811.jpg) */
+.optic-remaining-block {
+  background: #EF4444;
+  color: #FFFFFF;
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 6px 0 8px 0;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+
+.optic-remaining-block .rem-label {
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.optic-remaining-block .rem-val {
+  font-size: 1.3rem;
+  font-weight: 900;
+}
+
+/* Payment Mode Buttons */
+.optic-pm-wrap {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed #E2E8F0;
 }
 
 .pos-pm-label {
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  color: #64748B;
   display: block;
   margin-bottom: 6px;
 }
@@ -2343,97 +2832,89 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 }
 
 .btn-pos-pm {
-  background: #F9FAFB;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  padding: 8px 4px;
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: #4B5563;
-  transition: all 0.15s ease;
-}
-
-.btn-pos-pm:hover {
-  background: #FFFFFF;
-  border-color: #111111;
-}
-
-.btn-pos-pm.active {
-  background: #111111;
-  color: #FFFFFF;
-  border-color: #111111;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-}
-
-.pos-upi-card {
-  margin: 0 1.25rem 0.85rem 1.25rem;
-  background: #FFFBEB;
-  border: 1px solid #FCD34D;
-  border-radius: var(--radius-sm);
-  padding: 0.75rem;
-}
-
-.upi-card-content {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.upi-qr-preview {
-  width: 75px;
-  height: 75px;
-  background: #FFF;
-  border-radius: 4px;
-  padding: 3px;
-  border: 1px solid #FDE68A;
-  flex-shrink: 0;
+  height: 38px;
+  background: #F8FAFC;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: #334155;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.15s ease;
+  touch-action: manipulation;
 }
 
-.upi-instructions {
-  flex: 1;
-  font-size: 0.72rem;
-  color: #78350F;
-}
-
-.upi-instructions input {
-  margin-top: 4px;
-  font-size: 0.75rem;
-  padding: 4px 6px;
-}
-
-.pos-checkout-actions {
-  padding: 0 1.25rem 1.25rem 1.25rem;
-}
-
-.btn-pos-checkout {
-  width: 100%;
-  background: #111111;
+.btn-pos-pm.active {
+  background: #0A2540;
   color: #FFFFFF;
+  border-color: #0A2540;
+}
+
+/* 10. Bottom Action Buttons: Reset & Save Bill */
+.optic-bottom-actions {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.btn-optic-reset {
+  height: 50px;
+  background: #FEF2F2;
+  color: #DC2626;
+  border: 1.5px solid #FCA5A5;
+  border-radius: 12px;
   font-size: 0.88rem;
   font-weight: 800;
-  letter-spacing: 0.05em;
-  padding: 12px;
-  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-optic-reset:active {
+  background: #FEE2E2;
+  transform: scale(0.97);
+}
+
+.btn-optic-save {
+  height: 50px;
+  background: #0A2540;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(10, 37, 64, 0.28);
+  transition: all 0.15s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.btn-pos-checkout:hover:not(:disabled) {
-  background: #262626;
-  transform: translateY(-1px);
+.btn-optic-save:active {
+  transform: scale(0.98);
+  background: #07192C;
 }
 
-.btn-pos-checkout:disabled {
-  opacity: 0.5;
+.btn-optic-save:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
 }
+
+
 
 /* ── MODALS EXTENSION ────────────────────────────────────────────────────── */
 .modal-lg {
@@ -3505,5 +3986,614 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   border-radius: 6px;
   margin-bottom: 8px;
 }
+
+/* ==========================================================================
+   MOBILE & TABLET RESPONSIVE ENGINE — v6.0 Complete Mobile Overhaul
+   Fixes: POS top-bar overflow, KPI grid cramping, header button clipping,
+   inventory summary row, dashboard bottom grid, shape chip scroll, and more.
+   ========================================================================== */
+
+/* Mobile hamburger button - hidden on desktop */
+.btn-mobile-menu-toggle {
+  display: none;
+}
+
+/* Sidebar backdrop overlay for mobile */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.sidebar-backdrop.open {
+  display: block;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Mobile bottom app bar */
+.mobile-bottom-nav {
+  display: none;
+}
+
+/* ── Shared scroll-container improvements (all viewports) ─────────────────── */
+.date-pills,
+.pos-shape-chips {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE/Edge */
+}
+.date-pills::-webkit-scrollbar,
+.pos-shape-chips::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Tablet (≤ 1024px): Adjust grids before full collapse ─────────────────── */
+@media (max-width: 1024px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dash-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-layout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inv-summary-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── Phone (≤ 768px): Full mobile layout ─────────────────────────────────── */
+@media (max-width: 768px) {
+  /* 1. Prevent mobile viewport auto-zooming and side-scrolling */
+  html, body {
+    width: 100%;
+    max-width: 100dvw;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+
+  /* Prevent iOS input zoom (must be ≥ 16px) without nuking all typography */
+  input, select, textarea {
+    font-size: max(16px, 1em) !important;
+  }
+
+  .admin-shell {
+    width: 100%;
+    max-width: 100dvw;
+    overflow-x: hidden;
+    display: block;
+  }
+
+  /* 2. Offscreen drawer sidebar */
+  .admin-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(300px, 85dvw);
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 6px 0 28px rgba(0, 0, 0, 0.45);
+    overflow-y: auto;
+  }
+
+  .admin-sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* 3. Main container full width */
+  .admin-main {
+    margin-left: 0;
+    width: 100%;
+    max-width: 100dvw;
+    overflow-x: hidden;
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* 4. Compact sticky header */
+  .admin-header {
+    height: auto;
+    min-height: 54px;
+    padding: 0.5rem 0.85rem;
+    gap: 0.5rem;
+    flex-wrap: nowrap;        /* Keep header in a single row */
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+
+  .btn-mobile-menu-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    background: #F3F4F6;
+    border: 1px solid #E5E7EB;
+    border-radius: 10px;
+    color: #111111;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+
+  .btn-mobile-menu-toggle:active {
+    background: #D1D5DB;
+    transform: scale(0.95);
+  }
+
+  .page-title-wrap h1 {
+    font-size: clamp(0.9rem, 4vw, 1.1rem);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 36vw;
+  }
+
+  .page-subtitle {
+    display: none;
+  }
+
+  .header-actions {
+    margin-left: auto;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+
+  /* Hide text labels in header buttons on mobile, keep icons */
+  .btn-header-action span {
+    display: none;
+  }
+
+  .btn-header-action {
+    padding: 0.45rem 0.55rem;
+    font-size: 0;            /* hide any text not in <span> */
+    border-radius: 8px;
+    min-width: 36px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .btn-header-action svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+
+  .page-container {
+    padding: 0.85rem 0.75rem;
+    width: 100%;
+    max-width: 100dvw;
+    overflow-x: hidden;
+  }
+
+  /* 5. Mobile Bottom Navigation Bar */
+  .mobile-bottom-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(60px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: #111111;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    align-items: center;
+    justify-content: space-around;
+    z-index: 900;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .mob-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: #6B7280;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 6px 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mob-nav-item svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 1.8;
+    transition: stroke 0.15s ease;
+  }
+
+  .mob-nav-item.active {
+    color: #FFFFFF;
+  }
+
+  .mob-nav-item.active svg {
+    stroke: #B89047;
+    stroke-width: 2.2;
+  }
+
+  .mob-nav-icon-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .mob-badge {
+    position: absolute;
+    top: -5px;
+    right: -9px;
+    background: #B89047;
+    color: #000;
+    font-size: 0.58rem;
+    font-weight: 800;
+    border-radius: 99px;
+    padding: 1px 5px;
+    min-width: 15px;
+    text-align: center;
+    line-height: 1.4;
+  }
+
+  /* 6. Dashboard filter bar */
+  .dashboard-filter-bar {
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    padding: 0.75rem;
+  }
+
+  .filter-group-label {
+    display: none;      /* Hide "Date Range:" label on mobile to save space */
+  }
+
+  .date-pills {
+    overflow-x: auto;
+    max-width: 100%;
+    width: 100%;
+    display: flex;
+    gap: 0.4rem;
+    padding-bottom: 3px;
+    flex-wrap: nowrap;
+  }
+
+  .date-pill {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .tz-badge {
+    font-size: 0.68rem;
+  }
+
+  /* 7. KPI Cards — 2-column on mobile */
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+  }
+
+  .kpi-card {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .kpi-value {
+    font-size: 1.35rem;
+  }
+
+  .kpi-label {
+    font-size: 0.68rem;
+  }
+
+  /* 8. Dashboard bottom grid: single column */
+  .dash-bottom-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .shortcuts-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem;
+    padding: 0.85rem;
+  }
+
+  .shortcut-btn {
+    padding: 0.75rem 0.65rem;
+    gap: 0.6rem;
+  }
+
+  .sc-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+  }
+
+  .sc-title {
+    font-size: 0.76rem;
+  }
+
+  .sc-desc {
+    display: none;        /* Hide description to keep buttons compact */
+  }
+
+  /* 9. Chart — make it shorter on mobile */
+  .chart-container {
+    height: 200px !important;
+  }
+
+  /* 10. Orders view — stack subtabs & actions vertically */
+  .orders-top-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+
+  .subtabs-container {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+
+  .subtabs-container::-webkit-scrollbar { display: none; }
+
+  .subtab-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+  }
+
+  .orders-header-actions {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+  }
+
+  .btn-danger-soft span,
+  .btn-gold span {
+    font-size: 0.72rem;
+  }
+
+  /* 11. Orders & Inventory filter rows */
+  .orders-filter-row,
+  .inventory-filter-row {
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 0.75rem;
+    align-items: stretch;
+  }
+
+  .search-input-wrap {
+    min-width: unset;
+    width: 100%;
+  }
+
+  .filter-dropdowns {
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .filter-dropdowns select {
+    flex: 1;
+    width: 50%;
+  }
+
+  /* 12. Inventory summary row — 2 col */
+  .inv-summary-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+  }
+
+  .inv-metric-badge {
+    padding: 0.65rem 0.85rem;
+    gap: 0.5rem;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .badge-num {
+    font-size: 1.2rem;
+  }
+
+  /* Inventory header: stack vertically */
+  .inventory-top-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+
+  .inv-header-actions {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    gap: 0.4rem;
+    padding-bottom: 2px;
+  }
+
+  .inv-header-actions::-webkit-scrollbar { display: none; }
+
+  .inv-header-actions .btn-header-action span {
+    display: inline;          /* Show text in inventory action buttons */
+    font-size: 0.75rem;
+  }
+
+  .inv-header-actions .btn-header-action {
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 0.4rem 0.65rem;
+    font-size: 0.75rem;
+    min-width: unset;
+  }
+
+  /* 13. Data Tables: touch scrollable */
+  .table-responsive {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    display: block;
+    overscroll-behavior-x: contain;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 0.6rem 0.7rem;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  .table-footer-bar {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+    padding: 0.75rem;
+  }
+
+  /* 14. POS top bar — stack on mobile */
+  .pos-top-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    border-radius: 10px;
+  }
+
+  .pos-active-info {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .pos-printer-badge {
+    /* Move to its own row on very small screens */
+    width: 100%;
+    margin-top: 2px;
+  }
+
+  .pos-top-actions {
+    width: 100%;
+  }
+
+  .btn-pos-new-bill {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    border-radius: 8px;
+  }
+
+  /* 15. POS layout: single column */
+  .pos-layout-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  /* 16. POS shape filter chips — horizontal scroll */
+  .pos-shape-chips {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+    padding-bottom: 4px;
+  }
+
+  .pos-shape-chip {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* 17. POS catalog grid — 2 cols, scrollable */
+  .pos-catalog-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.65rem;
+    max-height: 45dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* 17b. POS left panel full width */
+  .pos-left-panel {
+    width: 100%;
+  }
+
+  /* 17c. POS right panel full width */
+  .pos-right-panel {
+    width: 100%;
+  }
+
+  /* 17d. POS mobile layout single column */
+  .pos-mobile-layout {
+    gap: 0.65rem;
+  }
+
+  /* 18. POS cart */
+  .pos-cart-card {
+    border-radius: 10px;
+    position: static;
+  }
+
+  /* 19. Modals — nearly full screen on phone */
+  .admin-modal {
+    width: calc(100vw - 1.5rem) !important;
+    max-width: calc(100dvw - 1.5rem) !important;
+    max-height: 92dvh !important;
+    margin: auto 0.75rem !important;
+    padding: 1rem 1rem 1.25rem !important;
+    border-radius: 14px 14px 0 0 !important;
+    overflow-y: auto !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+  }
+
+  .client-profile-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .rx-grid,
+  .rx-entry-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* 20. Panel headers: allow wrapping */
+  .panel-header {
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  /* 21. Sticker config on mobile */
+  .sticker-config-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 

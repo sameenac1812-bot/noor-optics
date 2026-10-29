@@ -235,6 +235,21 @@
       }
     });
 
+    // Update active nav-item in mobile bottom nav
+    document.querySelectorAll('.mobile-bottom-nav .mob-nav-item').forEach(el => {
+      if (el.dataset.nav === navKey) {
+        el.classList.add('active');
+      } else {
+        el.classList.remove('active');
+      }
+    });
+
+    // Close mobile drawer and backdrop if open
+    const mobSidebar = document.getElementById('admin-sidebar');
+    const mobBackdrop = document.getElementById('sidebar-backdrop');
+    if (mobSidebar) mobSidebar.classList.remove('open');
+    if (mobBackdrop) mobBackdrop.classList.remove('open');
+
     // Update active view section
     document.querySelectorAll('.view-section').forEach(sec => {
       sec.classList.remove('active');
@@ -415,17 +430,94 @@
     }).join('');
   }
 
+  // ── Web Audio Synthesizer: Boutique POS Dual-Tone Order Chime (Zero External Files, 0ms Lag) ──
+  function playOrderChime() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      const now = ctx.currentTime;
+      // High-end dual bell chime: A5 (880Hz), E6 (1318.5Hz), A6 (1760Hz)
+      const tones = [
+        { freq: 880, start: 0, duration: 0.35, gain: 0.3 },
+        { freq: 1318.5, start: 0.12, duration: 0.5, gain: 0.4 },
+        { freq: 1760, start: 0.25, duration: 0.8, gain: 0.35 }
+      ];
+      tones.forEach(t => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle'; // Crisp, bell-like timbre
+        osc.frequency.setValueAtTime(t.freq, now + t.start);
+        gain.gain.setValueAtTime(0.001, now + t.start);
+        gain.gain.exponentialRampToValueAtTime(t.gain, now + t.start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + t.start + t.duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + t.start);
+        osc.stop(now + t.start + t.duration);
+      });
+    } catch (e) {
+      console.warn('Order chime notice:', e);
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
-  // 2. SECTION: ORDERS — IN-STORE AND WEBSITE
+  // 2. SECTION: ORDERS — IN-STORE AND WEBSITE (AUTO-REFRESHING + INSTANT BILL)
   // ═══════════════════════════════════════════════════════════════════════════
-  async function loadOrders() {
+  state.knownOrderIds = new Set();
+  state.hasInitializedOrders = false;
+
+  async function loadOrders(silent = false) {
     try {
       const res = await apiFetch('/api/orders?limit=150');
-      state.ordersCache = Array.isArray(res) ? res : (res.orders || []);
+      const incoming = Array.isArray(res) ? res : (res.orders || []);
+
+      // Real-time detection of new incoming orders (customer mobile storefront or in-store POS)
+      if (!state.hasInitializedOrders) {
+        incoming.forEach(o => state.knownOrderIds.add(o.id));
+        state.hasInitializedOrders = true;
+      } else {
+        const brandNewOrders = incoming.filter(o => !state.knownOrderIds.has(o.id));
+        if (brandNewOrders.length > 0) {
+          brandNewOrders.forEach(o => state.knownOrderIds.add(o.id));
+
+          // 1. Play audible boutique chime
+          playOrderChime();
+
+          // 2. Flash live notification toast
+          const latest = brandNewOrders[0];
+          showToast(`🔔 New Order Placed: #${latest.order_number} by ${latest.customer_name || 'Client'}`, 'success');
+
+          // 3. Automatic instant thermal bill printout with zero delay
+          if (typeof instantPrintReceipt === 'function') {
+            instantPrintReceipt(latest.id);
+          }
+        }
+      }
+
+      state.ordersCache = incoming;
       renderOrdersTable();
+
+      // Update live order count badge on desktop sidebar and mobile bottom nav
+      const totalCount = incoming.length;
+      const sidebarBadge = document.getElementById('sidebar-orders-badge');
+      const mobBadge = document.getElementById('mob-orders-badge');
+      if (sidebarBadge) {
+        sidebarBadge.textContent = totalCount;
+        sidebarBadge.style.display = totalCount > 0 ? 'inline-block' : 'none';
+      }
+      if (mobBadge) {
+        mobBadge.textContent = totalCount;
+        mobBadge.style.display = totalCount > 0 ? 'inline-block' : 'none';
+      }
     } catch (err) {
-      console.error('Failed to load orders:', err);
-      showToast('Error loading orders: ' + err.message, 'error');
+      if (!silent) {
+        console.error('Failed to load orders:', err);
+        showToast('Error loading orders: ' + err.message, 'error');
+      }
     }
   }
 
@@ -522,10 +614,19 @@
           </td>
           <td><span class="badge-status ${orderClass}">${escapeHtml(o.status)}</span></td>
           <td>
-            <div style="display:flex; gap:4px;">
-              <button class="btn-table-action" onclick="viewOrderDetails('${o.id}')" title="View Full Details">View</button>
-              <button class="btn-table-action" onclick="previewThermalReceipt('${o.id}')" title="Print Receipt">Receipt</button>
-              <button class="btn-table-action btn-table-danger" onclick="deleteOrderPrompt('${o.id}', '${escapeHtml(o.order_number)}')" title="Delete Order">Delete</button>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                <button class="btn-table-action" onclick="viewOrderDetails('${o.id}')" title="View Full Details">View</button>
+                <button class="btn-table-action" onclick="instantPrintReceipt('${o.id}')" title="Instant Print Receipt">🖨️ Receipt</button>
+                ${o.prescription_id ? `<button class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="openEditPrescriptionModal('${o.prescription_id}')" title="Doctor: Edit Lens Values">✏️ Edit RX</button>` : ''}
+                <button class="btn-table-action btn-table-danger" onclick="deleteOrderPrompt('${o.id}', '${escapeHtml(o.order_number)}')" title="Delete Order">Delete</button>
+              </div>
+              ${o.customer_phone ? `
+                <div style="display:flex; gap:4px; margin-top:2px;">
+                  <a href="tel:${escapeHtml(o.customer_phone)}" class="btn-table-action" title="Call Client" style="text-decoration:none; display:inline-flex; align-items:center; gap:2px; font-weight:700; color:#1D4ED8; background:#EFF6FF; border:1px solid #BFDBFE;">📞 Call</a>
+                  <button type="button" class="btn-table-action" onclick="openWhatsAppDirect('${escapeHtml(o.customer_phone)}', '${escapeHtml(o.customer_name || 'Client')}')" title="WhatsApp Chat" style="display:inline-flex; align-items:center; gap:2px; font-weight:700; color:#15803D; background:#F0FDF4; border:1px solid #BBF7D0;">💬 WhatsApp</button>
+                </div>
+              ` : ''}
             </div>
           </td>
         </tr>
@@ -535,6 +636,7 @@
 
   // ── View Order Details Modal ──────────────────────────────────────────────
   window.viewOrderDetails = async function (orderId) {
+    window._activeViewingOrderId = orderId;
     const order = state.ordersCache.find(o => o.id === orderId);
     if (!order) {
       showToast('Order details not found.', 'error');
@@ -566,7 +668,13 @@
         <div>
           <h4 style="font-size:0.78rem; text-transform:uppercase; color:#6B7280; margin-bottom:6px;">Customer & Delivery</h4>
           <div style="font-size:0.95rem; font-weight:700;">${escapeHtml(order.customer_name || 'Walk-in Client')}</div>
-          ${order.customer_phone ? `<div>Phone: ${escapeHtml(order.customer_phone)}</div>` : ''}
+          ${order.customer_phone ? `
+            <div style="margin-top:4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span>Phone: ${escapeHtml(order.customer_phone)}</span>
+              <a href="tel:${escapeHtml(order.customer_phone)}" class="btn-table-action" style="text-decoration:none; padding:2px 8px; font-size:0.75rem; background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE;">📞 Call</a>
+              <button type="button" class="btn-table-action" onclick="openWhatsAppDirect('${escapeHtml(order.customer_phone)}', '${escapeHtml(order.customer_name || 'Client')}')" style="padding:2px 8px; font-size:0.75rem; background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0;">💬 WhatsApp</button>
+            </div>
+          ` : ''}
           ${order.customer_email ? `<div>Email: ${escapeHtml(order.customer_email)}</div>` : ''}
           ${order.delivery_address ? `<div style="margin-top:4px; font-size:0.8rem; color:#4B5563;">${escapeHtml(order.delivery_address)}, ${escapeHtml(order.city || '')} - ${escapeHtml(order.pin_code || '')}</div>` : ''}
         </div>
@@ -589,9 +697,14 @@
                 <div style="font-size:0.72rem; color:#15803D;">Checked by: ${escapeHtml(order.rx_checked_by || 'Optometrist')}</div>
               </div>
             </div>
-            <button type="button" class="btn-table-action" style="background:#166534; color:#FFF; font-weight:700; padding:6px 14px;" onclick="printPrescriptionRecord('${order.prescription_id}')">
-              🖨️ Print Prescription RX
-            </button>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button type="button" class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700; padding:6px 14px;" onclick="openEditPrescriptionModal('${order.prescription_id}')">
+                ✏️ Edit Prescription Lens Values
+              </button>
+              <button type="button" class="btn-table-action" style="background:#166534; color:#FFF; font-weight:700; padding:6px 14px;" onclick="printPrescriptionRecord('${order.prescription_id}')">
+                🖨️ Print Prescription RX
+              </button>
+            </div>
           </div>
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; font-size:0.82rem; background:#FFF; padding:12px; border-radius:6px; border:1px solid #DCFCE7;">
             <div>
@@ -2381,6 +2494,37 @@
     }
   }
 
+
+  // ── OpticTool Inline Customer & Live Clock Helpers ─────────────────────────
+  function getPosInlineCustomer() {
+    const name = document.getElementById('pos-inline-name')?.value.trim() || 'Walk-in Customer';
+    const phone = document.getElementById('pos-inline-phone')?.value.trim() || null;
+    const city = document.getElementById('pos-inline-city')?.value.trim() || null;
+    const age = parseInt(document.getElementById('pos-inline-age')?.value || '0', 10) || null;
+    return {
+      id: state.posSelectedClient?.id || null,
+      name,
+      phone,
+      city,
+      age
+    };
+  }
+
+  function clearPosInlineCustomer() {
+    ['pos-inline-name', 'pos-inline-phone', 'pos-inline-city', 'pos-inline-age', 'pos-bill-notes'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+  }
+
+  function updatePosLiveClock() {
+    const clockEl = document.getElementById('pos-live-clock');
+    if (!clockEl) return;
+    const now = new Date();
+    const opts = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true };
+    clockEl.textContent = now.toLocaleDateString('en-GB', opts).replace(/,/g, '');
+  }
+
   function updatePosCartUI() {
     const listEl = document.getElementById('pos-cart-items-list');
     const countEl = document.getElementById('pos-cart-count');
@@ -2388,6 +2532,9 @@
     const discountValEl = document.getElementById('pos-discount-val');
     const discountInput = document.getElementById('pos-discount-amount');
     const taxEl = document.getElementById('pos-tax-val');
+    const advanceInput = document.getElementById('pos-advance-amount');
+    const advanceValEl = document.getElementById('pos-advance-val');
+    const remainingValEl = document.getElementById('pos-remaining-val');
     const grandTotalEl = document.getElementById('pos-grand-total-val');
     const btnCheckout = document.getElementById('btn-pos-confirm-checkout');
 
@@ -2397,14 +2544,16 @@
       listEl.innerHTML = `
         <div class="pos-cart-empty">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-          <p>Bill is currently empty.<br/>Scan a yellow frame QR sticker or tap any frame from the catalog.</p>
+          <p>Bill is currently empty.<br/>Scan a QR sticker or tap frames from stock.</p>
         </div>
       `;
-      if (countEl) countEl.textContent = '0 frames added';
+      if (countEl) countEl.textContent = '0 items';
       if (subtotalEl) subtotalEl.textContent = '₹0.00';
       if (discountValEl) discountValEl.textContent = '-₹0.00';
       if (taxEl) taxEl.textContent = '₹0.00';
-      if (grandTotalEl) grandTotalEl.textContent = '₹0.00';
+      if (advanceValEl) advanceValEl.textContent = '₹0.00';
+      if (remainingValEl) remainingValEl.textContent = '₹0.00';
+      if (grandTotalEl) grandTotalEl.value = '0.00';
       if (btnCheckout) btnCheckout.disabled = true;
       return;
     }
@@ -2419,16 +2568,19 @@
       return `
         <div class="pos-cart-line-item">
           <div class="cart-item-info">
-            <span class="cart-item-name">${escapeHtml(item.name)}</span>
-            <span class="cart-item-sku">${escapeHtml(item.sku)} • ${escapeHtml(item.color)}</span>
+            <span class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+            <span class="cart-item-sku">${escapeHtml(item.sku)}${item.color ? ' • ' + escapeHtml(item.color) : ''}</span>
           </div>
           <div class="cart-item-qty-ctrl">
             <button type="button" class="btn-qty" onclick="changePosItemQty(${idx}, -1)">−</button>
-            <span style="font-weight:700; width:18px; text-align:center;">${item.quantity}</span>
+            <span style="font-weight:700; width:16px; text-align:center;">${item.quantity}</span>
             <button type="button" class="btn-qty" onclick="changePosItemQty(${idx}, 1)">+</button>
           </div>
-          <div class="cart-item-total">${formatINR(item.lineTotalINR)}</div>
-          <button type="button" class="btn-remove-cart-item" onclick="removePosItem(${idx})" title="Remove frame">&times;</button>
+          <div class="cart-item-price">${formatINR(item.priceINR)}</div>
+          <div class="cart-item-total" style="display:flex; align-items:center; justify-content:flex-end; gap:4px;">
+            <span>${formatINR(item.lineTotalINR)}</span>
+            <button type="button" class="btn-remove-cart-item" onclick="removePosItem(${idx})" title="Remove item">&times;</button>
+          </div>
         </div>
       `;
     }).join('');
@@ -2440,56 +2592,70 @@
     const taxPaise = Math.round(netBasePaise - (netBasePaise / 1.18));
     const grandTotalPaise = netBasePaise;
 
-    if (countEl) countEl.textContent = `${totalItems} frame${totalItems > 1 ? 's' : ''} in bill`;
+    const advanceINR = parseFloat(advanceInput ? advanceInput.value : 0) || 0;
+    const advancePaise = Math.round(advanceINR * 100);
+    const remainingPaise = Math.max(0, grandTotalPaise - advancePaise);
+
+    if (countEl) countEl.textContent = `${totalItems} item${totalItems > 1 ? 's' : ''}`;
     if (subtotalEl) subtotalEl.textContent = formatINR(subtotalPaise, true);
     if (discountValEl) discountValEl.textContent = `-${formatINR(discountPaise, true)}`;
     if (taxEl) taxEl.textContent = formatINR(taxPaise, true);
-    if (grandTotalEl) grandTotalEl.textContent = formatINR(grandTotalPaise, true);
+    if (advanceValEl) advanceValEl.textContent = formatINR(advancePaise, true);
+    if (remainingValEl) remainingValEl.textContent = formatINR(remainingPaise, true);
+    if (grandTotalEl) grandTotalEl.value = (grandTotalPaise / 100).toFixed(2);
     if (btnCheckout) btnCheckout.disabled = false;
 
-    // ── Update Selected Client Badge & Checkout Action in Active Bill ────────
-    const clientNameEl = document.getElementById('pos-client-name-display');
-    const clientPhoneEl = document.getElementById('pos-client-phone-display');
-    const btnEditClient = document.getElementById('btn-pos-edit-client');
-    const btnLabel = document.getElementById('pos-btn-checkout-label');
-    const btnIcon = document.getElementById('pos-checkout-btn-icon');
-    const rxBanner = document.getElementById('pos-rx-attached-badge');
-    const rxText = document.getElementById('pos-rx-badge-text');
-
-    if (state.posSelectedClient) {
-      if (clientNameEl) {
-        clientNameEl.textContent = `👤 ${state.posSelectedClient.name} ${state.posSelectedClient.client_code ? `(${state.posSelectedClient.client_code})` : ''}`;
-      }
-      if (clientPhoneEl) {
-        clientPhoneEl.textContent = `${state.posSelectedClient.phone || 'No phone'} • ${state.posSelectedClient.city || 'Store Client'}`;
-      }
-      if (btnEditClient) btnEditClient.style.display = 'inline-block';
-      if (btnLabel) btnLabel.textContent = 'Confirm Checkout & Print Invoice';
-      if (btnIcon) {
-        btnIcon.innerHTML = '<polyline points="20 6 9 17 4 12"/>';
-      }
-    } else {
-      if (clientNameEl) clientNameEl.textContent = 'Walk-in Client (No details attached)';
-      if (clientPhoneEl) clientPhoneEl.textContent = 'Click "Add Details" below to attach customer & RX';
-      if (btnEditClient) btnEditClient.style.display = 'none';
-      if (btnLabel) btnLabel.textContent = 'Add Details';
-      if (btnIcon) {
-        btnIcon.innerHTML = '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>';
-      }
-    }
-
-    // Prescription banner in active bill
+    // ── Update Attached Prescription Summary Badge ────────
     const attachedRx = state.posDraftPrescription || state.posSelectedPrescription;
-    if (attachedRx && rxBanner && rxText) {
-      rxBanner.style.display = 'flex';
-      const odSph = attachedRx.od_sph || '0.00';
-      const osSph = attachedRx.os_sph || '0.00';
-      rxText.textContent = `RX Attached: OD ${odSph} / OS ${osSph}`;
-    } else if (rxBanner) {
-      rxBanner.style.display = 'none';
+    const rxBadge = document.getElementById('pos-rx-attached-badge');
+    const rxBadgeText = document.getElementById('pos-rx-badge-text');
+    const rxMiniTable = document.getElementById('pos-rx-mini-table');
+
+    if (attachedRx && rxBadge) {
+      rxBadge.style.display = 'block';
+      if (rxBadgeText) {
+        rxBadgeText.textContent = attachedRx.prescription_number || '🩺 RX Attached';
+      }
+      if (rxMiniTable) {
+        const odSph = attachedRx.od_sph || attachedRx.odSph || '0.00';
+        const odCyl = attachedRx.od_cyl || attachedRx.odCyl || '—';
+        const odAxis = (attachedRx.od_axis || attachedRx.odAxis) ? (attachedRx.od_axis || attachedRx.odAxis) + '°' : '—';
+        const osSph = attachedRx.os_sph || attachedRx.osSph || '0.00';
+        const osCyl = attachedRx.os_cyl || attachedRx.osCyl || '—';
+        const osAxis = (attachedRx.os_axis || attachedRx.osAxis) ? (attachedRx.os_axis || attachedRx.osAxis) + '°' : '—';
+
+        rxMiniTable.innerHTML = `
+          <table style="width:100%; font-size:0.72rem; border-collapse:collapse; margin-top:4px;">
+            <thead>
+              <tr style="color:#94A3B8; text-align:left; border-bottom:1px solid rgba(255,255,255,0.15);">
+                <th style="padding:2px 4px;">EYE</th>
+                <th style="padding:2px 4px;">SPH</th>
+                <th style="padding:2px 4px;">CYL</th>
+                <th style="padding:2px 4px;">AXIS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding:3px 4px; font-weight:700; color:#BAE6FD;">OD (Right)</td>
+                <td style="padding:3px 4px;">${odSph}</td>
+                <td style="padding:3px 4px;">${odCyl}</td>
+                <td style="padding:3px 4px;">${odAxis}</td>
+              </tr>
+              <tr>
+                <td style="padding:3px 4px; font-weight:700; color:#BAE6FD;">OS (Left)</td>
+                <td style="padding:3px 4px;">${osSph}</td>
+                <td style="padding:3px 4px;">${osCyl}</td>
+                <td style="padding:3px 4px;">${osAxis}</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+      }
+    } else if (rxBadge) {
+      rxBadge.style.display = 'none';
     }
 
-    // Update dynamic UPI QR if visible
+    // Dynamic UPI QR if UPI_GPAY is selected
     if (state.posPaymode === 'UPI_GPAY') {
       renderPosDynamicUpiQr(grandTotalPaise / 100);
     }
@@ -2544,7 +2710,7 @@
     const btnText = document.getElementById('btn-camera-text');
     const cameraDropdown = document.getElementById('camera-select-dropdown');
 
-    if (!btnToggle || !window.Html5Qrcode) return;
+    if (!btnToggle) return;
 
     // Listen for manual camera device changes
     if (cameraDropdown) {
@@ -2557,6 +2723,10 @@
     }
 
     btnToggle.addEventListener('click', async () => {
+      if (!window.Html5Qrcode) {
+        showToast('Camera scanner library is initializing. Please tap again in a moment.', 'info');
+        return;
+      }
       if (state.posScannerActive) {
         // Stop Camera
         await stopCameraScanner();
@@ -2726,23 +2896,171 @@
   }
 
   // ── POS Payment & Checkout Submission ─────────────────────────────────────
+  // ── OpticTool POS UI Interactions (Stock toggle, Bill Image, Prescription) ─
+  function setupPosOpticFeatures() {
+    // 1. Stock catalog toggle
+    const btnToggleStock = document.getElementById('btn-toggle-stock-catalog');
+    const stockCatalogWrap = document.getElementById('optic-stock-catalog-wrap');
+    if (btnToggleStock && stockCatalogWrap) {
+      btnToggleStock.addEventListener('click', () => {
+        const isHidden = window.getComputedStyle(stockCatalogWrap).display === 'none';
+        stockCatalogWrap.style.display = isHidden ? 'block' : 'none';
+        btnToggleStock.innerHTML = isHidden ? '<span>✕ Hide Stock</span>' : '<span>📦 View Stock</span>';
+      });
+    }
+
+    // 2. Bill Image handlers (Camera snap & Gallery upload)
+    const btnRxCamera = document.getElementById('btn-rx-camera-snap');
+    const btnRxGallery = document.getElementById('btn-pos-rx-upload');
+    const fileGallery = document.getElementById('pos-rx-file-input');
+    const fileCamera = document.getElementById('pos-camera-file-input');
+    const previewWrap = document.getElementById('pos-rx-preview-wrap');
+    const previewImg = document.getElementById('pos-rx-image-preview');
+    const btnRemoveRxImg = document.getElementById('btn-remove-rx-img');
+
+    if (btnRxCamera && fileCamera) {
+      btnRxCamera.addEventListener('click', () => fileCamera.click());
+    }
+    if (btnRxGallery && fileGallery) {
+      btnRxGallery.addEventListener('click', () => fileGallery.click());
+    }
+
+    const handleBillFile = (file) => {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        state.uploadedRxImageUrl = dataUrl;
+        if (previewImg) previewImg.src = dataUrl;
+        if (previewWrap) previewWrap.style.display = 'block';
+        showToast('Bill image attached!', 'success');
+      };
+      reader.readAsDataURL(file);
+
+      // Async background server upload
+      const formData = new FormData();
+      formData.append('image', file);
+      const headers = {};
+      if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+      fetch('/api/prescriptions/upload-image', {
+        method: 'POST',
+        headers,
+        body: formData
+      })
+      .then(res => res.json())
+      .then(json => {
+        if (json.imageUrl) state.uploadedRxImageUrl = json.imageUrl;
+      })
+      .catch(err => console.warn('Server image upload sync:', err));
+    };
+
+    if (fileCamera) {
+      fileCamera.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) handleBillFile(e.target.files[0]);
+      });
+    }
+    if (fileGallery) {
+      fileGallery.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) handleBillFile(e.target.files[0]);
+      });
+    }
+
+    if (btnRemoveRxImg) {
+      btnRemoveRxImg.addEventListener('click', () => {
+        state.uploadedRxImageUrl = null;
+        if (previewWrap) previewWrap.style.display = 'none';
+        if (previewImg) previewImg.src = '';
+        if (fileCamera) fileCamera.value = '';
+        if (fileGallery) fileGallery.value = '';
+        showToast('Bill image removed.', 'info');
+      });
+    }
+
+    // 3. Prescription actions
+    const btnRxCreateNew = document.getElementById('btn-rx-create-new');
+    if (btnRxCreateNew) {
+      btnRxCreateNew.addEventListener('click', () => {
+        openPrescriptionModal(null, (rxData) => {
+          state.posDraftPrescription = rxData;
+          state.posSelectedPrescription = null;
+          updatePosCartUI();
+          showToast('Prescription attached to bill!', 'success');
+        });
+      });
+    }
+
+    const btnRxSearchExisting = document.getElementById('btn-rx-search-existing');
+    if (btnRxSearchExisting) {
+      btnRxSearchExisting.addEventListener('click', () => {
+        openClientDetailsModal();
+      });
+    }
+
+    const btnBrowseClients = document.getElementById('btn-browse-clients');
+    if (btnBrowseClients) {
+      btnBrowseClients.addEventListener('click', () => {
+        openClientDetailsModal();
+      });
+    }
+
+    const btnRemoveRx = document.getElementById('btn-pos-remove-rx');
+    if (btnRemoveRx) {
+      btnRemoveRx.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.posDraftPrescription = null;
+        state.posSelectedPrescription = null;
+        updatePosCartUI();
+        showToast('Prescription detached.', 'info');
+      });
+    }
+  }
+
+  // ── POS Payment & Checkout Submission ─────────────────────────────────────
   function setupPosCheckout() {
     const btnNewBill = document.getElementById('btn-pos-new-bill');
+    const btnReset = document.getElementById('btn-pos-reset');
     const btnClearCart = document.getElementById('btn-clear-cart');
     const btnCheckout = document.getElementById('btn-pos-confirm-checkout');
     const discountInput = document.getElementById('pos-discount-amount');
-    const btnEditClient = document.getElementById('btn-pos-edit-client');
-    const btnRemoveRx = document.getElementById('btn-pos-remove-rx');
+    const advanceInput = document.getElementById('pos-advance-amount');
+
+    const resetBill = (confirmUser = false) => {
+      if (confirmUser && (state.posCart.length > 0 || document.getElementById('pos-inline-name')?.value)) {
+        if (!confirm('Are you sure you want to reset this bill? All current items and inputs will be cleared.')) {
+          return;
+        }
+      }
+      state.posCart = [];
+      state.posSelectedClient = null;
+      state.posSelectedPrescription = null;
+      state.posDraftPrescription = null;
+      state.uploadedRxImageUrl = null;
+      clearPosInlineCustomer();
+      const wrap = document.getElementById('pos-rx-preview-wrap');
+      if (wrap) wrap.style.display = 'none';
+      const previewImg = document.getElementById('pos-rx-image-preview');
+      if (previewImg) previewImg.src = '';
+      if (discountInput) discountInput.value = 0;
+      if (advanceInput) advanceInput.value = 0;
+
+      const tokenDisplay = document.getElementById('pos-token-display');
+      if (tokenDisplay) {
+        tokenDisplay.textContent = 'INV-NOOR-' + Date.now().toString().slice(-4);
+      }
+      updatePosCartUI();
+    };
 
     if (btnNewBill) {
       btnNewBill.addEventListener('click', () => {
-        state.posCart = [];
-        state.posSelectedClient = null;
-        state.posSelectedPrescription = null;
-        state.posDraftPrescription = null;
-        if (discountInput) discountInput.value = 0;
-        updatePosCartUI();
+        resetBill(false);
         showToast('New in-store bill started.', 'info');
+      });
+    }
+
+    if (btnReset) {
+      btnReset.addEventListener('click', () => {
+        resetBill(true);
+        showToast('Bill reset.', 'info');
       });
     }
 
@@ -2753,24 +3071,12 @@
       });
     }
 
-    if (btnEditClient) {
-      btnEditClient.addEventListener('click', () => {
-        openClientDetailsModal();
-      });
-    }
-
-    if (btnRemoveRx) {
-      btnRemoveRx.addEventListener('click', (e) => {
-        e.stopPropagation();
-        state.posDraftPrescription = null;
-        state.posSelectedPrescription = null;
-        updatePosCartUI();
-        showToast('Prescription detached from current bill.', 'info');
-      });
-    }
-
     if (discountInput) {
       discountInput.addEventListener('input', () => updatePosCartUI());
+    }
+
+    if (advanceInput) {
+      advanceInput.addEventListener('input', () => updatePosCartUI());
     }
 
     // Payment mode selection buttons
@@ -2785,41 +3091,59 @@
           upiCard.style.display = state.posPaymode === 'UPI_GPAY' ? 'block' : 'none';
           if (state.posPaymode === 'UPI_GPAY') {
             const grandTotalEl = document.getElementById('pos-grand-total-val');
-            const total = parseFloat((grandTotalEl.textContent || '').replace(/[^0-9.]/g, '')) || 0;
+            const total = parseFloat(grandTotalEl?.value || '0') || 0;
             renderPosDynamicUpiQr(total);
           }
         }
       });
     });
 
-    // Action Button ("Add Details" when no client; "Confirm Checkout & Print Invoice" when attached)
+    // Save Bill & Print Checkout Action
     if (btnCheckout) {
       btnCheckout.addEventListener('click', async () => {
-        if (state.posCart.length === 0) return;
-
-        // Step 1: If client details are not yet attached, open the Client Details modal
-        if (!state.posSelectedClient) {
-          openClientDetailsModal();
+        if (state.posCart.length === 0) {
+          showToast('Please add at least one frame before saving bill.', 'warning');
           return;
         }
 
-        // Step 2: Client is attached — proceed to authoritative checkout
+        // Authoritative inline customer details
+        const inlineCust = getPosInlineCustomer();
+        const clientPayload = state.posSelectedClient ? {
+          ...state.posSelectedClient,
+          name: inlineCust.name || state.posSelectedClient.name,
+          phone: inlineCust.phone || state.posSelectedClient.phone,
+          city: inlineCust.city || state.posSelectedClient.city,
+          age: inlineCust.age || state.posSelectedClient.age
+        } : {
+          id: null,
+          name: inlineCust.name,
+          phone: inlineCust.phone,
+          city: inlineCust.city,
+          age: inlineCust.age
+        };
+
         btnCheckout.disabled = true;
         btnCheckout.innerHTML = `<span>Processing Sale...</span>`;
 
         try {
           const discountINR = parseFloat(discountInput ? discountInput.value : 0) || 0;
+          const advanceINR = parseFloat(advanceInput ? advanceInput.value : 0) || 0;
           const claimedUtr = document.getElementById('pos-claimed-utr') ? document.getElementById('pos-claimed-utr').value.trim() : null;
+          const notes = document.getElementById('pos-bill-notes')?.value.trim() || null;
 
           const payload = {
-            customerId: state.posSelectedClient.id || null,
-            clientDetails: state.posSelectedClient.id ? null : state.posSelectedClient,
+            customerId: clientPayload.id || null,
+            clientDetails: clientPayload.id ? null : clientPayload,
             prescriptionId: state.posSelectedPrescription ? state.posSelectedPrescription.id : null,
-            newPrescription: state.posDraftPrescription || null,
-            customerName: state.posSelectedClient.name,
-            customerPhone: state.posSelectedClient.phone || null,
+            newPrescription: state.posDraftPrescription || (state.uploadedRxImageUrl ? { imageUrl: state.uploadedRxImageUrl } : null),
+            customerName: clientPayload.name,
+            customerPhone: clientPayload.phone || null,
+            customerCity: clientPayload.city || null,
+            customerAge: clientPayload.age || null,
             paymentMethod: state.posPaymode,
             discountINR,
+            advanceINR,
+            notes,
             claimedUpiRef: claimedUtr,
             isVerifiedAtCounter: true,
             items: state.posCart.map(item => ({
@@ -2836,12 +3160,25 @@
 
           showToast(`Sale completed! Invoice: ${res.invoiceNumber} (Token #${res.tokenNumber})`, 'success');
 
-          // Reset cart & client state
+          // Reset cart & inputs
           state.posCart = [];
           state.posSelectedClient = null;
           state.posSelectedPrescription = null;
           state.posDraftPrescription = null;
+          state.uploadedRxImageUrl = null;
+          clearPosInlineCustomer();
+          const wrap = document.getElementById('pos-rx-preview-wrap');
+          if (wrap) wrap.style.display = 'none';
+          const previewImg = document.getElementById('pos-rx-image-preview');
+          if (previewImg) previewImg.src = '';
           if (discountInput) discountInput.value = 0;
+          if (advanceInput) advanceInput.value = 0;
+
+          // Generate next token number
+          const tokenDisplay = document.getElementById('pos-token-display');
+          if (tokenDisplay) {
+            tokenDisplay.textContent = 'INV-NOOR-' + Date.now().toString().slice(-4);
+          }
           updatePosCartUI();
 
           // Refresh live datasets across system
@@ -2850,14 +3187,36 @@
           loadOrders();
           if (typeof loadClients === 'function') loadClients();
 
-          // Open thermal receipt preview
+          // Instant automatic bill printout
           if (res.orderId) {
-            previewThermalReceipt(res.orderId);
+            instantPrintReceipt(res.orderId);
+          }
+
+          // Show Order Done modal
+          const successModal = document.getElementById('modal-order-success');
+          if (successModal) {
+            const invoiceElem = document.getElementById('success-invoice-num');
+            const tokenElem = document.getElementById('success-token-num');
+            const clientElem = document.getElementById('success-client-name');
+            const rxElem = document.getElementById('success-rx-status');
+            if (invoiceElem) invoiceElem.textContent = res.invoiceNumber || '-';
+            if (tokenElem) tokenElem.textContent = res.tokenNumber ? `#${res.tokenNumber}` : '-';
+            if (clientElem) clientElem.textContent = payload.customerName || 'Walk-in Client';
+            if (rxElem) rxElem.textContent = (res.prescriptionId || payload.newPrescription) ? 'Attached & Saved ✓' : 'Standard (Non-RX)';
+            const btnReprint = document.getElementById('btn-success-reprint');
+            if (btnReprint) {
+              btnReprint.onclick = () => instantPrintReceipt(res.orderId);
+            }
+            successModal.classList.add('open');
           }
         } catch (err) {
           showToast('Checkout failed: ' + err.message, 'error');
         } finally {
           btnCheckout.disabled = false;
+          btnCheckout.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="pos-checkout-btn-icon"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <span id="pos-btn-checkout-label">Save Bill &amp; Print</span>
+          `;
           updatePosCartUI();
         }
       });
@@ -3087,18 +3446,30 @@
         const rxData = {
           od_sph: odSph || null,
           od_cyl: odCyl || null,
-          od_axis: odAxis ? Number(odAxis) : null,
+          od_axis: odAxis !== null && odAxis !== '' ? Number(odAxis) : null,
           os_sph: osSph || null,
           os_cyl: osCyl || null,
-          os_axis: osAxis ? Number(osAxis) : null,
+          os_axis: osAxis !== null && osAxis !== '' ? Number(osAxis) : null,
           addition: addition || null,
-          ipd_distance: ipdD ? Number(ipdD) : null,
-          ipd_near: ipdN ? Number(ipdN) : null,
+          ipd_distance: ipdD !== null && ipdD !== '' ? Number(ipdD) : null,
+          ipd_near: ipdN !== null && ipdN !== '' ? Number(ipdN) : null,
           checked_by: checkedBy,
           prescriber_details: prescriber,
           notes: notes,
           image_url: imageUrl,
-          prescription_date: new Date().toISOString()
+          prescription_date: new Date().toISOString(),
+          // camelCase aliases for full compatibility
+          odSph: odSph || null,
+          odCyl: odCyl || null,
+          odAxis: odAxis !== null && odAxis !== '' ? Number(odAxis) : null,
+          osSph: osSph || null,
+          osCyl: osCyl || null,
+          osAxis: osAxis !== null && osAxis !== '' ? Number(osAxis) : null,
+          ipdDistance: ipdD !== null && ipdD !== '' ? Number(ipdD) : null,
+          ipdNear: ipdN !== null && ipdN !== '' ? Number(ipdN) : null,
+          checkedBy: checkedBy,
+          prescriberDetails: prescriber,
+          imageUrl: imageUrl
         };
 
         if (typeof activeRxSaveCallback === 'function') {
@@ -3114,8 +3485,8 @@
             rxSummary.style.display = 'block';
             rxSummary.innerHTML = `
               <strong>🩺 Draft Prescription Ready:</strong><br/>
-              Right (OD): SPH ${rxData.od_sph || '0.00'}, CYL ${rxData.od_cyl || '0.00'}, AXIS ${rxData.od_axis || '-'}<br/>
-              Left (OS): SPH ${rxData.os_sph || '0.00'}, CYL ${rxData.os_cyl || '0.00'}, AXIS ${rxData.os_axis || '-'}<br/>
+              Right (OD): SPH ${rxData.od_sph || '0.00'}, CYL ${rxData.od_cyl || '0.00'}, AXIS ${rxData.od_axis !== null ? rxData.od_axis + '°' : '-'}<br/>
+              Left (OS): SPH ${rxData.os_sph || '0.00'}, CYL ${rxData.os_cyl || '0.00'}, AXIS ${rxData.os_axis !== null ? rxData.os_axis + '°' : '-'}<br/>
               ${rxData.addition ? `Addition: ${rxData.addition} • ` : ''}Checked by: ${escapeHtml(rxData.checked_by || '-')}
             `;
           }
@@ -3145,10 +3516,10 @@
       }
     };
 
-    resetCombobox('rx-od-sph-btn', existingRx?.od_sph);
-    resetCombobox('rx-od-cyl-btn', existingRx?.od_cyl);
-    resetCombobox('rx-os-sph-btn', existingRx?.os_sph);
-    resetCombobox('rx-os-cyl-btn', existingRx?.os_cyl);
+    resetCombobox('rx-od-sph-btn', existingRx?.od_sph || existingRx?.odSph);
+    resetCombobox('rx-od-cyl-btn', existingRx?.od_cyl || existingRx?.odCyl);
+    resetCombobox('rx-os-sph-btn', existingRx?.os_sph || existingRx?.osSph);
+    resetCombobox('rx-os-cyl-btn', existingRx?.os_cyl || existingRx?.osCyl);
     resetCombobox('rx-addition-btn', existingRx?.addition);
 
     const odAxisInput = document.getElementById('rx-od-axis-input');
@@ -3159,20 +3530,25 @@
     const prescriberInput = document.getElementById('rx-prescriber-input');
     const notesInput = document.getElementById('rx-notes-input');
 
-    if (odAxisInput) odAxisInput.value = existingRx?.od_axis || '';
-    if (osAxisInput) osAxisInput.value = existingRx?.os_axis || '';
-    if (ipdDInput) ipdDInput.value = existingRx?.ipd_distance || '';
-    if (ipdNInput) ipdNInput.value = existingRx?.ipd_near || '';
-    if (checkedByInput) checkedByInput.value = existingRx?.checked_by || (state.user?.name || 'Optometrist');
-    if (prescriberInput) prescriberInput.value = existingRx?.prescriber_details || '';
+    const odAxisVal = existingRx?.od_axis !== undefined ? existingRx?.od_axis : existingRx?.odAxis;
+    const osAxisVal = existingRx?.os_axis !== undefined ? existingRx?.os_axis : existingRx?.osAxis;
+    const ipdDVal = existingRx?.ipd_distance !== undefined ? existingRx?.ipd_distance : existingRx?.ipdDistance;
+    const ipdNVal = existingRx?.ipd_near !== undefined ? existingRx?.ipd_near : existingRx?.ipdNear;
+
+    if (odAxisInput) odAxisInput.value = odAxisVal !== null && odAxisVal !== undefined ? odAxisVal : '';
+    if (osAxisInput) osAxisInput.value = osAxisVal !== null && osAxisVal !== undefined ? osAxisVal : '';
+    if (ipdDInput) ipdDInput.value = ipdDVal !== null && ipdDVal !== undefined ? ipdDVal : '';
+    if (ipdNInput) ipdNInput.value = ipdNVal !== null && ipdNVal !== undefined ? ipdNVal : '';
+    if (checkedByInput) checkedByInput.value = existingRx?.checked_by || existingRx?.checkedBy || (state.user?.name || 'Optometrist');
+    if (prescriberInput) prescriberInput.value = existingRx?.prescriber_details || existingRx?.prescriberDetails || '';
     if (notesInput) notesInput.value = existingRx?.notes || '';
 
     // Image preview
     const previewWrap = document.getElementById('rx-image-preview-wrap');
     const previewImg = document.getElementById('rx-image-preview');
     if (previewWrap && previewImg) {
-      if (existingRx?.image_url) {
-        previewImg.src = existingRx.image_url;
+      if (existingRx?.image_url || existingRx?.imageUrl) {
+        previewImg.src = existingRx.image_url || existingRx.imageUrl;
         previewWrap.style.display = 'block';
       } else {
         previewWrap.style.display = 'none';
@@ -3183,6 +3559,60 @@
     // Default to Values tab
     document.getElementById('rx-mode-values')?.click();
     modal.classList.add('open');
+  };
+
+  // ── Doctor/Optometrist View & Edit Prescription Lens Values ───────────────
+  window.openEditPrescriptionModal = async function (prescriptionId) {
+    if (!prescriptionId) {
+      showToast('No prescription ID provided to view/edit.', 'warning');
+      return;
+    }
+
+    try {
+      showToast('Loading prescription lens values...', 'info');
+      const rx = await apiFetch(`/api/prescriptions/${prescriptionId}`);
+      if (!rx || !rx.id) {
+        showToast('Prescription record not found.', 'error');
+        return;
+      }
+
+      const modal = document.getElementById('modal-prescription');
+      const titleElem = modal?.querySelector('.optical-rx-title');
+      const btnSaveText = document.getElementById('btn-save-rx-text');
+
+      if (titleElem) titleElem.textContent = `Edit RX — ${rx.prescription_number || 'Record'}`;
+      if (btnSaveText) btnSaveText.textContent = 'Update Prescription Lens Values';
+
+      window.openPrescriptionModal(rx, async (updatedData) => {
+        try {
+          showToast('Updating prescription lens values in database...', 'info');
+          await apiFetch(`/api/prescriptions/${prescriptionId}`, {
+            method: 'PUT',
+            body: JSON.stringify(updatedData)
+          });
+          showToast('Prescription lens values updated successfully!', 'success');
+          modal.classList.remove('open');
+
+          if (titleElem) titleElem.textContent = 'Create New RX';
+          if (btnSaveText) btnSaveText.textContent = 'Save & Add RX to Bill';
+
+          // Refresh orders and clients
+          loadOrders();
+          if (typeof loadClients === 'function') loadClients();
+          if (state.activeProfileClientId) {
+            openClientProfile(state.activeProfileClientId);
+          }
+          const orderModal = document.getElementById('modal-order-details');
+          if (orderModal && orderModal.classList.contains('open') && window._activeViewingOrderId) {
+            viewOrderDetails(window._activeViewingOrderId);
+          }
+        } catch (err) {
+          showToast('Failed to update prescription: ' + err.message, 'error');
+        }
+      });
+    } catch (err) {
+      showToast('Error opening prescription: ' + err.message, 'error');
+    }
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -3336,6 +3766,16 @@
           notes: notes || null
         };
 
+        // Also sync inline customer inputs on POS view
+        const inlineName = document.getElementById('pos-inline-name');
+        const inlinePhone = document.getElementById('pos-inline-phone');
+        const inlineCity = document.getElementById('pos-inline-city');
+        const inlineAge = document.getElementById('pos-inline-age');
+        if (inlineName) inlineName.value = name;
+        if (inlinePhone) inlinePhone.value = phone;
+        if (inlineCity) inlineCity.value = city;
+        if (inlineAge) inlineAge.value = age || '';
+
         // Update active bill display
         updatePosCartUI();
 
@@ -3428,6 +3868,15 @@
       document.getElementById('cust-dob').value = client.dob || '';
       document.getElementById('cust-address').value = client.address || '';
       document.getElementById('cust-notes').value = client.notes || '';
+
+      const inlineName = document.getElementById('pos-inline-name');
+      const inlinePhone = document.getElementById('pos-inline-phone');
+      const inlineCity = document.getElementById('pos-inline-city');
+      const inlineAge = document.getElementById('pos-inline-age');
+      if (inlineName) inlineName.value = client.name || '';
+      if (inlinePhone) inlinePhone.value = client.phone || '';
+      if (inlineCity) inlineCity.value = client.city || '';
+      if (inlineAge) inlineAge.value = client.age || '';
 
       await loadClientPrescriptionsIntoSelect(client.id);
       showToast(`Loaded details for ${client.name}`, 'info');
@@ -3598,6 +4047,7 @@
                 <button type="button" class="btn-table-action" onclick="openClientProfile('${c.id}')" title="View Full Profile">👁️ View</button>
                 ${c.phone ? `<a href="tel:${c.phone}" class="btn-table-action" title="Call">📞</a>` : ''}
                 ${c.phone ? `<button type="button" class="btn-table-action" onclick="openWhatsAppDirect('${c.phone}', '${escapeHtml(c.name)}')" title="WhatsApp">💬</button>` : ''}
+                <button type="button" class="btn-table-action btn-table-danger" onclick="deleteClientPrompt('${c.id}', '${escapeHtml(c.name)}')" title="Delete Client Permanently">🗑️ Delete</button>
               </div>
             </td>
           </tr>
@@ -3608,6 +4058,22 @@
       tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:2rem; color:#DC2626;">Error loading clients: ${err.message}</td></tr>`;
     }
   }
+
+  window.deleteClientPrompt = async function (clientId, clientName) {
+    if (!confirm(`Are you sure you want to permanently delete client "${clientName}" from the database? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      showToast(`Deleting client "${clientName}"...`, 'info');
+      await apiFetch(`/api/customers/${clientId}?permanent=true`, {
+        method: 'DELETE'
+      });
+      showToast(`Client "${clientName}" has been permanently deleted.`, 'success');
+      loadClients();
+    } catch (err) {
+      showToast('Failed to delete client: ' + err.message, 'error');
+    }
+  };
 
   window.openWhatsAppDirect = function (rawPhone, clientName) {
     const cleanDigits = String(rawPhone || '').replace(/[^0-9]/g, '');
@@ -3791,7 +4257,8 @@
                   <span class="profile-rx-number">🩺 ${escapeHtml(r.prescription_number || 'RX Record')}</span>
                   <span class="profile-rx-date">• ${formatShortDate(r.prescription_date || r.created_at)}</span>
                 </div>
-                <div style="display:flex; gap:6px;">
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <button type="button" class="btn-table-action btn-gold" onclick="openEditPrescriptionModal('${r.id}')" title="Edit Lens Values">✏️ Edit RX Values</button>
                   <button type="button" class="btn-table-action" onclick='printPrescriptionRecord(${JSON.stringify(r)})'>🖨️ Print RX</button>
                   ${r.image_url ? `<a href="${r.image_url}" target="_blank" class="btn-table-action">View Image</a>` : ''}
                 </div>
@@ -4051,6 +4518,31 @@
     }
   };
 
+  // ── Automatic Instant Bill Printout (Zero Delay, No Print Skipped) ─────────
+  window.instantPrintReceipt = function (orderId) {
+    if (!orderId) return;
+    let printFrame = document.getElementById('silent-receipt-print-frame');
+    if (!printFrame) {
+      printFrame = document.createElement('iframe');
+      printFrame.id = 'silent-receipt-print-frame';
+      printFrame.style.cssText = 'position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; border:none; visibility:hidden;';
+      document.body.appendChild(printFrame);
+    }
+
+    printFrame.onload = function () {
+      try {
+        if (printFrame.contentWindow) {
+          printFrame.contentWindow.focus();
+          printFrame.contentWindow.print();
+        }
+      } catch (err) {
+        console.warn('Silent auto-print notice:', err);
+      }
+    };
+
+    printFrame.src = `/api/printer/orders/${orderId}/preview-html?t=${Date.now()}`;
+  };
+
   // ── Receipt & Token Printing Preview ──────────────────────────────────────
   window.previewThermalReceipt = function (orderId) {
     const modal = document.getElementById('modal-receipt-preview');
@@ -4212,6 +4704,28 @@
   function init() {
     // 1. Sidebar Nav Click Listeners (Strict 4 Items)
     document.querySelectorAll('.sidebar-nav .nav-item').forEach(el => {
+      el.addEventListener('click', () => {
+        switchNav(el.dataset.nav);
+      });
+    });
+
+    // 1b. Mobile Navigation & Drawer Toggle Listeners
+    const btnMenuToggle = document.getElementById('btn-mobile-menu-toggle');
+    const adminSidebar = document.getElementById('admin-sidebar');
+    const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+    if (btnMenuToggle && adminSidebar) {
+      btnMenuToggle.addEventListener('click', () => {
+        adminSidebar.classList.toggle('open');
+        sidebarBackdrop?.classList.toggle('open');
+      });
+    }
+    if (sidebarBackdrop && adminSidebar) {
+      sidebarBackdrop.addEventListener('click', () => {
+        adminSidebar.classList.remove('open');
+        sidebarBackdrop.classList.remove('open');
+      });
+    }
+    document.querySelectorAll('.mobile-bottom-nav .mob-nav-item').forEach(el => {
       el.addEventListener('click', () => {
         switchNav(el.dataset.nav);
       });
@@ -4431,11 +4945,28 @@
     setupDailySalesReport();
     setupPosCameraScanner();
     setupKeyboardScannerListener();
+    setupPosOpticFeatures();
     setupPosCheckout();
+
+    // Start OpticTool Live Clock
+    updatePosLiveClock();
+    setInterval(updatePosLiveClock, 1000);
+
+    const tokenDisplay = document.getElementById('pos-token-display');
+    if (tokenDisplay) {
+      tokenDisplay.textContent = 'INV-NOOR-' + Date.now().toString().slice(-4);
+    }
     setupClientManagement();
     setupClientDetailsModal();
     setupPrescriptionModal();
     setupDiopterSelector();
+
+    // Real-time constant orders polling: loads orders instantly as placed, with audio ring and auto-bill printout
+    setInterval(() => {
+      if (state.token) {
+        loadOrders(true);
+      }
+    }, 3000);
 
     // Verify session
     checkExistingAuth();

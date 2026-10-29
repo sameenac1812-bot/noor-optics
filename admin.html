@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Noor Optics – Retail Business Management, Inventory & POS Portal</title>
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="icon" type="image/png" href="/images/favicon.png" />
   <link rel="apple-touch-icon" href="/images/favicon.png" />
-  <link rel="stylesheet" href="/admin.css?v=5.9.0" />
+  <link rel="stylesheet" href="/admin.css?v=6.5.0" />
 </head>
 <body>
 
@@ -96,13 +96,19 @@
         </button>
       </div>
     </aside>
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
     <!-- Main Workspace Area -->
     <main class="admin-main">
       <header class="admin-header">
-        <div class="page-title-wrap">
-          <h1 id="page-title">Operations Dashboard</h1>
-          <span class="page-subtitle" id="page-subtitle">Real-time performance overview • Asia/Kolkata (IST)</span>
+        <div style="display:flex; align-items:center; gap:0.6rem;">
+          <button type="button" class="btn-mobile-menu-toggle" id="btn-mobile-menu-toggle" aria-label="Toggle Navigation Menu">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div class="page-title-wrap">
+            <h1 id="page-title">Operations Dashboard</h1>
+            <span class="page-subtitle" id="page-subtitle">Real-time performance overview • Asia/Kolkata (IST)</span>
+          </div>
         </div>
         <div class="header-actions">
           <a href="/" target="_blank" class="btn-header-action" title="Open Customer Online Storefront">
@@ -625,190 +631,304 @@
         </section>
 
         <!-- ═════════════════════════════════════════════════════════════════ -->
-        <!-- 4. VIEW: IN-STORE POS — CAMERA SCANNING AND FRAME BILLING         -->
+        <!-- 4. VIEW: IN-STORE POS — OPTICTOOL WORKFLOW & REAL-TIME BILLING    -->
         <!-- ═════════════════════════════════════════════════════════════════ -->
         <section class="view-section" id="view-pos">
-          <div class="pos-top-bar">
-            <div class="pos-active-info">
-              <span class="pos-token-pill" id="pos-token-display">Token #--</span>
-              <span class="pos-cashier-label" id="pos-cashier-display">Cashier: Active</span>
-              <span class="pos-printer-badge">🖨️ 58mm / 80mm Thermal Printer Ready</span>
-            </div>
-            <div class="pos-top-actions">
-              <button class="btn-pos-new-bill" id="btn-pos-new-bill">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                <span>New Bill</span>
+          <div class="optic-billing-container">
+
+            <!-- ── Top Tab Bar: Saved Bills vs New Bill ─────────────────── -->
+            <div class="optic-tab-toggle-bar">
+              <button type="button" class="optic-toggle-btn" id="btn-optic-saved-bills" onclick="switchNav('orders')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>Saved Bills</span>
+              </button>
+              <button type="button" class="optic-toggle-btn active" id="btn-pos-new-bill">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>+ New Bill</span>
               </button>
             </div>
-          </div>
 
-          <div class="pos-layout-grid">
-            <!-- Left Panel: Camera QR Scanner + Fast Frame Search + Quick Catalog -->
-            <div class="pos-left-panel">
-              <!-- Camera QR Scanner Viewport & Controls -->
-              <div class="pos-camera-card" id="pos-camera-card">
-                <div class="camera-card-header">
-                  <div style="display:flex; align-items:center; gap:8px;">
-                    <span class="camera-indicator-dot" id="camera-status-dot"></span>
-                    <span style="font-weight:700; font-size:0.9rem;">Camera Frame Scanner</span>
-                  </div>
-                  <div class="camera-header-buttons">
-                    <select id="camera-select-dropdown" class="form-control" style="width:auto; font-size:0.75rem; padding:4px 8px; display:none;"></select>
-                    <button class="btn-camera-toggle" id="btn-toggle-camera">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                      <span id="btn-camera-text">Open Camera Scanner</span>
-                    </button>
-                  </div>
-                </div>
+            <!-- ── Invoice Banner (Navy Bar) ────────────────────────────── -->
+            <div class="optic-invoice-banner">
+              <div class="optic-inv-token" id="pos-token-display">INV-NOOR-0001</div>
+              <div class="optic-inv-clock" id="pos-live-clock">29 Oct 2026 09:56 PM</div>
+            </div>
 
-                <!-- Video Viewport for html5-qrcode -->
-                <div class="camera-viewport-wrap" id="camera-viewport-wrap" style="display:none;">
-                  <div id="html5-qr-reader" style="width:100%; border-radius:10px; overflow:hidden;"></div>
-                  <div class="scan-reticle">
-                    <div class="reticle-corner tl"></div>
-                    <div class="reticle-corner tr"></div>
-                    <div class="reticle-corner bl"></div>
-                    <div class="reticle-corner br"></div>
-                    <div class="reticle-laser"></div>
-                  </div>
-                  <div class="camera-scan-hint">Point camera at the yellow frame QR sticker to add to bill</div>
-                </div>
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- 1. QR FRAME SCANNER (Topmost Step)                             -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <div class="optic-card optic-scanner-card" id="pos-camera-card">
+              <div class="optic-scanner-action-row">
+                <button type="button" class="btn-optic-camera-main" id="btn-toggle-camera">
+                  <span class="camera-pulse-icon">📷</span>
+                  <span id="btn-camera-text">Scan QR Sticker (Open Camera)</span>
+                  <span class="camera-indicator-dot" id="camera-status-dot"></span>
+                </button>
+                <select id="camera-select-dropdown" class="form-control" style="display:none;"></select>
               </div>
 
-              <!-- Barcode / QR Keyboard Scanner & Search Input -->
-              <div class="pos-search-card">
-                <div class="pos-input-group">
+              <!-- Camera Viewport for html5-qrcode -->
+              <div class="camera-viewport-wrap" id="camera-viewport-wrap" style="display:none;">
+                <div id="html5-qr-reader" style="width:100%; border-radius:10px; overflow:hidden;"></div>
+                <div class="scan-reticle">
+                  <div class="reticle-corner tl"></div>
+                  <div class="reticle-corner tr"></div>
+                  <div class="reticle-corner bl"></div>
+                  <div class="reticle-corner br"></div>
+                  <div class="reticle-laser"></div>
+                </div>
+                <div class="camera-scan-hint">Point camera at the yellow frame QR sticker to instantly add to bill</div>
+              </div>
+
+              <!-- Barcode / USB / Bluetooth Scanner & Text Search -->
+              <div class="optic-search-row">
+                <div class="optic-input-wrap">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  <input type="text" id="pos-keyboard-scan-input" class="pos-search-input" placeholder="Scan QR sticker with USB/Bluetooth scanner, or type frame SKU / name..." autocomplete="off" />
-                  <button class="btn-clear-input" id="pos-btn-clear-search">&times;</button>
+                  <input type="text" id="pos-keyboard-scan-input" class="optic-input" placeholder="Scan QR sticker with scanner or type SKU..." autocomplete="off" />
+                  <button type="button" class="btn-clear-input" id="pos-btn-clear-search">&times;</button>
                 </div>
-                <div class="scan-status-notice" id="pos-scan-feedback" style="display:none;"></div>
               </div>
+              <div class="scan-status-notice" id="pos-scan-feedback" style="display:none;"></div>
+            </div>
 
-              <!-- Frame Shape Chips -->
-              <div class="pos-shape-chips" id="pos-shape-chips">
-                <button class="pos-shape-chip active" data-pos-shape="all">All Frames</button>
-                <button class="pos-shape-chip" data-pos-shape="Rectangular">Rectangular</button>
-                <button class="pos-shape-chip" data-pos-shape="Round">Round</button>
-                <button class="pos-shape-chip" data-pos-shape="Square">Square</button>
-                <button class="pos-shape-chip" data-pos-shape="Geometric">Geometric</button>
-                <button class="pos-shape-chip" data-pos-shape="Aviator">Aviator</button>
-                <button class="pos-shape-chip" data-pos-shape="Cat-Eye">Cat-Eye</button>
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- 2. CUSTOMER DETAILS (Inline below scanner)                     -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <div class="optic-card optic-customer-card">
+              <div class="optic-card-header">
+                <span class="optic-section-title">👤 Customer Details</span>
+                <span class="pos-cashier-label" id="pos-cashier-display" style="font-size:0.75rem; color:#64748B;">Cashier: Active</span>
               </div>
-
-              <!-- Quick Click Catalog Grid -->
-              <div class="pos-catalog-grid" id="pos-catalog-grid">
-                <!-- Populated dynamically via admin.js -->
+              <div class="optic-form-group">
+                <div class="optic-input-wrap">
+                  <span class="optic-input-icon">👤</span>
+                  <input type="text" id="pos-inline-name" class="optic-input" placeholder="Customer Name *" autocomplete="off" />
+                </div>
+              </div>
+              <div class="optic-form-group">
+                <div class="optic-input-wrap">
+                  <span class="optic-input-icon">📞</span>
+                  <input type="tel" id="pos-inline-phone" class="optic-input" placeholder="Start Phone e.g. +91, +44, +971, +1, +33" autocomplete="off" />
+                  <button type="button" class="btn-input-browse" id="btn-browse-clients" title="Select existing client">👥</button>
+                </div>
+              </div>
+              <div class="optic-form-row">
+                <div class="optic-input-wrap">
+                  <span class="optic-input-icon">📍</span>
+                  <input type="text" id="pos-inline-city" class="optic-input" placeholder="City" autocomplete="off" />
+                </div>
+                <div class="optic-input-wrap">
+                  <span class="optic-input-icon">🎂</span>
+                  <input type="number" id="pos-inline-age" class="optic-input" placeholder="Age" min="1" max="120" />
+                </div>
               </div>
             </div>
 
-            <!-- Right Panel: Active Billing Cart, Totals & Checkout -->
-            <div class="pos-right-panel">
-              <div class="pos-cart-card">
-                <div class="pos-cart-header">
-                  <div>
-                    <h3 class="pos-cart-title">ACTIVE BILL</h3>
-                    <span class="pos-cart-subtitle" id="pos-cart-count">0 frames added</span>
-                  </div>
-                  <button class="btn-table-action" id="btn-clear-cart" title="Clear all items from bill">Clear</button>
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- 3. PRESCRIPTION & BILL IMAGE TABS (OpticTool Style)           -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <div class="optic-rx-cards-grid">
+              <!-- Card A: Bill Image -->
+              <div class="optic-subcard">
+                <div class="optic-subcard-title">
+                  <span>📷</span> Bill Image
+                </div>
+                <div class="optic-subcard-buttons">
+                  <button type="button" class="btn-subcard-action" id="btn-rx-camera-snap">
+                    <span>📷 Camera</span>
+                  </button>
+                  <button type="button" class="btn-subcard-action" id="btn-pos-rx-upload">
+                    <span>🖼️ Gallery</span>
+                  </button>
+                </div>
+                <input type="file" id="pos-rx-file-input" accept="image/*" style="display:none;" />
+                <input type="file" id="pos-camera-file-input" accept="image/*" capture="environment" style="display:none;" />
+                <div id="pos-rx-preview-wrap" style="display:none; margin-top:8px; position:relative;">
+                  <img id="pos-rx-image-preview" class="rx-image-preview" src="" alt="RX Preview" style="width:100%; border-radius:8px; display:block;" />
+                  <button type="button" class="btn-rx-remove-img" id="btn-remove-rx-img" title="Remove image">&times;</button>
+                </div>
+              </div>
+
+              <!-- Card B: Prescription RX -->
+              <div class="optic-subcard">
+                <div class="optic-subcard-title">
+                  <span>📄</span> Prescription RX
+                </div>
+                <div class="optic-subcard-buttons">
+                  <button type="button" class="btn-subcard-action" id="btn-rx-create-new">
+                    <span>🩺 Create New</span>
+                  </button>
+                  <button type="button" class="btn-subcard-action" id="btn-rx-search-existing">
+                    <span>🔍 Search RX</span>
+                  </button>
                 </div>
 
-                <!-- Customer Details & Selected Client Badge -->
-                <div class="pos-customer-selection-wrap">
-                  <div class="pos-client-summary-card" id="pos-client-summary-card">
-                    <div class="pos-client-summary-header">
-                      <div class="pos-client-avatar" id="pos-client-avatar">👤</div>
-                      <div class="pos-client-meta">
-                        <div class="pos-client-name" id="pos-client-name-display">No Client Selected</div>
-                        <div class="pos-client-sub" id="pos-client-phone-display">Click "Add Details" below to attach client & RX</div>
-                      </div>
-                      <button type="button" class="btn-pos-edit-client" id="btn-pos-edit-client" style="display:none;" title="Edit or change client">
-                        <span>✏️ Edit</span>
-                      </button>
-                    </div>
-                    <div class="pos-rx-attached-badge" id="pos-rx-attached-badge" style="display:none;">
-                      <div class="rx-badge-pill">
-                        <span class="rx-badge-icon">🩺</span>
-                        <span class="rx-badge-text" id="pos-rx-badge-text">RX Attached</span>
-                      </div>
-                      <button type="button" class="btn-rx-remove" id="btn-pos-remove-rx" title="Detach prescription">&times;</button>
-                    </div>
+                <!-- Attached Prescription Badge / Summary -->
+                <div class="optic-attached-rx-card" id="pos-rx-attached-badge" style="display:none;">
+                  <div class="optic-rx-badge-top">
+                    <span class="optic-rx-badge-num" id="pos-rx-badge-text">RX Attached</span>
+                    <button type="button" class="btn-rx-remove" id="btn-pos-remove-rx" title="Detach prescription">&times;</button>
                   </div>
-                  <!-- Hidden inputs for fallback compatibility -->
-                  <input type="hidden" id="pos-cust-name" value="Walk-in Client" />
-                  <input type="hidden" id="pos-cust-phone" value="" />
-                </div>
-
-                <!-- Cart Line Items -->
-                <div class="pos-cart-items-list" id="pos-cart-items-list">
-                  <div class="pos-cart-empty">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-                    <p>Bill is currently empty.<br/>Scan a yellow frame QR sticker or tap any frame from the catalog.</p>
+                  <div class="optic-rx-mini-table" id="pos-rx-mini-table">
+                    <!-- Populated dynamically via admin.js -->
                   </div>
                 </div>
+              </div>
+            </div>
 
-                <!-- Bill Totals Breakdown -->
-                <div class="pos-totals-block">
-                  <div class="pos-total-row">
-                    <span>Subtotal</span>
-                    <span id="pos-subtotal-val">₹0.00</span>
-                  </div>
-                  <div class="pos-total-row discount-row">
-                    <div style="display:flex; align-items:center; gap:6px;">
-                      <span>Discount (₹)</span>
-                      <input type="number" id="pos-discount-amount" class="pos-discount-field" min="0" value="0" step="1" />
-                    </div>
-                    <span id="pos-discount-val">-₹0.00</span>
-                  </div>
-                  <div class="pos-total-row">
-                    <span>GST (18% Inclusive)</span>
-                    <span id="pos-tax-val">₹0.00</span>
-                  </div>
-                  <div class="pos-total-row final-total-row">
-                    <span>TOTAL PAYABLE</span>
-                    <span id="pos-grand-total-val">₹0.00</span>
-                  </div>
+            <!-- Fallback hidden client container for backward compatibility -->
+            <div id="pos-client-summary-card" style="display:none;">
+              <span id="pos-client-name-display"></span>
+              <span id="pos-client-phone-display"></span>
+              <button type="button" id="btn-pos-edit-client"></button>
+              <input type="hidden" id="pos-cust-name" value="Walk-in Client" />
+              <input type="hidden" id="pos-cust-phone" value="" />
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- 4. ITEMS / CATALOG & ACTIVE CART                              -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <div class="optic-card optic-items-card" id="pos-cart-card">
+              <div class="optic-items-header">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="optic-section-title">🛒 Items</span>
+                  <span class="optic-badge-count" id="pos-cart-count">0 items</span>
+                </div>
+                <div style="display:flex; gap:6px;">
+                  <button type="button" class="btn-optic-stock-toggle" id="btn-toggle-stock-catalog">
+                    <span>📦 View Stock</span>
+                  </button>
+                  <button type="button" class="btn-table-action" id="btn-clear-cart" title="Clear all items from bill">Clear</button>
+                </div>
+              </div>
+
+              <!-- Quick Frame Stock Catalog (Collapsible or visible) -->
+              <div class="optic-stock-catalog-wrap" id="optic-stock-catalog-wrap">
+                <!-- Shape Filter Chips -->
+                <div class="pos-shape-chips" id="pos-shape-chips">
+                  <button class="pos-shape-chip active" data-pos-shape="all">All Frames</button>
+                  <button class="pos-shape-chip" data-pos-shape="Rectangular">Rectangular</button>
+                  <button class="pos-shape-chip" data-pos-shape="Round">Round</button>
+                  <button class="pos-shape-chip" data-pos-shape="Square">Square</button>
+                  <button class="pos-shape-chip" data-pos-shape="Geometric">Geometric</button>
+                  <button class="pos-shape-chip" data-pos-shape="Aviator">Aviator</button>
+                  <button class="pos-shape-chip" data-pos-shape="Cat-Eye">Cat-Eye</button>
                 </div>
 
-                <!-- Supported Payment Methods -->
-                <div class="pos-payment-methods-block">
-                  <label class="pos-pm-label">Select Payment Method:</label>
-                  <div class="pos-pm-buttons">
-                    <button type="button" class="btn-pos-pm active" data-paymode="CASH">
-                      <span>💵 CASH</span>
-                    </button>
-                    <button type="button" class="btn-pos-pm" data-paymode="UPI_GPAY">
-                      <span>📱 GOOGLE PAY / UPI</span>
-                    </button>
-                    <button type="button" class="btn-pos-pm" data-paymode="CARD">
-                      <span>💳 CARD</span>
-                    </button>
-                  </div>
+                <!-- 2-Column Catalog Grid (Touch-friendly, never out of frame!) -->
+                <div class="pos-catalog-grid" id="pos-catalog-grid">
+                  <!-- Populated dynamically via admin.js -->
                 </div>
+              </div>
 
-                <!-- Dynamic UPI Helper (Shown when UPI is selected) -->
-                <div id="pos-upi-display-card" class="pos-upi-card" style="display:none;">
-                  <div class="upi-card-content">
-                    <div class="upi-qr-preview">
-                      <div id="pos-dynamic-upi-qr"></div>
-                    </div>
-                    <div class="upi-instructions">
-                      <strong>Boutique Instant UPI</strong>
-                      <p>Customer scans with Google Pay, PhonePe, or BHIM.</p>
-                      <input type="text" id="pos-claimed-utr" class="form-control" placeholder="Enter claimed UTR / UPI Ref (optional)" />
-                    </div>
-                  </div>
+              <!-- Items Table / Cart Header -->
+              <div class="optic-items-table-header">
+                <span class="col-name">NAME</span>
+                <span class="col-qty">QTY</span>
+                <span class="col-price">PRICE</span>
+                <span class="col-total">TOTAL</span>
+              </div>
+
+              <!-- Items Table Body / Cart List -->
+              <div class="pos-cart-items-list" id="pos-cart-items-list">
+                <div class="pos-cart-empty">
+                  <p>Bill is currently empty.<br/>Scan a QR sticker or tap frames from stock.</p>
                 </div>
+              </div>
+            </div>
 
-                <!-- Checkout Action Button (Renamed to "Add Details") -->
-                <div class="pos-checkout-actions">
-                  <button class="btn-pos-checkout" id="btn-pos-confirm-checkout" disabled>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="pos-checkout-btn-icon"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-                    <span id="pos-btn-checkout-label">Add Details</span>
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- 5. NOTES (Not printed or shared)                               -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <div class="optic-card optic-notes-card">
+              <div class="optic-card-title">
+                <span>📝 Notes</span>
+              </div>
+              <textarea id="pos-bill-notes" class="optic-textarea" placeholder="Notes (not printed or shared)..." rows="2"></textarea>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- 6. TOTALS & DUES SUMMARY (OpticTool Style)                     -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <div class="optic-card optic-totals-card">
+              <div class="optic-total-row">
+                <span class="label">Total Amount</span>
+                <span class="val" id="pos-subtotal-val">₹0.00</span>
+              </div>
+
+              <div class="optic-total-row discount">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span class="label">Discount (₹)</span>
+                  <input type="number" id="pos-discount-amount" class="optic-discount-input" min="0" value="0" step="1" />
+                </div>
+                <span class="val" id="pos-discount-val">-₹0.00</span>
+              </div>
+
+              <div class="optic-total-row" style="font-size:0.78rem; color:#64748B;">
+                <span class="label">GST (18% Inclusive)</span>
+                <span class="val" id="pos-tax-val">₹0.00</span>
+              </div>
+
+              <div class="optic-total-row advance">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span class="label">Advance Paid (₹)</span>
+                  <input type="number" id="pos-advance-amount" class="optic-discount-input" min="0" value="0" step="1" />
+                </div>
+                <span class="val" id="pos-advance-val">₹0.00</span>
+              </div>
+
+              <!-- Remaining Due Block (Prominent Red Banner in OpticTool Style) -->
+              <div class="optic-remaining-block" id="optic-remaining-block">
+                <span class="rem-label">Remaining Due</span>
+                <span class="rem-val" id="pos-remaining-val">₹0.00</span>
+              </div>
+              <input type="hidden" id="pos-grand-total-val" value="0.00" />
+
+              <!-- Payment Method Selection -->
+              <div class="optic-pm-wrap">
+                <label class="pos-pm-label">Payment Method:</label>
+                <div class="pos-pm-buttons">
+                  <button type="button" class="btn-pos-pm active" data-paymode="CASH">
+                    <span>💵 CASH</span>
+                  </button>
+                  <button type="button" class="btn-pos-pm" data-paymode="UPI_GPAY">
+                    <span>📱 UPI / GPAY</span>
+                  </button>
+                  <button type="button" class="btn-pos-pm" data-paymode="CARD">
+                    <span>💳 CARD</span>
                   </button>
                 </div>
               </div>
+
+              <!-- Dynamic UPI QR Helper -->
+              <div id="pos-upi-display-card" class="pos-upi-card" style="display:none;">
+                <div class="upi-card-content">
+                  <div class="upi-qr-preview">
+                    <div id="pos-dynamic-upi-qr"></div>
+                  </div>
+                  <div class="upi-instructions">
+                    <strong>Boutique Instant UPI</strong>
+                    <p>Customer scans with Google Pay, PhonePe, or Paytm.</p>
+                    <input type="text" id="pos-claimed-utr" class="form-control" placeholder="Enter claimed UTR / UPI Ref (optional)" />
+                  </div>
+                </div>
+              </div>
             </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- 7. BOTTOM ACTION BUTTONS: Reset & Save Bill                    -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <div class="optic-bottom-actions">
+              <button type="button" class="btn-optic-reset" id="btn-pos-reset">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                <span>Reset</span>
+              </button>
+              <button type="button" class="btn-optic-save" id="btn-pos-confirm-checkout" disabled>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="pos-checkout-btn-icon"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <span id="pos-btn-checkout-label">Save Bill &amp; Print</span>
+              </button>
+            </div>
+
           </div>
         </section>
 
@@ -1661,8 +1781,64 @@
     </div>
   </div>
 
+  <!-- ── 3.H ORDER DONE & SAVED SUCCESS MODAL (With Green Tick & Instant Auto-Print) ── -->
+  <div class="modal-overlay" id="modal-order-success" role="dialog" aria-modal="true">
+    <div class="admin-modal" style="max-width:440px; text-align:center; padding:2rem 1.75rem; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.2);">
+      <div style="width:72px; height:72px; border-radius:50%; background:#DCFCE7; border:3px solid #16A34A; color:#16A34A; display:flex; align-items:center; justify-content:center; margin:0 auto 1.25rem auto; font-size:2.4rem; font-weight:900; box-shadow:0 10px 25px rgba(22,163,74,0.25);">
+        ✓
+      </div>
+      <h3 style="font-family:'Playfair Display',serif; font-size:1.6rem; color:#111; margin:0 0 0.4rem 0;">Order Done & Saved</h3>
+      <p style="font-size:0.85rem; color:#4B5563; margin-bottom:1.25rem;">
+        Client details, frame chosen, and prescription are locked permanently in the database.
+      </p>
+      <div style="background:#F9FAFB; border:1px solid #E5E7EB; border-radius:8px; padding:1rem; margin-bottom:1.5rem; text-align:left; font-size:0.82rem; line-height:1.7;">
+        <div><strong>Invoice #:</strong> <span id="success-invoice-num">-</span></div>
+        <div><strong>Daily Token #:</strong> <span id="success-token-num">-</span></div>
+        <div><strong>Client Attached:</strong> <span id="success-client-name">-</span></div>
+        <div><strong>Prescription:</strong> <span id="success-rx-status">-</span></div>
+        <div style="color:#059669; font-weight:700; margin-top:8px; display:flex; align-items:center; gap:6px;">
+          <span>🖨️</span> Instant Bill Printout Sent Directly to Printer
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; justify-content:center;">
+        <button type="button" class="btn-card-addbag" style="background:#111; color:#FFF; padding:12px 24px; border-radius:6px; font-weight:700;" onclick="document.getElementById('modal-order-success').classList.remove('open')">
+          ✓ Next Sale
+        </button>
+        <button type="button" class="btn-header-action" id="btn-success-reprint">
+          🖨️ Re-Print
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden iframe for automatic instant bill printing with zero delay and no print skipped -->
+  <iframe id="silent-receipt-print-frame" style="position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; border:none; visibility:hidden;"></iframe>
+
   <!-- ── 4. DEDICATED PRINT STICKER CONTAINER (ISOLATED @MEDIA PRINT) ──────── -->
   <div id="print-sticker-container" style="display:none;" aria-hidden="true"></div>
+
+  <!-- ── 4b. MOBILE BOTTOM APP BAR (Native Mobile Phone UX) ────────────── -->
+  <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+    <button type="button" class="mob-nav-item active" data-nav="dashboard" id="mob-nav-dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <span>Dashboard</span>
+    </button>
+    <button type="button" class="mob-nav-item" data-nav="orders" id="mob-nav-orders">
+      <div class="mob-nav-icon-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+        <span class="mob-badge" id="mob-orders-badge" style="display:none;">0</span>
+      </div>
+      <span>Orders</span>
+    </button>
+    <button type="button" class="mob-nav-item" data-nav="inventory" id="mob-nav-inventory">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      <span>Inventory</span>
+    </button>
+    <button type="button" class="mob-nav-item" data-nav="pos" id="mob-nav-pos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="14" x2="6.01" y2="14"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+      <span>POS Register</span>
+    </button>
+  </nav>
 
   <!-- ── 5. LOCAL VENDOR LIBRARIES (Zero CDN Lag, 100% Offline Capable) ────── -->
   <script src="/vendor/qrcode.min.js?v=5.3.0"></script>
@@ -1671,6 +1847,6 @@
   <script src="/vendor/chart.umd.min.js?v=5.3.0"></script>
 
   <!-- ── 6. APPLICATION CONTROLLER ─────────────────────────────────────────── -->
-  <script src="/admin.js?v=5.10.0"></script>
+  <script src="/admin.js?v=6.5.0"></script>
 </body>
 </html>
