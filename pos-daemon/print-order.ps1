@@ -49,7 +49,16 @@ function Row-Text($left, $right) {
 # 1. Reset
 $bw.Write([byte[]]@(0x1B, 0x40))
 
-# 2. Header
+# 1b. Logo at Top
+$logoFile = Join-Path $ScriptDir "assets\logo_raster.bin"
+if (Test-Path $logoFile) {
+    $logoBytes = [System.IO.File]::ReadAllBytes($logoFile)
+    $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+    $bw.Write($logoBytes)
+    $bw.Write([byte[]]@(0x1B, 0x64, 0x01))
+}
+
+# 2. Header (NO City, NO GSTIN)
 $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
 $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
 $bw.Write([byte[]]@(0x1D, 0x21, 0x01))
@@ -57,7 +66,7 @@ $bw.Write([System.Text.Encoding]::ASCII.GetBytes("NOOR OPTICS`n"))
 $bw.Write([byte[]]@(0x1D, 0x21, 0x00))
 $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Scandinavian Eyewear Boutique`n"))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes("Indiranagar 100ft Road, BLR`n"))
+$bw.Write([System.Text.Encoding]::ASCII.GetBytes("Indiranagar 100ft Road`n"))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Ph: +91 98765 43210`n"))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes($doubleDivider))
 
@@ -68,7 +77,7 @@ $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Invoice:" "$($raw.or
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Date:" (Get-Date).ToString("dd MMM yyyy, hh:mm tt"))))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
-# 4. Customer
+# 4. Customer (NO City)
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Client: $($raw.customer_name)`n"))
 if ($raw.customer_phone) { $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Phone:  $($raw.customer_phone)`n")) }
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
@@ -84,7 +93,7 @@ foreach ($it in $raw.items) {
 }
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
-# 6. Total
+# 6. Total (NO GST / NO Tax)
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Subtotal:" "Rs.$($raw.subtotal_inr)")))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes($doubleDivider))
 $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
@@ -103,14 +112,29 @@ if ($raw.od_sph -ne $null) {
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Eye    SPH    CYL   AXIS   ADD  `n"))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OD   $($raw.od_sph)  $($raw.od_cyl)   $($raw.od_axis)  $($raw.addition)`n"))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OS   $($raw.os_sph)  $($raw.os_cyl)   $($raw.os_axis)  $($raw.addition)`n"))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Distance PD: $($raw.ipd_distance) mm`n"))
+    if ($raw.ipd_distance) { $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Distance PD: $($raw.ipd_distance) mm`n")) }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 }
 
-# 8. Cut
+# 8. Footer & Payment QR at Bottom
 $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Thank You for Choosing Noor!`n"))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes("Visit Again - nooroptics.in`n"))
+$bw.Write([System.Text.Encoding]::ASCII.GetBytes("2-Yr Frame Warranty • 14-Day Fit`n"))
+$bw.Write([System.Text.Encoding]::ASCII.GetBytes("Visit Again • nooroptics.in`n"))
+
+$qrFile = Join-Path $ScriptDir "assets\payment_qr_raster.bin"
+if (Test-Path $qrFile) {
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
+    $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+    $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("SCAN & PAY VIA UPI`n"))
+    $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
+    $qrBytes = [System.IO.File]::ReadAllBytes($qrFile)
+    $bw.Write($qrBytes)
+    $bw.Write([byte[]]@(0x1B, 0x64, 0x01))
+}
+
+# 9. Cut
 $bw.Write([byte[]]@(0x1B, 0x64, 0x04))
 $bw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00))
 
