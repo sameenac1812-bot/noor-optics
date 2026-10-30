@@ -485,21 +485,58 @@ router.put('/products/:id', authenticateToken, requirePermission('products:manag
   // Update stock balance if provided
   if (stockQuantity !== undefined) {
     const qty = Math.max(0, parseInt(stockQuantity, 10) || 0);
-    const variants = db.prepare('SELECT id FROM product_variants WHERE product_id = ?').all(pId);
-    if (variants.length > 0) {
-      db.prepare('UPDATE inventory_balances SET available_qty = ? WHERE variant_id = ?').run(qty, variants[0].id);
+    const curProd = db.prepare('SELECT sku, name FROM products WHERE id = ?').get(pId) || {};
+    let variants = db.prepare('SELECT id FROM product_variants WHERE product_id = ?').all(pId);
+    let varId;
+    if (variants.length === 0) {
+      varId = `var-${pId}-1`;
+      const varSku = `${curProd.sku || 'FRAME'}-STD`;
+      const barcode = `8901${Math.floor(100000 + Math.random() * 900000)}`;
+      db.prepare(`
+        INSERT OR IGNORE INTO product_variants (id, product_id, sku, barcode, color_name, color_hex)
+        VALUES (?, ?, ?, ?, 'Standard', '#111111')
+      `).run(varId, pId, varSku, barcode);
+    } else {
+      varId = variants[0].id;
+    }
+
+    const bal = db.prepare('SELECT id FROM inventory_balances WHERE variant_id = ? AND location_id = ?').get(varId, 'loc-main');
+    if (bal) {
+      db.prepare('UPDATE inventory_balances SET available_qty = ? WHERE variant_id = ? AND location_id = ?').run(qty, varId, 'loc-main');
+    } else {
+      db.prepare(`
+        INSERT INTO inventory_balances (id, variant_id, location_id, available_qty, reserved_qty)
+        VALUES (?, ?, 'loc-main', ?, 0)
+      `).run(`bal-${varId}`, varId, qty);
+    }
+
+    try {
       db.prepare(`
         INSERT INTO stock_movements (id, variant_id, location_id, change_qty, balance_after, movement_type, reason, created_by_user_id)
         VALUES (?, ?, 'loc-main', 0, ?, 'ADJUSTMENT', 'Direct stock update', ?)
-      `).run('mov-' + Date.now(), variants[0].id, qty, req.user.id);
-    }
+      `).run('mov-' + Date.now(), varId, qty, req.user.id);
+    } catch (_) {}
   }
 
   logAudit(req.user.id, req.user.email, 'PRODUCT_UPDATED', 'PRODUCT', pId, req.body, req);
 
   // Sync update to Supabase cloud
+  const updatedProd = db.prepare('SELECT * FROM products WHERE id = ?').get(pId) || {};
   pushProductToCloud({
-    id: pId, name, brand, shape, material, fit, sellingPriceINR, purchaseCostINR, reorderThreshold, isActive, description, stock: stockQuantity
+    id: pId,
+    sku: updatedProd.sku,
+    name: name || updatedProd.name,
+    brand: brand || updatedProd.brand,
+    shape: shape || updatedProd.shape,
+    material: material || updatedProd.material,
+    fit: fit || updatedProd.fit,
+    sellingPriceINR: sellingPriceINR !== undefined ? sellingPriceINR : (updatedProd.selling_price_paise ? updatedProd.selling_price_paise / 100 : 3499),
+    purchaseCostINR: purchaseCostINR !== undefined ? purchaseCostINR : (updatedProd.purchase_cost_paise ? updatedProd.purchase_cost_paise / 100 : 0),
+    reorderThreshold: reorderThreshold !== undefined ? reorderThreshold : updatedProd.reorder_threshold,
+    isActive: isActive !== undefined ? isActive : updatedProd.is_active,
+    imageUrl: updatedProd.image_url,
+    description: description || updatedProd.description,
+    stock: stockQuantity !== undefined ? Math.max(0, parseInt(stockQuantity, 10) || 0) : 10
   }).catch(() => {});
 
   res.json({ success: true, message: 'Frame updated successfully.' });

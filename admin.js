@@ -1634,9 +1634,16 @@
                 updated_at: cp.updated_at || new Date().toISOString()
               };
               if (idx >= 0) {
+                const cloudStock = Number(formattedItem.total_stock);
+                const prevStock = Number(list[idx].total_stock);
+                const finalStock = (!isNaN(cloudStock) && cloudStock > 0)
+                  ? cloudStock
+                  : (!isNaN(prevStock) && prevStock > 0 ? prevStock : (cloudStock || 0));
+
                 list[idx] = {
                   ...list[idx],
                   ...formattedItem,
+                  total_stock: finalStock,
                   image_url: (formattedItem.image_url && !formattedItem.image_url.includes('stockholm_noir.jpg'))
                     ? formattedItem.image_url
                     : (list[idx].image_url || formattedItem.image_url)
@@ -1660,9 +1667,16 @@
             const lSku = (localItem.sku && localItem.sku.trim() && localItem.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? localItem.sku.trim().toUpperCase() : null;
             const idx = list.findIndex(p => p.id === localItem.id || (p.sku && lSku && p.sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === lSku));
             if (idx >= 0) {
+              const localStock = Number(localItem.total_stock);
+              const listStock = Number(list[idx].total_stock);
+              const finalStock = (!isNaN(localStock) && localStock > 0)
+                ? localStock
+                : (!isNaN(listStock) && listStock > 0 ? listStock : (localStock || 0));
+
               list[idx] = {
                 ...list[idx],
                 ...localItem,
+                total_stock: finalStock,
                 image_url: (localItem.image_url && !localItem.image_url.includes('stockholm_noir.jpg'))
                   ? localItem.image_url
                   : (list[idx].image_url || localItem.image_url)
@@ -1683,9 +1697,16 @@
           if (foundIdx === -1) {
             list.unshift(existingItem);
           } else {
+            const memStock = Number(existingItem.total_stock);
+            const listStock = Number(list[foundIdx].total_stock);
+            const finalStock = (!isNaN(memStock) && memStock > 0)
+              ? memStock
+              : (!isNaN(listStock) && listStock > 0 ? listStock : (memStock || 0));
+
             list[foundIdx] = {
               ...list[foundIdx],
               ...existingItem,
+              total_stock: finalStock,
               image_url: (existingItem.image_url && !existingItem.image_url.includes('stockholm_noir.jpg'))
                 ? existingItem.image_url
                 : (list[foundIdx].image_url || existingItem.image_url)
@@ -2290,9 +2311,66 @@
       const stockQuantity = Number(document.getElementById('edit-frame-stock')?.value) || 0;
       const reorderThreshold = Number(document.getElementById('edit-frame-threshold')?.value) || 2;
 
+      // 1. Instantly update active in-memory state and UI (0ms latency, never reverts to 0)
+      const existing = state.inventoryList.find(p => p.id === pId) || {};
+      const updatedItem = {
+        ...existing,
+        id: pId,
+        name: name || existing.name,
+        brand: brand || existing.brand,
+        shape: shape || existing.shape,
+        selling_price_inr: sellingPriceINR,
+        selling_price_paise: Math.round(sellingPriceINR * 100),
+        purchase_cost_inr: purchaseCostINR,
+        purchase_cost_paise: Math.round(purchaseCostINR * 100),
+        total_stock: stockQuantity,
+        stock: stockQuantity,
+        reorder_threshold: reorderThreshold,
+        updated_at: new Date().toISOString()
+      };
+
+      const curMemIdx = state.inventoryList.findIndex(p => p.id === pId);
+      if (curMemIdx >= 0) {
+        state.inventoryList[curMemIdx] = updatedItem;
+      } else {
+        state.inventoryList.unshift(updatedItem);
+      }
+
+      // 2. Persist to localStorage immediately
       try {
-        showToast('Saving frame changes...', 'info');
-        await apiFetch(`/api/products/${pId}`, {
+        let localList = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
+        const locIdx = localList.findIndex(p => p.id === pId || (p.sku && p.sku === existing.sku));
+        if (locIdx >= 0) {
+          localList[locIdx] = { ...localList[locIdx], ...updatedItem };
+        } else {
+          localList.unshift(updatedItem);
+        }
+        localStorage.setItem('noor_custom_frames', JSON.stringify(localList));
+      } catch (_) {}
+
+      // Instant table re-render with the new stock count!
+      renderInventoryTable();
+
+      try {
+        showToast(`Stock updated to ${stockQuantity} units!`, 'success');
+        modal.classList.remove('open');
+        document.body.classList.remove('modal-open');
+
+        // 3. Dual-write update to Supabase Cloud
+        if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
+          window.NoorSupabase.saveProduct({
+            ...updatedItem,
+            id: pId,
+            sku: existing.sku,
+            price: sellingPriceINR,
+            stock: stockQuantity,
+            initialStock: stockQuantity,
+            reorderThreshold
+          }).catch(e => console.warn('Supabase product edit dual-write note:', e));
+        }
+
+        // 4. Server API update
+        apiFetch(`/api/products/${pId}`, {
           method: 'PUT',
           body: JSON.stringify({
             name,
@@ -2303,16 +2381,8 @@
             stockQuantity,
             reorderThreshold
           })
-        });
+        }).catch(e => console.warn('Server product update note:', e));
 
-        if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
-          window.NoorSupabase.saveProduct({ id: pId, name, brand, shape, sellingPriceINR, purchaseCostINR, stock: stockQuantity, reorderThreshold }).catch(() => {});
-        }
-
-        showToast('Frame updated successfully!', 'success');
-        modal.classList.remove('open');
-        document.body.classList.remove('modal-open');
-        await loadInventory();
         if (typeof loadDashboard === 'function') loadDashboard();
         if (typeof loadPosCatalog === 'function') loadPosCatalog();
       } catch (err) {
