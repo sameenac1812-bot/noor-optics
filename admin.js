@@ -1609,10 +1609,14 @@
           if (Array.isArray(cloudProducts) && cloudProducts.length > 0) {
             cloudProducts.forEach(cp => {
               if (!cp || !cp.name) return;
-              const idx = list.findIndex(p => p.id === cp.id || (p.sku && cp.sku && p.sku.toUpperCase() === cp.sku.toUpperCase()));
+              const cpSku = (cp.sku && cp.sku.trim() && cp.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? cp.sku.trim().toUpperCase() : null;
+              const idx = list.findIndex(p => p.id === cp.id || (p.sku && cpSku && p.sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === cpSku));
+              const assignedSku = cpSku || (idx >= 0 && list[idx].sku ? list[idx].sku : ('NOOR-' + cp.id.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(-8)));
+              const cpImg = cp.image || cp.imageUrl || cp.image_url || 'images/stockholm_noir.jpg';
+
               const formattedItem = {
                 id: cp.id,
-                sku: (cp.sku || 'NOOR-FRAME').toUpperCase(),
+                sku: assignedSku,
                 name: cp.name,
                 brand: cp.brand || cp.collection || 'Noor Optics',
                 category: cp.category || 'Frames',
@@ -1623,14 +1627,20 @@
                 purchase_cost_inr: Number(cp.purchaseCostINR || cp.cost) || 0,
                 total_stock: Number(cp.stock !== undefined ? cp.stock : (cp.initialStock !== undefined ? cp.initialStock : 10)),
                 reorder_threshold: Number(cp.reorder_threshold || cp.reorderThreshold || 2),
-                image_url: cp.image || cp.imageUrl || 'images/stockholm_noir.jpg',
+                image_url: cpImg,
                 description: cp.description || '',
                 is_active: cp.is_active !== false ? 1 : 0,
                 created_at: cp.created_at || new Date().toISOString(),
                 updated_at: cp.updated_at || new Date().toISOString()
               };
               if (idx >= 0) {
-                list[idx] = { ...list[idx], ...formattedItem };
+                list[idx] = {
+                  ...list[idx],
+                  ...formattedItem,
+                  image_url: (formattedItem.image_url && !formattedItem.image_url.includes('stockholm_noir.jpg'))
+                    ? formattedItem.image_url
+                    : (list[idx].image_url || formattedItem.image_url)
+                };
               } else {
                 list.unshift(formattedItem);
               }
@@ -1647,9 +1657,16 @@
         if (Array.isArray(localCached)) {
           localCached.forEach(localItem => {
             if (!localItem || !localItem.name) return;
-            const idx = list.findIndex(p => p.id === localItem.id || (p.sku && localItem.sku && p.sku.toUpperCase() === localItem.sku.toUpperCase()));
+            const lSku = (localItem.sku && localItem.sku.trim() && localItem.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? localItem.sku.trim().toUpperCase() : null;
+            const idx = list.findIndex(p => p.id === localItem.id || (p.sku && lSku && p.sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === lSku));
             if (idx >= 0) {
-              list[idx] = { ...list[idx], ...localItem };
+              list[idx] = {
+                ...list[idx],
+                ...localItem,
+                image_url: (localItem.image_url && !localItem.image_url.includes('stockholm_noir.jpg'))
+                  ? localItem.image_url
+                  : (list[idx].image_url || localItem.image_url)
+              };
             } else {
               list.unshift(localItem);
             }
@@ -1661,11 +1678,18 @@
       if (Array.isArray(state.inventoryList) && state.inventoryList.length > 0) {
         state.inventoryList.forEach(existingItem => {
           if (!existingItem || !existingItem.sku) return;
-          const foundIdx = list.findIndex(p => p.id === existingItem.id || (p.sku && existingItem.sku && p.sku.toUpperCase() === existingItem.sku.toUpperCase()));
+          const eSku = (existingItem.sku && existingItem.sku.trim() && existingItem.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? existingItem.sku.trim().toUpperCase() : null;
+          const foundIdx = list.findIndex(p => p.id === existingItem.id || (p.sku && eSku && p.sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === eSku));
           if (foundIdx === -1) {
             list.unshift(existingItem);
           } else {
-            list[foundIdx] = { ...list[foundIdx], ...existingItem };
+            list[foundIdx] = {
+              ...list[foundIdx],
+              ...existingItem,
+              image_url: (existingItem.image_url && !existingItem.image_url.includes('stockholm_noir.jpg'))
+                ? existingItem.image_url
+                : (list[foundIdx].image_url || existingItem.image_url)
+            };
           }
         });
       }
@@ -1977,8 +2001,8 @@
       });
     }
 
-    // Helper: Client-side downscaling and compression via HTML5 canvas
-    const compressImageFile = (file, maxWidth = 800, maxHeight = 800, quality = 0.82) => {
+    // Helper: Client-side downscaling and compression via HTML5 canvas (optimized ~20-30KB webp/jpeg for instant persistence)
+    const compressImageFile = (file, maxWidth = 500, maxHeight = 500, quality = 0.75) => {
       return new Promise((resolve, reject) => {
         if (!file) return reject(new Error('No file provided'));
         const reader = new FileReader();
@@ -2014,7 +2038,7 @@
       if (!file) return;
       try {
         showToast('Compressing frame photo...', 'info');
-        const compressedBase64 = await compressImageFile(file, 800, 800, 0.82);
+        const compressedBase64 = await compressImageFile(file, 500, 500, 0.75);
 
         const prevWrap = document.getElementById('frm-photo-preview-wrap');
         const prevImg = document.getElementById('frm-photo-preview');
@@ -2110,11 +2134,8 @@
         // 1. Immediately cache in localStorage (zero chance of disappearing)
         try {
           const cacheCopy = { ...savedItem };
-          if (cacheCopy.image_url && cacheCopy.image_url.startsWith('data:')) {
-            cacheCopy.image_url = 'images/meta_glasses.png';
-          }
           let localList = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
-          const existIdx = localList.findIndex(p => p.id === savedItem.id || (p.sku && p.sku.toUpperCase() === sku.toUpperCase()));
+          const existIdx = localList.findIndex(p => p.id === savedItem.id || (p.sku && p.sku !== 'NOOR-FRAME' && sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === sku.toUpperCase()));
           if (existIdx >= 0) {
             localList[existIdx] = { ...localList[existIdx], ...cacheCopy };
           } else {
@@ -2124,7 +2145,7 @@
         } catch (_) {}
 
         // 2. Immediately insert/update into active state.inventoryList at index 0
-        const curIdx = state.inventoryList.findIndex(p => p.id === savedItem.id || (p.sku && p.sku.toUpperCase() === sku.toUpperCase()));
+        const curIdx = state.inventoryList.findIndex(p => p.id === savedItem.id || (p.sku && p.sku !== 'NOOR-FRAME' && sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === sku.toUpperCase()));
         if (curIdx >= 0) {
           state.inventoryList[curIdx] = { ...state.inventoryList[curIdx], ...savedItem };
         } else {
@@ -3675,13 +3696,25 @@
       const targetUpper = skuOrId.toUpperCase();
 
       // ── 1. INSTANT LOCAL MEMORY RESOLUTION (0ms latency, zero delay!) ────────
-      const localFrame = (state.inventoryList || []).find(f => {
+      let localFrame = (state.inventoryList || []).find(f => {
         return (f.sku && f.sku.toUpperCase() === targetUpper) ||
                (f.variant_sku && f.variant_sku.toUpperCase() === targetUpper) ||
                (f.product_sku && f.product_sku.toUpperCase() === targetUpper) ||
                (f.id && String(f.id).toUpperCase() === targetUpper) ||
-               (f.barcode && f.barcode === skuOrId);
+               (f.barcode && f.barcode === skuOrId) ||
+               (f.name && f.name.toUpperCase() === targetUpper);
       });
+
+      if (!localFrame) {
+        try {
+          const cached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
+          localFrame = cached.find(f => {
+            return (f.sku && f.sku.toUpperCase() === targetUpper) ||
+                   (f.id && String(f.id).toUpperCase() === targetUpper) ||
+                   (f.name && f.name.toUpperCase() === targetUpper);
+          });
+        } catch (_) {}
+      }
 
       if (localFrame) {
         // Authoritative stock from inventory data: total_stock, variant balances, or stock field

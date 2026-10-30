@@ -54,6 +54,7 @@ const LENS_PACKAGES = [
 const EYEWEAR_CATALOG = [
   {
     id: "noor-01",
+    sku: "NOOR-STK-01",
     name: "The Stockholm Noir",
     collection: "Nordic Minimalist",
     price: 3499,
@@ -76,6 +77,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-02",
+    sku: "NOOR-CPH-02",
     name: "The Copenhagen Round",
     collection: "Atelier Heritage",
     price: 3899,
@@ -98,6 +100,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-03",
+    sku: "NOOR-OSL-03",
     name: "The Oslo Crystal",
     collection: "Clear Architectural",
     price: 3699,
@@ -120,6 +123,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-04",
+    sku: "NOOR-KYO-04",
     name: "The Kyoto Havana",
     collection: "Atelier Heritage",
     price: 4199,
@@ -142,6 +146,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-05",
+    sku: "NOOR-MIL-05",
     name: "The Milan Aureum",
     collection: "Titanium Wire",
     price: 4599,
@@ -164,6 +169,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-06",
+    sku: "NOOR-BER-06",
     name: "The Zurich Titanium",
     collection: "Titanium Wire",
     price: 4299,
@@ -186,6 +192,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-07",
+    sku: "NOOR-GTH-07",
     name: "The Berlin Hex",
     collection: "Geometric Series",
     price: 3799,
@@ -208,6 +215,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-08",
+    sku: "NOOR-HEL-08",
     name: "The Helsinki Quad",
     collection: "Nordic Minimalist",
     price: 3999,
@@ -230,6 +238,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-09",
+    sku: "NOOR-REY-09",
     name: "The Reykjavik Pilot",
     collection: "Titanium Wire",
     price: 4399,
@@ -252,6 +261,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-10",
+    sku: "NOOR-VIE-10",
     name: "The Vienna Silhouette",
     collection: "Atelier Heritage",
     price: 4199,
@@ -274,6 +284,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-11",
+    sku: "NOOR-AMB-11",
     name: "The Amber Arch",
     collection: "Clear Architectural",
     price: 3599,
@@ -296,6 +307,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-12",
+    sku: "NOOR-TKO-12",
     name: "The Tokyo Steel",
     collection: "Titanium Wire",
     price: 4499,
@@ -318,6 +330,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-13",
+    sku: "NOOR-ZUR-13",
     name: "The Geneva Feather",
     collection: "Titanium Wire",
     price: 4699,
@@ -340,6 +353,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-14",
+    sku: "NOOR-BAR-14",
     name: "The Malmö Olive",
     collection: "Nordic Minimalist",
     price: 3699,
@@ -362,6 +376,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-15",
+    sku: "NOOR-LON-15",
     name: "The Paris Oval",
     collection: "Atelier Heritage",
     price: 3899,
@@ -384,6 +399,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-16",
+    sku: "NOOR-PAR-16",
     name: "The Arctic Mist",
     collection: "Clear Architectural",
     price: 3799,
@@ -406,6 +422,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-17",
+    sku: "NOOR-NYC-17",
     name: "The Bergen Dual",
     collection: "Nordic Minimalist",
     price: 4299,
@@ -428,6 +445,7 @@ const EYEWEAR_CATALOG = [
   },
   {
     id: "noor-18",
+    sku: "NOOR-AMS-18",
     name: "The Bordeaux Edge",
     collection: "Atelier Heritage",
     price: 4099,
@@ -516,4 +534,16 @@ if (typeof window !== "undefined") {
   window.saveCart = saveCart;
   window.getSavedWishlist = getSavedWishlist;
   window.saveWishlist = saveWishlist;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    NOOR_BRAND,
+    LENS_PACKAGES,
+    EYEWEAR_CATALOG,
+    getSavedCart,
+    saveCart,
+    getSavedWishlist,
+    saveWishlist
+  };
 }

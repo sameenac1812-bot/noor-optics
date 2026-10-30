@@ -34,24 +34,43 @@ app.use('/api', apiRouter);
 app.use(apiRouter);
 
 // Public Phone Camera Frame QR Resolution Route (Supports both /qr/:code and short /q/:code)
-app.get(['/qr/:code', '/q/:code'], (req, res) => {
-  const code = (req.params.code || '').trim();
+app.get(['/qr/:code', '/q/:code'], async (req, res) => {
+  let code = (req.params.code || '').trim();
+  code = code.split('?')[0].split('#')[0];
+  if (/^https?:\/\//i.test(code) || code.includes('/')) {
+    const parts = code.split('/').filter(Boolean);
+    if (parts.length > 0) code = parts[parts.length - 1];
+  }
+  code = decodeURIComponent(code).trim();
+
   const { db } = require('./server/db');
-  const frame = db.prepare(`
+  const { syncSupabaseProducts } = require('./server/supabaseSync');
+
+  const queryFrame = (target) => db.prepare(`
     SELECT
       p.id, p.sku as product_sku, p.name, p.brand, p.shape, p.material,
       p.selling_price_paise, p.image_url, p.description,
-      pv.sku as variant_sku, pv.color_name, pv.color_hex,
-      COALESCE(ib.available_qty, 0) as available_qty
+      COALESCE(pv.sku, p.sku) as variant_sku,
+      COALESCE(pv.color_name, 'Standard') as color_name,
+      COALESCE(pv.color_hex, '#111111') as color_hex,
+      COALESCE(ib.available_qty, 20) as available_qty
     FROM products p
-    JOIN product_variants pv ON p.id = pv.product_id
+    LEFT JOIN product_variants pv ON p.id = pv.product_id
     LEFT JOIN inventory_balances ib ON pv.id = ib.variant_id
     WHERE LOWER(p.sku) = LOWER(?)
-       OR LOWER(pv.sku) = LOWER(?)
-       OR pv.barcode = ?
+       OR (pv.sku IS NOT NULL AND LOWER(pv.sku) = LOWER(?))
+       OR (pv.barcode IS NOT NULL AND pv.barcode = ?)
        OR p.id = ?
     LIMIT 1
-  `).get(code, code, code, code);
+  `).get(target, target, target, target);
+
+  let frame = queryFrame(code);
+  if (!frame) {
+    try {
+      await syncSupabaseProducts(db);
+      frame = queryFrame(code);
+    } catch (_) {}
+  }
 
   if (!frame) {
     return res.status(404).send(`

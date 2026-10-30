@@ -209,24 +209,31 @@
           .order('created_at', { ascending: true });
 
         if (!error && Array.isArray(data)) {
-          baseProducts = data.map(item => ({
-            id: item.id,
-            name: item.name,
-            collection: item.collection,
-            price: Number(item.price),
-            originalPrice: item.original_price ? Number(item.original_price) : null,
-            badge: item.badge,
-            shape: item.shape,
-            material: item.material,
-            fit: item.fit,
-            category: item.category || 'Optical',
-            rating: Number(item.rating) || 4.9,
-            reviewsCount: item.reviews_count || 50,
-            image: item.image,
-            colors: item.colors || [],
-            dimensions: item.dimensions || {},
-            description: item.description
-          }));
+          const staticList = (typeof window !== 'undefined' && window.EYEWEAR_CATALOG) ? window.EYEWEAR_CATALOG : [];
+          baseProducts = data.map(item => {
+            const staticMatch = staticList.find(sc => sc.id === item.id || sc.name.toLowerCase() === item.name.toLowerCase());
+            const canonicalSku = item.sku || (staticMatch ? staticMatch.sku : ('NOOR-' + item.id.replace('noor-', '').padStart(2, '0')));
+            return {
+              id: item.id,
+              sku: canonicalSku.toUpperCase(),
+              name: item.name,
+              brand: staticMatch?.brand || 'Noor Optics',
+              collection: item.collection,
+              price: Number(item.price),
+              originalPrice: item.original_price ? Number(item.original_price) : null,
+              badge: item.badge,
+              shape: item.shape,
+              material: item.material,
+              fit: item.fit,
+              category: item.category || 'Optical',
+              rating: Number(item.rating) || 4.9,
+              reviewsCount: item.reviews_count || 50,
+              image: item.image,
+              colors: item.colors || [],
+              dimensions: item.dimensions || {},
+              description: item.description
+            };
+          });
         }
       } catch (e) {
         console.warn('Base products fetch note:', e.message);
@@ -272,9 +279,13 @@
 
     try {
       const prodId = product.id || ('prod-' + Date.now());
+      const prodSku = (product.sku && String(product.sku).trim() && String(product.sku).trim().toUpperCase() !== 'NOOR-FRAME')
+        ? String(product.sku).trim().toUpperCase()
+        : ('NOOR-' + (product.model || product.brand || 'FRAME').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) + '-' + Date.now().toString().slice(-4));
+
       const formatted = {
         id: prodId,
-        sku: (product.sku || 'NOOR-FRAME').toUpperCase(),
+        sku: prodSku,
         name: product.name,
         brand: product.brand || 'Noor Optics',
         collection: product.brand || 'Noor Signature',
@@ -313,7 +324,7 @@
       }
 
       // Replace or append
-      const idx = currentList.findIndex(p => p.id === prodId || (p.sku && p.sku === formatted.sku));
+      const idx = currentList.findIndex(p => p.id === prodId || (p.sku && p.sku !== 'NOOR-FRAME' && prodSku !== 'NOOR-FRAME' && p.sku.toUpperCase() === prodSku.toUpperCase()));
       if (idx >= 0) {
         currentList[idx] = formatted;
       } else {

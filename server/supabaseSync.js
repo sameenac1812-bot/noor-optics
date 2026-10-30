@@ -784,15 +784,18 @@ async function syncSupabaseProducts(db) {
 
     for (const cp of cloudProducts) {
       if (!cp || !cp.name) continue;
-      const prodId = cp.id || ('prod-' + cp.sku.toLowerCase());
-      const sku = (cp.sku || 'NOOR-FRAME').toUpperCase();
+      const prodId = cp.id || ('prod-' + (cp.sku ? cp.sku.toLowerCase() : Date.now()));
+      const sku = (cp.sku && cp.sku.trim() && cp.sku.trim().toUpperCase() !== 'NOOR-FRAME')
+        ? cp.sku.trim().toUpperCase()
+        : ('NOOR-' + (cp.name || 'FRAME').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) + '-' + prodId.slice(-4));
       const sellingPaise = Math.round((Number(cp.price) || 3499) * 100);
       const origPaise = cp.original_price ? Math.round(Number(cp.original_price) * 100) : null;
       const costPaise = cp.purchaseCostINR ? Math.round(Number(cp.purchaseCostINR) * 100) : 145000;
-      const stockQty = Number(cp.stock || 10);
+      const stockQty = Number(cp.stock !== undefined ? cp.stock : 10);
+      const img = cp.image || cp.imageUrl || cp.image_url || 'images/stockholm_noir.jpg';
 
-      // Check if product exists in local SQLite
-      const existing = db.prepare('SELECT id FROM products WHERE id = ? OR LOWER(sku) = LOWER(?)').get(prodId, sku);
+      // Check if product exists in local SQLite (never collide on generic placeholder)
+      const existing = db.prepare('SELECT id FROM products WHERE id = ? OR (sku IS NOT NULL AND LOWER(sku) = LOWER(?) AND LOWER(sku) != "noor-frame")').get(prodId, sku);
       if (!existing) {
         db.prepare(`
           INSERT INTO products (
@@ -805,7 +808,7 @@ async function syncSupabaseProducts(db) {
           cp.shape || 'Rectangular', cp.material || 'Japanese Titanium',
           cp.fit || 'Regular', cp.category || 'Optical',
           sellingPaise, origPaise, costPaise,
-          cp.image || 'images/stockholm_noir.jpg', cp.description || ''
+          img, cp.description || ''
         );
 
         // Variant
@@ -833,12 +836,12 @@ async function syncSupabaseProducts(db) {
             selling_price_paise = ?,
             original_price_paise = ?,
             purchase_cost_paise = ?,
-            image_url = COALESCE(?, image_url),
+            image_url = CASE WHEN ? IS NOT NULL AND ? != '' AND ? != 'images/stockholm_noir.jpg' THEN ? ELSE image_url END,
             description = COALESCE(?, description),
             is_active = 1,
             updated_at = datetime('now')
           WHERE id = ?
-        `).run(cp.name, cp.brand || null, sellingPaise, origPaise, costPaise, cp.image || null, cp.description || null, existing.id);
+        `).run(cp.name, cp.brand || null, sellingPaise, origPaise, costPaise, img, img, img, img, cp.description || null, existing.id);
 
         // Update balance if variant exists
         const vRow = db.prepare('SELECT id FROM product_variants WHERE product_id = ? LIMIT 1').get(existing.id);
@@ -859,7 +862,9 @@ async function pushProductToCloud(product) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !product) return false;
   try {
     const prodId = product.id || ('prod-' + Date.now());
-    const sku = (product.sku || 'NOOR-FRAME').toUpperCase();
+    const sku = (product.sku && product.sku.trim() && product.sku.trim().toUpperCase() !== 'NOOR-FRAME')
+      ? product.sku.trim().toUpperCase()
+      : ('NOOR-' + (product.name || 'FRAME').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) + '-' + prodId.slice(-4));
     const formatted = {
       id: prodId,
       sku: sku,
@@ -901,7 +906,7 @@ async function pushProductToCloud(product) {
       }
     }
 
-    const idx = currentList.findIndex(p => p.id === prodId || (p.sku && p.sku === sku));
+    const idx = currentList.findIndex(p => p.id === prodId || (p.sku && p.sku !== 'NOOR-FRAME' && sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === sku.toUpperCase()));
     if (idx >= 0) {
       currentList[idx] = formatted;
     } else {

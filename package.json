@@ -4,7 +4,7 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "test": "node tests/system.test.js && node tests/client_prescription_verification.test.js",
+    "test": "node tests/system.test.js && node tests/client_prescription_verification.test.js && node tests/inventory_and_qr_resolution.test.js",
     "start": "node server.js",
     "seed": "node server/seed.js"
   },

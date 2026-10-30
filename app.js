@@ -1545,8 +1545,46 @@
   async function loadLiveCatalog() {
     try {
       const resp = await fetch('/api/products');
-      if (!resp.ok) return;
-      const cloudProducts = await resp.json();
+      let cloudProducts = [];
+      if (resp.ok) {
+        const data = await resp.json();
+        if (Array.isArray(data)) cloudProducts = data;
+      }
+
+      // Merge local cached custom frames so newly created frames never disappear on refresh
+      try {
+        const localCached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
+        if (Array.isArray(localCached)) {
+          localCached.forEach(lc => {
+            if (!lc || !lc.name) return;
+            const lSku = (lc.sku && lc.sku.trim() && lc.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? lc.sku.trim().toUpperCase() : null;
+            const matchIdx = cloudProducts.findIndex(p => p.id === lc.id || (p.sku && lSku && p.sku.toUpperCase() === lSku));
+            const customItem = {
+              id: lc.id,
+              sku: lc.sku,
+              name: lc.name,
+              brand: lc.brand || 'Noor Optics',
+              selling_price_inr: Number(lc.selling_price_inr || lc.price || 3499),
+              selling_price_paise: Math.round(Number(lc.selling_price_inr || lc.price || 3499) * 100),
+              total_stock: Number(lc.total_stock !== undefined ? lc.total_stock : 10),
+              image_url: lc.image_url || lc.image || 'images/stockholm_noir.jpg',
+              description: lc.description || ''
+            };
+            if (matchIdx >= 0) {
+              cloudProducts[matchIdx] = {
+                ...cloudProducts[matchIdx],
+                ...customItem,
+                image_url: (customItem.image_url && !customItem.image_url.includes('stockholm_noir.jpg'))
+                  ? customItem.image_url
+                  : (cloudProducts[matchIdx].image_url || customItem.image_url)
+              };
+            } else {
+              cloudProducts.unshift(customItem);
+            }
+          });
+        }
+      } catch (_) {}
+
       if (!Array.isArray(cloudProducts) || cloudProducts.length === 0) return;
 
       const staticList = window.EYEWEAR_CATALOG || [];

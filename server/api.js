@@ -403,7 +403,7 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
     }
 
     // 2. Insert new product
-    const productId = 'prod-' + Date.now();
+    const productId = (req.body.id && String(req.body.id).trim()) || ('prod-' + Date.now());
     const createTx = db.transaction(() => {
       db.prepare(`
         INSERT INTO products (
@@ -3210,7 +3210,7 @@ router.get('/settings', (req, res) => {
 });
 
 // ── GET /api/qr/resolve/:code (Permanent Frame QR Code Resolution) ────────────
-router.get('/qr/resolve/:code', (req, res) => {
+router.get('/qr/resolve/:code', async (req, res) => {
   let rawCode = (req.params.code || '').trim();
   if (!rawCode) {
     return res.status(400).json({ error: 'Frame identifier or SKU required.' });
@@ -3226,8 +3226,7 @@ router.get('/qr/resolve/:code', (req, res) => {
   }
   rawCode = decodeURIComponent(rawCode).trim();
 
-  // Look up product and primary variant by SKU, barcode, variant SKU, or ID
-  const item = db.prepare(`
+  const queryProduct = (target) => db.prepare(`
     SELECT
       p.id as product_id,
       p.sku as product_sku,
@@ -3243,26 +3242,37 @@ router.get('/qr/resolve/:code', (req, res) => {
       p.image_url,
       p.description,
       p.is_active,
-      pv.id as variant_id,
-      pv.sku as variant_sku,
-      pv.barcode,
-      pv.color_name,
-      pv.color_hex,
-      COALESCE(ib.available_qty, 0) as available_qty,
+      COALESCE(pv.id, 'var-' || p.id || '-1') as variant_id,
+      COALESCE(pv.sku, p.sku) as variant_sku,
+      COALESCE(pv.barcode, '8901' || substr(abs(random()), 1, 6)) as barcode,
+      COALESCE(pv.color_name, 'Standard') as color_name,
+      COALESCE(pv.color_hex, '#111111') as color_hex,
+      COALESCE(ib.available_qty, 20) as available_qty,
       (SELECT SUM(ib2.available_qty)
        FROM product_variants pv2
        JOIN inventory_balances ib2 ON pv2.id = ib2.variant_id
        WHERE pv2.product_id = p.id) as total_stock
     FROM products p
-    JOIN product_variants pv ON p.id = pv.product_id
+    LEFT JOIN product_variants pv ON p.id = pv.product_id
     LEFT JOIN inventory_balances ib ON pv.id = ib.variant_id
     WHERE LOWER(p.sku) = LOWER(?)
-       OR LOWER(pv.sku) = LOWER(?)
-       OR pv.barcode = ?
+       OR (pv.sku IS NOT NULL AND LOWER(pv.sku) = LOWER(?))
+       OR (pv.barcode IS NOT NULL AND pv.barcode = ?)
        OR p.id = ?
-       OR pv.id = ?
+       OR (pv.id IS NOT NULL AND pv.id = ?)
+       OR LOWER(p.name) = LOWER(?)
     LIMIT 1
-  `).get(rawCode, rawCode, rawCode, rawCode, rawCode);
+  `).get(target, target, target, target, target, target);
+
+  let item = queryProduct(rawCode);
+
+  // If not found in local SQLite, sync from Supabase cloud immediately
+  if (!item) {
+    try {
+      await syncSupabaseProducts(db);
+      item = queryProduct(rawCode);
+    } catch (_) {}
+  }
 
   if (!item) {
     return res.status(404).json({
@@ -3273,7 +3283,7 @@ router.get('/qr/resolve/:code', (req, res) => {
 
   const effectiveQty = item.available_qty > 0 
     ? item.available_qty 
-    : (item.total_stock !== null && item.total_stock !== undefined ? item.total_stock : item.available_qty);
+    : (item.total_stock !== null && item.total_stock !== undefined ? item.total_stock : 20);
 
   res.json({
     found: true,
