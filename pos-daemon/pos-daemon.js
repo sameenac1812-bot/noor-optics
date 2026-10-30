@@ -519,6 +519,23 @@ async function pollCloudOrders() {
       }
 
       log(`[Cloud Event] Detected newly confirmed website order #${ref}! Triggering automatic print...`);
+
+      // Extract prescription from items or query Supabase prescriptions table by phone
+      if (!o.prescription && Array.isArray(o.items) && o.items[0]?.prescription) {
+        o.prescription = o.items[0].prescription;
+      }
+      if (!o.prescription && o.customer_phone) {
+        try {
+          const rxRes = await fetch(`${config.supabaseUrl}/rest/v1/prescriptions?client_phone=eq.${encodeURIComponent(String(o.customer_phone).trim())}&order=created_at.desc&limit=1`, {
+            headers: { 'apikey': config.supabaseAnonKey, 'Authorization': `Bearer ${config.supabaseAnonKey}` }
+          });
+          if (rxRes.ok) {
+            const rxData = await rxRes.json();
+            if (Array.isArray(rxData) && rxData.length > 0) o.prescription = rxData[0];
+          }
+        } catch (_) {}
+      }
+
       await processPrintOrder(o);
     }
     savePrintedHistory();

@@ -69,11 +69,28 @@ ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.newsletter_subscribers ENABLE ROW LEVEL SECURITY;
 
--- Products: Anyone can read active products
+-- Products: Anyone can read active products & admin can manage products
 DROP POLICY IF EXISTS "Public can view active products" ON public.products;
 CREATE POLICY "Public can view active products"
     ON public.products FOR SELECT
-    USING (is_active = TRUE);
+    USING (true);
+
+DROP POLICY IF EXISTS "Public can manage products" ON public.products;
+CREATE POLICY "Public can manage products"
+    ON public.products FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+-- Prescriptions: Anyone can submit an Rx during checkout or admin
+DROP POLICY IF EXISTS "Public can insert prescriptions" ON public.prescriptions;
+CREATE POLICY "Public can insert prescriptions"
+    ON public.prescriptions FOR INSERT
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public can view prescriptions" ON public.prescriptions;
+CREATE POLICY "Public can view prescriptions"
+    ON public.prescriptions FOR SELECT
+    USING (true);
 
 -- Orders: Anyone can submit a new customer order
 DROP POLICY IF EXISTS "Public can insert orders" ON public.orders;

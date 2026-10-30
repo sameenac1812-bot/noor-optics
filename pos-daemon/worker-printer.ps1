@@ -61,13 +61,25 @@ public class RawPrinterHelperDirect {
     public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
 
     public static bool SendBytesToPrinter(string szPrinterName, byte[] bytes, string szDocName) {
+        if (string.IsNullOrEmpty(szPrinterName)) return false;
+        string cleanName = szPrinterName.Trim();
         IntPtr hPrinter = IntPtr.Zero;
+
         DOCINFOA di = new DOCINFOA();
         di.pDocName = string.IsNullOrEmpty(szDocName) ? "POS Thermal Receipt" : szDocName;
         di.pDataType = "RAW";
 
-        if (!OpenPrinter(szPrinterName.Normalize(), out hPrinter, IntPtr.Zero)) return false;
-        if (!StartDocPrinter(hPrinter, 1, di)) { ClosePrinter(hPrinter); return false; }
+        if (!OpenPrinter(cleanName, out hPrinter, IntPtr.Zero)) return false;
+
+        // Try RAW first; if driver rejects, try default data type (null)
+        if (!StartDocPrinter(hPrinter, 1, di)) {
+            di.pDataType = null;
+            if (!StartDocPrinter(hPrinter, 1, di)) {
+                ClosePrinter(hPrinter);
+                return false;
+            }
+        }
+
         if (!StartPagePrinter(hPrinter)) { EndDocPrinter(hPrinter); ClosePrinter(hPrinter); return false; }
 
         IntPtr pUnmanagedBytes = Marshal.AllocCoTaskMem(bytes.Length);

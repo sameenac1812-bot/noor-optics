@@ -127,3 +127,4 @@ if ($exitCode -eq 0) {
     Write-Host "[FAILED] $output" -ForegroundColor Red
     Write-Host "Please check USB cable, printer power switch, and Windows printer name." -ForegroundColor Yellow
 }
+

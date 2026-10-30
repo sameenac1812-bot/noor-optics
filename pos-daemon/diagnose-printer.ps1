@@ -87,3 +87,4 @@ if ($choice -eq "1") {
 } elseif ($choice -eq "3") {
     & cmd.exe /c (Join-Path $ScriptDir "setup-printer.bat")
 }
+

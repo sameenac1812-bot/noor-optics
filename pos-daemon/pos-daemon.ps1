@@ -325,6 +325,17 @@ function Format-ReceiptBytes($order) {
 
     # 7. Prescription if attached
     $rx = $order.prescription
+    if (-not $rx -and $order.items) {
+        $rawIts = $order.items
+        if ($rawIts -is [string]) {
+            try { $rawIts = $rawIts | ConvertFrom-Json } catch {}
+        }
+        if ($rawIts -and $rawIts.Count -gt 0) {
+            $firstIt = $rawIts[0]
+            if ($firstIt.prescription) { $rx = $firstIt.prescription }
+            elseif ($firstIt.rx) { $rx = $firstIt.rx }
+        }
+    }
     if (-not $rx) { $rx = $order.newPrescription }
     if (-not $rx) { $rx = $order }
 
@@ -490,6 +501,19 @@ function Poll-CloudOrders {
 
                 Write-DaemonLog "[Cloud Sync] Detected newly confirmed website order #$ref! Auto-printing..."
                 if (-not $o.channel) { $o | Add-Member -NotePropertyName "channel" -NotePropertyValue "WEBSITE" -Force }
+
+                # Extract Rx from items or query Supabase prescriptions table by phone
+                if (-not $o.prescription -and $o.customer_phone) {
+                    try {
+                        $cPhoneClean = [string]$o.customer_phone
+                        $rxUrl = "$($Config.supabaseUrl)/rest/v1/prescriptions?client_phone=eq.$([System.Uri]::EscapeDataString($cPhoneClean.Trim()))&order=created_at.desc&limit=1"
+                        $rxData = Invoke-RestMethod -Uri $rxUrl -Headers $headers -Method Get -TimeoutSec 3 -ErrorAction SilentlyContinue
+                        if ($rxData -and $rxData.Count -gt 0) {
+                            $o | Add-Member -NotePropertyName "prescription" -NotePropertyValue $rxData[0] -Force
+                        }
+                    } catch {}
+                }
+
                 $bytes = Format-ReceiptBytes $o
                 $ok = Spool-Bytes $bytes "Website-Bill-$ref"
 
@@ -599,22 +623,40 @@ while ($running) {
                 $reader.Close()
 
                 $payload = $body | ConvertFrom-Json
-                $rawItems = if ($payload.items) { $payload.items } else { @($payload) }
+                $rawItems = @()
+                if ($payload.items) {
+                    $rawItems = $payload.items
+                } else {
+                    $rawItems = @($payload)
+                }
                 Write-DaemonLog "Received QR Sticker print request for $($rawItems.Count) frame(s)..."
 
                 $allBuffers = New-Object System.IO.MemoryStream
                 $allBw = New-Object System.IO.BinaryWriter($allBuffers)
 
                 foreach ($item in $rawItems) {
-                    $sku = [string](if ($item.sku) { $item.sku } else { "NOOR-FRAME" }).ToUpper()
-                    $name = [string](if ($item.name) { $item.name } else { "" })
+                    $sku = "NOOR-FRAME"
+                    if ($item.sku) { $sku = [string]$item.sku }
+                    $sku = $sku.ToUpper()
+
+                    $name = ""
+                    if ($item.name) { $name = [string]$item.name }
                     if ($name.Length -gt 18) { $name = $name.Substring(0, 18) }
-                    $price = [string](if ($item.price) { $item.price } else { "" }).Trim()
+
+                    $price = ""
+                    if ($item.price) { $price = [string]$item.price }
+                    $price = $price.Trim()
                     if ($price.StartsWith("₹")) { $price = "Rs. " + $price.Substring(1).Trim() }
                     if ($price -and -not $price.ToUpper().StartsWith("RS") -and -not $price.ToUpper().StartsWith("M.R.P")) {
                         $price = "Rs. " + $price
                     }
-                    $copies = [int](if ($item.copies) { $item.copies } elseif ($payload.copies) { $payload.copies } else { 1 })
+
+                    $copies = 1
+                    if ($item.copies) {
+                        $copies = [int]$item.copies
+                    } elseif ($payload.copies) {
+                        $copies = [int]$payload.copies
+                    }
 
                     for ($c = 0; $c -lt $copies; $c++) {
                         $allBw.Write([byte[]]@(0x1B, 0x40)) # Reset
@@ -660,7 +702,9 @@ while ($running) {
                 $allBuffers.Close()
 
                 $ok = Spool-Bytes $combined "QR-Sticker"
-                $resObj = @{ success = $ok; count = $rawItems.Count; message = if ($ok) { "Sticker(s) printed successfully!" } else { "Spooler failure" } }
+                $statusMsg = "Spooler failure"
+                if ($ok) { $statusMsg = "Sticker(s) printed successfully!" }
+                $resObj = @{ success = $ok; count = $rawItems.Count; message = $statusMsg }
                 $buf = [System.Text.Encoding]::UTF8.GetBytes(($resObj | ConvertTo-Json))
                 $response.ContentType = "application/json"
                 $response.ContentLength64 = $buf.Length
@@ -685,7 +729,9 @@ while ($running) {
                 }
                 $bytes = Format-ReceiptBytes $sample
                 $ok = Spool-Bytes $bytes "Test-Receipt"
-                $resObj = @{ success = $ok; message = if ($ok) { "Test receipt printed!" } else { "Spooler failed" } }
+                $testMsg = "Spooler failed"
+                if ($ok) { $testMsg = "Test receipt printed!" }
+                $resObj = @{ success = $ok; message = $testMsg }
                 $buf = [System.Text.Encoding]::UTF8.GetBytes(($resObj | ConvertTo-Json))
                 $response.ContentType = "application/json"
                 $response.ContentLength64 = $buf.Length

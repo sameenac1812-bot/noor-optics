@@ -30,6 +30,8 @@ const {
   pushOrderToSupabase,
   pushCustomerToSupabase,
   pushPrescriptionToSupabase,
+  pushProductToCloud,
+  deleteProductFromCloud,
   deleteOrderFromSupabase,
   deleteAllOrdersFromSupabase,
   deleteCustomerFromSupabase,
@@ -342,6 +344,13 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
 
   createTx();
   logAudit(req.user.id, req.user.email, 'PRODUCT_CREATED', 'PRODUCT', productId, { name, sku }, req);
+
+  // Sync frame to Supabase cloud storage so it is permanently saved and appears on website
+  pushProductToCloud({
+    id: productId, sku, name, brand, shape, material, fit, category,
+    sellingPriceINR, originalPriceINR, purchaseCostINR, imageUrl, description, variants
+  }).catch(() => {});
+
   res.json({ success: true, id: productId });
 });
 
@@ -382,6 +391,12 @@ router.put('/products/:id', authenticateToken, requirePermission('products:manag
   }
 
   logAudit(req.user.id, req.user.email, 'PRODUCT_UPDATED', 'PRODUCT', pId, req.body, req);
+
+  // Sync update to Supabase cloud
+  pushProductToCloud({
+    id: pId, name, brand, shape, material, fit, sellingPriceINR, purchaseCostINR, reorderThreshold, isActive, description, stock: stockQuantity
+  }).catch(() => {});
+
   res.json({ success: true, message: 'Frame updated successfully.' });
 });
 
@@ -421,6 +436,7 @@ router.delete('/products/:id', authenticateToken, (req, res) => {
 
   try {
     deleteTx();
+    deleteProductFromCloud(productId).catch(() => {});
     res.json({ success: true, message: `Optical frame "${product.name}" deleted successfully.` });
   } catch (err) {
     console.error('Failed to delete product:', err);
@@ -468,6 +484,7 @@ router.delete('/products', authenticateToken, (req, res) => {
 
   try {
     const count = deleteBatchTx();
+    ids.forEach(id => deleteProductFromCloud(id).catch(() => {}));
     res.json({ success: true, deletedCount: count, message: `Successfully deleted ${count} frame(s).` });
   } catch (err) {
     console.error('Failed to batch delete products:', err);

@@ -1771,6 +1771,9 @@
       const res = await apiFetch(`/api/products/${productId}`, {
         method: 'DELETE'
       });
+      if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
+        window.NoorSupabase.deleteProduct(productId).catch(() => {});
+      }
       showToast(res.message || `Frame "${name}" deleted successfully.`, 'success');
       state.selectedFrameIds.delete(productId);
       await loadInventory();
@@ -1882,6 +1885,11 @@
             body: JSON.stringify(payload)
           });
 
+          // Dual-write to Supabase cloud for immediate persistence and website display
+          if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
+            await window.NoorSupabase.saveProduct(payload).catch(e => console.warn('Supabase product dual-write note:', e));
+          }
+
           showToast(`Frame "${name}" added to stock successfully!`, 'success');
           modal.classList.remove('open');
           document.body.classList.remove('modal-open');
@@ -1962,6 +1970,10 @@
             reorderThreshold
           })
         });
+
+        if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
+          window.NoorSupabase.saveProduct({ id: pId, name, brand, shape, sellingPriceINR, purchaseCostINR, stock: stockQuantity, reorderThreshold }).catch(() => {});
+        }
 
         showToast('Frame updated successfully!', 'success');
         modal.classList.remove('open');
