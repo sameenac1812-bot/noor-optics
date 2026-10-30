@@ -2521,11 +2521,10 @@
     const modal = document.getElementById('modal-qr-sticker');
     if (modal) {
       modal.classList.add('open');
-      const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
-      const w = activePreset === 'temple' ? 38 : 50;
-      const h = activePreset === 'temple' ? 18 : 25;
+      const w = 20;
+      const h = 21;
       const stage = document.getElementById('stk-preview-stage');
-      const qrSize = activePreset === 'temple' ? 'temple' : 'medium';
+      const qrSize = 'temple';
       renderSingleStickerCard(stage, frame, w, h, '', true, qrSize);
 
       const btnDirect = document.getElementById('btn-direct-thermal-print');
@@ -2551,11 +2550,10 @@
     const modal = document.getElementById('modal-qr-sticker');
     if (modal) {
       modal.classList.add('open');
-      const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'standard';
-      const w = activePreset === 'temple' ? 38 : 50;
-      const h = activePreset === 'temple' ? 18 : 25;
+      const w = 20;
+      const h = 21;
       const stage = document.getElementById('stk-preview-stage');
-      const qrSize = activePreset === 'temple' ? 'temple' : 'medium';
+      const qrSize = 'temple';
       renderSingleStickerCard(stage, firstFrame, w, h, '', true, qrSize);
 
       const btnDirect = document.getElementById('btn-direct-thermal-print');
@@ -2642,39 +2640,40 @@
   }
 
   /**
-   * Build Pure HTML for One Bright-Yellow Frame QR Sticker
-   * ZERO STORE HEADER & PHONE NUMBER. Genuine Square Crisp QR Code.
+   * Build Pure HTML for One Frame QR Sticker (Optical Dumbbell / Temple Tag)
+   * Small ~10mm QR code + All text (SKU, Name, Price) strictly fitted inside the 20mm x 21mm flag area!
+   * ZERO overflow onto the tail/strap.
    */
   function buildStickerHtml(frame, widthMm, heightMm, contactText, qrDataUrl, qrSize = 'medium') {
-    const sku = frame.sku || frame.id || 'NOOR-FRAME';
+    const sku = (frame.sku || frame.id || 'NOOR-FRAME').toUpperCase();
     const brand = frame.brand || 'Noor Optics';
-    const name = frame.name || '';
+    const name = (frame.name || '').slice(0, 20);
     let price = frame.selling_price_paise ? formatINR(frame.selling_price_paise, true) : (frame.selling_price_inr ? formatINR(frame.selling_price_inr * 100, true) : '');
     if (price && price.startsWith('₹')) price = 'Rs. ' + price.substring(1).trim();
+    if (price && !price.toUpperCase().startsWith('RS') && !price.toUpperCase().startsWith('M.R.P')) {
+      price = 'Rs. ' + price;
+    }
 
-    // Compact QR dimension (~16mm) fitting directly within narrow cut strips
-    const qrMm = (qrSize === 'tiny' || qrSize === 'temple') ? 13 : 16;
-    const tagWidthMm = (qrSize === 'tiny' || qrSize === 'temple') ? 22 : 25;
-    const tagHeightMm = Math.max(heightMm, 38);
+    // Precise physical optical tag dimensions: 20mm width × 21mm height flag area
+    const tagWidthMm = 20;
+    const tagHeightMm = 21;
+    const qrMm = 10; // Small crisp 10mm QR code
 
     return `
-      <div class="frame-sticker" style="width:${tagWidthMm}mm; min-height:${tagHeightMm}mm; background-color:#FFE500 !important; color:#000000 !important; box-sizing:border-box; border-radius:1.5mm; padding:1.5mm 1mm; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:1mm; overflow:hidden; position:relative; border:0.5px solid rgba(0,0,0,0.35); font-family:'Plus Jakarta Sans', -apple-system, sans-serif; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; margin:0 auto; text-align:center;">
-        <!-- Top: Crisp Square QR Code (Surrounded by pure white quiet zone) -->
-        <div style="width:${qrMm + 4}mm; height:${qrMm + 4}mm; background:#FFFFFF; padding:1.8mm; border-radius:1.5mm; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-sizing:border-box;">
+      <div class="frame-sticker" style="width:${tagWidthMm}mm; height:${tagHeightMm}mm; max-height:${tagHeightMm}mm; background-color:#FFE500 !important; color:#000000 !important; box-sizing:border-box; border-radius:1mm; padding:0.8mm 0.8mm 0.5mm 0.8mm; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; overflow:hidden; position:relative; border:0.5px solid rgba(0,0,0,0.35); font-family:'Plus Jakarta Sans', -apple-system, sans-serif; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; margin:0 auto; text-align:center;">
+        <!-- Top: Small Crisp Square QR Code (10mm) -->
+        <div style="width:${qrMm}mm; height:${qrMm}mm; background:#FFFFFF; padding:0.4mm; border-radius:0.8mm; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-sizing:border-box;">
           ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" style="width:100%; height:100%; display:block; object-fit:contain; image-rendering:pixelated;" />` : `<div style="font-size:5pt; font-weight:bold;">QR</div>`}
         </div>
 
-        <!-- Middle Rows: Text strictly fitted within QR column width so sides can be cut cleanly -->
-        <div style="width:100%; max-width:${qrMm + 4}mm; display:flex; flex-direction:column; align-items:center; text-align:center; overflow:hidden; padding:0 0.5mm;">
-          <div style="font-size:7.2pt; font-weight:900; line-height:1.15; letter-spacing:0.02em; color:#000000 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">
+        <!-- Bottom Rows: All text strictly fitted inside the QR flag area (SKU, Name, Price) -->
+        <div style="width:100%; max-width:${tagWidthMm - 1}mm; display:flex; flex-direction:column; align-items:center; text-align:center; overflow:hidden; margin-top:0.5mm; gap:0.2mm;">
+          <div style="font-size:5.8pt; font-weight:900; line-height:1.05; letter-spacing:0.02em; color:#000000 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">
             ${escapeHtml(sku)}
           </div>
-          ${name ? `<div style="font-size:5.2pt; font-weight:700; color:#1E293B; margin-top:0.4mm; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">${escapeHtml(name)}</div>` : ''}
-          ${price ? `<div style="font-size:5.2pt; font-weight:800; color:#000000; margin-top:0.4mm; white-space:nowrap;">M.R.P: ${price}</div>` : ''}
+          ${name ? `<div style="font-size:4.6pt; font-weight:700; line-height:1.05; color:#1E293B; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">${escapeHtml(name)}</div>` : ''}
+          ${price ? `<div style="font-size:5pt; font-weight:900; line-height:1.05; color:#000000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">${escapeHtml(price)}</div>` : ''}
         </div>
-
-        <!-- Bottom: Dashed Cut Guide Line -->
-        <div style="width:90%; border-bottom:0.5px dashed #000000; margin-top:1.5mm;"></div>
       </div>
     `;
   }
@@ -2690,7 +2689,7 @@
       ? sku
       : `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`;
     const qrDataUrl = await generateQrDataUrl(qrPayload, 320);
-    container.innerHTML = buildStickerHtml(frame, widthMm, heightMm, '', qrDataUrl, qrSize);
+    container.innerHTML = buildStickerHtml(frame, 20, 21, '', qrDataUrl, qrSize);
   }
 
   /**
@@ -2699,9 +2698,9 @@
    */
   async function executeStickerPrint() {
     const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'url';
-    const w = activePreset === 'temple' ? 38 : 50;
-    const h = activePreset === 'temple' ? 18 : 25;
-    const qrSize = activePreset === 'temple' ? 'temple' : 'medium';
+    const w = 20;
+    const h = 21;
+    const qrSize = 'temple';
     const layout = activePreset === 'a4_sheet' ? 'a4_sheet' : 'individual';
     const cols = 4;
     const copies = parseInt(document.getElementById('stk-copies-count')?.value || '1', 10);
@@ -2734,9 +2733,8 @@
       for (const item of stickerPayloads) {
         for (let c = 0; c < copies; c++) {
           printBodyHtml += `
-            <div class="roll-sticker-wrapper" style="page-break-after:always; break-after:page; margin:0; padding:1.5mm 0; width:${w}mm; min-height:${h}mm; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <div class="roll-sticker-wrapper" style="page-break-after:always; break-after:page; margin:0; padding:0; width:${w}mm; height:${h}mm; display:flex; flex-direction:column; align-items:center; justify-content:center;">
               ${buildStickerHtml(item.frame, w, h, '', item.qrDataUrl, qrSize)}
-              <div style="width:100%; border-bottom:0.5px dashed #888888; margin-top:2.5mm;"></div>
             </div>
           `;
         }

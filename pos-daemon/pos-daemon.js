@@ -9,7 +9,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { exec, spawn } = require('child_process');
+const { exec, spawn, execSync } = require('child_process');
 
 const DAEMON_VERSION = '2.4.0';
 const SCRIPT_DIR = __dirname;
@@ -55,6 +55,33 @@ if (fs.existsSync(CONFIG_FILE)) {
     console.warn('[Daemon] Error loading config.json, using defaults:', e.message);
   }
 }
+
+// ── Smart Thermal Printer Auto-Discovery ──────────────────────────────────────
+function autoDetectPrinter() {
+  try {
+    const stdout = execSync('powershell.exe -NoProfile -Command "Get-Printer | Select-Object -ExpandProperty Name"', { encoding: 'utf8', timeout: 6000 });
+    const installed = stdout.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (installed.length === 0) return config.printerName;
+
+    // 1. Direct match with configured printer
+    if (installed.includes(config.printerName)) {
+      return config.printerName;
+    }
+
+    // 2. Search for any installed USB / thermal POS printer
+    const posMatch = installed.find(name => /POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS/i.test(name));
+    if (posMatch) {
+      console.log(`[Auto-Detect] Configured '${config.printerName}' not found. Automatically connected to: '${posMatch}'`);
+      config.printerName = posMatch;
+      try {
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
+      } catch (e) {}
+      return posMatch;
+    }
+  } catch (e) {}
+  return config.printerName;
+}
+autoDetectPrinter();
 
 // ── Pre-compiled 2.5-Inch ESC/POS Raster Assets (Logo & Payment QR) ───────────
 let logoRasterBuffer = null;
@@ -354,8 +381,12 @@ async function format25InchEscPosQrSticker(item) {
   let QRCode;
   try { QRCode = require('qrcode'); } catch (e) { QRCode = null; }
   const sku = (item.sku || 'NOOR-FRAME').toUpperCase();
-  const name = (item.name || '').slice(0, 20);
-  const price = item.price || '';
+  const name = (item.name || '').slice(0, 18);
+  let price = item.price ? String(item.price).trim() : '';
+  if (price.startsWith('₹')) price = 'Rs. ' + price.substring(1).trim();
+  if (price && !price.toUpperCase().startsWith('RS') && !price.toUpperCase().startsWith('M.R.P')) {
+    price = 'Rs. ' + price;
+  }
   const qrUrl = `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`;
 
   const chunks = [];
@@ -364,13 +395,14 @@ async function format25InchEscPosQrSticker(item) {
 
   writeBytes([0x1B, 0x40]); // Reset
   writeBytes([0x1B, 0x61, 0x01]); // Center
+  writeBytes([0x1B, 0x33, 0x10]); // Ultra-tight line spacing (16 dots ~ 2mm)
 
   if (QRCode) {
     try {
       const qr = QRCode.create(qrUrl, { errorCorrectionLevel: 'L' });
-      const rawSize = qr.modules.size;
-      const quiet = 3;
-      const scale = 4;
+      const rawSize = qr.modules.size; // 25
+      const quiet = 1; // Small quiet zone
+      const scale = 3; // 27 * 3 = 81 dots (~10mm small crisp QR!)
       const totalModules = rawSize + quiet * 2;
       const imgWidth = totalModules * scale;
       const imgHeight = totalModules * scale;
@@ -410,15 +442,18 @@ async function format25InchEscPosQrSticker(item) {
     }
   }
 
-  // Label Text
-  writeBytes([0x1B, 0x45, 0x01]); // Bold
-  writeText(`\n${sku}\n`);
-  writeBytes([0x1B, 0x45, 0x00]);
+  // Label Text strictly inside QR flag area (SKU, Name, Price):
+  writeBytes([0x1B, 0x4D, 0x01]); // Font B (9x17 dots, super crisp & compact)
+  writeBytes([0x1B, 0x45, 0x01]); // Bold ON
+  writeText(`${sku}\n`);
+  writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
   if (name) writeText(`${name}\n`);
-  if (price) writeText(`M.R.P: ${price}\n`);
-  writeText('--------------------------------\n');
-  writeBytes([0x1B, 0x64, 0x03]); // Feed 3 lines
-  writeBytes([0x1D, 0x56, 0x42, 0x00]); // Cut
+  if (price) writeText(`${price}\n`);
+  writeBytes([0x1B, 0x4D, 0x00]); // Font A (normal)
+  writeBytes([0x1B, 0x32]); // Reset line spacing
+
+  writeBytes([0x1B, 0x64, 0x01]); // Feed 1 minimal line
+  writeBytes([0x1D, 0x56, 0x42, 0x00]); // Partial/Full Cut
 
   return Buffer.concat(chunks);
 }

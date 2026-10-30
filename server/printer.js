@@ -407,39 +407,35 @@ async function generateEscPosQrLabel(opts = {}) {
 
   // Full ISO/IEC 18004 compliant 4-module quiet zone on all sides
   // Mandatory for camera scanners to detect the 1:1:3:1:1 corner finder patterns
-  const quiet = 4;
-  let scale = 4; // Crisp 4x4 printer dots (0.50mm)
+  const quiet = 1; // Small quiet zone
+  let scale = 3; // Small crisp QR modules (~10mm total)
 
-  if (rawSize <= 21) {
-    scale = 5; // Extra large 5x5 dots (0.625mm) for Version 1
-  } else if (qrPreset === 'temple' || opts.qrSize === 'tiny' || opts.qrSize === 'temple') {
-    scale = 3;
+  if (opts.qrSize === 'tiny' || opts.qrSize === 'temple') {
+    scale = 2;
   }
 
   const totalModules = rawSize + quiet * 2;
-  const qrPixels = totalModules * scale; // 33 * 4 = 132 pixels (URL) or 29 * 5 = 145 pixels (SKU)
+  const qrPixels = totalModules * scale; // 27 * 3 = 81 pixels (~10mm)
 
-  // Label width: 152 pixels (19 bytes = 19mm) ensuring wide protective paper margins on both sides
-  // Guaranteed protection so cutting the strip with scissors never damages the quiet zone
-  const labelWidth = 152;
+  // Label width: 136 pixels (17mm) to fit strictly inside optical tag flag area
+  const labelWidth = 136;
   const qrOffsetX = Math.max(0, Math.floor((labelWidth - qrPixels) / 2)); // Centered
-  const qrOffsetY = 12; // Generous 12px white paper buffer at top
+  const qrOffsetY = 4; // Minimal top buffer
 
-  // Typography layout: centered within 152px width with generous white gap below QR
-  const skuScale = (sku.length * 12 <= labelWidth - 8) ? 2 : 1;
-  const skuOffsetY = qrOffsetY + qrPixels + 12; // Clean white space between bottom finder patterns & SKU text
+  // Typography layout: centered within labelWidth strictly inside flag area
+  const skuScale = 1;
+  const skuOffsetY = qrOffsetY + qrPixels + 5;
   const skuHeight = 7 * skuScale;
-  const nameOffsetY = skuOffsetY + skuHeight + 6;
-  const priceOffsetY = nameOffsetY + 7 + 4;
-  const lineOffsetY = priceOffsetY + 7 + 8;
-  const totalHeight = lineOffsetY + 8;
+  const nameOffsetY = skuOffsetY + skuHeight + 3;
+  const priceOffsetY = nameOffsetY + 7 + 2;
+  const totalHeight = priceOffsetY + 7 + 4; // Total ~140 pixels (17.5mm)
 
   // Format price cleanly without Unicode Rupee symbol
   let cleanPrice = price ? String(price).trim() : '';
   if (cleanPrice) {
     if (cleanPrice.startsWith('₹')) cleanPrice = 'Rs. ' + cleanPrice.substring(1).trim();
     if (!cleanPrice.toUpperCase().startsWith('M.R.P') && !cleanPrice.toUpperCase().startsWith('RS')) {
-      cleanPrice = 'M.R.P: ' + cleanPrice;
+      cleanPrice = 'Rs. ' + cleanPrice;
     }
   }
 
@@ -512,17 +508,10 @@ async function generateEscPosQrLabel(opts = {}) {
     }
   }
 
-  // 3. Render SKU, Name, Price centered strictly between the QR sides
+  // 3. Render SKU, Name, Price centered strictly inside the QR flag area
   drawCenteredText(sku, skuOffsetY, skuScale);
   if (name) drawCenteredText(name, nameOffsetY, 1);
   if (cleanPrice) drawCenteredText(cleanPrice, priceOffsetY, 1);
-
-  // 4. Render clean dashed cut line
-  for (let x = 4; x < labelWidth - 4; x++) {
-    if (Math.floor(x / 5) % 2 === 0) {
-      grid[lineOffsetY][x] = 1;
-    }
-  }
 
   // Convert to ESC/POS GS v 0 format
   const totalPrintWidth = paperWidthMm >= 80 ? 576 : 384;

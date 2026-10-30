@@ -47,6 +47,30 @@ if (Test-Path $ConfigFile) {
     } catch {}
 }
 
+# Auto-Detect POS Printer
+try {
+    $installed = Get-Printer | Select-Object -ExpandProperty Name
+    if ($installed -notcontains $Config.printerName) {
+        $autoMatch = $installed | Where-Object { $_ -match 'POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS' } | Select-Object -First 1
+        if ($autoMatch) {
+            Write-Host "[Auto-Detect] Switched printer to connected POS device: '$autoMatch'" -ForegroundColor Green
+            $Config.printerName = $autoMatch
+        }
+    }
+} catch {}
+
+# Auto-detect printer if configured printer is not found
+try {
+    $installed = Get-Printer | Select-Object -ExpandProperty Name
+    if ($installed -notcontains $Config.printerName) {
+        $auto = $installed | Where-Object { $_ -match 'POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS' } | Select-Object -First 1
+        if ($auto) {
+            Write-Host "[Auto-Detect] Target '$($Config.printerName)' not found. Automatically connected to: '$auto'" -ForegroundColor Yellow
+            $Config.printerName = $auto
+        }
+    }
+} catch {}
+
 # Load Print History
 $History = @{}
 if (Test-Path $HistoryFile) {
@@ -56,11 +80,35 @@ if (Test-Path $HistoryFile) {
     } catch {}
 }
 
+# Auto-detect printer if configured printer is not found
+try {
+    $installed = Get-Printer | Select-Object -ExpandProperty Name
+    if ($installed -notcontains $Config.printerName) {
+        $auto = $installed | Where-Object { $_ -match 'POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS' } | Select-Object -First 1
+        if ($auto) {
+            Write-Host "[Auto-Detect] Target '$($Config.printerName)' not found. Automatically connected to: '$auto'" -ForegroundColor Yellow
+            $Config.printerName = $auto
+        }
+    }
+} catch {}
+
 function Save-History {
     try {
         $History | ConvertTo-Json -Depth 4 | Set-Content $HistoryFile -Encoding UTF8
     } catch {}
 }
+
+# Auto-detect printer if configured printer is not found
+try {
+    $installed = Get-Printer | Select-Object -ExpandProperty Name
+    if ($installed -notcontains $Config.printerName) {
+        $auto = $installed | Where-Object { $_ -match 'POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS' } | Select-Object -First 1
+        if ($auto) {
+            Write-Host "[Auto-Detect] Target '$($Config.printerName)' not found. Automatically connected to: '$auto'" -ForegroundColor Yellow
+            $Config.printerName = $auto
+        }
+    }
+} catch {}
 
 function Write-DaemonLog($msg, $level = "INFO") {
     $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
@@ -72,6 +120,18 @@ function Write-DaemonLog($msg, $level = "INFO") {
         Add-Content -Path $logPath -Value $line -Encoding UTF8
     } catch {}
 }
+
+# Auto-detect printer if configured printer is not found
+try {
+    $installed = Get-Printer | Select-Object -ExpandProperty Name
+    if ($installed -notcontains $Config.printerName) {
+        $auto = $installed | Where-Object { $_ -match 'POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS' } | Select-Object -First 1
+        if ($auto) {
+            Write-Host "[Auto-Detect] Target '$($Config.printerName)' not found. Automatically connected to: '$auto'" -ForegroundColor Yellow
+            $Config.printerName = $auto
+        }
+    }
+} catch {}
 
 # Format 2.5-Inch (32 Column) ESC/POS Receipt
 function Format-ReceiptBytes($order) {
