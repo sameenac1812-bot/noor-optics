@@ -12,10 +12,7 @@ echo.
 cd /d "%~dp0"
 
 REM 1. Cleanly terminate any stale process holding port 5001
-for /f "tokens=5" %%p in ('netstat -aon 2^>nul ^| findstr /r ":5001\>.*LISTENING"') do (
-    echo [RESTART] Port 5001 in use by PID %%p. Freeing port...
-    taskkill /f /pid %%p >nul 2>nul
-)
+powershell -NoProfile -Command "Get-Process -Id (Get-NetTCPConnection -LocalPort 5001 -ErrorAction SilentlyContinue).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" 2>nul
 timeout /t 1 /nobreak >nul
 
 REM 2. Detect Node.js runtime or fallback to PowerShell
@@ -37,6 +34,7 @@ echo [INFO] Automatic receipt printing is ACTIVE for website and in-store orders
 echo.
 
 :WATCHDOG_LOOP
+powershell -NoProfile -Command "Get-Process -Id (Get-NetTCPConnection -LocalPort 5001 -ErrorAction SilentlyContinue).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" 2>nul
 if "%ENGINE%"=="NODE" (
     node pos-daemon.js
 )

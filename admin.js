@@ -2910,14 +2910,31 @@
         document.body.appendChild(tempDiv);
 
         try {
+          const qrCorrectLevel = (window.QRCode && window.QRCode.CorrectLevel && window.QRCode.CorrectLevel.M !== undefined)
+            ? window.QRCode.CorrectLevel.M
+            : (window.QRCode?.CorrectLevel?.L ?? 0);
+
           new window.QRCode(tempDiv, {
             text: text,
             width: size,
             height: size,
             colorDark: '#000000',
             colorLight: '#FFFFFF',
-            correctLevel: window.QRCode.CorrectLevel.L
+            correctLevel: qrCorrectLevel
           });
+
+          // Immediate check: canvas is painted synchronously in qrcode.js
+          const immediateCanvas = tempDiv.querySelector('canvas');
+          if (immediateCanvas && immediateCanvas.width > 0) {
+            try {
+              const dUrl = immediateCanvas.toDataURL('image/png');
+              if (dUrl && dUrl.length > 100) {
+                tempDiv.remove();
+                resolve(dUrl);
+                return;
+              }
+            } catch (_) {}
+          }
 
           let attempts = 0;
           const poll = setInterval(() => {
@@ -2932,7 +2949,7 @@
               dataUrl = img.src;
             }
 
-            if (dataUrl || attempts >= 15) {
+            if (dataUrl || attempts >= 25) {
               clearInterval(poll);
               tempDiv.remove();
               resolve(dataUrl || '');

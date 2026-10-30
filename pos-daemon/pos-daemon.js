@@ -511,11 +511,16 @@ async function format25InchEscPosQrSticker(item) {
     } catch (_) {}
   }
 
-  // 2. Fallback: Build unified 384-dot monochrome ESC/POS raster directly
+  // 2. Authoritative Unified 384-Dot Monochrome ESC/POS Raster (GS v 0)
+  // Perfectly reproduces reference design: Top Large 2D QR -> SKU -> Model Name -> Price
   let QRCode;
-  try { QRCode = require('qrcode'); } catch (e) { QRCode = null; }
+  try { QRCode = require(path.join(__dirname, 'assets', 'qrcode-bundle.js')); } catch (_) {}
+  if (!QRCode) {
+    try { QRCode = require('qrcode'); } catch (_) { QRCode = null; }
+  }
+
   const sku = (item.sku || 'NOOR-FRAME').toUpperCase();
-  const name = (item.name || '').slice(0, 20);
+  const name = (item.name || '').slice(0, 24);
   let price = item.price ? String(item.price).trim() : '';
   if (price.startsWith('₹')) price = 'Rs. ' + price.substring(1).trim();
   if (price && !price.toUpperCase().startsWith('RS') && !price.toUpperCase().startsWith('M.R.P')) {
@@ -538,18 +543,18 @@ async function format25InchEscPosQrSticker(item) {
     }
   }
 
-  const qrScale = 3;
+  const qrScale = 4; // 29 * 4 = 116 dots (~14.5mm)
   const qrQuiet = 2;
-  const qrModules = (qrSize > 0) ? (qrSize + qrQuiet * 2) : 29;
-  const qrPix = qrModules * qrScale; // e.g. 29 * 3 = 87 dots
+  const qrModules = (qrSize > 0) ? (qrSize + qrQuiet * 2) : 33;
+  const qrPix = qrModules * qrScale; // e.g. 33 * 4 = 132 dots (~16.5mm)
 
-  // Total height: QR (87) + SKU (16) + Name (14) + Price (16) + margins = 160 dots
-  const totalHeight = qrPix + 70;
+  // Total height: QR (132) + SKU (18) + Name (14) + Price (18) + margins = ~200 dots (~25mm)
+  const totalHeight = qrPix + 80;
   const raster = Buffer.alloc(widthBytes * totalHeight, 0);
 
   // Center QR horizontally
   const qrStartX = Math.floor((widthDots - qrPix) / 2);
-  const qrStartY = 4;
+  const qrStartY = 6;
 
   if (qrMatrix) {
     for (let my = 0; my < qrModules; my++) {
@@ -574,7 +579,7 @@ async function format25InchEscPosQrSticker(item) {
   }
 
   // Draw SKU Centered under QR
-  let curY = qrStartY + qrPix + 4;
+  let curY = qrStartY + qrPix + 6;
   const skuWidth = sku.length * 6 * 2;
   const skuX = Math.max(0, Math.floor((widthDots - skuWidth) / 2));
   drawBitmapText(raster, widthBytes, sku, skuX, curY, 2);
@@ -585,7 +590,7 @@ async function format25InchEscPosQrSticker(item) {
     const nameWidth = name.length * 6 * 1;
     const nameX = Math.max(0, Math.floor((widthDots - nameWidth) / 2));
     drawBitmapText(raster, widthBytes, name, nameX, curY, 1);
-    curY += 13;
+    curY += 14;
   }
 
   // Draw Price Centered

@@ -311,7 +311,7 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
 
         # 2. Draw unified 384-dot wide label (100% aligned with POS-80 thermal printhead)
         $width = 384
-        $height = 140
+        $height = 240
         $bmp = New-Object System.Drawing.Bitmap($width, $height)
         $g = [System.Drawing.Graphics]::FromImage($bmp)
         $g.Clear([System.Drawing.Color]::White)
