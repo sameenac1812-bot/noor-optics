@@ -2053,8 +2053,9 @@
       const imageUrl = state.uploadedFrameImageUrl || 'images/stockholm_noir.jpg';
 
       try {
-        showToast('Saving frame to stock...', 'info');
+        const prodId = 'prod-' + Date.now();
         const payload = {
+          id: prodId,
           name,
           sku,
           brand,
@@ -2076,14 +2077,9 @@
           ]
         };
 
-        const saveRes = await apiFetch('/api/products', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
-
-        // Construct the authoritative in-memory frame object
+        // Construct the authoritative in-memory frame object immediately
         const savedItem = {
-          id: (saveRes && saveRes.id) || ('prod-' + Date.now()),
+          id: prodId,
           sku: sku.toUpperCase(),
           name,
           brand,
@@ -2140,7 +2136,7 @@
 
         // 4. Dual-write to Supabase cloud for multi-device sync and website display
         if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
-          await window.NoorSupabase.saveProduct({
+          window.NoorSupabase.saveProduct({
             ...payload,
             id: savedItem.id,
             stock: quantity,
@@ -2148,27 +2144,30 @@
           }).catch(e => console.warn('Supabase product dual-write note:', e));
         }
 
-        const successMsg = saveRes && saveRes.updated
-          ? `✓ Frame "${name}" (${sku}) updated with new specifications & stock!`
-          : `✓ Frame "${name}" added to stock successfully!`;
-        showToast(successMsg, 'success');
+        // 5. Close modal immediately with celebratory confirmation
+        showToast(`✓ Frame "${name}" added to stock successfully!`, 'success');
         modal.classList.remove('open');
         document.body.classList.remove('modal-open');
 
+        // 6. Background server sync: never blocks UI or rolls back on transient network hiccups
+        apiFetch('/api/products', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        }).then(saveRes => {
+          if (saveRes && saveRes.id) {
+            savedItem.id = saveRes.id;
+          }
+        }).catch(e => {
+          console.warn('Background server sync note:', e.message);
+        });
+
         // Background catalog refreshes
-        loadInventory();
         if (typeof loadDashboard === 'function') loadDashboard();
         if (typeof loadPosCatalog === 'function') loadPosCatalog();
 
         // Automatic Thermal Sticker Printing if "Save & Print QR Sticker" was clicked
         if (shouldPrintSticker) {
           showToast(`Printing QR sticker for "${name}"...`, 'info');
-          const newFrameObj = {
-            sku,
-            name,
-            brand,
-            selling_price_inr: retail
-          };
           const printRes = await dispatchThermalStickerPrint([{
             sku,
             name,

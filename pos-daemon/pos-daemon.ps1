@@ -592,7 +592,7 @@ function Format-ReceiptBytes($order) {
         }
     } else {
         $fallbackPrice = if ($grandT -gt 0) { $grandT } else { 0.0 }
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Optical Frame" "1  Rs.$([Math]::Round($fallbackPrice))")))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Noor Optical Frame" "1  Rs.$([Math]::Round($fallbackPrice))")))
     }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
