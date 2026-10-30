@@ -1,0 +1,35 @@
+{
+  "order_number": "NOOR-SAMPLE-001",
+  "token_number": 5,
+  "channel": "IN-STORE",
+  "customer_name": "Aditya",
+  "customer_phone": "+91 7396561933",
+  "city": "Bengaluru",
+  "created_at": "2026-10-30T10:30:00Z",
+  "subtotal_inr": 4299,
+  "discount_inr": 0,
+  "tax_inr": 656,
+  "total_payable_inr": 4299,
+  "amount_paid_inr": 4299,
+  "payment_method": "CASH",
+  "od_sph": -1.50,
+  "od_cyl": -0.50,
+  "od_axis": 90,
+  "addition": 1.50,
+  "os_sph": -1.75,
+  "os_cyl": -0.25,
+  "os_axis": 80,
+  "ipd_distance": 63,
+  "rx_checked_by": "Staff Optom",
+  "items": [
+    {
+      "product_name": "The Amber Arch",
+      "sku": "NOOR-AMB-11-MAZ",
+      "variant_name": "Mazzucchelli Honey",
+      "lens_name": "Blue-Light Filter",
+      "quantity": 1,
+      "unit_price_inr": 4299,
+      "subtotal_inr": 4299
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "noor-pos-print-daemon",
+  "version": "2.4.0",
+  "description": "Portable Windows POS Thermal Print Daemon for Noor Optics",
+  "main": "pos-daemon.js",
+  "scripts": {
+    "start": "node pos-daemon.js"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.3"
+  }
+}

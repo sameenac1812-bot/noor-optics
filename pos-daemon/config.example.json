@@ -1,0 +1,23 @@
+{
+  "port": 5001,
+  "printerName": "POS-80",
+  "paperWidthInch": 2.5,
+  "columns": 32,
+  "printKOT": false,
+  "storeName": "NOOR OPTICS",
+  "storeTagline": "Scandinavian Eyewear Boutique",
+  "storeAddress": "Indiranagar 100ft Road, Bengaluru",
+  "storePhone": "+91 98765 43210",
+  "storeGstin": "29AAAAA0000A1Z5",
+  "orderFreshnessMinutes": 30,
+  "supabaseUrl": "https://czajxtgwsxbrrymrhauz.supabase.co",
+  "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk",
+  "backendUrl": "https://noor-optics-five.vercel.app",
+  "allowedOrigins": [
+    "https://noor-optics-five.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5000",
+    "http://127.0.0.1:5000"
+  ]
+}

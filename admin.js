@@ -2347,29 +2347,30 @@
         };
 
         try {
-          let res;
+          let res = null;
+          // 1. Direct print request to Windows POS Print Daemon on Port 5001
           try {
-            res = await apiFetch('/api/printer/print-qr-sticker', {
-              method: 'POST',
-              body: JSON.stringify(payload)
-            });
-          } catch (cloudErr) {
-            // Cloud fallback: try local POS hardware bridge on port 3000
-            const localResp = await fetch('http://127.0.0.1:3000/api/printer/print-qr-sticker', {
+            const localResp = await fetch('http://127.0.0.1:5001/api/printer/print-qr-sticker', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
             });
-            res = await localResp.json();
+            if (localResp.ok) {
+              res = await localResp.json();
+            }
+          } catch (daemonErr) {
+            console.log('Local print daemon on port 5001 unreachable, attempting browser print fallback...');
           }
 
           if (res && res.success) {
-            showToast(`✓ All ${frames.length} stickers printed sequentially to POS-80 thermal printer!`, 'success');
+            showToast(`✓ All ${frames.length} sticker(s) printed to POS thermal printer!`, 'success');
           } else {
-            showToast('Printer response: ' + (res?.error || 'Check printer connection'), 'error');
+            // 2. Foolproof fallback: trigger clean browser print via hidden iframe (100% reliable)
+            showToast('POS daemon not detected. Opening direct print dialog...', 'info');
+            await executeStickerPrint();
           }
         } catch (err) {
-          showToast('Could not reach POS printer: ' + err.message, 'error');
+          await executeStickerPrint();
         } finally {
           btnDirect.disabled = false;
           btnDirect.innerHTML = `
@@ -2757,27 +2758,38 @@
       printBodyHtml += `</div>`;
     }
 
-    // 3. Open dedicated popup window for browser print (100% reliable)
-    const printWin = window.open('', '_blank', 'width=700,height=700');
-    if (!printWin) {
-      showToast('Browser blocked print popup. Please allow popups or use the POS Thermal button.', 'warning');
-      return;
+    // 3. Print via dedicated hidden iframe (100% immune to browser popup blockers)
+    let iframe = document.getElementById('silent-receipt-print-frame');
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'silent-receipt-print-frame';
+      iframe.style.position = 'fixed';
+      iframe.style.top = '-9999px';
+      iframe.style.left = '-9999px';
+      iframe.style.width = '1px';
+      iframe.style.height = '1px';
+      iframe.style.border = 'none';
+      document.body.appendChild(iframe);
     }
 
-    printWin.document.open();
-    printWin.document.write(`
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
-        <title></title>
+        <title>Frame QR Sticker</title>
         <style>
-          @page { size: auto; margin: 0mm !important; }
+          @page {
+            size: ${isRoll ? '58mm auto' : 'auto'};
+            margin: 0mm !important;
+          }
           *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
           html, body {
             margin: 0 auto !important;
             padding: 0 !important;
-            width: ${isRoll ? `${Math.min(w, 58)}mm` : 'auto'} !important;
+            width: ${isRoll ? '58mm' : 'auto'} !important;
             max-width: ${isRoll ? '58mm' : 'none'} !important;
             background: #FFFFFF !important;
             -webkit-print-color-adjust: exact !important;
@@ -2787,18 +2799,27 @@
       </head>
       <body>
         ${printBodyHtml}
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.focus();
-              window.print();
-            }, 300);
-          };
-        <\/script>
       </body>
       </html>
     `);
-    printWin.document.close();
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        showToast('Print dialog triggered for yellow frame QR sticker(s)!', 'success');
+      } catch (err) {
+        // Fallback popup if iframe focus is restricted
+        const printWin = window.open('', '_blank', 'width=700,height=700');
+        if (printWin) {
+          printWin.document.open();
+          printWin.document.write(doc.documentElement.outerHTML);
+          printWin.document.close();
+          setTimeout(() => { printWin.focus(); printWin.print(); }, 250);
+        }
+      }
+    }, 250);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -5312,12 +5333,103 @@
     }
   };
 
-  // ── Dispatch Print Signal to POS Portable Daemon (No browser print popup) ──
-  window.instantPrintReceipt = function (orderId) {
+  // ── Dispatch Print Signal to POS Portable Daemon (Port 5001) ─────────────
+  window.instantPrintReceipt = async function (orderId, manualReprint = false) {
     if (!orderId) return;
-    // Dispatch signal to POS portable thermal printer daemon via background API
-    fetch(`/api/printer/orders/${orderId}/daemon-dispatch`, { method: 'POST' }).catch(() => {});
+
+    let order = state.ordersCache.find(o => o.id === orderId || o.order_number === orderId);
+    if (!order) {
+      try {
+        order = await apiFetch(`/api/orders/${orderId}`);
+      } catch (e) {}
+    }
+
+    if (!order) {
+      console.warn('Order not found for instant receipt printing:', orderId);
+      return;
+    }
+
+    // 1. Send direct hardware print signal to Windows POS Print Daemon on Port 5001
+    try {
+      const daemonResp = await fetch('http://127.0.0.1:5001/api/print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order: order,
+          manualReprint: manualReprint
+        })
+      });
+
+      if (daemonResp.ok) {
+        const result = await daemonResp.json();
+        if (result.skippedDuplicate) {
+          console.log(`[Print] Order #${order.order_number} already printed.`);
+        } else {
+          showToast(`🖨️ Customer Bill #${order.order_number} printed to POS thermal printer!`, 'success');
+        }
+        return;
+      }
+    } catch (daemonErr) {
+      console.log('POS Daemon offline, using silent browser fallback...');
+    }
+
+    // 2. Fallback: Trigger silent iframe browser print so cashier is never stranded
+    try {
+      let iframe = document.getElementById('silent-receipt-print-frame');
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'silent-receipt-print-frame';
+        iframe.style.position = 'fixed';
+        iframe.style.top = '-9999px';
+        iframe.style.left = '-9999px';
+        iframe.style.width = '1px';
+        iframe.style.height = '1px';
+        iframe.style.border = 'none';
+        document.body.appendChild(iframe);
+      }
+      iframe.src = `/api/printer/orders/${order.id || orderId}/preview-html`;
+      iframe.onload = () => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch (e) {}
+      };
+    } catch (e) {}
   };
+
+  // ── POS Print Daemon Health Monitor (Port 5001) ───────────────────────────
+  async function checkDaemonStatus() {
+    const badge = document.getElementById('daemon-status-badge');
+    const dot = document.getElementById('daemon-indicator-dot');
+    const label = document.getElementById('daemon-indicator-label');
+    if (!badge || !dot || !label) return;
+
+    try {
+      const res = await fetch('http://127.0.0.1:5001/api/status', { method: 'GET', signal: AbortSignal.timeout(1800) });
+      if (res.ok) {
+        const data = await res.json();
+        dot.style.background = '#16A34A'; // Green
+        label.textContent = `🖨️ ${data.printer || 'POS-80'} Online`;
+        badge.title = `Print Daemon Active (${data.engine}) • ${data.totalPrinted || 0} printed • 2.5" Thermal`;
+        badge.style.borderColor = '#BBF7D0';
+        badge.style.background = '#F0FDF4';
+        badge.style.cursor = 'default';
+        badge.onclick = null;
+        return;
+      }
+    } catch (e) {}
+
+    // Offline State
+    dot.style.background = '#F59E0B'; // Amber
+    label.textContent = 'POS Daemon Offline';
+    badge.title = 'POS Print Daemon not running on port 5001. Click for quick setup.';
+    badge.style.borderColor = '#FDE68A';
+    badge.style.background = '#FFFBEB';
+    badge.style.cursor = 'pointer';
+    badge.onclick = () => {
+      alert("POS Print Daemon is not running on port 5001.\n\nTo enable instant hardware receipt printing:\n1. Open your 'pos-daemon' folder.\n2. Double-click 'start-pos.bat'.\n3. The daemon will connect automatically and print all receipts on your 2.5-inch thermal printer.");
+    };
+  }
 
   // ── Receipt & Token Printing Preview ──────────────────────────────────────
   window.previewThermalReceipt = function (orderId) {
@@ -5711,6 +5823,10 @@
         loadOrders(true);
       }
     }, 3000);
+
+    // Monitor POS Print Daemon on Port 5001
+    checkDaemonStatus();
+    setInterval(checkDaemonStatus, 10000);
 
     // Verify session
     checkExistingAuth();
