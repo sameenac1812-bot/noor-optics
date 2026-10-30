@@ -777,16 +777,27 @@ async function format25InchEscPosQrSticker(item) {
             (actualX < 7 && actualY >= qrSize - 7)
           );
 
-          // For inside data lines: draw 3x3 active dots inside 4x4 cell (leaves 1-dot margin, THIN lines, zero blotting)
-          const wDot = isFinder ? qrScale : 3;
-          const hDot = isFinder ? qrScale : 3;
-
-          for (let dy = 0; dy < hDot; dy++) {
-            for (let dx = 0; dx < wDot; dx++) {
-              const px = qrStartX + mx * qrScale + dx;
-              const py = qrStartY + my * qrScale + dy;
-              const bIdx = py * widthBytes + Math.floor(px / 8);
-              raster[bIdx] |= (0x80 >> (px % 8));
+          if (isFinder) {
+            // Solid 4x4 module fill for finder patterns
+            for (let dy = 0; dy < qrScale; dy++) {
+              for (let dx = 0; dx < qrScale; dx++) {
+                const px = qrStartX + mx * qrScale + dx;
+                const py = qrStartY + my * qrScale + dy;
+                const bIdx = py * widthBytes + Math.floor(px / 8);
+                raster[bIdx] |= (0x80 >> (px % 8));
+              }
+            }
+          } else {
+            // DOTTED STYLE for data modules: discrete 2x2 centered dot inside 4x4 cell
+            // Leaves 1-dot white padding on all sides (2-dot pure white gap between adjacent modules)
+            // Completely eliminates thermal heat bleeding / blotting!
+            for (let dy = 1; dy <= 2; dy++) {
+              for (let dx = 1; dx <= 2; dx++) {
+                const px = qrStartX + mx * qrScale + dx;
+                const py = qrStartY + my * qrScale + dy;
+                const bIdx = py * widthBytes + Math.floor(px / 8);
+                raster[bIdx] |= (0x80 >> (px % 8));
+              }
             }
           }
         }

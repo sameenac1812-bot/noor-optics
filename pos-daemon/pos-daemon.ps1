@@ -289,9 +289,40 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
                 Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
                 $gen = New-Object QRCoder.QRCodeGenerator
                 $data = $gen.CreateQrCode($sku, [QRCoder.QRCodeGenerator+ECCLevel]::M)
-                $qr = New-Object QRCoder.QRCode($data)
-                $qrBmp = $qr.GetGraphic(4, [System.Drawing.Color]::Black, [System.Drawing.Color]::White, $true)
-                $qr.Dispose(); $data.Dispose(); $gen.Dispose()
+                $matrix = $data.ModuleMatrix
+                $qrModCount = $matrix.Count
+                $qrQuiet = 4
+                $qrScale = 4
+                $totalMods = $qrModCount + ($qrQuiet * 2)
+                $qrBmpW = $totalMods * $qrScale
+                $customQrBmp = New-Object System.Drawing.Bitmap($qrBmpW, $qrBmpW)
+                $gQr = [System.Drawing.Graphics]::FromImage($customQrBmp)
+                $gQr.Clear([System.Drawing.Color]::White)
+                $brushB = [System.Drawing.Brushes]::Black
+
+                for ($my = 0; $my -lt $totalMods; $my++) {
+                    $ay = $my - $qrQuiet
+                    for ($mx = 0; $mx -lt $totalMods; $mx++) {
+                        $ax = $mx - $qrQuiet
+                        $isBlack = ($ax -ge 0 -and $ax -lt $qrModCount -and $ay -ge 0 -and $ay -lt $qrModCount) -and $matrix[$ay][$ax]
+                        if ($isBlack) {
+                            $isFinder = (
+                                ($ax -lt 7 -and $ay -lt 7) -or
+                                ($ax -ge ($qrModCount - 7) -and $ay -lt 7) -or
+                                ($ax -lt 7 -and $ay -ge ($qrModCount - 7))
+                            )
+                            if ($isFinder) {
+                                $gQr.FillRectangle($brushB, ($mx * $qrScale), ($my * $qrScale), $qrScale, $qrScale)
+                            } else {
+                                # Anti-blotting dotted style: centered 2x2 dot with 1-dot margin
+                                $gQr.FillRectangle($brushB, ($mx * $qrScale + 1), ($my * $qrScale + 1), 2, 2)
+                            }
+                        }
+                    }
+                }
+                $gQr.Dispose()
+                $qrBmp = $customQrBmp
+                $data.Dispose(); $gen.Dispose()
             } catch {}
         }
 
