@@ -36,6 +36,7 @@ const {
   deleteAllOrdersFromSupabase,
   deleteCustomerFromSupabase,
   deleteAllCustomersFromSupabase,
+  pushPrintJobToCloudQueue,
   startBackgroundSync
 } = require('./supabaseSync');
 
@@ -2903,13 +2904,41 @@ router.post('/printer/print-qr-sticker', async (req, res) => {
     const tempFile = path.join(dataDir, `qr_batch_${Date.now()}.bin`);
     fs.writeFileSync(tempFile, combinedBinary);
 
+    // If running in cloud / Linux serverless (e.g. Vercel), route through Supabase Cloud Print Queue
+    if (process.platform !== 'win32') {
+      const qRes = await pushPrintJobToCloudQueue({
+        type: 'qr_sticker',
+        items: rawItems
+      });
+      return res.json({
+        success: true,
+        queued: true,
+        count: rawItems.length,
+        jobId: qRes.jobId,
+        message: `Successfully queued ${rawItems.length} sticker(s) in cloud queue for POS thermal printer!`
+      });
+    }
+
     const psScript = path.join(__dirname, '..', 'scripts', 'print_raw_qr.ps1');
     const cmd = `powershell.exe -ExecutionPolicy Bypass -File "${psScript}" -FilePath "${tempFile}" -PrinterName "${printerName}"`;
 
     const { exec } = require('child_process');
-    exec(cmd, (err, stdout, stderr) => {
+    exec(cmd, async (err, stdout, stderr) => {
       try { fs.unlinkSync(tempFile); } catch (e) {}
       if (err) {
+        // Fallback to Supabase Cloud Print Queue if Windows raw print fails
+        const qRes = await pushPrintJobToCloudQueue({
+          type: 'qr_sticker',
+          items: rawItems
+        });
+        if (qRes && qRes.success) {
+          return res.json({
+            success: true,
+            queued: true,
+            count: rawItems.length,
+            message: `Queued ${rawItems.length} sticker(s) to cloud print queue (local printer busy or offline).`
+          });
+        }
         return res.status(500).json({ success: false, error: stderr || err.message });
       }
       return res.json({

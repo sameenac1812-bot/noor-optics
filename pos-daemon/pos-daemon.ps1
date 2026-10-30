@@ -268,10 +268,11 @@ function Convert-DataUrlToEscPosRaster([string]$dataUrl) {
     }
 }
 
-# Pre-load QRCoder engine if present
+# Pre-load QRCoder engine if present and unblock
 $qrCoderDll = Join-Path $ScriptDir "assets\QRCoder.dll"
 if (Test-Path $qrCoderDll) {
     try {
+        Unblock-File -Path $qrCoderDll -ErrorAction SilentlyContinue
         Add-Type -Path $qrCoderDll -ErrorAction SilentlyContinue
     } catch {}
 }
@@ -281,6 +282,7 @@ function Generate-QrRaster([string]$text) {
     $dll = Join-Path $ScriptDir "assets\QRCoder.dll"
     if (Test-Path $dll) {
         try {
+            Unblock-File -Path $dll -ErrorAction SilentlyContinue
             Add-Type -Path $dll -ErrorAction SilentlyContinue
             Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
             $gen = New-Object QRCoder.QRCodeGenerator
@@ -297,6 +299,105 @@ function Generate-QrRaster([string]$text) {
         } catch {}
     }
     return @()
+}
+
+# Format Optical Temple QR Sticker ESC/POS Bytes (Universal GS v 0 2D Bit Image)
+function Format-StickerBytes($rawItems) {
+    $allBuffers = New-Object System.IO.MemoryStream
+    $allBw = New-Object System.IO.BinaryWriter($allBuffers)
+
+    foreach ($item in $rawItems) {
+        $sku = "NOOR-FRAME"
+        if ($item.sku) { $sku = [string]$item.sku }
+        $sku = $sku.ToUpper()
+
+        $name = ""
+        if ($item.name) { $name = [string]$item.name }
+        if ($name.Length -gt 18) { $name = $name.Substring(0, 18) }
+
+        $price = ""
+        if ($item.price) { $price = [string]$item.price }
+        $price = $price.Trim()
+        if ($price.StartsWith("₹")) { $price = "Rs. " + $price.Substring(1).Trim() }
+        if ($price -and -not $price.ToUpper().StartsWith("RS") -and -not $price.ToUpper().StartsWith("M.R.P")) {
+            $price = "Rs. " + $price
+        }
+
+        $copies = 1
+        if ($item.copies) {
+            $copies = [int]$item.copies
+        } elseif ($item.quantity) {
+            $copies = [int]$item.quantity
+        }
+
+        for ($c = 0; $c -lt $copies; $c++) {
+            $allBw.Write([byte[]]@(0x1B, 0x40)) # Reset
+            $allBw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
+            $allBw.Write([byte[]]@(0x1B, 0x33, 0x10)) # Tight line spacing (16 dots)
+
+            # Universal 2D QR Code Bitmap Output via ESC/POS GS v 0 (100% Thermal Printer Compatible)
+            $qrText = "HTTPS://NOOROPTICS.VERCEL.APP/Q/$sku"
+            $rasterBytes = $null
+
+            # 1. Native Offline QRCoder Generation (100% offline, pure .NET, instant!)
+            $rasterBytes = Generate-QrRaster $qrText
+
+            # 2. Check pre-computed GS v 0 raster from admin.js
+            if ((-not $rasterBytes -or $rasterBytes.Length -eq 0) -and $item.qrRasterBase64) {
+                try {
+                    $r = [Convert]::FromBase64String([string]$item.qrRasterBase64)
+                    if ($r -and $r.Length -gt 8) { $rasterBytes = $r }
+                } catch {}
+            }
+
+            # 3. Check PNG data URL from admin.js
+            if ((-not $rasterBytes -or $rasterBytes.Length -eq 0) -and $item.qrDataUrl) {
+                try {
+                    $r = Convert-DataUrlToEscPosRaster ([string]$item.qrDataUrl)
+                    if ($r -and $r.Length -gt 8) { $rasterBytes = $r }
+                } catch {}
+            }
+
+            # 4. Cloud fallback: generate QR bitmap via online API if offline raster wasn't attached
+            if (-not $rasterBytes -or $rasterBytes.Length -eq 0) {
+                try {
+                    $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&margin=0&data=$([System.Uri]::EscapeDataString($qrText))"
+                    $wc = New-Object System.Net.WebClient
+                    $imgData = $wc.DownloadData($qrApiUrl)
+                    $msImg = New-Object System.IO.MemoryStream($imgData, 0, $imgData.Length)
+                    $bmp = [System.Drawing.Bitmap]::FromStream($msImg)
+                    $rasterBytes = Convert-BitmapToEscPosRaster $bmp
+                    $bmp.Dispose()
+                    $msImg.Close()
+                    $wc.Dispose()
+                } catch {}
+            }
+
+            # Write 2D QR Bit Image (GS v 0) - NEVER prints text link!
+            if ($rasterBytes -and $rasterBytes.Length -gt 0) {
+                $allBw.Write([byte[]]$rasterBytes)
+                $allBw.Write([byte[]]@(0x1B, 0x64, 0x01)) # 1 dot line feed
+            }
+
+            # 6. Text strictly inside QR flag area: Font B
+            $allBw.Write([byte[]]@(0x1B, 0x4D, 0x01)) # Font B
+            $allBw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
+            $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$sku`n"))
+            $allBw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
+            if ($name) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$name`n")) }
+            if ($price) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$price`n")) }
+            $allBw.Write([byte[]]@(0x1B, 0x4D, 0x00)) # Font A
+            $allBw.Write([byte[]]@(0x1B, 0x32)) # Reset line spacing
+
+            $allBw.Write([byte[]]@(0x1B, 0x64, 0x01)) # Feed 1 line
+            $allBw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00)) # Partial cut
+        }
+    }
+
+    $combined = $allBuffers.ToArray()
+    $allBw.Close()
+    $allBuffers.Close()
+    return $combined
 }
 
 # Format 2.5-Inch (32 Column) ESC/POS Receipt
@@ -648,6 +749,80 @@ function Poll-CloudOrders {
     }
 }
 
+# ── Cloud Print Queue (Direct Background Sticker & Manual Print Jobs) ────────
+function Poll-CloudPrintQueue {
+    if (-not $Config.supabaseUrl -or -not $Config.supabaseAnonKey) { return }
+
+    try {
+        $headers = @{
+            "apikey" = $Config.supabaseAnonKey
+            "Authorization" = "Bearer $($Config.supabaseAnonKey)"
+        }
+        $url = "$($Config.supabaseUrl)/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE"
+        $recs = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 5 -ErrorAction SilentlyContinue
+
+        if ($recs -and $recs.Count -gt 0 -and $recs[0].notes) {
+            $notesObj = $null
+            try { $notesObj = $recs[0].notes | ConvertFrom-Json } catch {}
+
+            if ($notesObj -and $notesObj.jobs -and $notesObj.jobs.Count -gt 0) {
+                $jobs = @($notesObj.jobs)
+                $remainingJobs = New-Object System.Collections.ArrayList
+                $changed = $false
+
+                foreach ($job in $jobs) {
+                    $jobId = [string]$job.id
+                    if ($History.ContainsKey($jobId)) {
+                        continue
+                    }
+
+                    Write-DaemonLog "[Cloud Print Queue] Processing job #$jobId (Type: $($job.type))..."
+
+                    $ok = $false
+                    if ($job.type -eq "qr_sticker" -and $job.items) {
+                        $rawItems = @($job.items)
+                        $bytes = Format-StickerBytes $rawItems
+                        $ok = Spool-Bytes $bytes "Sticker-$jobId"
+                    } elseif ($job.type -eq "receipt" -and $job.order) {
+                        $bytes = Format-ReceiptBytes $job.order
+                        $ok = Spool-Bytes $bytes "Receipt-$jobId"
+                    }
+
+                    if ($ok) {
+                        $History[$jobId] = (Get-Date).ToString("o")
+                        $changed = $true
+                        Write-DaemonLog "[Cloud Print Queue] SUCCESS: Spooled job #$jobId to $($Config.printerName)!" "INFO"
+                    } else {
+                        Write-DaemonLog "[Cloud Print Queue] FAILED: Spool error on job #$jobId" "ERROR"
+                        $remainingJobs.Add($job) | Out-Null
+                    }
+                }
+
+                # Clear processed jobs in Supabase
+                $patchUrl = "$($Config.supabaseUrl)/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE"
+                $patchHeaders = @{
+                    "apikey" = $Config.supabaseAnonKey
+                    "Authorization" = "Bearer $($Config.supabaseAnonKey)"
+                    "Content-Type" = "application/json"
+                    "Prefer" = "return=minimal"
+                }
+                $patchBody = @{
+                    id = "sys-print-queue-global"
+                    client_code = "SYS-PRINT-QUEUE"
+                    name = "System Print Queue"
+                    city = "Bengaluru"
+                    notes = (@{ jobs = $remainingJobs.ToArray() } | ConvertTo-Json -Compress)
+                } | ConvertTo-Json
+
+                Invoke-RestMethod -Uri $patchUrl -Headers $patchHeaders -Method Patch -Body $patchBody -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
+                if ($changed) { Save-History }
+            }
+        }
+    } catch {
+        Write-DaemonLog "[Cloud Print Queue] Error: $_" "ERROR"
+    }
+}
+
 Write-DaemonLog "[Cloud Sync] Autonomous background polling ACTIVE (Checking Supabase every 4s)"
 Write-DaemonLog "[Cloud Sync] You DO NOT need to keep the admin page open for orders to print!"
 
@@ -668,7 +843,8 @@ while ($running) {
             $origin = if ($request.Headers["Origin"]) { $request.Headers["Origin"] } else { "*" }
             $response.AddHeader("Access-Control-Allow-Origin", $origin)
             $response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            $response.AddHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
+            $response.AddHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+            $response.AddHeader("Access-Control-Allow-Private-Network", "true")
 
             if ($request.HttpMethod -eq "OPTIONS") {
                 $response.StatusCode = 204
@@ -740,107 +916,13 @@ while ($running) {
                 $payload = $body | ConvertFrom-Json
                 $rawItems = @()
                 if ($payload.items) {
-                    $rawItems = $payload.items
+                    $rawItems = @($payload.items)
                 } else {
                     $rawItems = @($payload)
                 }
                 Write-DaemonLog "Received QR Sticker print request for $($rawItems.Count) frame(s)..."
 
-                $allBuffers = New-Object System.IO.MemoryStream
-                $allBw = New-Object System.IO.BinaryWriter($allBuffers)
-
-                foreach ($item in $rawItems) {
-                    $sku = "NOOR-FRAME"
-                    if ($item.sku) { $sku = [string]$item.sku }
-                    $sku = $sku.ToUpper()
-
-                    $name = ""
-                    if ($item.name) { $name = [string]$item.name }
-                    if ($name.Length -gt 18) { $name = $name.Substring(0, 18) }
-
-                    $price = ""
-                    if ($item.price) { $price = [string]$item.price }
-                    $price = $price.Trim()
-                    if ($price.StartsWith("₹")) { $price = "Rs. " + $price.Substring(1).Trim() }
-                    if ($price -and -not $price.ToUpper().StartsWith("RS") -and -not $price.ToUpper().StartsWith("M.R.P")) {
-                        $price = "Rs. " + $price
-                    }
-
-                    $copies = 1
-                    if ($item.copies) {
-                        $copies = [int]$item.copies
-                    } elseif ($payload.copies) {
-                        $copies = [int]$payload.copies
-                    }
-
-                    for ($c = 0; $c -lt $copies; $c++) {
-                        $allBw.Write([byte[]]@(0x1B, 0x40)) # Reset
-                        $allBw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
-                        $allBw.Write([byte[]]@(0x1B, 0x33, 0x10)) # Tight line spacing (16 dots)
-
-                        # Universal 2D QR Code Bitmap Output via ESC/POS GS v 0 (100% Thermal Printer Compatible)
-                        $qrText = "HTTPS://NOOROPTICS.VERCEL.APP/Q/$sku"
-                        $rasterBytes = $null
-
-                        # 1. Native Offline QRCoder Generation (100% offline, pure .NET, instant!)
-                        $rasterBytes = Generate-QrRaster $qrText
-
-                        # 2. Check pre-computed GS v 0 raster from admin.js
-                        if (-not $rasterBytes -and $item.qrRasterBase64) {
-                            try {
-                                $r = [Convert]::FromBase64String([string]$item.qrRasterBase64)
-                                if ($r -and $r.Length -gt 8) { $rasterBytes = $r }
-                            } catch {}
-                        }
-
-                        # 3. Check PNG data URL from admin.js
-                        if (-not $rasterBytes -and $item.qrDataUrl) {
-                            try {
-                                $r = Convert-DataUrlToEscPosRaster ([string]$item.qrDataUrl)
-                                if ($r -and $r.Length -gt 8) { $rasterBytes = $r }
-                            } catch {}
-                        }
-
-                        # 4. Cloud/System fallback: generate QR bitmap via online API if offline raster wasn't attached
-                        if (-not $rasterBytes) {
-                            try {
-                                $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&margin=0&data=$([System.Uri]::EscapeDataString($qrText))"
-                                $wc = New-Object System.Net.WebClient
-                                $imgData = $wc.DownloadData($qrApiUrl)
-                                $msImg = New-Object System.IO.MemoryStream($imgData, 0, $imgData.Length)
-                                $bmp = [System.Drawing.Bitmap]::FromStream($msImg)
-                                $rasterBytes = Convert-BitmapToEscPosRaster $bmp
-                                $bmp.Dispose()
-                                $msImg.Close()
-                                $wc.Dispose()
-                            } catch {}
-                        }
-
-                        # Write 2D QR Bit Image (GS v 0) - NEVER prints text link!
-                        if ($rasterBytes -and $rasterBytes.Length -gt 0) {
-                            $allBw.Write([byte[]]$rasterBytes)
-                            $allBw.Write([byte[]]@(0x1B, 0x64, 0x01)) # 1 dot line feed
-                        }
-
-                        # 6. Text strictly inside QR flag area: Font B
-                        $allBw.Write([byte[]]@(0x1B, 0x4D, 0x01)) # Font B
-                        $allBw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
-                        $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$sku`n"))
-                        $allBw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
-                        if ($name) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$name`n")) }
-                        if ($price) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$price`n")) }
-                        $allBw.Write([byte[]]@(0x1B, 0x4D, 0x00)) # Font A
-                        $allBw.Write([byte[]]@(0x1B, 0x32)) # Reset line spacing
-
-                        $allBw.Write([byte[]]@(0x1B, 0x64, 0x01)) # Feed 1 line
-                        $allBw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00)) # Partial cut
-                    }
-                }
-
-                $combined = $allBuffers.ToArray()
-                $allBw.Close()
-                $allBuffers.Close()
-
+                $combined = Format-StickerBytes $rawItems
                 $ok = Spool-Bytes $combined "QR-Sticker"
                 $statusMsg = "Spooler failure"
                 if ($ok) { $statusMsg = "Sticker(s) printed successfully!" }
@@ -888,9 +970,10 @@ while ($running) {
         # 2. Autonomous Cloud Order Polling (Every 4 seconds)
         # Directly fetches newly placed website orders from Supabase without needing any browser!
         $nowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-        if ($nowEpoch - $lastCloudPoll -ge 4) {
+        if ($nowEpoch - $lastCloudPoll -ge 3) {
             $lastCloudPoll = $nowEpoch
             Poll-CloudOrders
+            Poll-CloudPrintQueue
         }
 
         Start-Sleep -Milliseconds 150

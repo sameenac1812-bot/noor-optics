@@ -957,6 +957,71 @@ async function deleteProductFromCloud(productId) {
 /**
  * Start recurring background synchronization
  */
+async function pushPrintJobToCloudQueue(jobPayload) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    const list = await res.json();
+    let jobs = [];
+    let recordExists = false;
+
+    if (Array.isArray(list) && list.length > 0) {
+      recordExists = true;
+      try {
+        const parsed = JSON.parse(list[0].notes || '{}');
+        jobs = Array.isArray(parsed.jobs) ? parsed.jobs : [];
+      } catch (_) { jobs = []; }
+    }
+
+    const newJob = {
+      id: 'stk_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      type: jobPayload.type || 'qr_sticker',
+      items: jobPayload.items || [jobPayload],
+      created_at: new Date().toISOString()
+    };
+    jobs.push(newJob);
+
+    if (jobs.length > 25) jobs = jobs.slice(-25);
+
+    const payload = {
+      id: 'sys-print-queue-global',
+      client_code: 'SYS-PRINT-QUEUE',
+      name: 'System Print Queue',
+      city: 'Bengaluru',
+      notes: JSON.stringify({ jobs })
+    };
+
+    if (recordExists) {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify(payload)
+      });
+    }
+    return { success: true, jobId: newJob.id };
+  } catch (err) {
+    console.warn('pushPrintJobToCloudQueue warning:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 function startBackgroundSync(db, intervalMs = 10000) {
   // Run immediate initial sync
   syncSupabaseOrders(db).catch(console.warn);
@@ -989,5 +1054,6 @@ module.exports = {
   pushAllDeletedOrdersToCloudTombstone,
   deleteCustomerFromSupabase,
   deleteAllCustomersFromSupabase,
+  pushPrintJobToCloudQueue,
   startBackgroundSync
 };

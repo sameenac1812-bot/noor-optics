@@ -17,13 +17,10 @@ set /p PORT_STATUS=<"%TEMP%\daemon_port_check.txt"
 del "%TEMP%\daemon_port_check.txt" 2>nul
 
 if "%PORT_STATUS%"=="ONLINE" (
-    echo [INFO] Print Daemon is ALREADY RUNNING on http://127.0.0.1:5001!
-    echo [INFO] Only one instance is permitted. Opening daemon status...
-    powershell -NoProfile -Command "Invoke-RestMethod -Uri 'http://127.0.0.1:5001/api/status' | ConvertTo-Json"
-    echo.
-    echo Press any key to exit this launcher window...
-    pause >nul
-    exit /b 0
+    echo [INFO] A Print Daemon is currently active on port 5001.
+    echo [RESTART] Upgrading and reloading daemon with latest QR sticker engine...
+    powershell -NoProfile -Command "Get-Process -Name powershell,node -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -match 'Portable POS' -or $_.CommandLine -match 'pos-daemon' } | Stop-Process -Force -ErrorAction SilentlyContinue" 2>nul
+    timeout /t 1 /nobreak >nul
 )
 
 REM 2. Detect Node.js runtime or fallback to PowerShell
