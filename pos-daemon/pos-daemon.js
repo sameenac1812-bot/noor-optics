@@ -397,7 +397,15 @@ async function format25InchEscPosQrSticker(item) {
   writeBytes([0x1B, 0x61, 0x01]); // Center
   writeBytes([0x1B, 0x33, 0x10]); // Ultra-tight line spacing (16 dots ~ 2mm)
 
-  if (QRCode) {
+  if (item.qrRasterBase64) {
+    try {
+      const rasterBuf = Buffer.from(item.qrRasterBase64, 'base64');
+      chunks.push(rasterBuf);
+      writeBytes([0x1B, 0x64, 0x01]);
+    } catch (e) {
+      log(`Direct raster failed: ${e.message}`, 'WARN');
+    }
+  } else if (QRCode) {
     try {
       const qr = QRCode.create(qrUrl, { errorCorrectionLevel: 'L' });
       const rawSize = qr.modules.size; // 25

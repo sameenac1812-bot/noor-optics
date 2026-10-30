@@ -2343,13 +2343,20 @@
         btnDirect.disabled = true;
         btnDirect.innerHTML = `<span>⏳ Printing ${frames.length} in Sequence...</span>`;
 
-        const items = frames.map(f => ({
-          sku: f.sku || f.id,
-          name: f.name || '',
-          brand: f.brand || 'Noor Optics',
-          price: f.selling_price_paise ? formatINR(f.selling_price_paise, true) : (f.selling_price_inr ? formatINR(f.selling_price_inr * 100, true) : ''),
-          copies: copies
-        }));
+        const items = [];
+        for (const f of frames) {
+          const sku = (f.sku || f.id || 'NOOR-FRAME').toUpperCase();
+          const qrInfo = await generateQrStickerPayload(sku);
+          items.push({
+            sku: sku,
+            name: f.name || '',
+            brand: f.brand || 'Noor Optics',
+            price: f.selling_price_paise ? formatINR(f.selling_price_paise, true) : (f.selling_price_inr ? formatINR(f.selling_price_inr * 100, true) : ''),
+            copies: copies,
+            qrRasterBase64: qrInfo.qrRasterBase64,
+            qrDataUrl: qrInfo.qrDataUrl
+          });
+        }
 
         const payload = {
           items: items,
@@ -2472,13 +2479,20 @@
     const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'url';
     const copies = parseInt(document.getElementById('stk-copies-count')?.value || '1', 10);
 
-    const items = selectedFrames.map(f => ({
-      sku: f.sku || f.id,
-      name: f.name || '',
-      brand: f.brand || 'Noor Optics',
-      price: f.selling_price_paise ? formatINR(f.selling_price_paise, true) : (f.selling_price_inr ? formatINR(f.selling_price_inr * 100, true) : ''),
-      copies: copies
-    }));
+    const items = [];
+    for (const f of selectedFrames) {
+      const sku = (f.sku || f.id || 'NOOR-FRAME').toUpperCase();
+      const qrInfo = await generateQrStickerPayload(sku);
+      items.push({
+        sku: sku,
+        name: f.name || '',
+        brand: f.brand || 'Noor Optics',
+        price: f.selling_price_paise ? formatINR(f.selling_price_paise, true) : (f.selling_price_inr ? formatINR(f.selling_price_inr * 100, true) : ''),
+        copies: copies,
+        qrRasterBase64: qrInfo.qrRasterBase64,
+        qrDataUrl: qrInfo.qrDataUrl
+      });
+    }
 
     const payload = {
       items: items,
@@ -2577,6 +2591,112 @@
       }
     }
   };
+
+  /**
+   * Convert an HTML5 Canvas directly to ESC/POS GS v 0 1-bit monochrome raster
+   * Works on 100% of POS-80 thermal receipt & label printers with zero text link blotting.
+   */
+  function convertCanvasToEscPosRasterBase64(canvas) {
+    if (!canvas) return '';
+    try {
+      const ctx = canvas.getContext('2d');
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const w = canvas.width;
+      const h = canvas.height;
+      const widthBytes = Math.ceil(w / 8);
+      const raster = new Uint8Array(widthBytes * h);
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          const r = imgData.data[idx];
+          const g = imgData.data[idx + 1];
+          const b = imgData.data[idx + 2];
+          const a = imgData.data[idx + 3];
+          const isBlack = (a > 128) && ((r * 0.299 + g * 0.587 + b * 0.114) < 128);
+          if (isBlack) {
+            const byteIdx = y * widthBytes + Math.floor(x / 8);
+            const bitMask = 0x80 >> (x % 8);
+            raster[byteIdx] |= bitMask;
+          }
+        }
+      }
+
+      // Prepend ESC/POS GS v 0 header: 0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH
+      const header = [
+        0x1D, 0x76, 0x30, 0x00,
+        widthBytes & 0xFF, (widthBytes >> 8) & 0xFF,
+        h & 0xFF, (h >> 8) & 0xFF
+      ];
+      let binary = '';
+      for (let i = 0; i < header.length; i++) binary += String.fromCharCode(header[i]);
+      for (let i = 0; i < raster.length; i++) binary += String.fromCharCode(raster[i]);
+      return btoa(binary);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /**
+   * Pre-renders crisp ~10mm QR code for Optical Dumbbell Tags
+   */
+  async function generateQrStickerPayload(sku) {
+    const text = `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent((sku || 'NOOR-FRAME').toUpperCase())}`;
+    return new Promise((resolve) => {
+      function render() {
+        if (!window.QRCode) {
+          resolve({ text, qrDataUrl: '', qrRasterBase64: '' });
+          return;
+        }
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'fixed';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '-9999px';
+        tempDiv.style.width = '80px';
+        tempDiv.style.height = '80px';
+        document.body.appendChild(tempDiv);
+
+        try {
+          new window.QRCode(tempDiv, {
+            text: text,
+            width: 80,
+            height: 80,
+            colorDark: '#000000',
+            colorLight: '#FFFFFF',
+            correctLevel: window.QRCode.CorrectLevel.L
+          });
+
+          let attempts = 0;
+          const poll = setInterval(() => {
+            attempts++;
+            const canvas = tempDiv.querySelector('canvas');
+            if (canvas && canvas.width > 0) {
+              clearInterval(poll);
+              const dataUrl = canvas.toDataURL('image/png');
+              const rasterBase64 = convertCanvasToEscPosRasterBase64(canvas);
+              tempDiv.remove();
+              resolve({ text, qrDataUrl: dataUrl, qrRasterBase64: rasterBase64 });
+              return;
+            }
+            if (attempts >= 15) {
+              clearInterval(poll);
+              tempDiv.remove();
+              resolve({ text, qrDataUrl: '', qrRasterBase64: '' });
+            }
+          }, 20);
+        } catch (_) {
+          tempDiv.remove();
+          resolve({ text, qrDataUrl: '', qrRasterBase64: '' });
+        }
+      }
+
+      if (window.QRCode) {
+        render();
+      } else {
+        setTimeout(render, 50);
+      }
+    });
+  }
 
   /**
    * Helper: Generate QR Code as Base64 Data URL

@@ -203,6 +203,71 @@ try {
     }
 } catch {}
 
+Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+
+function Convert-BitmapToEscPosRaster([System.Drawing.Bitmap]$bitmap) {
+    if (-not $bitmap) { return @() }
+    try {
+        $w = $bitmap.Width
+        $h = $bitmap.Height
+        $widthBytes = [int][Math]::Ceiling($w / 8.0)
+
+        $ms = New-Object System.IO.MemoryStream
+        $bw = New-Object System.IO.BinaryWriter($ms)
+
+        # GS v 0 (0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH)
+        $bw.Write([byte]0x1D)
+        $bw.Write([byte]0x76)
+        $bw.Write([byte]0x30)
+        $bw.Write([byte]0x00)
+        $bw.Write([byte]($widthBytes % 256))
+        $bw.Write([byte]([Math]::Floor($widthBytes / 256)))
+        $bw.Write([byte]($h % 256))
+        $bw.Write([byte]([Math]::Floor($h / 256)))
+
+        for ($y = 0; $y -lt $h; $y++) {
+            for ($xb = 0; $xb -lt $widthBytes; $xb++) {
+                $byteVal = 0
+                for ($bit = 0; $bit -lt 8; $bit++) {
+                    $x = ($xb * 8) + $bit
+                    if ($x -lt $w) {
+                        $pixel = $bitmap.GetPixel($x, $y)
+                        $lum = (0.299 * $pixel.R) + (0.587 * $pixel.G) + (0.114 * $pixel.B)
+                        if ($pixel.A -gt 128 -and $lum -lt 128) {
+                            $byteVal = $byteVal -bor (0x80 -shr $bit)
+                        }
+                    }
+                }
+                $bw.Write([byte]$byteVal)
+            }
+        }
+
+        $res = $ms.ToArray()
+        $bw.Close()
+        $ms.Close()
+        return $res
+    } catch {
+        return @()
+    }
+}
+
+function Convert-DataUrlToEscPosRaster([string]$dataUrl) {
+    if (-not $dataUrl) { return @() }
+    try {
+        $base64 = $dataUrl
+        if ($base64 -match "base64,(.+)") { $base64 = $matches[1] }
+        $bytes = [Convert]::FromBase64String($base64)
+        $ms = New-Object System.IO.MemoryStream($bytes, 0, $bytes.Length)
+        $bmp = [System.Drawing.Bitmap]::FromStream($ms)
+        $res = Convert-BitmapToEscPosRaster $bmp
+        $bmp.Dispose()
+        $ms.Close()
+        return $res
+    } catch {
+        return @()
+    }
+}
+
 # Format 2.5-Inch (32 Column) ESC/POS Receipt
 function Format-ReceiptBytes($order) {
     $ms = New-Object System.IO.MemoryStream
@@ -663,24 +728,46 @@ while ($running) {
                         $allBw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
                         $allBw.Write([byte[]]@(0x1B, 0x33, 0x10)) # Tight line spacing (16 dots)
 
-                        # ESC/POS Native 2D QR Code: GS ( k
+                        # Universal 2D QR Code Bitmap Output via ESC/POS GS v 0 (100% Thermal Printer Compatible)
                         $qrText = "HTTPS://NOOROPTICS.VERCEL.APP/Q/$sku"
-                        $qrBytes = [System.Text.Encoding]::ASCII.GetBytes($qrText)
-                        $len = $qrBytes.Length + 3
-                        $pL = $len % 256
-                        $pH = [Math]::Floor($len / 256)
+                        $rasterBytes = $null
 
-                        # 1. Model (Model 2)
-                        $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00))
-                        # 2. Module Size (3 dots per module = ~10mm small crisp QR!)
-                        $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x03))
-                        # 3. Error Correction Level L
-                        $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x30))
-                        # 4. Store Data
-                        $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, $pL, $pH, 0x31, 0x50, 0x30))
-                        $allBw.Write($qrBytes)
-                        # 5. Print QR
-                        $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30))
+                        # 1. Check pre-computed GS v 0 raster from admin.js
+                        if ($item.qrRasterBase64) {
+                            try {
+                                $r = [Convert]::FromBase64String([string]$item.qrRasterBase64)
+                                if ($r -and $r.Length -gt 8) { $rasterBytes = $r }
+                            } catch {}
+                        }
+
+                        # 2. Check PNG data URL from admin.js
+                        if (-not $rasterBytes -and $item.qrDataUrl) {
+                            try {
+                                $r = Convert-DataUrlToEscPosRaster ([string]$item.qrDataUrl)
+                                if ($r -and $r.Length -gt 8) { $rasterBytes = $r }
+                            } catch {}
+                        }
+
+                        # 3. Cloud/System fallback: generate QR bitmap via online API if offline raster wasn't attached
+                        if (-not $rasterBytes) {
+                            try {
+                                $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&margin=0&data=$([System.Uri]::EscapeDataString($qrText))"
+                                $wc = New-Object System.Net.WebClient
+                                $imgData = $wc.DownloadData($qrApiUrl)
+                                $msImg = New-Object System.IO.MemoryStream($imgData, 0, $imgData.Length)
+                                $bmp = [System.Drawing.Bitmap]::FromStream($msImg)
+                                $rasterBytes = Convert-BitmapToEscPosRaster $bmp
+                                $bmp.Dispose()
+                                $msImg.Close()
+                                $wc.Dispose()
+                            } catch {}
+                        }
+
+                        # Write 2D QR Bit Image (GS v 0) - NEVER prints text link!
+                        if ($rasterBytes -and $rasterBytes.Length -gt 0) {
+                            $allBw.Write($rasterBytes)
+                            $allBw.Write([byte[]]@(0x1B, 0x64, 0x01)) # 1 dot line feed
+                        }
 
                         # 6. Text strictly inside QR flag area: Font B
                         $allBw.Write([byte[]]@(0x1B, 0x4D, 0x01)) # Font B
