@@ -3852,17 +3852,18 @@
           cameraDropdown.value = activeCameraId;
         }
 
-        // Start scanner with FULL VIEWPORT scanning (no qrbox cropping, no aspect ratio squishing)
-        // This ensures the camera uses its full optical resolution and never clips the QR code!
+        // Start scanner with targeted high-speed scanning box aligned with yellow brackets
         await state.html5QrScanner.start(
           activeCameraId,
           {
-            fps: 25,
+            fps: 15,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const edge = Math.min(viewfinderWidth, viewfinderHeight);
+              const qrboxSize = Math.max(160, Math.floor(edge * 0.72));
+              return { width: qrboxSize, height: qrboxSize };
+            },
             videoConstraints: {
-              facingMode: { ideal: 'environment' },
-              width: { ideal: 1280, min: 640 },
-              height: { ideal: 720, min: 480 },
-              focusMode: { ideal: 'continuous' }
+              facingMode: { ideal: 'environment' }
             }
           },
           (decodedText) => {
