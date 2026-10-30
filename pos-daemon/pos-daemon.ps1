@@ -19,9 +19,82 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $ConfigFile = Join-Path $ScriptDir "config.json"
 $HistoryFile = Join-Path $ScriptDir ".printed_orders.json"
 $LogsDir = Join-Path $ScriptDir "logs"
-$WorkerScript = Join-Path $ScriptDir "worker-printer.ps1"
 
 if (-not (Test-Path $LogsDir)) { New-Item -ItemType Directory -Path $LogsDir -Force | Out-Null }
+
+# Compile Direct Win32 Spooler P/Invoke once in memory
+$win32Code = @"
+using System;
+using System.Runtime.InteropServices;
+
+public class RawPrinterHelperDirect {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    public class DOCINFOA {
+        [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+        [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+        [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
+    }
+
+    [DllImport("winspool.Drv", EntryPoint = "OpenPrinterA", SetLastError = true, CharSet = CharSet.Ansi, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    public static extern bool OpenPrinter([MarshalAs(UnmanagedType.LPStr)] string szPrinter, out IntPtr hPrinter, IntPtr pd);
+
+    [DllImport("winspool.Drv", EntryPoint = "ClosePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    public static extern bool ClosePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.Drv", EntryPoint = "StartDocPrinterA", SetLastError = true, CharSet = CharSet.Ansi, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    public static extern bool StartDocPrinter(IntPtr hPrinter, int level, [In, MarshalAs(UnmanagedType.LPStruct)] DOCINFOA di);
+
+    [DllImport("winspool.Drv", EntryPoint = "EndDocPrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    public static extern bool EndDocPrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.Drv", EntryPoint = "StartPagePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    public static extern bool StartPagePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.Drv", EntryPoint = "EndPagePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    public static extern bool EndPagePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.Drv", EntryPoint = "WritePrinter", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+    public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
+
+    public static bool SendBytesToPrinter(string szPrinterName, byte[] bytes, string szDocName) {
+        if (string.IsNullOrEmpty(szPrinterName)) return false;
+        string cleanName = szPrinterName.Trim();
+        IntPtr hPrinter = IntPtr.Zero;
+
+        DOCINFOA di = new DOCINFOA();
+        di.pDocName = string.IsNullOrEmpty(szDocName) ? "POS Thermal Receipt" : szDocName;
+        di.pDataType = "RAW";
+
+        if (!OpenPrinter(cleanName, out hPrinter, IntPtr.Zero)) return false;
+
+        if (!StartDocPrinter(hPrinter, 1, di)) {
+            di.pDataType = null;
+            if (!StartDocPrinter(hPrinter, 1, di)) {
+                ClosePrinter(hPrinter);
+                return false;
+            }
+        }
+
+        if (!StartPagePrinter(hPrinter)) { EndDocPrinter(hPrinter); ClosePrinter(hPrinter); return false; }
+
+        IntPtr pUnmanagedBytes = Marshal.AllocCoTaskMem(bytes.Length);
+        Marshal.Copy(bytes, 0, pUnmanagedBytes, bytes.Length);
+
+        int dwWritten = 0;
+        bool bSuccess = WritePrinter(hPrinter, pUnmanagedBytes, bytes.Length, out dwWritten);
+        Marshal.FreeCoTaskMem(pUnmanagedBytes);
+
+        EndPagePrinter(hPrinter);
+        EndDocPrinter(hPrinter);
+        ClosePrinter(hPrinter);
+        return bSuccess;
+    }
+}
+"@
+
+if (-not ([System.Management.Automation.PSTypeName]'RawPrinterHelperDirect').Type) {
+    Add-Type -TypeDefinition $win32Code
+}
 
 # Load Configuration
 $Config = @{
@@ -49,24 +122,15 @@ if (Test-Path $ConfigFile) {
 
 # Auto-Detect POS Printer
 try {
-    $installed = Get-Printer | Select-Object -ExpandProperty Name
+    $installed = @()
+    try { $installed += @(Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name) } catch {}
+    if ($installed.Count -eq 0) { try { $installed += @(Get-Printer | Select-Object -ExpandProperty Name) } catch {} }
+
     if ($installed -notcontains $Config.printerName) {
-        $autoMatch = $installed | Where-Object { $_ -match 'POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS' } | Select-Object -First 1
+        $autoMatch = $installed | Where-Object { $_ -match "POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS" } | Select-Object -First 1
         if ($autoMatch) {
             Write-Host "[Auto-Detect] Switched printer to connected POS device: '$autoMatch'" -ForegroundColor Green
             $Config.printerName = $autoMatch
-        }
-    }
-} catch {}
-
-# Auto-detect printer if configured printer is not found
-try {
-    $installed = Get-Printer | Select-Object -ExpandProperty Name
-    if ($installed -notcontains $Config.printerName) {
-        $auto = $installed | Where-Object { $_ -match 'POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS' } | Select-Object -First 1
-        if ($auto) {
-            Write-Host "[Auto-Detect] Target '$($Config.printerName)' not found. Automatically connected to: '$auto'" -ForegroundColor Yellow
-            $Config.printerName = $auto
         }
     }
 } catch {}
@@ -311,12 +375,25 @@ function Format-ReceiptBytes($order) {
 }
 
 function Spool-Bytes($bytes, $docName = "POS Bill") {
-    $tempFile = Join-Path $LogsDir "ps_spool_$([Guid]::NewGuid().ToString().Substring(0,8)).bin"
-    [System.IO.File]::WriteAllBytes($tempFile, $bytes)
-    $output = & powershell.exe -ExecutionPolicy Bypass -NoProfile -File $WorkerScript -FilePath $tempFile -PrinterName $Config.printerName -DocName $docName
-    $code = $LASTEXITCODE
-    Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
-    return ($code -eq 0)
+    try {
+        $p = $Config.printerName
+        Write-DaemonLog "Direct Spooling $($bytes.Length) bytes to '$p'..."
+        $ok = [RawPrinterHelperDirect]::SendBytesToPrinter($p, $bytes, $docName)
+        if (-not $ok) {
+            $installed = @()
+            try { $installed += @(Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name) } catch {}
+            $alt = $installed | Where-Object { $_ -match "POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS" } | Select-Object -First 1
+            if ($alt -and $alt -ne $p) {
+                Write-DaemonLog "Primary failed. Retrying with fallback: '$alt'..."
+                $ok = [RawPrinterHelperDirect]::SendBytesToPrinter($alt, $bytes, $docName)
+                if ($ok) { $Config.printerName = $alt }
+            }
+        }
+        return $ok
+    } catch {
+        Write-DaemonLog "Spool exception: $_" "ERROR"
+        return $false
+    }
 }
 
 # Start HTTP Listener
@@ -402,6 +479,83 @@ while ($running) {
                 }
             }
 
+            $buf = [System.Text.Encoding]::UTF8.GetBytes(($resObj | ConvertTo-Json))
+            $response.ContentType = "application/json"
+            $response.ContentLength64 = $buf.Length
+            $response.OutputStream.Write($buf, 0, $buf.Length)
+            $response.Close()
+            continue
+        }
+
+        # 2b. POST /api/printer/print-qr-sticker or /api/print-qr-sticker
+        if ($request.HttpMethod -eq "POST" -and ($path -eq "/api/printer/print-qr-sticker" -or $path -eq "/api/print-qr-sticker")) {
+            $reader = New-Object System.IO.StreamReader($request.InputStream, $request.ContentEncoding)
+            $body = $reader.ReadToEnd()
+            $reader.Close()
+
+            $payload = $body | ConvertFrom-Json
+            $rawItems = if ($payload.items) { $payload.items } else { @($payload) }
+            Write-DaemonLog "Received QR Sticker print request for $($rawItems.Count) frame(s)..."
+
+            $allBuffers = New-Object System.IO.MemoryStream
+            $allBw = New-Object System.IO.BinaryWriter($allBuffers)
+
+            foreach ($item in $rawItems) {
+                $sku = [string](if ($item.sku) { $item.sku } else { "NOOR-FRAME" }).ToUpper()
+                $name = [string](if ($item.name) { $item.name } else { "" })
+                if ($name.Length -gt 18) { $name = $name.Substring(0, 18) }
+                $price = [string](if ($item.price) { $item.price } else { "" }).Trim()
+                if ($price.StartsWith("₹")) { $price = "Rs. " + $price.Substring(1).Trim() }
+                if ($price -and -not $price.ToUpper().StartsWith("RS") -and -not $price.ToUpper().StartsWith("M.R.P")) {
+                    $price = "Rs. " + $price
+                }
+                $copies = [int](if ($item.copies) { $item.copies } elseif ($payload.copies) { $payload.copies } else { 1 })
+
+                for ($c = 0; $c -lt $copies; $c++) {
+                    $allBw.Write([byte[]]@(0x1B, 0x40)) # Reset
+                    $allBw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
+                    $allBw.Write([byte[]]@(0x1B, 0x33, 0x10)) # Tight line spacing (16 dots)
+
+                    # ESC/POS Native 2D QR Code: GS ( k
+                    $qrText = "HTTPS://NOOROPTICS.VERCEL.APP/Q/$sku"
+                    $qrBytes = [System.Text.Encoding]::ASCII.GetBytes($qrText)
+                    $len = $qrBytes.Length + 3
+                    $pL = $len % 256
+                    $pH = [Math]::Floor($len / 256)
+
+                    # 1. Model (Model 2)
+                    $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00))
+                    # 2. Module Size (3 dots per module = ~10mm small crisp QR!)
+                    $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x03))
+                    # 3. Error Correction Level L
+                    $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x30))
+                    # 4. Store Data
+                    $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, $pL, $pH, 0x31, 0x50, 0x30))
+                    $allBw.Write($qrBytes)
+                    # 5. Print QR
+                    $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30))
+
+                    # 6. Text strictly inside QR flag area: Font B
+                    $allBw.Write([byte[]]@(0x1B, 0x4D, 0x01)) # Font B
+                    $allBw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
+                    $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$sku`n"))
+                    $allBw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
+                    if ($name) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$name`n")) }
+                    if ($price) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$price`n")) }
+                    $allBw.Write([byte[]]@(0x1B, 0x4D, 0x00)) # Font A
+                    $allBw.Write([byte[]]@(0x1B, 0x32)) # Reset line spacing
+
+                    $allBw.Write([byte[]]@(0x1B, 0x64, 0x01)) # Feed 1 line
+                    $allBw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00)) # Partial cut
+                }
+            }
+
+            $combined = $allBuffers.ToArray()
+            $allBw.Close()
+            $allBuffers.Close()
+
+            $ok = Spool-Bytes $combined "QR-Sticker"
+            $resObj = @{ success = $ok; count = $rawItems.Count; message = if ($ok) { "Sticker(s) printed successfully!" } else { "Spooler failure" } }
             $buf = [System.Text.Encoding]::UTF8.GetBytes(($resObj | ConvertTo-Json))
             $response.ContentType = "application/json"
             $response.ContentLength64 = $buf.Length

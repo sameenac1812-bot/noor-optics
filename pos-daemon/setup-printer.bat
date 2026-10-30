@@ -12,7 +12,7 @@ cd /d "%~dp0"
 
 echo Scanning installed Windows printers...
 echo.
-powershell -Command "Get-Printer | Format-Table -AutoSize Name, DriverName, PortName, PrinterStatus"
+powershell -Command "try { Get-Printer | Format-Table -AutoSize Name, DriverName, PortName, PrinterStatus } catch { Get-CimInstance Win32_Printer | Format-Table -AutoSize Name, DriverName, PortName, PrinterStatus }"
 echo.
 
 echo ----------------------------------------------------------------------
