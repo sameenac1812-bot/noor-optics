@@ -300,9 +300,6 @@
                  decoding="async"
                  onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';"
                  id="img-${product.id}">
-            <div class="card-quick-action">
-              <button class="btn-card-quickview" data-action="quickview" data-id="${product.id}">Quick View</button>
-            </div>
           </div>
           <div class="card-content">
             <div class="card-header-row">
@@ -1364,7 +1361,7 @@
         if (addBagBtn) {
           e.stopPropagation();
           const id = addBagBtn.getAttribute('data-id');
-          addToCart(id);
+          openQuickView(id);
           return;
         }
 
