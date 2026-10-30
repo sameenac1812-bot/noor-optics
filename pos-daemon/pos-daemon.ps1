@@ -318,14 +318,22 @@ function Format-ReceiptBytes($order) {
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "GRAND TOTAL:" "Rs.$([Math]::Round($grandT))")))
     $bw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Payment [$paym]:" "Rs.$([Math]::Round($paid))")))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Balance Due:" (if ($bal -gt 0) { "Rs.$([Math]::Round($bal))" } else { "Rs.0 (PAID)" }))))
+    $balText = "Rs.0 (PAID)"
+    if ($bal -gt 0) { $balText = "Rs.$([Math]::Round($bal))" }
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Balance Due:" $balText)))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
     # 7. Prescription if attached
-    $rx = if ($order.prescription) { $order.prescription } elseif ($order.newPrescription) { $order.newPrescription } else { $order }
-    $odSphV = if ($rx.od_sph -ne $null -and $rx.od_sph -ne '') { $rx.od_sph } else { $order.od_sph }
-    $osSphV = if ($rx.os_sph -ne $null -and $rx.os_sph -ne '') { $rx.os_sph } else { $order.os_sph }
-    $hasRx = ($odSphV -ne $null -and $odSphV -ne '') -or ($osSphV -ne $null -and $osSphV -ne '') -or $rx.prescription_number -or $order.prescription_number -or $order.prescription_id -or ($order.prescription_pref -and $order.prescription_pref -match 'rx')
+    $rx = $order.prescription
+    if (-not $rx) { $rx = $order.newPrescription }
+    if (-not $rx) { $rx = $order }
+
+    $odSphV = $rx.od_sph
+    if ($odSphV -eq $null -or $odSphV -eq '') { $odSphV = $order.od_sph }
+    $osSphV = $rx.os_sph
+    if ($osSphV -eq $null -or $osSphV -eq '') { $osSphV = $order.os_sph }
+
+    $hasRx = ($odSphV -ne $null -and $odSphV -ne '') -or ($osSphV -ne $null -and $osSphV -ne '')
 
     if ($hasRx) {
         $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
@@ -335,21 +343,38 @@ function Format-ReceiptBytes($order) {
         $bw.Write([byte[]]@(0x1B, 0x61, 0x00))
 
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Eye    SPH    CYL   AXIS   ADD  `n"))
-        $odS = "{0:+0.00;-0.00; 0.00}" -f [double]($odSphV)
-        $odC = "{0:+0.00;-0.00; 0.00}" -f [double](if ($rx.od_cyl -ne $null) { $rx.od_cyl } else { $order.od_cyl })
-        $odA = "{0,3}" -f (if ($rx.od_axis -ne $null) { $rx.od_axis } else { $order.od_axis })
-        $add = "{0:+0.00;-0.00; 0.00}" -f [double](if ($rx.addition -ne $null) { $rx.addition } else { $order.addition })
+        $odS = "{0:+0.00;-0.00; 0.00}" -f [double]$odSphV
+        $odCylV = 0.0
+        if ($rx.od_cyl -ne $null -and $rx.od_cyl -ne '') { $odCylV = [double]$rx.od_cyl } elseif ($order.od_cyl -ne $null -and $order.od_cyl -ne '') { $odCylV = [double]$order.od_cyl }
+        $odC = "{0:+0.00;-0.00; 0.00}" -f $odCylV
+        $odAxV = 0
+        if ($rx.od_axis) { $odAxV = $rx.od_axis } elseif ($order.od_axis) { $odAxV = $order.od_axis }
+        $odA = "{0,3}" -f $odAxV
+        $addV = 0.0
+        if ($rx.addition -ne $null -and $rx.addition -ne '') { $addV = [double]$rx.addition } elseif ($order.addition -ne $null -and $order.addition -ne '') { $addV = [double]$order.addition }
+        $add = "{0:+0.00;-0.00; 0.00}" -f $addV
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OD   $odS  $odC   $odA  $add`n"))
 
-        $osS = "{0:+0.00;-0.00; 0.00}" -f [double]($osSphV)
-        $osC = "{0:+0.00;-0.00; 0.00}" -f [double](if ($rx.os_cyl -ne $null) { $rx.os_cyl } else { $order.os_cyl })
-        $osA = "{0,3}" -f (if ($rx.os_axis -ne $null) { $rx.os_axis } else { $order.os_axis })
+        $osS = "{0:+0.00;-0.00; 0.00}" -f [double]$osSphV
+        $osCylV = 0.0
+        if ($rx.os_cyl -ne $null -and $rx.os_cyl -ne '') { $osCylV = [double]$rx.os_cyl } elseif ($order.os_cyl -ne $null -and $order.os_cyl -ne '') { $osCylV = [double]$order.os_cyl }
+        $osC = "{0:+0.00;-0.00; 0.00}" -f $osCylV
+        $osAxV = 0
+        if ($rx.os_axis) { $osAxV = $rx.os_axis } elseif ($order.os_axis) { $osAxV = $order.os_axis }
+        $osA = "{0,3}" -f $osAxV
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OS   $osS  $osC   $osA  $add`n"))
-        $pdVal = if ($rx.ipd_distance) { $rx.ipd_distance } elseif ($rx.pd) { $rx.pd } elseif ($order.ipd_distance) { $order.ipd_distance } else { $order.pd }
+
+        $pdVal = $rx.ipd_distance
+        if (-not $pdVal) { $pdVal = $rx.pd }
+        if (-not $pdVal) { $pdVal = $order.ipd_distance }
+        if (-not $pdVal) { $pdVal = $order.pd }
         if ($pdVal) {
             $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Distance PD: $pdVal mm`n"))
         }
-        $docVal = if ($rx.checked_by) { $rx.checked_by } elseif ($rx.rx_checked_by) { $rx.rx_checked_by } else { $order.checked_by }
+
+        $docVal = $rx.checked_by
+        if (-not $docVal) { $docVal = $rx.rx_checked_by }
+        if (-not $docVal) { $docVal = $order.checked_by }
         if ($docVal) {
             $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Optometrist: $docVal`n"))
         }
@@ -480,7 +505,7 @@ function Poll-CloudOrders {
             if ($changed) { Save-History }
         }
     } catch {
-        # Silent network transient
+        Write-DaemonLog "[Cloud Sync] Error: $_" "ERROR"
     }
 }
 
