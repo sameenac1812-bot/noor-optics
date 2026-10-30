@@ -107,6 +107,9 @@ $Config = @{
     storeAddress = "Indiranagar 100ft Road, Bengaluru"
     storePhone = "+91 98765 43210"
     storeGstin = "29AAAAA0000A1Z5"
+    orderFreshnessMinutes = 45
+    supabaseUrl = "https://czajxtgwsxbrrymrhauz.supabase.co"
+    supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk"
 }
 
 if (Test-Path $ConfigFile) {
@@ -117,6 +120,9 @@ if (Test-Path $ConfigFile) {
         if ($json.storeName) { $Config.storeName = [string]$json.storeName }
         if ($json.storeAddress) { $Config.storeAddress = [string]$json.storeAddress }
         if ($json.storePhone) { $Config.storePhone = [string]$json.storePhone }
+        if ($json.supabaseUrl) { $Config.supabaseUrl = [string]$json.supabaseUrl }
+        if ($json.supabaseAnonKey) { $Config.supabaseAnonKey = [string]$json.supabaseAnonKey }
+        if ($json.orderFreshnessMinutes) { $Config.orderFreshnessMinutes = [int]$json.orderFreshnessMinutes }
     } catch {}
 }
 
@@ -274,13 +280,19 @@ function Format-ReceiptBytes($order) {
         foreach ($it in $order.items) {
             $name = if ($it.product_name) { $it.product_name } elseif ($it.name) { $it.name } else { "Frame" }
             $qty = if ($it.quantity) { [int]$it.quantity } else { 1 }
-            $price = if ($it.unit_price_inr) { [double]$it.unit_price_inr } elseif ($it.unitPrice) { [double]$it.unitPrice } else { 0 }
-            $tot = if ($it.subtotal_inr) { [double]$it.subtotal_inr } else { $price * $qty }
+            $price = if ($it.unit_price_inr) { [double]$it.unit_price_inr } elseif ($it.unitPrice) { [double]$it.unitPrice } elseif ($it.unit_price) { [double]$it.unit_price } else { 0 }
+            $tot = if ($it.subtotal_inr) { [double]$it.subtotal_inr } elseif ($it.subtotal) { [double]$it.subtotal } else { $price * $qty }
 
-            $line = Row-Text $name.Substring(0, [Math]::Min(18, $name.Length)) "$qty  Rs.$([Math]::Round($tot))"
+            $cleanName = if ($name.Length -gt 18) { $name.Substring(0, 18) } else { $name }
+            $line = Row-Text $cleanName "$qty  Rs.$([Math]::Round($tot))"
             $bw.Write([System.Text.Encoding]::ASCII.GetBytes($line))
             if ($it.variant_name) {
                 $bw.Write([System.Text.Encoding]::ASCII.GetBytes(" Color: $($it.variant_name)`n"))
+            } elseif ($it.color) {
+                $bw.Write([System.Text.Encoding]::ASCII.GetBytes(" Color: $($it.color)`n"))
+            }
+            if ($it.lens) {
+                $bw.Write([System.Text.Encoding]::ASCII.GetBytes(" Lens:  $($it.lens)`n"))
             }
         }
     } else {
@@ -292,7 +304,7 @@ function Format-ReceiptBytes($order) {
     # 6. Totals (NO GST / NO GSTIN / NO TAX lines)
     $sub = if ($order.subtotal_inr) { [double]$order.subtotal_inr } elseif ($order.subtotal) { [double]$order.subtotal } else { 4299 }
     $disc = if ($order.discount_inr) { [double]$order.discount_inr } elseif ($order.discount) { [double]$order.discount } else { 0 }
-    $grandT = if ($order.total_payable_inr) { [double]$order.total_payable_inr } elseif ($order.grand_total) { [double]$order.grand_total } else { $sub }
+    $grandT = if ($order.total_payable_inr) { [double]$order.total_payable_inr } elseif ($order.grand_total) { [double]$order.grand_total } elseif ($order.total) { [double]$order.total } else { $sub }
     $paid = if ($order.amount_paid_inr) { [double]$order.amount_paid_inr } else { $grandT }
     $bal = [Math]::Max(0, $grandT - $paid)
     $paym = if ($order.payment_method) { $order.payment_method.ToUpper() } else { "CASH" }
@@ -415,186 +427,264 @@ Write-DaemonLog "Target Printer: '$($Config.printerName)' (2.5 Inch Paper Width)
 Write-DaemonLog "Mode: Single Customer Bill"
 Write-DaemonLog "======================================================="
 
-$running = $true
-while ($running) {
+
+# ── Cloud Order Poller (Direct Background Supabase Sync) ─────────────────────
+function Poll-CloudOrders {
+    if (-not $Config.supabaseUrl -or -not $Config.supabaseAnonKey) { return }
+
     try {
-        $context = $listener.GetContext()
-        $request = $context.Request
-        $response = $context.Response
-
-        $origin = if ($request.Headers["Origin"]) { $request.Headers["Origin"] } else { "*" }
-        $response.AddHeader("Access-Control-Allow-Origin", $origin)
-        $response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        $response.AddHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-        if ($request.HttpMethod -eq "OPTIONS") {
-            $response.StatusCode = 204
-            $response.Close()
-            continue
+        $headers = @{
+            "apikey" = $Config.supabaseAnonKey
+            "Authorization" = "Bearer $($Config.supabaseAnonKey)"
         }
+        $url = "$($Config.supabaseUrl)/rest/v1/orders?select=*&order=created_at.desc&limit=10"
+        $orders = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 5 -ErrorAction SilentlyContinue
 
-        $path = $request.Url.AbsolutePath
+        if ($orders -and $orders.Count -gt 0) {
+            $nowUtc = [DateTime]::UtcNow
+            $freshnessMinutes = [int]$Config.orderFreshnessMinutes
+            $changed = $false
 
-        # 1. GET /api/status
-        if ($request.HttpMethod -eq "GET" -and $path -eq "/api/status") {
-            $statusObj = @{
-                status = "online"
-                version = "2.4.0"
-                engine = "PowerShell"
-                printer = $Config.printerName
-                paperWidthInch = 2.5
-                columns = 32
-                printKOT = $false
-            }
-            $buf = [System.Text.Encoding]::UTF8.GetBytes(($statusObj | ConvertTo-Json))
-            $response.ContentType = "application/json"
-            $response.ContentLength64 = $buf.Length
-            $response.OutputStream.Write($buf, 0, $buf.Length)
-            $response.Close()
-            continue
-        }
+            foreach ($o in $orders) {
+                $ref = if ($o.order_ref) { [string]$o.order_ref } elseif ($o.order_number) { [string]$o.order_number } else { [string]$o.id }
+                if (-not $ref -or $ref -match "TEST") { continue }
+                if ($History.ContainsKey($ref)) { continue }
 
-        # 2. POST /api/print
-        if ($request.HttpMethod -eq "POST" -and $path -eq "/api/print") {
-            $reader = New-Object System.IO.StreamReader($request.InputStream, $request.ContentEncoding)
-            $body = $reader.ReadToEnd()
-            $reader.Close()
+                # Stale historical check: don't print old orders on reboot
+                if ($o.created_at) {
+                    try {
+                        $orderTime = [DateTime]::Parse($o.created_at).ToUniversalTime()
+                        $ageMinutes = ($nowUtc - $orderTime).TotalMinutes
+                        if ($ageMinutes -gt $freshnessMinutes) {
+                            $History[$ref] = "SKIPPED_STALE"
+                            $changed = $true
+                            continue
+                        }
+                    } catch {}
+                }
 
-            $payload = $body | ConvertFrom-Json
-            $order = if ($payload.order) { $payload.order } else { $payload }
-            $orderRef = if ($order.order_number) { $order.order_number } elseif ($order.order_ref) { $order.order_ref } else { $order.id }
+                Write-DaemonLog "[Cloud Sync] Detected newly confirmed website order #$ref! Auto-printing..."
+                if (-not $o.channel) { $o | Add-Member -NotePropertyName "channel" -NotePropertyValue "WEBSITE" -Force }
+                $bytes = Format-ReceiptBytes $o
+                $ok = Spool-Bytes $bytes "Website-Bill-$ref"
 
-            if ($History.ContainsKey($orderRef) -and -not $payload.manualReprint) {
-                $resObj = @{ success = $true; skippedDuplicate = $true; orderNumber = $orderRef }
-            } else {
-                Write-DaemonLog "Printing 2.5-inch receipt for order #$orderRef..."
-                $bytes = Format-ReceiptBytes $order
-                $ok = Spool-Bytes $bytes "Bill-$orderRef"
                 if ($ok) {
-                    $History[$orderRef] = (Get-Date).ToString("o")
-                    Save-History
-                    $resObj = @{ success = $true; orderNumber = $orderRef }
+                    $History[$ref] = (Get-Date).ToString("o")
+                    $changed = $true
+                    Write-DaemonLog "[Cloud Sync] SUCCESS: Printed website order #$ref to $($Config.printerName)!" "INFO"
                 } else {
-                    $resObj = @{ success = $false; error = "Spooler failure" }
+                    Write-DaemonLog "[Cloud Sync] FAILED: Could not spool website order #$ref" "ERROR"
                 }
             }
 
-            $buf = [System.Text.Encoding]::UTF8.GetBytes(($resObj | ConvertTo-Json))
-            $response.ContentType = "application/json"
-            $response.ContentLength64 = $buf.Length
-            $response.OutputStream.Write($buf, 0, $buf.Length)
-            $response.Close()
-            continue
+            if ($changed) { Save-History }
         }
-
-        # 2b. POST /api/printer/print-qr-sticker or /api/print-qr-sticker
-        if ($request.HttpMethod -eq "POST" -and ($path -eq "/api/printer/print-qr-sticker" -or $path -eq "/api/print-qr-sticker")) {
-            $reader = New-Object System.IO.StreamReader($request.InputStream, $request.ContentEncoding)
-            $body = $reader.ReadToEnd()
-            $reader.Close()
-
-            $payload = $body | ConvertFrom-Json
-            $rawItems = if ($payload.items) { $payload.items } else { @($payload) }
-            Write-DaemonLog "Received QR Sticker print request for $($rawItems.Count) frame(s)..."
-
-            $allBuffers = New-Object System.IO.MemoryStream
-            $allBw = New-Object System.IO.BinaryWriter($allBuffers)
-
-            foreach ($item in $rawItems) {
-                $sku = [string](if ($item.sku) { $item.sku } else { "NOOR-FRAME" }).ToUpper()
-                $name = [string](if ($item.name) { $item.name } else { "" })
-                if ($name.Length -gt 18) { $name = $name.Substring(0, 18) }
-                $price = [string](if ($item.price) { $item.price } else { "" }).Trim()
-                if ($price.StartsWith("₹")) { $price = "Rs. " + $price.Substring(1).Trim() }
-                if ($price -and -not $price.ToUpper().StartsWith("RS") -and -not $price.ToUpper().StartsWith("M.R.P")) {
-                    $price = "Rs. " + $price
-                }
-                $copies = [int](if ($item.copies) { $item.copies } elseif ($payload.copies) { $payload.copies } else { 1 })
-
-                for ($c = 0; $c -lt $copies; $c++) {
-                    $allBw.Write([byte[]]@(0x1B, 0x40)) # Reset
-                    $allBw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
-                    $allBw.Write([byte[]]@(0x1B, 0x33, 0x10)) # Tight line spacing (16 dots)
-
-                    # ESC/POS Native 2D QR Code: GS ( k
-                    $qrText = "HTTPS://NOOROPTICS.VERCEL.APP/Q/$sku"
-                    $qrBytes = [System.Text.Encoding]::ASCII.GetBytes($qrText)
-                    $len = $qrBytes.Length + 3
-                    $pL = $len % 256
-                    $pH = [Math]::Floor($len / 256)
-
-                    # 1. Model (Model 2)
-                    $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00))
-                    # 2. Module Size (3 dots per module = ~10mm small crisp QR!)
-                    $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x03))
-                    # 3. Error Correction Level L
-                    $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x30))
-                    # 4. Store Data
-                    $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, $pL, $pH, 0x31, 0x50, 0x30))
-                    $allBw.Write($qrBytes)
-                    # 5. Print QR
-                    $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30))
-
-                    # 6. Text strictly inside QR flag area: Font B
-                    $allBw.Write([byte[]]@(0x1B, 0x4D, 0x01)) # Font B
-                    $allBw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
-                    $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$sku`n"))
-                    $allBw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
-                    if ($name) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$name`n")) }
-                    if ($price) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$price`n")) }
-                    $allBw.Write([byte[]]@(0x1B, 0x4D, 0x00)) # Font A
-                    $allBw.Write([byte[]]@(0x1B, 0x32)) # Reset line spacing
-
-                    $allBw.Write([byte[]]@(0x1B, 0x64, 0x01)) # Feed 1 line
-                    $allBw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00)) # Partial cut
-                }
-            }
-
-            $combined = $allBuffers.ToArray()
-            $allBw.Close()
-            $allBuffers.Close()
-
-            $ok = Spool-Bytes $combined "QR-Sticker"
-            $resObj = @{ success = $ok; count = $rawItems.Count; message = if ($ok) { "Sticker(s) printed successfully!" } else { "Spooler failure" } }
-            $buf = [System.Text.Encoding]::UTF8.GetBytes(($resObj | ConvertTo-Json))
-            $response.ContentType = "application/json"
-            $response.ContentLength64 = $buf.Length
-            $response.OutputStream.Write($buf, 0, $buf.Length)
-            $response.Close()
-            continue
-        }
-
-        # 3. POST /api/test-print
-        if ($request.HttpMethod -eq "POST" -and $path -eq "/api/test-print") {
-            $sample = @{
-                order_number = "TEST-PS-01"
-                token_number = 99
-                channel = "TEST"
-                customer_name = "Test Client"
-                customer_phone = "+91 99999 99999"
-                subtotal_inr = 4299
-                total_payable_inr = 4299
-                amount_paid_inr = 4299
-                od_sph = -1.50; od_cyl = -0.50; od_axis = 90; addition = 1.50
-                os_sph = -1.75; os_cyl = -0.25; os_axis = 80; ipd_distance = 63
-            }
-            $bytes = Format-ReceiptBytes $sample
-            $ok = Spool-Bytes $bytes "Test-Receipt"
-            $resObj = @{ success = $ok; message = if ($ok) { "Test receipt printed!" } else { "Spooler failed" } }
-            $buf = [System.Text.Encoding]::UTF8.GetBytes(($resObj | ConvertTo-Json))
-            $response.ContentType = "application/json"
-            $response.ContentLength64 = $buf.Length
-            $response.OutputStream.Write($buf, 0, $buf.Length)
-            $response.Close()
-            continue
-        }
-
-        # Default 404
-        $response.StatusCode = 404
-        $response.Close()
     } catch {
-        Write-DaemonLog "Request loop error: $_" "ERROR"
+        # Silent network transient
     }
 }
 
-$listener.Stop()
+Write-DaemonLog "[Cloud Sync] Autonomous background polling ACTIVE (Checking Supabase every 4s)"
+Write-DaemonLog "[Cloud Sync] You DO NOT need to keep the admin page open for orders to print!"
+
+$running = $true
+$asyncResult = $listener.BeginGetContext($null, $null)
+$lastCloudPoll = 0
+
+while ($running) {
+    try {
+        # 1. Process incoming local POS HTTP requests (Non-blocking)
+        if ($asyncResult.IsCompleted) {
+            $context = $listener.EndGetContext($asyncResult)
+            $asyncResult = $listener.BeginGetContext($null, $null)
+
+            $request = $context.Request
+            $response = $context.Response
+
+            $origin = if ($request.Headers["Origin"]) { $request.Headers["Origin"] } else { "*" }
+            $response.AddHeader("Access-Control-Allow-Origin", $origin)
+            $response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            $response.AddHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+            if ($request.HttpMethod -eq "OPTIONS") {
+                $response.StatusCode = 204
+                $response.Close()
+                continue
+            }
+
+            $path = $request.Url.AbsolutePath
+
+            # 1. GET /api/status
+            if ($request.HttpMethod -eq "GET" -and $path -eq "/api/status") {
+                $statusObj = @{
+                    status = "online"
+                    version = "2.4.0"
+                    engine = "PowerShell"
+                    printer = $Config.printerName
+                    paperWidthInch = 2.5
+                    columns = 32
+                    printKOT = $false
+                    autonomousCloudSync = $true
+                }
+                $buf = [System.Text.Encoding]::UTF8.GetBytes(($statusObj | ConvertTo-Json))
+                $response.ContentType = "application/json"
+                $response.ContentLength64 = $buf.Length
+                $response.OutputStream.Write($buf, 0, $buf.Length)
+                $response.Close()
+                continue
+            }
+
+            # 2. POST /api/print (In-Store Checkout or Manual Reprint)
+            if ($request.HttpMethod -eq "POST" -and $path -eq "/api/print") {
+                $reader = New-Object System.IO.StreamReader($request.InputStream, $request.ContentEncoding)
+                $body = $reader.ReadToEnd()
+                $reader.Close()
+
+                $payload = $body | ConvertFrom-Json
+                $order = if ($payload.order) { $payload.order } else { $payload }
+                $orderRef = if ($order.order_number) { $order.order_number } elseif ($order.order_ref) { $order.order_ref } else { $order.id }
+
+                if ($History.ContainsKey($orderRef) -and -not $payload.manualReprint) {
+                    $resObj = @{ success = $true; skippedDuplicate = $true; orderNumber = $orderRef }
+                } else {
+                    Write-DaemonLog "Printing 2.5-inch receipt for order #$orderRef..."
+                    $bytes = Format-ReceiptBytes $order
+                    $ok = Spool-Bytes $bytes "Bill-$orderRef"
+                    if ($ok) {
+                        $History[$orderRef] = (Get-Date).ToString("o")
+                        Save-History
+                        $resObj = @{ success = $true; orderNumber = $orderRef }
+                    } else {
+                        $resObj = @{ success = $false; error = "Spooler failure" }
+                    }
+                }
+
+                $buf = [System.Text.Encoding]::UTF8.GetBytes(($resObj | ConvertTo-Json))
+                $response.ContentType = "application/json"
+                $response.ContentLength64 = $buf.Length
+                $response.OutputStream.Write($buf, 0, $buf.Length)
+                $response.Close()
+                continue
+            }
+
+            # 2b. POST /api/printer/print-qr-sticker or /api/print-qr-sticker
+            if ($request.HttpMethod -eq "POST" -and ($path -eq "/api/printer/print-qr-sticker" -or $path -eq "/api/print-qr-sticker")) {
+                $reader = New-Object System.IO.StreamReader($request.InputStream, $request.ContentEncoding)
+                $body = $reader.ReadToEnd()
+                $reader.Close()
+
+                $payload = $body | ConvertFrom-Json
+                $rawItems = if ($payload.items) { $payload.items } else { @($payload) }
+                Write-DaemonLog "Received QR Sticker print request for $($rawItems.Count) frame(s)..."
+
+                $allBuffers = New-Object System.IO.MemoryStream
+                $allBw = New-Object System.IO.BinaryWriter($allBuffers)
+
+                foreach ($item in $rawItems) {
+                    $sku = [string](if ($item.sku) { $item.sku } else { "NOOR-FRAME" }).ToUpper()
+                    $name = [string](if ($item.name) { $item.name } else { "" })
+                    if ($name.Length -gt 18) { $name = $name.Substring(0, 18) }
+                    $price = [string](if ($item.price) { $item.price } else { "" }).Trim()
+                    if ($price.StartsWith("₹")) { $price = "Rs. " + $price.Substring(1).Trim() }
+                    if ($price -and -not $price.ToUpper().StartsWith("RS") -and -not $price.ToUpper().StartsWith("M.R.P")) {
+                        $price = "Rs. " + $price
+                    }
+                    $copies = [int](if ($item.copies) { $item.copies } elseif ($payload.copies) { $payload.copies } else { 1 })
+
+                    for ($c = 0; $c -lt $copies; $c++) {
+                        $allBw.Write([byte[]]@(0x1B, 0x40)) # Reset
+                        $allBw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
+                        $allBw.Write([byte[]]@(0x1B, 0x33, 0x10)) # Tight line spacing (16 dots)
+
+                        # ESC/POS Native 2D QR Code: GS ( k
+                        $qrText = "HTTPS://NOOROPTICS.VERCEL.APP/Q/$sku"
+                        $qrBytes = [System.Text.Encoding]::ASCII.GetBytes($qrText)
+                        $len = $qrBytes.Length + 3
+                        $pL = $len % 256
+                        $pH = [Math]::Floor($len / 256)
+
+                        # 1. Model (Model 2)
+                        $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00))
+                        # 2. Module Size (3 dots per module = ~10mm small crisp QR!)
+                        $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x03))
+                        # 3. Error Correction Level L
+                        $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x30))
+                        # 4. Store Data
+                        $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, $pL, $pH, 0x31, 0x50, 0x30))
+                        $allBw.Write($qrBytes)
+                        # 5. Print QR
+                        $allBw.Write([byte[]]@(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30))
+
+                        # 6. Text strictly inside QR flag area: Font B
+                        $allBw.Write([byte[]]@(0x1B, 0x4D, 0x01)) # Font B
+                        $allBw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
+                        $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$sku`n"))
+                        $allBw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
+                        if ($name) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$name`n")) }
+                        if ($price) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$price`n")) }
+                        $allBw.Write([byte[]]@(0x1B, 0x4D, 0x00)) # Font A
+                        $allBw.Write([byte[]]@(0x1B, 0x32)) # Reset line spacing
+
+                        $allBw.Write([byte[]]@(0x1B, 0x64, 0x01)) # Feed 1 line
+                        $allBw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00)) # Partial cut
+                    }
+                }
+
+                $combined = $allBuffers.ToArray()
+                $allBw.Close()
+                $allBuffers.Close()
+
+                $ok = Spool-Bytes $combined "QR-Sticker"
+                $resObj = @{ success = $ok; count = $rawItems.Count; message = if ($ok) { "Sticker(s) printed successfully!" } else { "Spooler failure" } }
+                $buf = [System.Text.Encoding]::UTF8.GetBytes(($resObj | ConvertTo-Json))
+                $response.ContentType = "application/json"
+                $response.ContentLength64 = $buf.Length
+                $response.OutputStream.Write($buf, 0, $buf.Length)
+                $response.Close()
+                continue
+            }
+
+            # 3. POST /api/test-print
+            if ($request.HttpMethod -eq "POST" -and $path -eq "/api/test-print") {
+                $sample = @{
+                    order_number = "TEST-PS-01"
+                    token_number = 99
+                    channel = "TEST"
+                    customer_name = "Test Client"
+                    customer_phone = "+91 99999 99999"
+                    subtotal_inr = 4299
+                    total_payable_inr = 4299
+                    amount_paid_inr = 4299
+                    od_sph = -1.50; od_cyl = -0.50; od_axis = 90; addition = 1.50
+                    os_sph = -1.75; os_cyl = -0.25; os_axis = 80; ipd_distance = 63
+                }
+                $bytes = Format-ReceiptBytes $sample
+                $ok = Spool-Bytes $bytes "Test-Receipt"
+                $resObj = @{ success = $ok; message = if ($ok) { "Test receipt printed!" } else { "Spooler failed" } }
+                $buf = [System.Text.Encoding]::UTF8.GetBytes(($resObj | ConvertTo-Json))
+                $response.ContentType = "application/json"
+                $response.ContentLength64 = $buf.Length
+                $response.OutputStream.Write($buf, 0, $buf.Length)
+                $response.Close()
+                continue
+            }
+
+            # Default 404
+            $response.StatusCode = 404
+            $response.Close()
+        }
+
+        # 2. Autonomous Cloud Order Polling (Every 4 seconds)
+        # Directly fetches newly placed website orders from Supabase without needing any browser!
+        $nowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        if ($nowEpoch - $lastCloudPoll -ge 4) {
+            $lastCloudPoll = $nowEpoch
+            Poll-CloudOrders
+        }
+
+        Start-Sleep -Milliseconds 150
+    } catch {
+        Write-DaemonLog "Daemon loop error: $_" "ERROR"
+        Start-Sleep -Milliseconds 500
+    }
+}

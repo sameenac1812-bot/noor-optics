@@ -59,7 +59,7 @@ if (fs.existsSync(CONFIG_FILE)) {
 // ── Smart Thermal Printer Auto-Discovery ──────────────────────────────────────
 function autoDetectPrinter() {
   try {
-    const stdout = execSync('powershell.exe -NoProfile -Command "Get-Printer | Select-Object -ExpandProperty Name"', { encoding: 'utf8', timeout: 6000 });
+    const stdout = execSync('powershell.exe -NoProfile -Command "try { Get-Printer | Select-Object -ExpandProperty Name } catch { (Get-CimInstance Win32_Printer).Name }"', { encoding: 'utf8', timeout: 6000 });
     const installed = stdout.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     if (installed.length === 0) return config.printerName;
 
@@ -259,15 +259,15 @@ function format25InchEscPosReceipt(rawOrder) {
     items.forEach(item => {
       const name = item.product_name || item.name || 'Frame';
       const qty = parseInt(item.quantity || 1, 10);
-      const unitPrice = item.unit_price_inr ? item.unit_price_inr : (item.unit_price_paise ? item.unit_price_paise / 100 : (item.unitPrice || 0));
-      const lineTotal = item.subtotal_inr ? item.subtotal_inr : (item.subtotal_paise ? item.subtotal_paise / 100 : unitPrice * qty);
+      const unitPrice = item.unit_price_inr ? item.unit_price_inr : (item.unit_price_paise ? item.unit_price_paise / 100 : (item.unitPrice || item.unit_price || 0));
+      const lineTotal = item.subtotal_inr ? item.subtotal_inr : (item.subtotal_paise ? item.subtotal_paise / 100 : (item.subtotal || unitPrice * qty));
 
       writeText(row(name.slice(0, 18), `${qty}  ${formatINR(lineTotal)}`));
       if (item.variant_name || item.color) {
         writeText(` Color: ${(item.variant_name || item.color).slice(0, COLS - 9)}\n`);
       }
-      if (item.lens_name && !/standard/i.test(item.lens_name)) {
-        writeText(` Lens: ${item.lens_name.slice(0, COLS - 8)}\n`);
+      if (item.lens || (item.lens_name && !/standard/i.test(item.lens_name))) {
+        writeText(` Lens: ${(item.lens || item.lens_name).slice(0, COLS - 8)}\n`);
       }
     });
   }
