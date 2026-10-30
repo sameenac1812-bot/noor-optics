@@ -102,3 +102,4 @@ console.log('  ✓ [PASS] Cleaned up test records');
 console.log('\n======================================================');
 console.log('🏁 INVENTORY & QR RESOLUTION TESTS PASSED (4/4)');
 console.log('======================================================\n');
+

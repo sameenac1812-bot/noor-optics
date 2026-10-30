@@ -552,6 +552,16 @@ function Format-ReceiptBytes($order) {
 
     if ($itemCount -gt 0) {
         foreach ($it in $rawItems) {
+            $qty = if ($it.quantity) { [int]$it.quantity } else { 1 }
+            $price = if ($it.unit_price_inr -ne $null) { [double]$it.unit_price_inr } `
+                     elseif ($it.unit_price_paise -ne $null) { [double]$it.unit_price_paise / 100 } `
+                     elseif ($it.unitPricePaise -ne $null) { [double]$it.unitPricePaise / 100 } `
+                     elseif ($it.pricePaise -ne $null) { [double]$it.pricePaise / 100 } `
+                     elseif ($it.priceINR -ne $null) { [double]$it.priceINR } `
+                     elseif ($it.unitPrice -ne $null) { [double]$it.unitPrice } `
+                     elseif ($it.unit_price -ne $null) { [double]$it.unit_price } `
+                     else { 0.0 }
+
             $name = if ($it.product_name) { [string]$it.product_name } `
                     elseif ($it.name) { [string]$it.name } `
                     elseif ($it.model) { [string]$it.model } `
@@ -560,10 +570,10 @@ function Format-ReceiptBytes($order) {
 
             $vId = if ($it.variantId) { [string]$it.variantId } elseif ($it.id) { [string]$it.id } else { "" }
             if (-not $name -or $name -eq "Optical Frame" -or $name -eq "Frame") {
-                if ($vId -match "1793298868419|1793380443146" -or $it.sku -match "BATMAN" -or ($price -gt 50000 -and $price -lt 60000)) {
+                if ($vId -match "1793298868419|1793380443146" -or $it.sku -match "BATMAN" -or ($price -ge 50000 -and $price -le 60000)) {
                     $name = "meta glasses meta"
                     if (-not $it.sku) { $it | Add-Member -NotePropertyName "sku" -NotePropertyValue "NOOR BATMAN" -Force }
-                } elseif ($vId -match "1793380282448" -or $it.sku -match "GOLD" -or ($price -gt 12000 -and $price -lt 13000)) {
+                } elseif ($vId -match "1793380282448" -or $it.sku -match "GOLD" -or ($price -ge 12000 -and $price -le 13000)) {
                     $name = "RayBan Aviator Gold"
                     if (-not $it.sku) { $it | Add-Member -NotePropertyName "sku" -NotePropertyValue "NOOR-RB-GOLD-2425" -Force }
                 } elseif ($vId -match "noor-01") { $name = "The Stockholm Noir" }
@@ -583,16 +593,6 @@ function Format-ReceiptBytes($order) {
                 elseif ($order.product_name) { $name = [string]$order.product_name }
                 else { $name = "Noor Optical Frame" }
             }
-
-            $qty = if ($it.quantity) { [int]$it.quantity } else { 1 }
-            $price = if ($it.unit_price_inr -ne $null) { [double]$it.unit_price_inr } `
-                     elseif ($it.unit_price_paise -ne $null) { [double]$it.unit_price_paise / 100 } `
-                     elseif ($it.unitPricePaise -ne $null) { [double]$it.unitPricePaise / 100 } `
-                     elseif ($it.pricePaise -ne $null) { [double]$it.pricePaise / 100 } `
-                     elseif ($it.priceINR -ne $null) { [double]$it.priceINR } `
-                     elseif ($it.unitPrice -ne $null) { [double]$it.unitPrice } `
-                     elseif ($it.unit_price -ne $null) { [double]$it.unit_price } `
-                     else { 0.0 }
 
             $tot = if ($it.subtotal_inr -ne $null) { [double]$it.subtotal_inr } `
                    elseif ($it.subtotal_paise -ne $null) { [double]$it.subtotal_paise / 100 } `
