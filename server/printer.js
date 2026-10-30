@@ -112,9 +112,8 @@ function format58mmTextReceipt(order, items, settings = {}) {
  */
 function generate58mmHTML(order, items, settings = {}) {
   const storeName = settings.store_name || 'NOOR OPTICS';
-  const storeAddress = settings.store_address || 'Indiranagar 100ft Road, Bengaluru';
+  const storeAddress = (settings.store_address || 'Indiranagar 100ft Road').replace(/,\s*Bengaluru/i, '').replace(/Bengaluru/i, '').trim();
   const storePhone = settings.store_phone || '+91 98765 43210';
-  const storeGstin = settings.store_gstin || '29AAAAA0000A1Z5';
   const widthMm = settings.printer_nominal_width_mm || 58;
 
   const dateStr = new Date(order.created_at || Date.now()).toLocaleString('en-IN', {
@@ -166,6 +165,7 @@ function generate58mmHTML(order, items, settings = {}) {
       box-sizing: border-box;
     }
     .header { text-align: center; margin-bottom: 6px; }
+    .brand-logo { width: 68px; height: auto; display: block; margin: 0 auto 4px auto; }
     .brand-title { font-size: 15px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
     .brand-sub { font-size: 9px; text-transform: uppercase; color: #444; }
     .token-badge {
@@ -187,11 +187,11 @@ function generate58mmHTML(order, items, settings = {}) {
 </head>
 <body>
   <div class="header">
+    <img src="/images/bill_logo.png" class="brand-logo" alt="NOOR" onerror="this.style.display='none';" />
     <div class="brand-title">${storeName}</div>
     <div class="brand-sub">Curated Scandinavian Eyewear</div>
     <div style="font-size:9px;">${storeAddress}</div>
     <div style="font-size:9px;">Ph: ${storePhone}</div>
-    ${storeGstin ? `<div style="font-size:9px;">GSTIN: ${storeGstin}</div>` : ''}
   </div>
 
   <div class="token-badge">
@@ -229,10 +229,6 @@ function generate58mmHTML(order, items, settings = {}) {
       <span>-${formatINR(order.discount_paise)}</span>
     </div>
   ` : ''}
-  <div class="totals-row" style="font-size:9.5px;">
-    <span>Tax (GST 18% Incl):</span>
-    <span>${formatINR(order.tax_paise)}</span>
-  </div>
 
   <div class="double-divider"></div>
   <div class="totals-row grand-total">
@@ -254,6 +250,36 @@ function generate58mmHTML(order, items, settings = {}) {
       <span>${formatINR(order.outstanding_paise)}</span>
     </div>
   ` : ''}
+
+  ${(order.od_sph !== undefined && order.od_sph !== null && order.od_sph !== '') || order.prescription_number ? `
+    <div class="divider"></div>
+    <div style="text-align:center; font-weight:800; font-size:10px; margin:4px 0; text-transform:uppercase; letter-spacing:0.5px;">--- Client Prescription (Rx) ---</div>
+    <table style="font-size:9.5px; width:100%; text-align:center; margin:3px 0; border-collapse:collapse;">
+      <thead>
+        <tr style="border-bottom:1px dashed #666; font-weight:700;">
+          <th style="text-align:left; padding:2px 0;">Eye</th><th>SPH</th><th>CYL</th><th>AXIS</th><th>ADD</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="text-align:left; font-weight:700; padding:2px 0;">OD</td>
+          <td>${order.od_sph || '0.00'}</td><td>${order.od_cyl || '0.00'}</td><td>${order.od_axis || '---'}</td><td>${order.addition || '0.00'}</td>
+        </tr>
+        <tr>
+          <td style="text-align:left; font-weight:700; padding:2px 0;">OS</td>
+          <td>${order.os_sph || '0.00'}</td><td>${order.os_cyl || '0.00'}</td><td>${order.os_axis || '---'}</td><td>${order.addition || '0.00'}</td>
+        </tr>
+      </tbody>
+    </table>
+    ${order.ipd_distance ? `<div style="font-size:9px; margin-top:2px;"><strong>Distance PD:</strong> ${order.ipd_distance} mm</div>` : ''}
+    ${order.rx_checked_by ? `<div style="font-size:9px;"><strong>Optometrist:</strong> ${order.rx_checked_by}</div>` : ''}
+  ` : ''}
+
+  <div class="divider"></div>
+  <div style="text-align:center; margin:8px 0;">
+    <div style="font-size:9.5px; font-weight:800; letter-spacing:0.5px; margin-bottom:4px; text-transform:uppercase;">Scan to Pay via UPI</div>
+    <img src="/images/payment_qr.jpg" style="width:125px; height:125px; display:inline-block; border:1px solid #111; padding:2px;" alt="UPI QR" />
+  </div>
 
   <div class="divider"></div>
   <div class="footer">

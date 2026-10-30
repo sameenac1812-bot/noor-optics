@@ -3828,9 +3828,32 @@
           loadOrders();
           if (typeof loadClients === 'function') loadClients();
 
-          // Instant automatic bill printout
+          // Instant automatic bill printout with complete embedded prescription
           if (res.orderId) {
-            instantPrintReceipt(res.orderId);
+            const rxData = state.posDraftPrescription || state.posSelectedPrescription || null;
+            const fullOrderSnapshot = {
+              id: res.orderId,
+              order_number: res.orderNumber || res.invoiceNumber,
+              token_number: res.tokenNumber,
+              customer_name: payload.customerName || 'Walk-in Client',
+              customer_phone: payload.customerPhone,
+              channel: 'IN-STORE',
+              items: state.posCart.map(i => ({
+                product_name: i.name || i.model || 'Frame',
+                variant_name: i.colorName || i.variantName,
+                lens_name: i.lensName,
+                quantity: i.quantity,
+                unit_price_inr: (i.pricePaise || 0) / 100,
+                subtotal_inr: ((i.pricePaise || 0) * i.quantity) / 100
+              })),
+              subtotal_inr: (subtotalPaise || 0) / 100,
+              discount_inr: discountINR,
+              total_payable_inr: res.totalPayableINR,
+              amount_paid_inr: res.totalPayableINR,
+              payment_method: state.posPaymode,
+              ...(rxData || {})
+            };
+            instantPrintReceipt(res.orderId, false, fullOrderSnapshot);
           }
 
           // Show Order Done modal
@@ -5334,19 +5357,29 @@
   };
 
   // ── Dispatch Print Signal to POS Portable Daemon (Port 5001) ─────────────
-  window.instantPrintReceipt = async function (orderId, manualReprint = false) {
-    if (!orderId) return;
+  window.instantPrintReceipt = async function (orderId, manualReprint = false, directOrder = null) {
+    if (!orderId && !directOrder) return;
 
-    let order = state.ordersCache.find(o => o.id === orderId || o.order_number === orderId);
+    let order = directOrder || state.ordersCache.find(o => o.id === orderId || o.order_number === orderId);
     if (!order) {
       try {
-        order = await apiFetch(`/api/orders/${orderId}`);
+        const resp = await apiFetch(`/api/orders/${orderId}`);
+        order = resp.order || resp;
+        if (resp.items && !order.items) order.items = resp.items;
       } catch (e) {}
     }
 
     if (!order) {
       console.warn('Order not found for instant receipt printing:', orderId);
       return;
+    }
+
+    // Ensure client prescription is attached if linked
+    if (!order.od_sph && order.customer_id && state.clientsCache) {
+      const client = state.clientsCache.find(c => c.id === order.customer_id);
+      if (client && client.latest_prescription) {
+        Object.assign(order, client.latest_prescription);
+      }
     }
 
     // 1. Send direct hardware print signal to Windows POS Print Daemon on Port 5001

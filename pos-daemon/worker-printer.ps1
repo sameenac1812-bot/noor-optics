@@ -128,3 +128,4 @@ try {
     Write-Error "EXCEPTION: $_"
     exit 1
 }
+

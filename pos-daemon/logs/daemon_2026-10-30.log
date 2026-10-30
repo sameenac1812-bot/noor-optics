@@ -9,3 +9,20 @@
 [2026-10-30T09:48:03.554Z] [INFO] Duplicate print skipped for order NOOR-SAMPLE-001 (Already printed at 2026-10-30T09:48:03.542Z)
 [2026-10-30T09:48:03.562Z] [INFO] Received QR Sticker print request for 1 frame(s)...
 [2026-10-30T09:48:05.339Z] [INFO] Printed successfully to POS-80
+[2026-10-30T10:02:45.521Z] [INFO] =======================================================
+[2026-10-30T10:02:45.523Z] [INFO] NOOR OPTICS - PORTABLE POS PRINT DAEMON v2.4.0
+[2026-10-30T10:02:45.524Z] [INFO] Listening on http://127.0.0.1:5001
+[2026-10-30T10:02:45.524Z] [INFO] Target Printer: 'POS-80' (2.5 Inch Paper Width)
+[2026-10-30T10:02:45.524Z] [INFO] Mode: Single Customer Bill (KOT: false)
+[2026-10-30T10:02:45.525Z] [INFO] =======================================================
+[2026-10-30T10:05:03.137Z] [INFO] =======================================================
+[2026-10-30T10:05:03.140Z] [INFO] NOOR OPTICS - PORTABLE POS PRINT DAEMON v2.4.0
+[2026-10-30T10:05:03.141Z] [INFO] Listening on http://127.0.0.1:5001
+[2026-10-30T10:05:03.141Z] [INFO] Target Printer: 'POS-80' (2.5 Inch Paper Width)
+[2026-10-30T10:05:03.142Z] [INFO] Mode: Single Customer Bill (KOT: false)
+[2026-10-30T10:05:03.142Z] [INFO] =======================================================
+[2026-10-30T10:05:12.858Z] [INFO] Received QR Sticker print request for 1 frame(s)...
+[2026-10-30T10:05:13.855Z] [INFO] Printed successfully to POS-80
+[2026-10-30T10:06:57.903Z] [INFO] [Cloud Event] Detected newly confirmed website order #NOOR-20261030-1031! Triggering automatic print...
+[2026-10-30T10:06:57.904Z] [INFO] Preparing 2.5-inch Customer Bill for order #NOOR-20261030-1031...
+[2026-10-30T10:06:58.933Z] [INFO] Printed successfully to POS-80

@@ -56,6 +56,28 @@ if (fs.existsSync(CONFIG_FILE)) {
   }
 }
 
+// ── Pre-compiled 2.5-Inch ESC/POS Raster Assets (Logo & Payment QR) ───────────
+let logoRasterBuffer = null;
+let paymentQrRasterBuffer = null;
+
+try {
+  const logoPath = path.join(__dirname, 'assets', 'logo_raster.bin');
+  if (fs.existsSync(logoPath)) {
+    logoRasterBuffer = fs.readFileSync(logoPath);
+  }
+} catch (e) {
+  console.warn('[Daemon] Error loading logo raster:', e.message);
+}
+
+try {
+  const qrPath = path.join(__dirname, 'assets', 'payment_qr_raster.bin');
+  if (fs.existsSync(qrPath)) {
+    paymentQrRasterBuffer = fs.readFileSync(qrPath);
+  }
+} catch (e) {
+  console.warn('[Daemon] Error loading payment QR raster:', e.message);
+}
+
 // ── Persistent Print History ──────────────────────────────────────────────────
 let printedHistory = {};
 if (fs.existsSync(PRINTED_FILE)) {
@@ -120,14 +142,20 @@ function spoolBytesToPrinter(buffer, docName = 'Customer Bill') {
 }
 
 // ── Format 2.5-Inch (32 Columns) ESC/POS Customer Bill ────────────────────────
-function format25InchEscPosReceipt(order) {
+function format25InchEscPosReceipt(rawOrder) {
   const chunks = [];
   const COLS = config.columns || 32;
   const divider = '-'.repeat(COLS) + '\n';
   const doubleDivider = '='.repeat(COLS) + '\n';
 
+  // Support both raw order and wrapped { order: { ... }, items: [...] }
+  const order = rawOrder.order || rawOrder;
+  if (!order.items && Array.isArray(rawOrder.items)) {
+    order.items = rawOrder.items;
+  }
+
   function writeBytes(arr) {
-    chunks.push(Buffer.from(arr));
+    chunks.push(Buffer.isBuffer(arr) ? arr : Buffer.from(arr));
   }
   function writeText(str) {
     chunks.push(Buffer.from(str, 'ascii'));
@@ -153,7 +181,14 @@ function format25InchEscPosReceipt(order) {
   // 1. Initialize Printer (ESC @)
   writeBytes([0x1B, 0x40]);
 
-  // 2. Store Header (Centered, Double Height for Name)
+  // 1b. Print Noor Glasses Logo at Top of Bill
+  if (logoRasterBuffer && logoRasterBuffer.length > 0) {
+    writeBytes([0x1B, 0x61, 0x01]); // Center
+    writeBytes(logoRasterBuffer);
+    writeBytes([0x1B, 0x64, 0x01]); // Feed 1 line
+  }
+
+  // 2. Store Header (Centered, Bold, NO City, NO GSTIN)
   writeBytes([0x1B, 0x61, 0x01]); // Center
   writeBytes([0x1B, 0x45, 0x01]); // Bold ON
   writeBytes([0x1D, 0x21, 0x01]); // Double height
@@ -161,9 +196,10 @@ function format25InchEscPosReceipt(order) {
   writeBytes([0x1D, 0x21, 0x00]); // Normal size
   writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
   writeText(`${config.storeTagline}\n`);
-  writeText(`${config.storeAddress}\n`);
+  const cleanAddress = (config.storeAddress || 'Indiranagar 100ft Road').replace(/,\s*Bengaluru/i, '').replace(/Bengaluru/i, '').trim();
+  if (cleanAddress) writeText(`${cleanAddress}\n`);
   writeText(`Ph: ${config.storePhone}\n`);
-  if (config.storeGstin) writeText(`GSTIN: ${config.storeGstin}\n`);
+  // GSTIN REMOVED as requested
   writeText(doubleDivider);
 
   // 3. Invoice & Token Header
@@ -178,13 +214,11 @@ function format25InchEscPosReceipt(order) {
   writeText(row('Date:', dateStr));
   writeText(divider);
 
-  // 4. Customer Information
+  // 4. Customer Information (NO CITY as requested)
   const custName = order.customer_name || 'Walk-in Client';
   const custPhone = order.customer_phone || '-';
-  const custCity = order.city || 'Bengaluru';
   writeText(`Client: ${custName.slice(0, COLS - 8)}\n`);
   if (custPhone !== '-') writeText(`Phone:  ${custPhone}\n`);
-  if (custCity) writeText(`City:   ${custCity.slice(0, COLS - 8)}\n`);
   writeText(divider);
 
   // 5. Itemized Frame & Products Table
@@ -212,10 +246,9 @@ function format25InchEscPosReceipt(order) {
   }
   writeText(divider);
 
-  // 6. Financial Breakdown
+  // 6. Financial Breakdown (NO GST / NO GSTIN / NO TAX line as requested)
   const subtotal = order.subtotal_inr || (order.subtotal_paise ? order.subtotal_paise / 100 : order.subtotal || 0);
   const discount = order.discount_inr || (order.discount_paise ? order.discount_paise / 100 : order.discount || 0);
-  const tax = order.tax_inr || (order.tax_paise ? order.tax_paise / 100 : Math.round(subtotal * 0.18 / 1.18));
   const grandTotal = order.total_payable_inr || (order.total_payable_paise ? order.total_payable_paise / 100 : order.grand_total || subtotal);
   const amountPaid = order.amount_paid_inr || (order.amount_paid_paise ? order.amount_paid_paise / 100 : grandTotal);
   const balance = Math.max(0, grandTotal - amountPaid);
@@ -223,7 +256,6 @@ function format25InchEscPosReceipt(order) {
 
   writeText(row('Subtotal:', formatINR(subtotal)));
   if (discount > 0) writeText(row('Discount:', '-' + formatINR(discount)));
-  writeText(row('GST (18% Included):', formatINR(tax)));
   writeText(doubleDivider);
 
   writeBytes([0x1B, 0x45, 0x01]); // Bold ON
@@ -240,10 +272,15 @@ function format25InchEscPosReceipt(order) {
   }
   writeText(divider);
 
-  // 7. Client Prescription (Rx) Section (Cleanly embedded on Customer Bill)
-  const hasRx = order.od_sph !== undefined && order.od_sph !== null ||
-                order.prescription_number ||
-                order.os_sph !== undefined && order.os_sph !== null;
+  // 7. Client Prescription (Rx) Section (100% Reliable Extraction)
+  const rx = order.prescription || rawOrder.prescription || order.client_prescription || order.newPrescription || order;
+  const odSphVal = rx.od_sph !== undefined && rx.od_sph !== null && rx.od_sph !== '' ? rx.od_sph : order.od_sph;
+  const osSphVal = rx.os_sph !== undefined && rx.os_sph !== null && rx.os_sph !== '' ? rx.os_sph : order.os_sph;
+
+  const hasRx = (odSphVal !== undefined && odSphVal !== null && odSphVal !== '') ||
+                (osSphVal !== undefined && osSphVal !== null && osSphVal !== '') ||
+                Boolean(rx.prescription_number || order.prescription_number || order.prescription_id) ||
+                (order.prescription_pref && /rx/i.test(order.prescription_pref));
 
   if (hasRx) {
     writeBytes([0x1B, 0x61, 0x01]); // Center
@@ -265,22 +302,24 @@ function format25InchEscPosReceipt(order) {
     }
 
     writeText('Eye    SPH    CYL   AXIS   ADD  \n');
-    const odSph = fmtRx(order.od_sph);
-    const odCyl = fmtRx(order.od_cyl);
-    const odAx = fmtAx(order.od_axis);
-    const add = fmtRx(order.addition);
+    const odSph = fmtRx(odSphVal);
+    const odCyl = fmtRx(rx.od_cyl !== undefined && rx.od_cyl !== null ? rx.od_cyl : order.od_cyl);
+    const odAx = fmtAx(rx.od_axis !== undefined && rx.od_axis !== null ? rx.od_axis : order.od_axis);
+    const add = fmtRx(rx.addition !== undefined && rx.addition !== null ? rx.addition : order.addition);
     writeText(`OD   ${odSph}  ${odCyl}   ${odAx}  ${add}\n`);
 
-    const osSph = fmtRx(order.os_sph);
-    const osCyl = fmtRx(order.os_cyl);
-    const osAx = fmtAx(order.os_axis);
+    const osSph = fmtRx(osSphVal);
+    const osCyl = fmtRx(rx.os_cyl !== undefined && rx.os_cyl !== null ? rx.os_cyl : order.os_cyl);
+    const osAx = fmtAx(rx.os_axis !== undefined && rx.os_axis !== null ? rx.os_axis : order.os_axis);
     writeText(`OS   ${osSph}  ${osCyl}   ${osAx}  ${add}\n`);
 
-    if (order.ipd_distance || order.pd) {
-      writeText(`Distance PD: ${order.ipd_distance || order.pd} mm\n`);
+    const pdVal = rx.ipd_distance || rx.pd || order.ipd_distance || order.pd;
+    if (pdVal) {
+      writeText(`Distance PD: ${pdVal} mm\n`);
     }
-    if (order.rx_checked_by || order.checked_by) {
-      writeText(`Optometrist: ${order.rx_checked_by || order.checked_by}\n`);
+    const docVal = rx.checked_by || rx.rx_checked_by || order.rx_checked_by || order.checked_by;
+    if (docVal) {
+      writeText(`Optometrist: ${docVal}\n`);
     }
     writeText(divider);
   }
@@ -291,7 +330,18 @@ function format25InchEscPosReceipt(order) {
   writeText('2-Yr Frame Warranty • 14-Day Fit\n');
   writeText('Visit Again • nooroptics.in\n');
 
-  // 9. Feed Paper & Cut
+  // 9. Payment QR Code at Bottom of Bill (Centered)
+  if (paymentQrRasterBuffer && paymentQrRasterBuffer.length > 0) {
+    writeText(divider);
+    writeBytes([0x1B, 0x61, 0x01]); // Center
+    writeBytes([0x1B, 0x45, 0x01]); // Bold ON
+    writeText('SCAN & PAY VIA UPI\n');
+    writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
+    writeBytes(paymentQrRasterBuffer);
+    writeBytes([0x1B, 0x64, 0x01]);
+  }
+
+  // 10. Feed Paper & Cut
   writeBytes([0x1B, 0x64, 0x04]); // Feed 4 lines
   writeBytes([0x1D, 0x56, 0x42, 0x00]); // Partial Cut (GS V 66 0)
 
@@ -599,3 +649,4 @@ server.on('error', err => {
     process.exit(1);
   }
 });
+

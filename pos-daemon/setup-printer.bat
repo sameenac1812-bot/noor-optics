@@ -42,3 +42,4 @@ if /i "%DO_TEST%"=="Y" (
 echo.
 echo Setup complete. Press any key to exit...
 pause >nul
+

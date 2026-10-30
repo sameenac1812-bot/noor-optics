@@ -44,3 +44,4 @@ Automated, high-speed Windows thermal receipt printing for 2.5-inch (58mm) print
 - `POST http://127.0.0.1:5001/api/print`: Submit order JSON to print customer bill.
 - `POST http://127.0.0.1:5001/api/printer/print-qr-sticker`: Submit frame QR sticker payload.
 - `POST http://127.0.0.1:5001/api/test-print`: Print test receipt.
+

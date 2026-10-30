@@ -101,7 +101,16 @@ function Format-ReceiptBytes($order) {
     # 1. ESC @ (Initialize)
     $bw.Write([byte[]]@(0x1B, 0x40))
 
-    # 2. Header
+    # 1b. Print Noor Glasses Logo at Top
+    $LogoRasterFile = Join-Path $ScriptDir "assets\logo_raster.bin"
+    if (Test-Path $LogoRasterFile) {
+        $logoBytes = [System.IO.File]::ReadAllBytes($LogoRasterFile)
+        $bw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
+        $bw.Write($logoBytes)
+        $bw.Write([byte[]]@(0x1B, 0x64, 0x01)) # Feed 1 line
+    }
+
+    # 2. Header (NO City, NO GSTIN)
     $bw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
     $bw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
     $bw.Write([byte[]]@(0x1D, 0x21, 0x01)) # Double height
@@ -109,8 +118,10 @@ function Format-ReceiptBytes($order) {
     $bw.Write([byte[]]@(0x1D, 0x21, 0x00)) # Normal
     $bw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("$($Config.storeTagline)`n"))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("$($Config.storeAddress)`n"))
+    $cleanAddr = "$($Config.storeAddress)" -replace ",\s*Bengaluru", "" -replace "Bengaluru", ""
+    if ($cleanAddr) { $bw.Write([System.Text.Encoding]::ASCII.GetBytes("$cleanAddr`n")) }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Ph: $($Config.storePhone)`n"))
+    # GSTIN removed
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($doubleDivider))
 
     # 3. Invoice & Token
@@ -124,7 +135,7 @@ function Format-ReceiptBytes($order) {
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Date:" $dateStr)))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
-    # 4. Customer
+    # 4. Customer (NO CITY)
     $cName = if ($order.customer_name) { $order.customer_name } else { "Walk-in Client" }
     $cPhone = if ($order.customer_phone) { $order.customer_phone } else { "-" }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Client: $cName`n"))
@@ -154,24 +165,33 @@ function Format-ReceiptBytes($order) {
     }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
-    # 6. Totals
+    # 6. Totals (NO GST / NO GSTIN / NO TAX lines)
     $sub = if ($order.subtotal_inr) { [double]$order.subtotal_inr } elseif ($order.subtotal) { [double]$order.subtotal } else { 4299 }
+    $disc = if ($order.discount_inr) { [double]$order.discount_inr } elseif ($order.discount) { [double]$order.discount } else { 0 }
     $grandT = if ($order.total_payable_inr) { [double]$order.total_payable_inr } elseif ($order.grand_total) { [double]$order.grand_total } else { $sub }
     $paid = if ($order.amount_paid_inr) { [double]$order.amount_paid_inr } else { $grandT }
     $bal = [Math]::Max(0, $grandT - $paid)
     $paym = if ($order.payment_method) { $order.payment_method.ToUpper() } else { "CASH" }
 
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Subtotal:" "Rs.$([Math]::Round($sub))")))
+    if ($disc -gt 0) {
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Discount:" "-Rs.$([Math]::Round($disc))")))
+    }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($doubleDivider))
     $bw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "GRAND TOTAL:" "Rs.$([Math]::Round($grandT))")))
     $bw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Payment [$paym]:" "Rs.$([Math]::Round($paid))")))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Balance Due:" "Rs.$([Math]::Round($bal))")))
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Balance Due:" (if ($bal -gt 0) { "Rs.$([Math]::Round($bal))" } else { "Rs.0 (PAID)" }))))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
     # 7. Prescription if attached
-    if ($order.od_sph -ne $null -or $order.prescription_number) {
+    $rx = if ($order.prescription) { $order.prescription } elseif ($order.newPrescription) { $order.newPrescription } else { $order }
+    $odSphV = if ($rx.od_sph -ne $null -and $rx.od_sph -ne '') { $rx.od_sph } else { $order.od_sph }
+    $osSphV = if ($rx.os_sph -ne $null -and $rx.os_sph -ne '') { $rx.os_sph } else { $order.os_sph }
+    $hasRx = ($odSphV -ne $null -and $odSphV -ne '') -or ($osSphV -ne $null -and $osSphV -ne '') -or $rx.prescription_number -or $order.prescription_number -or $order.prescription_id -or ($order.prescription_pref -and $order.prescription_pref -match 'rx')
+
+    if ($hasRx) {
         $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
         $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
@@ -179,27 +199,47 @@ function Format-ReceiptBytes($order) {
         $bw.Write([byte[]]@(0x1B, 0x61, 0x00))
 
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Eye    SPH    CYL   AXIS   ADD  `n"))
-        $odS = "{0:+0.00;-0.00; 0.00}" -f [double]($order.od_sph)
-        $odC = "{0:+0.00;-0.00; 0.00}" -f [double]($order.od_cyl)
-        $odA = "{0,3}" -f $order.od_axis
-        $add = "{0:+0.00;-0.00; 0.00}" -f [double]($order.addition)
+        $odS = "{0:+0.00;-0.00; 0.00}" -f [double]($odSphV)
+        $odC = "{0:+0.00;-0.00; 0.00}" -f [double](if ($rx.od_cyl -ne $null) { $rx.od_cyl } else { $order.od_cyl })
+        $odA = "{0,3}" -f (if ($rx.od_axis -ne $null) { $rx.od_axis } else { $order.od_axis })
+        $add = "{0:+0.00;-0.00; 0.00}" -f [double](if ($rx.addition -ne $null) { $rx.addition } else { $order.addition })
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OD   $odS  $odC   $odA  $add`n"))
 
-        $osS = "{0:+0.00;-0.00; 0.00}" -f [double]($order.os_sph)
-        $osC = "{0:+0.00;-0.00; 0.00}" -f [double]($order.os_cyl)
-        $osA = "{0,3}" -f $order.os_axis
+        $osS = "{0:+0.00;-0.00; 0.00}" -f [double]($osSphV)
+        $osC = "{0:+0.00;-0.00; 0.00}" -f [double](if ($rx.os_cyl -ne $null) { $rx.os_cyl } else { $order.os_cyl })
+        $osA = "{0,3}" -f (if ($rx.os_axis -ne $null) { $rx.os_axis } else { $order.os_axis })
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OS   $osS  $osC   $osA  $add`n"))
-        if ($order.ipd_distance) {
-            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Distance PD: $($order.ipd_distance) mm`n"))
+        $pdVal = if ($rx.ipd_distance) { $rx.ipd_distance } elseif ($rx.pd) { $rx.pd } elseif ($order.ipd_distance) { $order.ipd_distance } else { $order.pd }
+        if ($pdVal) {
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Distance PD: $pdVal mm`n"))
+        }
+        $docVal = if ($rx.checked_by) { $rx.checked_by } elseif ($rx.rx_checked_by) { $rx.rx_checked_by } else { $order.checked_by }
+        if ($docVal) {
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Optometrist: $docVal`n"))
         }
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
     }
 
-    # 8. Footer & Cut
+    # 8. Footer & Warranty
     $bw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Thank You for Choosing Noor!`n"))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("2-Yr Frame Warranty • 14-Day Fit`n"))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Visit Again • nooroptics.in`n"))
+
+    # 9. Payment QR Code at Bottom
+    $QrRasterFile = Join-Path $ScriptDir "assets\payment_qr_raster.bin"
+    if (Test-Path $QrRasterFile) {
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
+        $bw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
+        $bw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("SCAN & PAY VIA UPI`n"))
+        $bw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
+        $qrBytes = [System.IO.File]::ReadAllBytes($QrRasterFile)
+        $bw.Write($qrBytes)
+        $bw.Write([byte[]]@(0x1B, 0x64, 0x01))
+    }
+
+    # 10. Feed & Cut
     $bw.Write([byte[]]@(0x1B, 0x64, 0x04)) # Feed 4 lines
     $bw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00)) # Partial cut
 

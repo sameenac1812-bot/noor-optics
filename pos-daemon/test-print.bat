@@ -22,7 +22,16 @@ $bw = New-Object System.IO.BinaryWriter($ms)
 # Reset
 $bw.Write([byte[]]@(0x1B, 0x40))
 
-# Center & Double Height
+# 1. Logo at Top
+$logoFile = Join-Path $PSScriptRoot 'assets\logo_raster.bin'
+if (Test-Path $logoFile) {
+    $logoBytes = [System.IO.File]::ReadAllBytes($logoFile)
+    $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+    $bw.Write($logoBytes)
+    $bw.Write([byte[]]@(0x1B, 0x64, 0x01))
+}
+
+# 2. Store Header (NO City, NO GSTIN)
 $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
 $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
 $bw.Write([byte[]]@(0x1D, 0x21, 0x01))
@@ -30,11 +39,11 @@ $bw.Write([System.Text.Encoding]::ASCII.GetBytes('NOOR OPTICS`n'))
 $bw.Write([byte[]]@(0x1D, 0x21, 0x00))
 $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('Scandinavian Eyewear Boutique`n'))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes('Indiranagar 100ft Road, BLR`n'))
+$bw.Write([System.Text.Encoding]::ASCII.GetBytes('Indiranagar 100ft Road`n'))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('Ph: +91 98765 43210`n'))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('================================`n'))
 
-# Order info
+# 3. Order info
 $bw.Write([byte[]]@(0x1B, 0x61, 0x00))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('TOKEN #99           [TEST PRINT]`n'))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('Invoice: NOOR-TEST-001`n'))
@@ -51,8 +60,6 @@ $bw.Write([System.Text.Encoding]::ASCII.GetBytes(' Color: Mazzucchelli Honey`n')
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes(' Lens: Blue-Light Filter`n'))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('--------------------------------`n'))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('Subtotal:               Rs.4,299`n'))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes('Discount:                   Rs.0`n'))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes('GST (18% Included):       Rs.656`n'))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('================================`n'))
 $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('GRAND TOTAL:            Rs.4,299`n'))
@@ -73,7 +80,21 @@ $bw.Write([System.Text.Encoding]::ASCII.GetBytes('Optometrist: Licensed Optom`n'
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('--------------------------------`n'))
 $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('Thank You for Choosing Noor!`n'))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes('Visit Again - nooroptics.in`n'))
+$bw.Write([System.Text.Encoding]::ASCII.GetBytes('2-Yr Frame Warranty • 14-Day Fit`n'))
+$bw.Write([System.Text.Encoding]::ASCII.GetBytes('Visit Again • nooroptics.in`n'))
+
+# 4. Payment QR Code at Bottom
+$qrFile = Join-Path $PSScriptRoot 'assets\payment_qr_raster.bin'
+if (Test-Path $qrFile) {
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes('--------------------------------`n'))
+    $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+    $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes('SCAN & PAY VIA UPI`n'))
+    $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
+    $qrBytes = [System.IO.File]::ReadAllBytes($qrFile)
+    $bw.Write($qrBytes)
+    $bw.Write([byte[]]@(0x1B, 0x64, 0x01))
+}
 $bw.Write([byte[]]@(0x1B, 0x64, 0x04)) # Feed 4 lines
 $bw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00)) # Partial Cut
 
@@ -93,3 +114,4 @@ Write-Host $res
 echo.
 echo Test completed. Press any key to exit...
 pause >nul
+
