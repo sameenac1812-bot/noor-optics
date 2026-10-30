@@ -277,28 +277,98 @@ if (Test-Path $qrCoderDll) {
     } catch {}
 }
 
-function Generate-QrRaster([string]$text) {
-    if (-not $text) { return @() }
-    $dll = Join-Path $ScriptDir "assets\QRCoder.dll"
-    if (Test-Path $dll) {
-        try {
-            Unblock-File -Path $dll -ErrorAction SilentlyContinue
-            Add-Type -Path $dll -ErrorAction SilentlyContinue
-            Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
-            $gen = New-Object QRCoder.QRCodeGenerator
-            $data = $gen.CreateQrCode($text, [QRCoder.QRCodeGenerator+ECCLevel]::M)
-            $qr = New-Object QRCoder.QRCode($data)
-            # 3 pixels per module gives 87x87 dots (~10.8mm) - exact size for optical temple tag!
-            $bmp = $qr.GetGraphic(3, [System.Drawing.Color]::Black, [System.Drawing.Color]::White, $false)
-            $raster = Convert-BitmapToEscPosRaster $bmp
-            $bmp.Dispose()
-            $qr.Dispose()
-            $data.Dispose()
-            $gen.Dispose()
-            return $raster
-        } catch {}
+function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$price) {
+    try {
+        # 1. Generate 2D QR Code Bitmap
+        $qrBmp = $null
+        $dll = Join-Path $ScriptDir "assets\QRCoder.dll"
+        if (Test-Path $dll) {
+            try {
+                Unblock-File -Path $dll -ErrorAction SilentlyContinue
+                Add-Type -Path $dll -ErrorAction SilentlyContinue
+                Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+                $gen = New-Object QRCoder.QRCodeGenerator
+                $data = $gen.CreateQrCode("HTTPS://NOOROPTICS.VERCEL.APP/Q/$sku", [QRCoder.QRCodeGenerator+ECCLevel]::M)
+                $qr = New-Object QRCoder.QRCode($data)
+                $qrBmp = $qr.GetGraphic(3, [System.Drawing.Color]::Black, [System.Drawing.Color]::White, $false)
+                $qr.Dispose(); $data.Dispose(); $gen.Dispose()
+            } catch {}
+        }
+
+        # Fallback to online API if QRCoder is unavailable
+        if (-not $qrBmp) {
+            try {
+                $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=87x87&margin=0&data=$([System.Uri]::EscapeDataString("HTTPS://NOOROPTICS.VERCEL.APP/Q/$sku"))"
+                $wc = New-Object System.Net.WebClient
+                $imgData = $wc.DownloadData($qrApiUrl)
+                $msImg = New-Object System.IO.MemoryStream($imgData, 0, $imgData.Length)
+                $qrBmp = [System.Drawing.Bitmap]::FromStream($msImg)
+                $msImg.Close(); $wc.Dispose()
+            } catch {}
+        }
+
+        if (-not $qrBmp) { return @() }
+
+        # 2. Draw unified 384-dot wide label (100% aligned with POS-80 thermal printhead)
+        $width = 384
+        $height = 140
+        $bmp = New-Object System.Drawing.Bitmap($width, $height)
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $g.Clear([System.Drawing.Color]::White)
+        $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+        $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
+        $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::SingleBitPerPixelGridFit
+
+        # Center QR code
+        $qrX = [Math]::Floor(($width - $qrBmp.Width) / 2)
+        $qrY = 2
+        $g.DrawImage($qrBmp, $qrX, $qrY, $qrBmp.Width, $qrBmp.Height)
+
+        # Draw tiny, crisp optical tag typography (strictly centered under QR)
+        $fontSku = New-Object System.Drawing.Font("Arial", 7.5, [System.Drawing.FontStyle]::Bold)
+        $fontName = New-Object System.Drawing.Font("Arial", 6.5, [System.Drawing.FontStyle]::Regular)
+        $fontPrice = New-Object System.Drawing.Font("Arial", 7.0, [System.Drawing.FontStyle]::Bold)
+        $brush = [System.Drawing.Brushes]::Black
+
+        $curY = $qrY + $qrBmp.Height + 2
+
+        # SKU
+        $sizeSku = $g.MeasureString($sku, $fontSku)
+        $xSku = [Math]::Max(0, [Math]::Floor(($width - $sizeSku.Width) / 2))
+        $g.DrawString($sku, $fontSku, $brush, $xSku, $curY)
+        $curY += [Math]::Floor($sizeSku.Height) - 1
+
+        # Frame Name
+        if ($name) {
+            $sizeName = $g.MeasureString($name, $fontName)
+            $xName = [Math]::Max(0, [Math]::Floor(($width - $sizeName.Width) / 2))
+            $g.DrawString($name, $fontName, $brush, $xName, $curY)
+            $curY += [Math]::Floor($sizeName.Height) - 1
+        }
+
+        # Retail Price
+        if ($price) {
+            $sizePrice = $g.MeasureString($price, $fontPrice)
+            $xPrice = [Math]::Max(0, [Math]::Floor(($width - $sizePrice.Width) / 2))
+            $g.DrawString($price, $fontPrice, $brush, $xPrice, $curY)
+            $curY += [Math]::Floor($sizePrice.Height) + 2
+        }
+
+        $g.Dispose()
+        $qrBmp.Dispose()
+
+        # Crop to actual content height
+        $finalHeight = [Math]::Min($height, [Math]::Max(100, $curY))
+        $cropRect = New-Object System.Drawing.Rectangle(0, 0, $width, $finalHeight)
+        $croppedBmp = $bmp.Clone($cropRect, $bmp.PixelFormat)
+        $bmp.Dispose()
+
+        $raster = Convert-BitmapToEscPosRaster $croppedBmp
+        $croppedBmp.Dispose()
+        return $raster
+    } catch {
+        return @()
     }
-    return @()
 }
 
 # Format Optical Temple QR Sticker ESC/POS Bytes (Universal GS v 0 2D Bit Image)
@@ -313,7 +383,7 @@ function Format-StickerBytes($rawItems) {
 
         $name = ""
         if ($item.name) { $name = [string]$item.name }
-        if ($name.Length -gt 18) { $name = $name.Substring(0, 18) }
+        if ($name.Length -gt 22) { $name = $name.Substring(0, 22) }
 
         $price = ""
         if ($item.price) { $price = [string]$item.price }
@@ -332,64 +402,28 @@ function Format-StickerBytes($rawItems) {
 
         for ($c = 0; $c -lt $copies; $c++) {
             $allBw.Write([byte[]]@(0x1B, 0x40)) # Reset
-            $allBw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
-            $allBw.Write([byte[]]@(0x1B, 0x33, 0x10)) # Tight line spacing (16 dots)
 
-            # Universal 2D QR Code Bitmap Output via ESC/POS GS v 0 (100% Thermal Printer Compatible)
-            $qrText = "HTTPS://NOOROPTICS.VERCEL.APP/Q/$sku"
+            # 1. Check if client sent pre-computed 384-dot unified raster
             $rasterBytes = $null
-
-            # 1. Native Offline QRCoder Generation (100% offline, pure .NET, instant!)
-            $rasterBytes = Generate-QrRaster $qrText
-
-            # 2. Check pre-computed GS v 0 raster from admin.js
-            if ((-not $rasterBytes -or $rasterBytes.Length -eq 0) -and $item.qrRasterBase64) {
+            if ($item.stickerRasterBase64) {
                 try {
-                    $r = [Convert]::FromBase64String([string]$item.qrRasterBase64)
-                    if ($r -and $r.Length -gt 8) { $rasterBytes = $r }
+                    $r = [Convert]::FromBase64String([string]$item.stickerRasterBase64)
+                    if ($r -and $r.Length -gt 100) { $rasterBytes = $r }
                 } catch {}
             }
 
-            # 3. Check PNG data URL from admin.js
-            if ((-not $rasterBytes -or $rasterBytes.Length -eq 0) -and $item.qrDataUrl) {
-                try {
-                    $r = Convert-DataUrlToEscPosRaster ([string]$item.qrDataUrl)
-                    if ($r -and $r.Length -gt 8) { $rasterBytes = $r }
-                } catch {}
-            }
-
-            # 4. Cloud fallback: generate QR bitmap via online API if offline raster wasn't attached
+            # 2. Generate unified 384-dot sticker bitmap in PowerShell (.NET System.Drawing)
             if (-not $rasterBytes -or $rasterBytes.Length -eq 0) {
-                try {
-                    $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&margin=0&data=$([System.Uri]::EscapeDataString($qrText))"
-                    $wc = New-Object System.Net.WebClient
-                    $imgData = $wc.DownloadData($qrApiUrl)
-                    $msImg = New-Object System.IO.MemoryStream($imgData, 0, $imgData.Length)
-                    $bmp = [System.Drawing.Bitmap]::FromStream($msImg)
-                    $rasterBytes = Convert-BitmapToEscPosRaster $bmp
-                    $bmp.Dispose()
-                    $msImg.Close()
-                    $wc.Dispose()
-                } catch {}
+                $rasterBytes = Generate-UnifiedStickerRaster $sku $name $price
             }
 
-            # Write 2D QR Bit Image (GS v 0) - NEVER prints text link!
+            # Write unified 2D QR Bit Image (GS v 0) - NEVER prints big plain text!
             if ($rasterBytes -and $rasterBytes.Length -gt 0) {
                 $allBw.Write([byte[]]$rasterBytes)
-                $allBw.Write([byte[]]@(0x1B, 0x64, 0x01)) # 1 dot line feed
             }
 
-            # 6. Text strictly inside QR flag area: Font B
-            $allBw.Write([byte[]]@(0x1B, 0x4D, 0x01)) # Font B
-            $allBw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
-            $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$sku`n"))
-            $allBw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
-            if ($name) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$name`n")) }
-            if ($price) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes("$price`n")) }
-            $allBw.Write([byte[]]@(0x1B, 0x4D, 0x00)) # Font A
-            $allBw.Write([byte[]]@(0x1B, 0x32)) # Reset line spacing
-
-            $allBw.Write([byte[]]@(0x1B, 0x64, 0x01)) # Feed 1 line
+            # Minimal line feed and partial cut
+            $allBw.Write([byte[]]@(0x1B, 0x64, 0x02)) # Feed 2 lines
             $allBw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00)) # Partial cut
         }
     }
