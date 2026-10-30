@@ -279,13 +279,12 @@ function generate58mmHTML(order, items, settings = {}) {
   <div style="text-align:center; margin:8px 0;">
     <div style="font-size:9.5px; font-weight:800; letter-spacing:0.5px; margin-bottom:4px; text-transform:uppercase;">Scan to Pay via UPI</div>
     <img src="/images/payment_qr.jpg" style="width:125px; height:125px; display:inline-block; border:1px solid #111; padding:2px;" alt="UPI QR" />
+    <div style="font-size:9px; font-weight:700; margin-top:3px;">UPI ID: 9182341567@mairtel</div>
   </div>
 
   <div class="divider"></div>
-  <div class="footer">
-    <div>2-Year Comprehensive Frame Warranty</div>
-    <div>14-Day Free Optical Comfort Adjustment</div>
-    <div style="margin-top:4px; font-weight:600;">Thank You for Choosing Noor Optics!</div>
+  <div class="footer" style="text-align:center; padding-top:4px;">
+    <div style="font-weight:800; font-size:11px;">Thank You for Choosing Noor!</div>
   </div>
 </body>
 </html>

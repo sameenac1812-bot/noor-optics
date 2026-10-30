@@ -220,16 +220,9 @@ function Format-ReceiptBytes($order) {
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
     }
 
-    # 8. Footer & Warranty
-    $bw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Thank You for Choosing Noor!`n"))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("2-Yr Frame Warranty • 14-Day Fit`n"))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Visit Again • nooroptics.in`n"))
-
-    # 9. Payment QR Code at Bottom
+    # 8. Crisp Anti-Blotting UPI Payment QR Code
     $QrRasterFile = Join-Path $ScriptDir "assets\payment_qr_raster.bin"
     if (Test-Path $QrRasterFile) {
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
         $bw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
         $bw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("SCAN & PAY VIA UPI`n"))
@@ -237,7 +230,15 @@ function Format-ReceiptBytes($order) {
         $qrBytes = [System.IO.File]::ReadAllBytes($QrRasterFile)
         $bw.Write($qrBytes)
         $bw.Write([byte[]]@(0x1B, 0x64, 0x01))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("UPI ID: 9182341567@mairtel`n"))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
     }
+
+    # 9. Concluding Sign-off (Everything under this removed as requested)
+    $bw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
+    $bw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Thank You for Choosing Noor!`n"))
+    $bw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
 
     # 10. Feed & Cut
     $bw.Write([byte[]]@(0x1B, 0x64, 0x04)) # Feed 4 lines

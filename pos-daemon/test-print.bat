@@ -78,15 +78,9 @@ $bw.Write([System.Text.Encoding]::ASCII.GetBytes('OS   -1.75  -0.25    80  +1.50
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('Distance PD: 63 mm`n'))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('Optometrist: Licensed Optom`n'))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes('--------------------------------`n'))
-$bw.Write([byte[]]@(0x1B, 0x61, 0x01))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes('Thank You for Choosing Noor!`n'))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes('2-Yr Frame Warranty • 14-Day Fit`n'))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes('Visit Again • nooroptics.in`n'))
-
-# 4. Payment QR Code at Bottom
+# 4. Crisp Anti-Blotting Payment QR Code
 $qrFile = Join-Path $PSScriptRoot 'assets\payment_qr_raster.bin'
 if (Test-Path $qrFile) {
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes('--------------------------------`n'))
     $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
     $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes('SCAN & PAY VIA UPI`n'))
@@ -94,7 +88,16 @@ if (Test-Path $qrFile) {
     $qrBytes = [System.IO.File]::ReadAllBytes($qrFile)
     $bw.Write($qrBytes)
     $bw.Write([byte[]]@(0x1B, 0x64, 0x01))
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes('UPI ID: 9182341567@mairtel`n'))
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes('--------------------------------`n'))
 }
+
+# 5. Concluding Sign-off (Everything under this removed as requested)
+$bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+$bw.Write([byte[]]@(0x1B, 0x45, 0x01))
+$bw.Write([System.Text.Encoding]::ASCII.GetBytes('Thank You for Choosing Noor!`n'))
+$bw.Write([byte[]]@(0x1B, 0x45, 0x00))
+
 $bw.Write([byte[]]@(0x1B, 0x64, 0x04)) # Feed 4 lines
 $bw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00)) # Partial Cut
 

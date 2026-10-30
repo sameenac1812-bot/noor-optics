@@ -324,22 +324,23 @@ function format25InchEscPosReceipt(rawOrder) {
     writeText(divider);
   }
 
-  // 8. Footer & Warranty
-  writeBytes([0x1B, 0x61, 0x01]); // Center
-  writeText('Thank You for Choosing Noor!\n');
-  writeText('2-Yr Frame Warranty • 14-Day Fit\n');
-  writeText('Visit Again • nooroptics.in\n');
-
-  // 9. Payment QR Code at Bottom of Bill (Centered)
+  // 8. Crisp Anti-Blotting UPI Payment QR Code (Centered)
   if (paymentQrRasterBuffer && paymentQrRasterBuffer.length > 0) {
-    writeText(divider);
     writeBytes([0x1B, 0x61, 0x01]); // Center
     writeBytes([0x1B, 0x45, 0x01]); // Bold ON
     writeText('SCAN & PAY VIA UPI\n');
     writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
     writeBytes(paymentQrRasterBuffer);
-    writeBytes([0x1B, 0x64, 0x01]);
+    writeBytes([0x1B, 0x64, 0x01]); // Feed 1 line
+    writeText('UPI ID: 9182341567@mairtel\n');
+    writeText(divider);
   }
+
+  // 9. Concluding Sign-off (Everything under this removed as requested)
+  writeBytes([0x1B, 0x61, 0x01]); // Center
+  writeBytes([0x1B, 0x45, 0x01]); // Bold ON
+  writeText('Thank You for Choosing Noor!\n');
+  writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
 
   // 10. Feed Paper & Cut
   writeBytes([0x1B, 0x64, 0x04]); // Feed 4 lines

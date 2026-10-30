@@ -84,3 +84,4 @@ $b64Out = Join-Path $ScriptDir "assets\rasters_base64.json"
     paymentQr = $qrB64
 } | ConvertTo-Json | Set-Content $b64Out -Encoding UTF8
 Write-Host "Exported Rasters to $b64Out"
+

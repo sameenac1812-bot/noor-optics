@@ -116,15 +116,9 @@ if ($raw.od_sph -ne $null) {
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 }
 
-# 8. Footer & Payment QR at Bottom
-$bw.Write([byte[]]@(0x1B, 0x61, 0x01))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes("Thank You for Choosing Noor!`n"))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes("2-Yr Frame Warranty • 14-Day Fit`n"))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes("Visit Again • nooroptics.in`n"))
-
+# 8. Crisp Anti-Blotting UPI Payment QR
 $qrFile = Join-Path $ScriptDir "assets\payment_qr_raster.bin"
 if (Test-Path $qrFile) {
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
     $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
     $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("SCAN & PAY VIA UPI`n"))
@@ -132,9 +126,17 @@ if (Test-Path $qrFile) {
     $qrBytes = [System.IO.File]::ReadAllBytes($qrFile)
     $bw.Write($qrBytes)
     $bw.Write([byte[]]@(0x1B, 0x64, 0x01))
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("UPI ID: 9182341567@mairtel`n"))
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 }
 
-# 9. Cut
+# 9. Concluding Sign-off (Everything under this removed as requested)
+$bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+$bw.Write([byte[]]@(0x1B, 0x45, 0x01))
+$bw.Write([System.Text.Encoding]::ASCII.GetBytes("Thank You for Choosing Noor!`n"))
+$bw.Write([byte[]]@(0x1B, 0x45, 0x00))
+
+# 10. Cut
 $bw.Write([byte[]]@(0x1B, 0x64, 0x04))
 $bw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00))
 
