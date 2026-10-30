@@ -1672,23 +1672,24 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     }
 
     // 2. Insert Order (With authoritative customer_id and prescription_id)
+    const nowIso = new Date().toISOString();
     db.prepare(`
       INSERT INTO orders (
         id, order_number, token_number, channel, customer_id, customer_name,
         customer_phone, customer_email, prescription_id, status, payment_status, subtotal_paise,
         discount_paise, discount_reason, tax_paise, total_payable_paise,
-        amount_paid_paise, outstanding_paise, staff_user_id, notes
+        amount_paid_paise, outstanding_paise, staff_user_id, notes, created_at, updated_at
       ) VALUES (
         ?, ?, ?, 'POS', ?, ?,
         ?, ?, ?, 'CONFIRMED', ?, ?,
         ?, ?, ?, ?,
-        ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?
       )
     `).run(
       orderId, orderNumber, tokenNumber, finalCustomerId, finalCustomerName,
       finalCustomerPhone, finalCustomerEmail, finalPrescriptionId, paymentStatus, subtotalPaise,
       discountPaise, discountReason || null, taxPaise, totalPayablePaise,
-      amountPaidPaise, outstandingPaise, req.user.id, notes || null
+      amountPaidPaise, outstandingPaise, req.user.id, notes || null, nowIso, nowIso
     );
 
     // Update customer's total spent
@@ -2013,24 +2014,25 @@ router.post('/orders/online', (req, res) => {
       createdPrescriptionId = finalPrescriptionId;
     }
 
+    const nowIso = new Date().toISOString();
     db.prepare(`
       INSERT INTO orders (
         id, order_number, token_number, channel, customer_id, customer_name, customer_phone,
         customer_email, customer_age, delivery_address, city, pin_code, prescription_pref, prescription_id,
         status, payment_status, subtotal_paise, tax_paise, total_payable_paise,
-        amount_paid_paise, outstanding_paise, notes
+        amount_paid_paise, outstanding_paise, notes, created_at, updated_at
       ) VALUES (
         ?, ?, ?, 'ONLINE', ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?,
         'CONFIRMED', 'AWAITING_VERIFICATION', ?, ?, ?,
-        0, ?, 'Online Storefront Order'
+        0, ?, 'Online Storefront Order', ?, ?
       )
     `).run(
       orderId, orderNumber, tokenNumber, customerId, customerName, customerPhone || null,
       customerEmail || null, finalAge, deliveryAddress || null, city || 'Bengaluru', pinCode || null,
       prescriptionPref || (finalPrescriptionId ? 'RX Attached' : 'call-optometrist'), finalPrescriptionId,
       subtotalPaise, taxPaise, totalPayablePaise,
-      totalPayablePaise
+      totalPayablePaise, nowIso, nowIso
     );
 
     const insertItem = db.prepare(`
@@ -2195,7 +2197,7 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
     params.push(status);
   }
 
-  sql += ' ORDER BY o.created_at DESC LIMIT ?';
+  sql += ' ORDER BY replace(o.created_at, " ", "T") DESC, o.rowid DESC LIMIT ?';
   params.push(parseInt(limit, 10));
 
   const orders = db.prepare(sql).all(...params);
@@ -2212,8 +2214,16 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
       if (cust) rx = getLatestRxForCustomer.get(cust.id);
     }
 
+    let normCreatedAt = o.created_at;
+    if (normCreatedAt && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(normCreatedAt)) {
+      normCreatedAt = normCreatedAt.replace(' ', 'T') + 'Z';
+    } else if (normCreatedAt && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(normCreatedAt) && !normCreatedAt.includes('Z') && !normCreatedAt.includes('+')) {
+      normCreatedAt = normCreatedAt + 'Z';
+    }
+
     return {
       ...o,
+      created_at: normCreatedAt,
       prescription_id: o.prescription_id || (rx ? rx.id : null),
       prescription_number: o.prescription_number || (rx ? rx.prescription_number : null),
       od_sph: o.od_sph || (rx ? rx.od_sph : null),
@@ -2237,6 +2247,13 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
         subtotal_inr: i.subtotal_paise / 100
       }))
     };
+  });
+
+  // Strictly sort newest first
+  formatted.sort((a, b) => {
+    const tA = new Date(a.created_at).getTime() || 0;
+    const tB = new Date(b.created_at).getTime() || 0;
+    return tB - tA;
   });
 
   res.json(formatted);

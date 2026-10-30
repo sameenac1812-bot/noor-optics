@@ -83,10 +83,35 @@
     }
   }
 
+  function parseOrderTimestamp(order) {
+    if (!order) return 0;
+    if (order.created_at) {
+      let s = String(order.created_at).trim();
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(s)) {
+        s = s.replace(' ', 'T') + 'Z';
+      } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(s) && !s.includes('Z') && !s.includes('+') && !s.includes('-')) {
+        s = s + 'Z';
+      }
+      const t = new Date(s).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (order.id) {
+      const m = String(order.id).match(/(\d{13})/);
+      if (m) return Number(m[1]);
+    }
+    return 0;
+  }
+
   function formatDateTime(isoString) {
     if (!isoString) return '-';
+    let s = String(isoString).trim();
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(s)) {
+      s = s.replace(' ', 'T') + 'Z';
+    } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(s) && !s.includes('Z') && !s.includes('+')) {
+      s = s + 'Z';
+    }
     try {
-      const d = new Date(isoString);
+      const d = new Date(s);
       return d.toLocaleString('en-IN', {
         timeZone: 'Asia/Kolkata',
         day: '2-digit',
@@ -502,6 +527,9 @@
         return true;
       });
 
+      // Strictly sort newest orders first
+      incoming.sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a));
+
       // Real-time detection of new incoming orders (customer mobile storefront or in-store POS)
       if (!state.hasInitializedOrders) {
         incoming.forEach(o => state.knownOrderIds.add(o.id));
@@ -578,6 +606,9 @@
       }
       return true;
     });
+
+    // Ensure newest orders are always at the top
+    cleanOrders.sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a));
 
     // Count badges
     const allCount = cleanOrders.length;

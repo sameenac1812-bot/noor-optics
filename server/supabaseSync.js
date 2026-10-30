@@ -275,7 +275,12 @@ async function syncSupabaseOrders(db) {
       const taxPaise = Math.round(grandTotalPaise * 0.18 / 1.18);
       const phone = co.customer_phone ? String(co.customer_phone).trim() : null;
       const name = co.customer_name ? String(co.customer_name).trim() : 'Customer';
-      const orderDate = co.created_at || new Date().toISOString();
+      let orderDate = co.created_at || new Date().toISOString();
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(orderDate)) {
+        orderDate = orderDate.replace(' ', 'T') + 'Z';
+      } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(orderDate) && !orderDate.includes('Z') && !orderDate.includes('+')) {
+        orderDate = orderDate + 'Z';
+      }
 
       // Detect whether order is In-Store POS or Website
       const isPos = Boolean(
