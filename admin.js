@@ -1837,68 +1837,106 @@
     if (fileUp) fileUp.addEventListener('change', (e) => handleFramePhoto(e.target.files[0]));
 
     // Form submission
+    const handleSaveFrame = async (shouldPrintSticker = false) => {
+      const brand = document.getElementById('frm-brand')?.value.trim() || 'Noor Optics';
+      const model = document.getElementById('frm-model')?.value.trim() || '';
+      const color = document.getElementById('frm-color')?.value.trim() || 'Black';
+      const size = document.getElementById('frm-size')?.value.trim() || '52-18';
+      let sku = document.getElementById('frm-sku')?.value.trim().toUpperCase() || '';
+      if (!sku) {
+        sku = `NOOR-${(model || brand).toUpperCase().replace(/[^A-Z0-9]/g, '')}-${Date.now().toString().slice(-4)}`;
+      }
+      const wholesale = Number(document.getElementById('frm-wholesale')?.value) || 0;
+      const retail = Number(document.getElementById('frm-retail')?.value) || 0;
+      const quantity = Number(document.getElementById('frm-quantity')?.value) || 0;
+      const lowStock = Number(document.getElementById('frm-low-stock')?.value) || 2;
+
+      const name = `${brand} ${model}`.trim();
+      const imageUrl = state.uploadedFrameImageUrl || 'images/stockholm_noir.jpg';
+
+      try {
+        showToast('Adding frame to stock...', 'info');
+        const payload = {
+          name,
+          sku,
+          brand,
+          category: 'Frames',
+          shape: 'Rectangular',
+          material: 'Acetate',
+          fit: size,
+          sellingPriceINR: retail,
+          purchaseCostINR: wholesale,
+          reorderThreshold: lowStock,
+          imageUrl,
+          description: `Brand: ${brand} | Model: ${model} | Color: ${color} | Size: ${size}`,
+          variants: [
+            {
+              colorName: color,
+              colorHex: '#111111',
+              initialStock: quantity
+            }
+          ]
+        };
+
+        await apiFetch('/api/products', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        // Dual-write to Supabase cloud for immediate persistence and website display
+        if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
+          await window.NoorSupabase.saveProduct(payload).catch(e => console.warn('Supabase product dual-write note:', e));
+        }
+
+        showToast(`Frame "${name}" added to stock successfully!`, 'success');
+        modal.classList.remove('open');
+        document.body.classList.remove('modal-open');
+        await loadInventory();
+        if (typeof loadDashboard === 'function') loadDashboard();
+        if (typeof loadPosCatalog === 'function') loadPosCatalog();
+
+        // Automatic Thermal Sticker Printing if "Save & Print QR Sticker" was clicked
+        if (shouldPrintSticker) {
+          showToast(`Printing QR sticker for "${name}"...`, 'info');
+          const newFrameObj = {
+            sku,
+            name,
+            brand,
+            selling_price_inr: retail
+          };
+          const rasterObj = await renderStickerToUnifiedRaster(newFrameObj, 26, 32);
+          const printRes = await dispatchThermalStickerPrint([{
+            sku,
+            name,
+            brand,
+            price: formatINR(retail * 100, true),
+            copies: 1,
+            stickerRasterBase64: rasterObj.stickerRasterBase64,
+            qrDataUrl: rasterObj.qrDataUrl
+          }]);
+          if (printRes && printRes.success) {
+            showToast(`✓ QR sticker for "${name}" printed successfully!`, 'success');
+          } else {
+            showToast(`Frame saved! (Printer: ${printRes?.error || 'queued'})`, 'warning');
+          }
+        }
+      } catch (err) {
+        showToast('Failed to add frame: ' + err.message, 'error');
+      }
+    };
+
     if (form) {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const brand = document.getElementById('frm-brand')?.value.trim() || 'Noor Optics';
-        const model = document.getElementById('frm-model')?.value.trim() || '';
-        const color = document.getElementById('frm-color')?.value.trim() || 'Black';
-        const size = document.getElementById('frm-size')?.value.trim() || '52-18';
-        let sku = document.getElementById('frm-sku')?.value.trim().toUpperCase() || '';
-        if (!sku) {
-          sku = `NOOR-${(model || brand).toUpperCase().replace(/[^A-Z0-9]/g, '')}-${Date.now().toString().slice(-4)}`;
-        }
-        const wholesale = Number(document.getElementById('frm-wholesale')?.value) || 0;
-        const retail = Number(document.getElementById('frm-retail')?.value) || 0;
-        const quantity = Number(document.getElementById('frm-quantity')?.value) || 0;
-        const lowStock = Number(document.getElementById('frm-low-stock')?.value) || 2;
+        await handleSaveFrame(false);
+      });
+    }
 
-        const name = `${brand} ${model}`.trim();
-        const imageUrl = state.uploadedFrameImageUrl || 'images/stockholm_noir.jpg';
-
-        try {
-          showToast('Adding frame to stock...', 'info');
-          const payload = {
-            name,
-            sku,
-            brand,
-            category: 'Frames',
-            shape: 'Rectangular',
-            material: 'Acetate',
-            fit: size,
-            sellingPriceINR: retail,
-            purchaseCostINR: wholesale,
-            reorderThreshold: lowStock,
-            imageUrl,
-            description: `Brand: ${brand} | Model: ${model} | Color: ${color} | Size: ${size}`,
-            variants: [
-              {
-                colorName: color,
-                colorHex: '#111111',
-                initialStock: quantity
-              }
-            ]
-          };
-
-          await apiFetch('/api/products', {
-            method: 'POST',
-            body: JSON.stringify(payload)
-          });
-
-          // Dual-write to Supabase cloud for immediate persistence and website display
-          if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
-            await window.NoorSupabase.saveProduct(payload).catch(e => console.warn('Supabase product dual-write note:', e));
-          }
-
-          showToast(`Frame "${name}" added to stock successfully!`, 'success');
-          modal.classList.remove('open');
-          document.body.classList.remove('modal-open');
-          await loadInventory();
-          if (typeof loadDashboard === 'function') loadDashboard();
-          if (typeof loadPosCatalog === 'function') loadPosCatalog();
-        } catch (err) {
-          showToast('Failed to add frame: ' + err.message, 'error');
-        }
+    const btnSaveAndPrint = document.getElementById('btn-submit-add-frame-print');
+    if (btnSaveAndPrint) {
+      btnSaveAndPrint.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await handleSaveFrame(true);
       });
     }
   }
@@ -2322,6 +2360,23 @@
       });
     }
 
+    // Connect dimension inputs (#stk-width-mm, #stk-height-mm) to live preview
+    if (widthInput && heightInput) {
+      const updateDimPreview = () => {
+        const w = Number(widthInput.value) || 26;
+        const h = Number(heightInput.value) || 32;
+        const stage = document.getElementById('stk-preview-stage');
+        const frame = state.activeStickerFrame || (state.inventoryList && state.inventoryList[0]) || {
+          sku: 'NOOR-ARC-15',
+          name: 'The Arctic Frame',
+          selling_price_inr: 4599
+        };
+        if (stage) renderSingleStickerCard(stage, frame, w, h);
+      };
+      widthInput.addEventListener('input', updateDimPreview);
+      heightInput.addEventListener('input', updateDimPreview);
+    }
+
     // Direct Thermal Hardware Print (Instant ESC/POS to POS-80)
     const btnDirect = document.getElementById('btn-direct-thermal-print');
     if (btnDirect) {
@@ -2337,8 +2392,8 @@
         }
 
         const copies = parseInt(document.getElementById('stk-copies-count')?.value || '1', 10);
-        const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'url';
-        const qrSize = activePreset === 'temple' ? 'temple' : 'url';
+        const wMm = Number(document.getElementById('stk-width-mm')?.value) || 26;
+        const hMm = Number(document.getElementById('stk-height-mm')?.value) || 32;
 
         btnDirect.disabled = true;
         btnDirect.innerHTML = `<span>⏳ Printing ${frames.length} in Sequence...</span>`;
@@ -2346,24 +2401,17 @@
         const items = [];
         for (const f of frames) {
           const sku = (f.sku || f.id || 'NOOR-FRAME').toUpperCase();
-          const qrInfo = await generateQrStickerPayload(sku);
+          const rasterObj = await renderStickerToUnifiedRaster(f, wMm, hMm);
           items.push({
             sku: sku,
             name: f.name || '',
             brand: f.brand || 'Noor Optics',
             price: f.selling_price_paise ? formatINR(f.selling_price_paise, true) : (f.selling_price_inr ? formatINR(f.selling_price_inr * 100, true) : ''),
             copies: copies,
-            qrRasterBase64: qrInfo.qrRasterBase64,
-            qrDataUrl: qrInfo.qrDataUrl
+            stickerRasterBase64: rasterObj.stickerRasterBase64,
+            qrDataUrl: rasterObj.qrDataUrl
           });
         }
-
-        const payload = {
-          items: items,
-          paperWidthMm: 58,
-          qrPreset: activePreset,
-          qrSize: qrSize
-        };
 
         try {
           const res = await dispatchThermalStickerPrint(items);
@@ -2384,6 +2432,52 @@
           btnDirect.innerHTML = `
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             <span>⚡ Print to POS Thermal Printer</span>
+          `;
+        }
+      });
+    }
+
+    // One-Click Dedicated Test Sticker Button (#btn-test-sticker-print)
+    const btnTestSticker = document.getElementById('btn-test-sticker-print');
+    if (btnTestSticker) {
+      btnTestSticker.addEventListener('click', async () => {
+        btnTestSticker.disabled = true;
+        btnTestSticker.innerHTML = `<span>⏳ Printing Test...</span>`;
+        showToast('Sending reference test sticker (NOOR-ARC-15) to thermal printer...', 'info');
+
+        const testFrame = {
+          sku: 'NOOR-ARC-15',
+          name: 'The Arctic Frame',
+          selling_price_inr: 4599
+        };
+
+        const wMm = Number(document.getElementById('stk-width-mm')?.value) || 26;
+        const hMm = Number(document.getElementById('stk-height-mm')?.value) || 32;
+        const rasterObj = await renderStickerToUnifiedRaster(testFrame, wMm, hMm);
+
+        const items = [{
+          sku: testFrame.sku,
+          name: testFrame.name,
+          price: 'Rs. 4,599.00',
+          copies: 1,
+          stickerRasterBase64: rasterObj.stickerRasterBase64,
+          qrDataUrl: rasterObj.qrDataUrl
+        }];
+
+        try {
+          const res = await dispatchThermalStickerPrint(items);
+          if (res && res.success) {
+            showToast('✓ Reference test sticker printed cleanly to POS thermal printer!', 'success');
+          } else {
+            showToast('Printer response: ' + (res?.error || 'Check printer connection'), 'error');
+          }
+        } catch (err) {
+          showToast('Failed to print test sticker: ' + err.message, 'error');
+        } finally {
+          btnTestSticker.disabled = false;
+          btnTestSticker.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span>🧪 Test QR Sticker</span>
           `;
         }
       });
@@ -2592,19 +2686,21 @@
 
     const activePreset = document.querySelector('input[name="stk-preset-choice"]:checked')?.value || 'url';
     const copies = parseInt(document.getElementById('stk-copies-count')?.value || '1', 10);
+    const wMm = Number(document.getElementById('stk-width-mm')?.value) || 26;
+    const hMm = Number(document.getElementById('stk-height-mm')?.value) || 32;
 
     const items = [];
     for (const f of selectedFrames) {
       const sku = (f.sku || f.id || 'NOOR-FRAME').toUpperCase();
-      const qrInfo = await generateQrStickerPayload(sku);
+      const rasterObj = await renderStickerToUnifiedRaster(f, wMm, hMm);
       items.push({
         sku: sku,
         name: f.name || '',
         brand: f.brand || 'Noor Optics',
         price: f.selling_price_paise ? formatINR(f.selling_price_paise, true) : (f.selling_price_inr ? formatINR(f.selling_price_inr * 100, true) : ''),
         copies: copies,
-        qrRasterBase64: qrInfo.qrRasterBase64,
-        qrDataUrl: qrInfo.qrDataUrl
+        stickerRasterBase64: rasterObj.stickerRasterBase64,
+        qrDataUrl: rasterObj.qrDataUrl
       });
     }
 
@@ -2867,46 +2963,128 @@
   }
 
   /**
-   * Build Pure HTML for One Frame QR Sticker (Optical Dumbbell / Temple Tag)
-   * Small ~10mm QR code + All text (SKU, Name, Price) strictly fitted inside the 20mm x 21mm flag area!
-   * ZERO overflow onto the tail/strap.
+   * Build Pure HTML for One Frame QR Sticker
+   * Exact reproduction of Reference Image:
+   * - Pure white card background, pure black printing
+   * - Top: Centered crisp square 2D QR code
+   * - Directly below QR: Bold SKU / Frame ID (e.g. NOOR-ARC-15)
+   * - Directly below SKU: Model Name / Description (e.g. The Arctic Frame)
+   * - Bottom: Retail Price in Indian Rupees (e.g. Rs. 4,599.00)
    */
   function buildStickerHtml(frame, widthMm, heightMm, contactText, qrDataUrl, qrSize = 'medium') {
     const sku = (frame.sku || frame.id || 'NOOR-FRAME').toUpperCase();
-    const brand = frame.brand || 'Noor Optics';
-    const name = (frame.name || '').slice(0, 20);
+    const name = (frame.name || '').slice(0, 24);
     let price = frame.selling_price_paise ? formatINR(frame.selling_price_paise, true) : (frame.selling_price_inr ? formatINR(frame.selling_price_inr * 100, true) : '');
     if (price && price.startsWith('₹')) price = 'Rs. ' + price.substring(1).trim();
     if (price && !price.toUpperCase().startsWith('RS') && !price.toUpperCase().startsWith('M.R.P')) {
       price = 'Rs. ' + price;
     }
 
-    // Precise physical optical tag dimensions: 20mm width × 21mm height flag area
-    const tagWidthMm = 20;
-    const tagHeightMm = 21;
-    const qrMm = 10; // Small crisp 10mm QR code
+    const tagWidthMm = widthMm || 26;
+    const tagHeightMm = heightMm || 32;
 
     return `
-      <div class="frame-sticker" style="width:${tagWidthMm}mm; height:${tagHeightMm}mm; max-height:${tagHeightMm}mm; background-color:#FFE500 !important; color:#000000 !important; box-sizing:border-box; border-radius:1mm; padding:0.8mm 0.8mm 0.5mm 0.8mm; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; overflow:hidden; position:relative; border:0.5px solid rgba(0,0,0,0.35); font-family:'Plus Jakarta Sans', -apple-system, sans-serif; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; margin:0 auto; text-align:center;">
-        <!-- Top: Small Crisp Square QR Code (10mm) -->
-        <div style="width:${qrMm}mm; height:${qrMm}mm; background:#FFFFFF; padding:0.4mm; border-radius:0.8mm; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-sizing:border-box;">
-          ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" style="width:100%; height:100%; display:block; object-fit:contain; image-rendering:pixelated;" />` : `<div style="font-size:5pt; font-weight:bold;">QR</div>`}
+      <div class="frame-sticker" style="width:${tagWidthMm}mm; min-height:${tagHeightMm}mm; background-color:#FFFFFF !important; color:#000000 !important; box-sizing:border-box; border-radius:2mm; padding:2mm 1.5mm 1.5mm 1.5mm; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; overflow:hidden; position:relative; border:1px solid #000000; font-family:'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; margin:0 auto; text-align:center;">
+        <!-- Top: Centered Crisp Square QR Code -->
+        <div style="width:16mm; height:16mm; background:#FFFFFF; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-sizing:border-box; margin-bottom:1.5mm;">
+          ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" style="width:100%; height:100%; display:block; object-fit:contain; image-rendering:pixelated;" />` : `<div style="font-size:7pt; font-weight:bold;">QR</div>`}
         </div>
 
-        <!-- Bottom Rows: All text strictly fitted inside the QR flag area (SKU, Name, Price) -->
-        <div style="width:100%; max-width:${tagWidthMm - 1}mm; display:flex; flex-direction:column; align-items:center; text-align:center; overflow:hidden; margin-top:0.5mm; gap:0.2mm;">
-          <div style="font-size:5.8pt; font-weight:900; line-height:1.05; letter-spacing:0.02em; color:#000000 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">
-            ${escapeHtml(sku)}
-          </div>
-          ${name ? `<div style="font-size:4.6pt; font-weight:700; line-height:1.05; color:#1E293B; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">${escapeHtml(name)}</div>` : ''}
-          ${price ? `<div style="font-size:5pt; font-weight:900; line-height:1.05; color:#000000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">${escapeHtml(price)}</div>` : ''}
+        <!-- Frame Unique Code / SKU -->
+        <div style="font-size:7.5pt; font-weight:900; line-height:1.15; letter-spacing:0.04em; color:#000000 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; text-transform:uppercase;">
+          ${escapeHtml(sku)}
         </div>
+
+        <!-- Short Frame Name / Model -->
+        ${name ? `<div style="font-size:5.8pt; font-weight:600; line-height:1.15; color:#111111 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; margin-top:0.6mm;">${escapeHtml(name)}</div>` : ''}
+
+        <!-- Current Retail Price (Rs.) -->
+        ${price ? `<div style="font-size:7pt; font-weight:900; line-height:1.15; color:#000000 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; margin-top:1mm;">${escapeHtml(price)}</div>` : ''}
       </div>
     `;
   }
 
   /**
-   * Render One Bright-Yellow Frame QR Sticker inside an on-screen container (Modal preview)
+   * Render unified 384-dot ESC/POS raster for a frame sticker via HTML5 Canvas
+   * Perfectly matches reference image down to the dot, zero bleeding, zero large text.
+   */
+  async function renderStickerToUnifiedRaster(frame, widthMm = 26, heightMm = 32) {
+    const sku = (frame.sku || frame.id || 'NOOR-FRAME').toUpperCase();
+    const name = (frame.name || '').slice(0, 24);
+    let price = frame.selling_price_paise ? formatINR(frame.selling_price_paise, true) : (frame.selling_price_inr ? formatINR(frame.selling_price_inr * 100, true) : '');
+    if (price && price.startsWith('₹')) price = 'Rs. ' + price.substring(1).trim();
+    if (price && !price.toUpperCase().startsWith('RS') && !price.toUpperCase().startsWith('M.R.P')) {
+      price = 'Rs. ' + price;
+    }
+
+    const qrUrl = `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`;
+    const qrDataUrl = await generateQrDataUrl(qrUrl, 240);
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const lineDots = 384;
+        const dotsPerMm = 8;
+        const cardWidthDots = Math.min(360, Math.max(180, Math.round(widthMm * dotsPerMm)));
+        const cardHeightDots = Math.round(heightMm * dotsPerMm);
+        const totalHeightDots = Math.max(cardHeightDots + 16, 220);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = lineDots;
+        canvas.height = totalHeightDots;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, lineDots, totalHeightDots);
+
+        const cardX = Math.floor((lineDots - cardWidthDots) / 2);
+        const cardY = 6;
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cardX, cardY, cardWidthDots, cardHeightDots);
+
+        const qrSizeDots = Math.min(cardWidthDots - 24, 120);
+        const qrX = Math.floor(cardX + (cardWidthDots - qrSizeDots) / 2);
+        const qrY = cardY + 12;
+
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, qrX, qrY, qrSizeDots, qrSizeDots);
+
+        let textY = qrY + qrSizeDots + 22;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#000000';
+
+        ctx.font = 'bold 20px "Plus Jakarta Sans", Arial, sans-serif';
+        ctx.fillText(sku, cardX + cardWidthDots / 2, textY, cardWidthDots - 16);
+        textY += 18;
+
+        if (name) {
+          ctx.font = '500 15px "Plus Jakarta Sans", Arial, sans-serif';
+          ctx.fillText(name, cardX + cardWidthDots / 2, textY, cardWidthDots - 16);
+          textY += 19;
+        }
+
+        if (price) {
+          ctx.font = 'bold 18px "Plus Jakarta Sans", Arial, sans-serif';
+          ctx.fillText(price, cardX + cardWidthDots / 2, textY, cardWidthDots - 16);
+        }
+
+        const rasterBase64 = convertCanvasToEscPosRasterBase64(canvas);
+        resolve({
+          qrDataUrl,
+          stickerRasterBase64: rasterBase64
+        });
+      };
+      img.onerror = () => {
+        resolve({ qrDataUrl: '', stickerRasterBase64: '' });
+      };
+      img.src = qrDataUrl;
+    });
+  }
+
+  /**
+   * Render One Frame QR Sticker inside an on-screen container (Modal preview)
    */
   async function renderSingleStickerCard(container, frame, widthMm, heightMm, contactText, isPreview = false, qrSize = 'medium', preset = '') {
     container.innerHTML = '';
@@ -2916,7 +3094,9 @@
       ? sku
       : `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`;
     const qrDataUrl = await generateQrDataUrl(qrPayload, 320);
-    container.innerHTML = buildStickerHtml(frame, 20, 21, '', qrDataUrl, qrSize);
+    const w = widthMm || Number(document.getElementById('stk-width-mm')?.value) || 26;
+    const h = heightMm || Number(document.getElementById('stk-height-mm')?.value) || 32;
+    container.innerHTML = buildStickerHtml(frame, w, h, '', qrDataUrl, qrSize);
   }
 
   /**
@@ -5621,11 +5801,12 @@
     if (!orderId && !directOrder) return;
 
     let order = directOrder || state.ordersCache.find(o => o.id === orderId || o.order_number === orderId);
-    if (!order) {
+    if (!order || !order.items || order.items.length === 0) {
       try {
         const resp = await apiFetch(`/api/orders/${orderId}`);
-        order = resp.order || resp;
-        if (resp.items && !order.items) order.items = resp.items;
+        const fetchedOrder = resp.order || resp;
+        const fetchedItems = resp.items || fetchedOrder.items || [];
+        order = { ...(order || {}), ...fetchedOrder, items: fetchedItems };
       } catch (e) {}
     }
 
@@ -5634,7 +5815,10 @@
       return;
     }
 
-    // Ensure client prescription is attached if linked
+    // Ensure prescription is attached if linked
+    if (!order.od_sph && order.prescription) {
+      Object.assign(order, order.prescription);
+    }
     if (!order.od_sph && order.customer_id && state.clientsCache) {
       const client = state.clientsCache.find(c => c.id === order.customer_id);
       if (client && client.latest_prescription) {

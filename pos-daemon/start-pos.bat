@@ -11,17 +11,12 @@ echo.
 
 cd /d "%~dp0"
 
-REM 1. Check if port 5001 is already running our daemon
-powershell -NoProfile -Command "$client = New-Object System.Net.Sockets.TcpClient; try { $client.Connect('127.0.0.1', 5001); Write-Host 'ONLINE'; $client.Close(); } catch { Write-Host 'OFFLINE' }" > "%TEMP%\daemon_port_check.txt" 2>nul
-set /p PORT_STATUS=<"%TEMP%\daemon_port_check.txt"
-del "%TEMP%\daemon_port_check.txt" 2>nul
-
-if "%PORT_STATUS%"=="ONLINE" (
-    echo [INFO] A Print Daemon is currently active on port 5001.
-    echo [RESTART] Upgrading and reloading daemon with latest QR sticker engine...
-    powershell -NoProfile -Command "Get-Process -Name powershell,node -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -match 'Portable POS' -or $_.CommandLine -match 'pos-daemon' } | Stop-Process -Force -ErrorAction SilentlyContinue" 2>nul
-    timeout /t 1 /nobreak >nul
+REM 1. Cleanly terminate any stale process holding port 5001
+for /f "tokens=5" %%p in ('netstat -aon 2^>nul ^| findstr /r ":5001\>.*LISTENING"') do (
+    echo [RESTART] Port 5001 in use by PID %%p. Freeing port...
+    taskkill /f /pid %%p >nul 2>nul
 )
+timeout /t 1 /nobreak >nul
 
 REM 2. Detect Node.js runtime or fallback to PowerShell
 set ENGINE=PS

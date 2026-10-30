@@ -1667,12 +1667,14 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       orderNumber, total: result.totalPayableINR, customerId: result.customerId
     }, req);
 
+    const rxRecord = result.prescriptionId ? db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(result.prescriptionId) : null;
+
     pushOrderToSupabase({
       orderNumber,
       customerName: result.customerName,
       customerPhone: req.body.customerPhone || (req.body.clientDetails && req.body.clientDetails.phone),
       customerEmail: req.body.customerEmail || (req.body.clientDetails && req.body.clientDetails.email),
-      items: preparedItems.map(pi => ({
+      items: preparedItems.map((pi, idx) => ({
         id: pi.id,
         name: pi.product_name,
         product_name: pi.product_name,
@@ -1682,9 +1684,19 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
         lensName: pi.lens_name,
         quantity: pi.quantity,
         unit_price: pi.unit_price_paise / 100,
-        subtotal: pi.subtotal_paise / 100
+        subtotal: pi.subtotal_paise / 100,
+        prescription: idx === 0 ? (rxRecord || incomingRx || null) : null
       })),
       prescriptionId: result.prescriptionId,
+      prescription: rxRecord || incomingRx || null,
+      od_sph: rxRecord?.od_sph || incomingRx?.od_sph || null,
+      od_cyl: rxRecord?.od_cyl || incomingRx?.od_cyl || null,
+      od_axis: rxRecord?.od_axis || incomingRx?.od_axis || null,
+      os_sph: rxRecord?.os_sph || incomingRx?.os_sph || null,
+      os_cyl: rxRecord?.os_cyl || incomingRx?.os_cyl || null,
+      os_axis: rxRecord?.os_axis || incomingRx?.os_axis || null,
+      addition: rxRecord?.addition || incomingRx?.addition || null,
+      ipd_distance: rxRecord?.ipd_distance || incomingRx?.ipd_distance || null,
       paymentMethod: req.body.paymentMethod,
       grandTotalINR: result.totalPayableINR
     }).catch(err => console.warn('[SupabaseSync] Push POS order note:', err.message));
@@ -1698,15 +1710,12 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     }
 
     // Push prescription to Supabase Cloud
-    if (result.prescriptionId) {
-      const rxRecord = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(result.prescriptionId);
-      if (rxRecord) {
-        pushPrescriptionToSupabase({
-          ...rxRecord,
-          client_name: result.customerName,
-          client_phone: req.body.customerPhone || (req.body.clientDetails && req.body.clientDetails.phone)
-        }).catch(err => console.warn('[SupabaseSync] Push POS rx note:', err.message));
-      }
+    if (rxRecord) {
+      pushPrescriptionToSupabase({
+        ...rxRecord,
+        client_name: result.customerName,
+        client_phone: req.body.customerPhone || (req.body.clientDetails && req.body.clientDetails.phone)
+      }).catch(err => console.warn('[SupabaseSync] Push POS rx note:', err.message));
     }
 
     res.json({ success: true, ...result });
@@ -3086,6 +3095,11 @@ router.get('/qr/resolve/:code', (req, res) => {
       inStock: effectiveQty > 0
     }
   });
+});
+
+// ── GET /q/:code & /Q/:code (Smartphone camera QR resolution redirect) ────────
+router.get(['/q/:code', '/Q/:code'], (req, res) => {
+  res.redirect(`/#product=${encodeURIComponent(req.params.code || '')}`);
 });
 
 // ── GET /api/dashboard/overview (Live Data-Driven Dashboard Overview) ──────────

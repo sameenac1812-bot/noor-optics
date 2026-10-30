@@ -1658,23 +1658,26 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
   color: #6B7280;
 }
 
-/* THE BRIGHT-YELLOW FRAME STICKER COMPONENT */
+/* THE PURE-WHITE OPTICAL FRAME QR STICKER COMPONENT (REFERENCE-EXACT) */
 .frame-sticker {
-  background-color: #FFE500 !important; /* Vivid bright yellow */
+  background-color: #FFFFFF !important;
   color: #000000 !important;
   box-sizing: border-box;
-  border-radius: 2mm;
-  padding: 1.5mm 1.8mm;
+  border-radius: 1.5mm;
+  padding: 1.5mm 1.5mm 1.5mm 1.5mm;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: flex-start;
   overflow: hidden;
   position: relative;
-  border: 0.5px solid rgba(0,0,0,0.25);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+  border: 0.5px solid rgba(0,0,0,0.3);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
   page-break-inside: avoid;
   break-inside: avoid;
-  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  text-align: center;
+}
   user-select: none;
 }
 

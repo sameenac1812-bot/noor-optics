@@ -17,3 +17,5 @@ skills-lock.json
 scratch/
 .vercel
 .env*
+pos-daemon/logs/
+pos-daemon/.printed_orders.json
