@@ -1657,6 +1657,17 @@
         }
       } catch (_) {}
 
+      // 3. Guaranteed In-Memory Retention: Never drop newly added frames already in state.inventoryList
+      if (Array.isArray(state.inventoryList) && state.inventoryList.length > 0) {
+        state.inventoryList.forEach(existingItem => {
+          if (!existingItem || !existingItem.sku) return;
+          const found = list.find(p => p.id === existingItem.id || (p.sku && existingItem.sku && p.sku.toUpperCase() === existingItem.sku.toUpperCase()));
+          if (!found) {
+            list.unshift(existingItem);
+          }
+        });
+      }
+
       state.inventoryList = list;
       renderInventoryTable();
     } catch (err) {
@@ -2093,12 +2104,16 @@
 
         // 1. Immediately cache in localStorage (zero chance of disappearing)
         try {
+          const cacheCopy = { ...savedItem };
+          if (cacheCopy.image_url && cacheCopy.image_url.startsWith('data:') && cacheCopy.image_url.length > 80000) {
+            cacheCopy.image_url = 'images/meta_glasses.png';
+          }
           let localList = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
           const existIdx = localList.findIndex(p => p.id === savedItem.id || (p.sku && p.sku.toUpperCase() === sku.toUpperCase()));
           if (existIdx >= 0) {
-            localList[existIdx] = savedItem;
+            localList[existIdx] = { ...localList[existIdx], ...cacheCopy };
           } else {
-            localList.unshift(savedItem);
+            localList.unshift(cacheCopy);
           }
           localStorage.setItem('noor_custom_frames', JSON.stringify(localList));
         } catch (_) {}
@@ -2117,7 +2132,7 @@
         document.querySelectorAll('.optic-cat-pill').forEach(btn => {
           btn.classList.toggle('active', btn.getAttribute('data-inv-cat') === 'ALL');
         });
-        const searchInput = document.getElementById('optic-inv-search');
+        const searchInput = document.getElementById('inv-search-input') || document.getElementById('optic-inv-search');
         if (searchInput) searchInput.value = '';
 
         // Instant table re-render
@@ -2125,7 +2140,12 @@
 
         // 4. Dual-write to Supabase cloud for multi-device sync and website display
         if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
-          await window.NoorSupabase.saveProduct(payload).catch(e => console.warn('Supabase product dual-write note:', e));
+          await window.NoorSupabase.saveProduct({
+            ...payload,
+            id: savedItem.id,
+            stock: quantity,
+            initialStock: quantity
+          }).catch(e => console.warn('Supabase product dual-write note:', e));
         }
 
         const successMsg = saveRes && saveRes.updated

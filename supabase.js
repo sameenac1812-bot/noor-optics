@@ -293,6 +293,7 @@
           : (product.colors || [{ name: 'Standard', hex: '#111111' }]),
         dimensions: product.dimensions || { lens: '52mm', bridge: '18mm', temple: '145mm', weight: '15g' },
         description: product.description || '',
+        stock: Number(product.initialStock !== undefined ? product.initialStock : (product.stock !== undefined ? product.stock : (product.variants && product.variants[0] && product.variants[0].initialStock !== undefined ? product.variants[0].initialStock : (product.total_stock || 10)))),
         is_active: true,
         updated_at: new Date().toISOString()
       };

@@ -298,7 +298,7 @@ router.get('/products', async (req, res) => {
   res.json(results);
 });
 
-router.post('/products', authenticateToken, requirePermission('products:manage'), (req, res) => {
+router.post('/products', authenticateToken, requirePermission('products:manage'), async (req, res) => {
   const {
     name, sku, brand, shape, material, fit, category,
     sellingPriceINR, originalPriceINR, purchaseCostINR,
@@ -394,10 +394,10 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
 
       logAudit(req.user.id, req.user.email, 'PRODUCT_UPDATED', 'PRODUCT', productId, { name, sku: cleanSku }, req);
 
-      pushProductToCloud({
+      await pushProductToCloud({
         id: productId, sku: cleanSku, name, brand, shape, material, fit, category,
         sellingPriceINR, originalPriceINR, purchaseCostINR, imageUrl: cleanImageUrl, description: cleanDesc, variants
-      }).catch(() => {});
+      }).catch(e => console.warn('[SupabaseSync] pushProductToCloud update note:', e.message));
 
       return res.json({ success: true, id: productId, updated: true, message: `Frame with SKU "${cleanSku}" updated successfully.` });
     }
@@ -447,10 +447,10 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
     logAudit(req.user.id, req.user.email, 'PRODUCT_CREATED', 'PRODUCT', productId, { name, sku: cleanSku }, req);
 
     // Sync frame to Supabase cloud storage so it is permanently saved and appears on website
-    pushProductToCloud({
+    await pushProductToCloud({
       id: productId, sku: cleanSku, name, brand, shape, material, fit, category,
       sellingPriceINR, originalPriceINR, purchaseCostINR, imageUrl: cleanImageUrl, description: cleanDesc, variants
-    }).catch(() => {});
+    }).catch(e => console.warn('[SupabaseSync] pushProductToCloud create note:', e.message));
 
     return res.json({ success: true, id: productId });
   } catch (err) {

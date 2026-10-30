@@ -881,7 +881,7 @@ async function pushProductToCloud(product) {
         : [{ name: 'Standard', hex: '#111111' }],
       dimensions: { lens: '52mm', bridge: '18mm', temple: '145mm', weight: '15g' },
       description: product.description || '',
-      stock: Number(product.initialStock || product.stock || 10),
+      stock: Number(product.initialStock || product.stock || (product.variants && product.variants[0] && product.variants[0].initialStock) || product.total_stock || 10),
       is_active: true,
       updated_at: new Date().toISOString()
     };
