@@ -2149,15 +2149,12 @@
             brand,
             selling_price_inr: retail
           };
-          const rasterObj = await renderStickerToUnifiedRaster(newFrameObj, 26, 32);
           const printRes = await dispatchThermalStickerPrint([{
             sku,
             name,
             brand,
             price: formatINR(retail * 100, true),
-            copies: 1,
-            stickerRasterBase64: rasterObj.stickerRasterBase64,
-            qrDataUrl: rasterObj.qrDataUrl
+            copies: 1
           }]);
           if (printRes && printRes.success) {
             showToast(`✓ QR sticker for "${name}" printed successfully!`, 'success');
@@ -2646,15 +2643,12 @@
         const items = [];
         for (const f of frames) {
           const sku = (f.sku || f.id || 'NOOR-FRAME').toUpperCase();
-          const rasterObj = await renderStickerToUnifiedRaster(f, wMm, hMm);
           items.push({
             sku: sku,
             name: f.name || '',
             brand: f.brand || 'Noor Optics',
             price: f.selling_price_paise ? formatINR(f.selling_price_paise, true) : (f.selling_price_inr ? formatINR(f.selling_price_inr * 100, true) : ''),
-            copies: copies,
-            stickerRasterBase64: rasterObj.stickerRasterBase64,
-            qrDataUrl: rasterObj.qrDataUrl
+            copies: copies
           });
         }
 
@@ -2698,15 +2692,11 @@
 
         const wMm = Number(document.getElementById('stk-width-mm')?.value) || 26;
         const hMm = Number(document.getElementById('stk-height-mm')?.value) || 32;
-        const rasterObj = await renderStickerToUnifiedRaster(testFrame, wMm, hMm);
-
         const items = [{
           sku: testFrame.sku,
           name: testFrame.name,
           price: 'Rs. 4,599.00',
-          copies: 1,
-          stickerRasterBase64: rasterObj.stickerRasterBase64,
-          qrDataUrl: rasterObj.qrDataUrl
+          copies: 1
         }];
 
         try {
@@ -2937,15 +2927,12 @@
     const items = [];
     for (const f of selectedFrames) {
       const sku = (f.sku || f.id || 'NOOR-FRAME').toUpperCase();
-      const rasterObj = await renderStickerToUnifiedRaster(f, wMm, hMm);
       items.push({
         sku: sku,
         name: f.name || '',
         brand: f.brand || 'Noor Optics',
         price: f.selling_price_paise ? formatINR(f.selling_price_paise, true) : (f.selling_price_inr ? formatINR(f.selling_price_inr * 100, true) : ''),
-        copies: copies,
-        stickerRasterBase64: rasterObj.stickerRasterBase64,
-        qrDataUrl: rasterObj.qrDataUrl
+        copies: copies
       });
     }
 

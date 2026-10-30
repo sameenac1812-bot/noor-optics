@@ -666,23 +666,9 @@ function drawBitmapText(raster, widthBytes, text, startX, startY, scale = 1) {
 
 // ── Format Optical Frame QR Sticker (Unified 384-Dot Raster Image) ───────────
 async function format25InchEscPosQrSticker(item) {
-  // 1. Check if client sent pre-computed 384-dot unified raster
-  if (item.stickerRasterBase64) {
-    try {
-      const rasterBuf = Buffer.from(item.stickerRasterBase64, 'base64');
-      if (rasterBuf && rasterBuf.length > 50) {
-        return Buffer.concat([
-          Buffer.from([0x1B, 0x40]), // ESC @ Reset
-          rasterBuf,
-          Buffer.from([0x1B, 0x64, 0x02]), // Feed 2 lines
-          Buffer.from([0x1D, 0x56, 0x42, 0x00]) // Partial cut
-        ]);
-      }
-    } catch (_) {}
-  }
-
-  // 2. Authoritative Unified 384-Dot Monochrome ESC/POS Raster (GS v 0)
-  // Perfectly reproduces reference design: Top Large 2D QR -> SKU -> Model Name -> Price
+  // Authoritative Unified 384-Dot Monochrome ESC/POS Raster (GS v 0)
+  // Thin-line anti-blotting engine: Solid finder patterns + 3x3 active dots inside 4x4 cells
+  // Perfectly reproduces crisp, thin-line reference sticker layout (Top QR -> SKU -> Model -> Price)
   let QRCode;
   try { QRCode = require(path.join(__dirname, 'assets', 'qrcode-bundle.js')); } catch (_) {}
   if (!QRCode) {
