@@ -12,6 +12,193 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIs
 let isSyncing = false;
 
 /**
+ * Fetch cloud tombstones from dedicated system record in Supabase customers table
+ */
+async function fetchCloudOrderTombstones() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return { orders: new Set(), purgedBefore: null };
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-ORDERS`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (!res.ok) return { orders: new Set(), purgedBefore: null };
+    const list = await res.json();
+    if (!Array.isArray(list) || list.length === 0) return { orders: new Set(), purgedBefore: null };
+
+    const raw = list[0].notes;
+    if (!raw) return { orders: new Set(), purgedBefore: null };
+
+    const parsed = JSON.parse(raw);
+    const orderSet = new Set();
+    let purgedBefore = null;
+
+    if (Array.isArray(parsed)) {
+      parsed.forEach(ref => orderSet.add(String(ref)));
+    } else if (parsed && typeof parsed === 'object') {
+      if (Array.isArray(parsed.orders)) {
+        parsed.orders.forEach(ref => orderSet.add(String(ref)));
+      }
+      if (parsed.purged_before) {
+        purgedBefore = parsed.purged_before;
+      }
+    }
+    return { orders: orderSet, purgedBefore };
+  } catch (e) {
+    return { orders: new Set(), purgedBefore: null };
+  }
+}
+
+/**
+ * Record a deleted order reference into the Supabase cloud tombstone
+ */
+async function pushDeletedOrderToCloudTombstone(orderRef) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !orderRef) return;
+  try {
+    // 1. Fetch current
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-ORDERS`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    let existingOrders = [];
+    let purgedBefore = null;
+    let recordExists = false;
+
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list) && list.length > 0) {
+        recordExists = true;
+        try {
+          const parsed = JSON.parse(list[0].notes || '{}');
+          if (Array.isArray(parsed)) existingOrders = parsed;
+          else if (parsed.orders) {
+            existingOrders = parsed.orders;
+            purgedBefore = parsed.purged_before || null;
+          }
+        } catch(e) {}
+      }
+    }
+
+    if (!existingOrders.includes(orderRef)) {
+      existingOrders.push(orderRef);
+    }
+
+    const payload = {
+      notes: JSON.stringify({ orders: existingOrders, purged_before: purgedBefore }),
+      updated_at: new Date().toISOString()
+    };
+
+    if (recordExists) {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-ORDERS`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: 'tombstone-orders-global',
+          client_code: 'SYS-TOMBSTONE-ORDERS',
+          name: 'System Order Tombstones',
+          city: 'Bengaluru',
+          is_archived: false,
+          ...payload
+        })
+      });
+    }
+  } catch (err) {
+    console.warn('[SupabaseSync] Error updating cloud order tombstone:', err.message);
+  }
+}
+
+/**
+ * Record all deleted orders / purge timestamp into Supabase cloud tombstone
+ */
+async function pushAllDeletedOrdersToCloudTombstone(orderRefs = []) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-ORDERS`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    let existingOrders = [];
+    let recordExists = false;
+
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list) && list.length > 0) {
+        recordExists = true;
+        try {
+          const parsed = JSON.parse(list[0].notes || '{}');
+          if (Array.isArray(parsed)) existingOrders = parsed;
+          else if (parsed.orders) existingOrders = parsed.orders;
+        } catch(e) {}
+      }
+    }
+
+    if (Array.isArray(orderRefs)) {
+      orderRefs.forEach(ref => {
+        if (ref && !existingOrders.includes(ref)) existingOrders.push(ref);
+      });
+    }
+
+    const payload = {
+      notes: JSON.stringify({
+        orders: existingOrders,
+        purged_before: new Date().toISOString()
+      }),
+      updated_at: new Date().toISOString()
+    };
+
+    if (recordExists) {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-ORDERS`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: 'tombstone-orders-global',
+          client_code: 'SYS-TOMBSTONE-ORDERS',
+          name: 'System Order Tombstones',
+          city: 'Bengaluru',
+          is_archived: false,
+          ...payload
+        })
+      });
+    }
+  } catch (err) {
+    console.warn('[SupabaseSync] Error updating cloud order tombstone on purge:', err.message);
+  }
+}
+
+/**
  * Sync orders from Supabase cloud into local SQLite database
  */
 async function syncSupabaseOrders(db) {
@@ -19,6 +206,36 @@ async function syncSupabaseOrders(db) {
   isSyncing = true;
 
   try {
+    // 1. Fetch cloud tombstones and sync into local deleted_orders table
+    const { orders: cloudTombstones, purgedBefore } = await fetchCloudOrderTombstones();
+    for (const deadRef of cloudTombstones) {
+      try {
+        db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(deadRef);
+        // Cascade delete from local orders if still present
+        const deadOrder = db.prepare('SELECT id FROM orders WHERE order_number = ? OR id = ?').get(deadRef, deadRef);
+        if (deadOrder) {
+          db.prepare('DELETE FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE order_id = ?)').run(deadOrder.id);
+          db.prepare('DELETE FROM invoices WHERE order_id = ?').run(deadOrder.id);
+          db.prepare('DELETE FROM order_items WHERE order_id = ?').run(deadOrder.id);
+          db.prepare('DELETE FROM orders WHERE id = ?').run(deadOrder.id);
+        }
+      } catch(e) {}
+    }
+
+    if (purgedBefore) {
+      try {
+        const purgedOrders = db.prepare('SELECT id, order_number FROM orders WHERE created_at <= ?').all(purgedBefore);
+        for (const po of purgedOrders) {
+          db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(po.order_number);
+          db.prepare('DELETE FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE order_id = ?)').run(po.id);
+          db.prepare('DELETE FROM invoices WHERE order_id = ?').run(po.id);
+          db.prepare('DELETE FROM order_items WHERE order_id = ?').run(po.id);
+          db.prepare('DELETE FROM orders WHERE id = ?').run(po.id);
+        }
+      } catch(e) {}
+    }
+
+    // 2. Fetch orders from Supabase
     const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc`, {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
@@ -39,7 +256,15 @@ async function syncSupabaseOrders(db) {
       // Filter out dummy/test ghost orders
       if (/TEST/i.test(co.order_ref) || (co.customer_name && /Test/i.test(co.customer_name))) continue;
 
-      // Check if this order was deleted / tombstoned by admin
+      // Filter out if in cloud tombstones or purged before
+      if (cloudTombstones.has(co.order_ref) || (co.id && cloudTombstones.has(co.id))) {
+        continue;
+      }
+      if (purgedBefore && co.created_at && co.created_at <= purgedBefore) {
+        continue;
+      }
+
+      // Check if this order was deleted / tombstoned in local SQLite
       try {
         const isTombstoned = db.prepare('SELECT order_number FROM deleted_orders WHERE order_number = ?').get(co.order_ref);
         if (isTombstoned) continue;
@@ -180,7 +405,11 @@ async function syncSupabaseOrders(db) {
  * Delete single order from Supabase cloud by order reference
  */
 async function deleteOrderFromSupabase(orderRef) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !orderRef) return;
+  if (!orderRef) return;
+  // 1. Immediately record in cloud tombstone (guaranteed persistence across all lambdas & clients)
+  await pushDeletedOrderToCloudTombstone(orderRef).catch(() => {});
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?order_ref=eq.${encodeURIComponent(orderRef)}`, {
       method: 'DELETE',
@@ -199,7 +428,10 @@ async function deleteOrderFromSupabase(orderRef) {
 /**
  * Delete all orders from Supabase cloud
  */
-async function deleteAllOrdersFromSupabase() {
+async function deleteAllOrdersFromSupabase(existingOrderRefs = []) {
+  // 1. Record all existing refs and purge timestamp in cloud tombstone
+  await pushAllDeletedOrdersToCloudTombstone(existingOrderRefs).catch(() => {});
+
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?id=not.is.null`, {
@@ -480,6 +712,8 @@ module.exports = {
   pushPrescriptionToSupabase,
   deleteOrderFromSupabase,
   deleteAllOrdersFromSupabase,
+  pushDeletedOrderToCloudTombstone,
+  pushAllDeletedOrdersToCloudTombstone,
   deleteCustomerFromSupabase,
   deleteAllCustomersFromSupabase,
   startBackgroundSync

@@ -14,5 +14,6 @@ uploads/
 .vercel
 .agents/
 skills-lock.json
+scratch/
 .vercel
 .env*

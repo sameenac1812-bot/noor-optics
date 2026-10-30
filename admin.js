@@ -473,7 +473,25 @@
   async function loadOrders(silent = false) {
     try {
       const res = await apiFetch('/api/orders?limit=150');
-      const incoming = Array.isArray(res) ? res : (res.orders || []);
+      let incoming = Array.isArray(res) ? res : (res.orders || []);
+
+      // Filter against persistent tombstones and purge timestamp
+      const localDeleted = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
+      const localDeletedSet = new Set(localDeleted.map(x => String(x).toLowerCase().trim()));
+      const purgedAt = Number(localStorage.getItem('noor_orders_purged_at')) || 0;
+
+      incoming = incoming.filter(o => {
+        if (!o) return false;
+        if (o.order_number && /TEST/i.test(o.order_number)) return false;
+        if (o.customer_name && /test/i.test(o.customer_name)) return false;
+        if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
+        if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
+        if (purgedAt && o.created_at) {
+          const t = new Date(o.created_at).getTime();
+          if (t && t <= purgedAt) return false;
+        }
+        return true;
+      });
 
       // Real-time detection of new incoming orders (customer mobile storefront or in-store POS)
       if (!state.hasInitializedOrders) {
@@ -534,10 +552,21 @@
     const statusFilter = state.ordersStatusFilter;
     const paymentFilter = state.ordersPaymentFilter;
 
-    // Filter out dummy test ghost orders only
+    // Filter out dummy test ghost orders and local tombstones
+    const localDeleted = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
+    const localDeletedSet = new Set(localDeleted.map(x => String(x).toLowerCase().trim()));
+    const purgedAt = Number(localStorage.getItem('noor_orders_purged_at')) || 0;
+
     const cleanOrders = state.ordersCache.filter(o => {
+      if (!o) return false;
       if (o.order_number && /TEST/i.test(o.order_number)) return false;
       if (o.customer_name && /test/i.test(o.customer_name)) return false;
+      if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
+      if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
+      if (purgedAt && o.created_at) {
+        const t = new Date(o.created_at).getTime();
+        if (t && t <= purgedAt) return false;
+      }
       return true;
     });
 
@@ -1086,6 +1115,36 @@
   async function directDeleteSupabaseOrder(orderRef) {
     if (!orderRef) return;
     try {
+      // 1. Persist directly to Supabase cloud tombstone register
+      const res = await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-ORDERS`, {
+        headers: { 'apikey': CLOUD_SYNC_CFG.key, 'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}` }
+      });
+      let tombData = { orders: [] };
+      if (res.ok) {
+        const list = await res.json();
+        if (list[0]?.notes) {
+          try {
+            const p = JSON.parse(list[0].notes);
+            if (Array.isArray(p)) tombData.orders = p;
+            else if (p.orders) tombData = p;
+          } catch(e) {}
+        }
+      }
+      if (!tombData.orders.includes(orderRef)) tombData.orders.push(orderRef);
+      await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-ORDERS`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': CLOUD_SYNC_CFG.key,
+          'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ notes: JSON.stringify(tombData), updated_at: new Date().toISOString() })
+      });
+    } catch (e) {
+      console.warn('Cloud tombstone write note:', e);
+    }
+
+    try {
       await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/orders?order_ref=eq.${encodeURIComponent(orderRef)}`, {
         method: 'DELETE',
         headers: {
@@ -1099,6 +1158,37 @@
   }
 
   async function directDeleteAllSupabaseOrders() {
+    try {
+      const res = await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-ORDERS`, {
+        headers: { 'apikey': CLOUD_SYNC_CFG.key, 'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}` }
+      });
+      let tombData = { orders: [], purged_before: new Date().toISOString() };
+      if (res.ok) {
+        const list = await res.json();
+        if (list[0]?.notes) {
+          try {
+            const p = JSON.parse(list[0].notes);
+            if (Array.isArray(p)) tombData.orders = p;
+            else if (p.orders) tombData.orders = p.orders;
+          } catch(e) {}
+        }
+      }
+      state.ordersCache.forEach(o => {
+        if (o.order_number && !tombData.orders.includes(o.order_number)) tombData.orders.push(o.order_number);
+      });
+      await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-ORDERS`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': CLOUD_SYNC_CFG.key,
+          'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ notes: JSON.stringify(tombData), updated_at: new Date().toISOString() })
+      });
+    } catch (e) {
+      console.warn('Cloud tombstone write note:', e);
+    }
+
     try {
       await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/orders?id=not.is.null`, {
         method: 'DELETE',
@@ -5591,7 +5681,6 @@
     });
 
     // Initialize Components
-    try { localStorage.removeItem('noor_orders_purged_at'); } catch (e) {}
     setupAuth();
     setupAddFrameModal();
     setupEditFrameModal();

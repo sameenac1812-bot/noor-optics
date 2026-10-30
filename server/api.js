@@ -739,6 +739,7 @@ router.get('/customers', authenticateToken, async (req, res) => {
     FROM customers c
     LEFT JOIN orders o ON c.id = o.customer_id AND o.status != 'CANCELLED'
     WHERE 1=1
+      AND (c.client_code IS NULL OR c.client_code NOT LIKE 'SYS-%')
       AND c.id NOT IN (SELECT customer_id FROM deleted_customers WHERE customer_id IS NOT NULL)
       AND (c.phone IS NULL OR c.phone NOT IN (SELECT phone FROM deleted_customers WHERE phone IS NOT NULL))
       AND (c.name IS NULL OR LOWER(c.name) NOT IN (SELECT LOWER(name) FROM deleted_customers WHERE name IS NOT NULL))
@@ -1991,6 +1992,8 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
     LEFT JOIN customers c ON o.customer_id = c.id
     LEFT JOIN prescriptions pr ON o.prescription_id = pr.id
     WHERE 1=1
+      AND o.order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
+      AND o.id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
   `;
   const params = [];
 
@@ -2200,6 +2203,9 @@ router.delete('/orders/:id', authenticateToken, async (req, res) => {
     // 3. Record in tombstone register so it never re-syncs from cloud
     try {
       db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(order.order_number);
+      if (order.id) {
+        db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(order.id);
+      }
     } catch (tErr) {}
 
     logAudit(req.user.id, req.user.email, 'ORDER_DELETED', 'ORDER', actualOrderId, {
@@ -2226,8 +2232,20 @@ router.delete('/orders', authenticateToken, async (req, res) => {
 
   const { channel } = req.query; // optional: 'POS' or 'WEBSITE'
 
-  // Delete from Supabase cloud first
-  await deleteAllOrdersFromSupabase().catch(err => console.warn('Supabase delete all warning:', err.message));
+  // Pre-fetch orders to delete so references can be tombstoned in cloud and local registers
+  let preSql = 'SELECT id, order_number FROM orders WHERE 1=1';
+  const preParams = [];
+  if (channel === 'POS') {
+    preSql += ' AND channel = ?';
+    preParams.push('POS');
+  } else if (channel === 'WEBSITE' || channel === 'ONLINE') {
+    preSql += " AND channel IN ('ONLINE', 'WEBSITE')";
+  }
+  const ordersTargeted = db.prepare(preSql).all(...preParams);
+  const targetRefs = ordersTargeted.map(o => o.order_number);
+
+  // Delete / Tombstone in Supabase cloud first
+  await deleteAllOrdersFromSupabase(targetRefs).catch(err => console.warn('Supabase delete all warning:', err.message));
 
   const deleteTx = db.transaction(() => {
     let sql = 'SELECT id, order_number, status, channel FROM orders';
@@ -2285,6 +2303,9 @@ router.delete('/orders', authenticateToken, async (req, res) => {
       // Record in tombstone register
       try {
         db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(order.order_number);
+        if (order.id) {
+          db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(order.id);
+        }
       } catch (tErr) {}
     }
 
