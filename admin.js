@@ -4402,13 +4402,17 @@
               variantId: item.variantId,
               name: item.name,
               product_name: item.name,
+              model: item.model || item.name,
+              brand: item.brand || 'NOOR',
               sku: item.sku,
               color: item.color,
               variant_name: item.color,
               lensName: item.lensName || 'Standard Demo Lens',
               quantity: item.quantity,
               unitPricePaise: item.pricePaise,
-              priceINR: item.priceINR
+              priceINR: item.priceINR,
+              lineTotalINR: item.lineTotalINR,
+              lineTotalPaise: item.lineTotalPaise
             }))
           };
 
@@ -4421,6 +4425,7 @@
 
           // Instant automatic bill printout with complete embedded prescription
           if (res.orderId) {
+            const subtotalFromCart = (subtotalPaiseSnapshot > 0) ? (subtotalPaiseSnapshot / 100) : res.totalPayableINR;
             const fullOrderSnapshot = {
               id: res.orderId,
               order_number: res.orderNumber || res.invoiceNumber,
@@ -4436,10 +4441,10 @@
                 color: i.color || i.colorName || 'Standard',
                 lens_name: i.lensName || 'Standard Demo Lens',
                 quantity: i.quantity || 1,
-                unit_price_inr: (i.pricePaise || 0) / 100,
-                subtotal_inr: ((i.pricePaise || 0) * (i.quantity || 1)) / 100
+                unit_price_inr: (i.priceINR != null) ? Number(i.priceINR) : ((i.pricePaise || 0) / 100),
+                subtotal_inr: (i.lineTotalINR != null) ? Number(i.lineTotalINR) : (((i.pricePaise || 0) * (i.quantity || 1)) / 100)
               })),
-              subtotal_inr: (subtotalPaiseSnapshot || 0) / 100,
+              subtotal_inr: subtotalFromCart,
               discount_inr: discountINR,
               total_payable_inr: res.totalPayableINR,
               amount_paid_inr: res.totalPayableINR,

@@ -38,8 +38,8 @@ function generateInvoicePDF(invoice, items) {
     doc.on('error', err => reject(err));
 
     const settings = getStoreSettings();
-    const storeName = settings.store_name || 'NOOR OPTICS';
-    const storeAddress = settings.store_address || '104, 100ft Road, Indiranagar, Bengaluru - 560038';
+    const storeName = settings.store_name || 'NOOR OPTIC';
+    const storeAddress = settings.store_address || 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028';
     const storePhone = settings.store_phone || '+91 98765 43210';
     const storeEmail = settings.store_email || 'concierge@nooroptics.com';
     const storeGstin = settings.store_gstin || '29AAAAA0000A1Z5';

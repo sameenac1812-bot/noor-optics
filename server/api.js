@@ -1439,6 +1439,10 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
   const tokenNumber = getNextDailyTokenNumber();
   const invoiceNumber = generateInvoiceNumber();
 
+  let incomingRx = newPrescription || req.body.prescription || null;
+  const preparedItems = [];
+  let calculatedSubtotalPaise = 0;
+
   const checkoutTx = db.transaction(() => {
     // 0. Resolve or create customer permanently
     let finalCustomerId = customerId || null;
@@ -1500,7 +1504,6 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     }
 
     // 0b. Resolve or create new prescription if submitted
-    const incomingRx = newPrescription || req.body.prescription;
     let finalPrescriptionId = prescriptionId || null;
 
     if (incomingRx && !finalCustomerId) {
@@ -1553,7 +1556,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     }
 
     let subtotalPaise = 0;
-    const preparedItems = [];
+    preparedItems.length = 0; // Clear array in case of retry
 
     // 1. Validate & calculate line items and stock
     for (const item of items) {
@@ -1607,6 +1610,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
         order_id: orderId,
         variant_id: variant ? variant.id : (item.variantId || 'var-noor-01-1'),
         product_name: prodName,
+        name: prodName,
         variant_name: varColor,
         sku: varSku,
         brand,
@@ -1616,9 +1620,11 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
         size,
         lens_name: item.lensName || item.lens_name || 'Standard Demo Lens',
         unit_price_paise: unitPrice,
+        unit_price_inr: unitPrice / 100,
         purchase_cost_paise: variant ? variant.purchase_cost_paise : 145000,
         quantity: qty,
-        subtotal_paise: lineSubtotal
+        subtotal_paise: lineSubtotal,
+        subtotal_inr: lineSubtotal / 100
       });
 
       // Safely decrement or create inventory balance
@@ -1644,6 +1650,8 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
         VALUES (?, ?, 'loc-main', ?, ?, 'SALE_POS', ?, 'Physical Store POS Checkout', ?)
       `).run('mov-' + Date.now() + '-' + variant.id, variant.id, -qty, newBal, orderNumber, req.user.id);
     }
+
+    calculatedSubtotalPaise = subtotalPaise;
 
     const taxRate = 0.18; // 18% GST inclusive
     const netBase = Math.max(0, subtotalPaise - discountPaise);
@@ -1756,6 +1764,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       tokenNumber,
       invoiceNumber,
       invoiceId,
+      subtotalINR: subtotalPaise / 100,
       totalPayableINR: totalPayablePaise / 100,
       paymentStatus,
       printJobId: printJob.jobId,
@@ -1783,25 +1792,38 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
         name: pi.product_name,
         product_name: pi.product_name,
         sku: pi.sku,
+        brand: pi.brand,
+        model: pi.model,
+        shape: pi.shape,
+        size: pi.size,
         color: pi.color,
         variant_name: pi.variant_name,
         lensName: pi.lens_name,
+        lens_name: pi.lens_name,
         quantity: pi.quantity,
         unit_price: pi.unit_price_paise / 100,
+        unit_price_inr: pi.unit_price_paise / 100,
+        unit_price_paise: pi.unit_price_paise,
+        unitPricePaise: pi.unit_price_paise,
+        priceINR: pi.unit_price_paise / 100,
         subtotal: pi.subtotal_paise / 100,
+        subtotal_inr: pi.subtotal_paise / 100,
+        subtotal_paise: pi.subtotal_paise,
+        subtotalPaise: pi.subtotal_paise,
         prescription: idx === 0 ? (rxRecord || incomingRx || null) : null
       })),
       prescriptionId: result.prescriptionId,
       prescription: rxRecord || incomingRx || null,
-      od_sph: rxRecord?.od_sph || incomingRx?.od_sph || null,
-      od_cyl: rxRecord?.od_cyl || incomingRx?.od_cyl || null,
-      od_axis: rxRecord?.od_axis || incomingRx?.od_axis || null,
-      os_sph: rxRecord?.os_sph || incomingRx?.os_sph || null,
-      os_cyl: rxRecord?.os_cyl || incomingRx?.os_cyl || null,
-      os_axis: rxRecord?.os_axis || incomingRx?.os_axis || null,
-      addition: rxRecord?.addition || incomingRx?.addition || null,
-      ipd_distance: rxRecord?.ipd_distance || incomingRx?.ipd_distance || null,
-      paymentMethod: req.body.paymentMethod,
+      od_sph: rxRecord?.od_sph != null ? rxRecord.od_sph : (incomingRx?.od_sph != null ? incomingRx.od_sph : null),
+      od_cyl: rxRecord?.od_cyl != null ? rxRecord.od_cyl : (incomingRx?.od_cyl != null ? incomingRx.od_cyl : null),
+      od_axis: rxRecord?.od_axis != null ? rxRecord.od_axis : (incomingRx?.od_axis != null ? incomingRx.od_axis : null),
+      os_sph: rxRecord?.os_sph != null ? rxRecord.os_sph : (incomingRx?.os_sph != null ? incomingRx.os_sph : null),
+      os_cyl: rxRecord?.os_cyl != null ? rxRecord.os_cyl : (incomingRx?.os_cyl != null ? incomingRx.os_cyl : null),
+      os_axis: rxRecord?.os_axis != null ? rxRecord.os_axis : (incomingRx?.os_axis != null ? incomingRx.os_axis : null),
+      addition: rxRecord?.addition != null ? rxRecord.addition : (incomingRx?.addition != null ? incomingRx.addition : null),
+      ipd_distance: rxRecord?.ipd_distance != null ? rxRecord.ipd_distance : (incomingRx?.ipd_distance != null ? incomingRx.ipd_distance : null),
+      paymentMethod: paymentMethod,
+      subtotalINR: result.subtotalINR || (calculatedSubtotalPaise / 100),
       grandTotalINR: result.totalPayableINR
     }).catch(err => console.warn('[SupabaseSync] Push POS order note:', err.message));
 
@@ -1850,10 +1872,11 @@ router.post('/orders/online', (req, res) => {
 
   let createdCustomerId = null;
   let createdPrescriptionId = null;
+  const preparedItems = [];
 
   const onlineTx = db.transaction(() => {
     let subtotalPaise = 0;
-    const preparedItems = [];
+    preparedItems.length = 0;
 
     for (const item of items) {
       // Find variant or fallback by product ID
@@ -2049,6 +2072,7 @@ router.post('/orders/online', (req, res) => {
       orderNumber,
       tokenNumber,
       invoiceNumber,
+      subtotalINR: subtotalPaise / 100,
       grandTotalINR: totalPayablePaise / 100
     };
   });
@@ -2065,16 +2089,33 @@ router.post('/orders/online', (req, res) => {
       deliveryAddress,
       city,
       pinCode,
-      items: items.map(it => ({
-        ...it,
-        brand: it.brand || 'Noor Optics',
-        model: it.model || it.name,
-        shape: it.shape || 'Optical',
-        color: it.color || 'Matte Black',
-        size: it.size || 'Regular'
+      items: preparedItems.map(pi => ({
+        id: pi.id,
+        name: pi.product_name,
+        product_name: pi.product_name,
+        sku: pi.sku,
+        brand: pi.brand,
+        model: pi.model,
+        shape: pi.shape,
+        size: pi.size,
+        color: pi.color,
+        variant_name: pi.variant_name,
+        lensName: pi.lens_name,
+        lens_name: pi.lens_name,
+        quantity: pi.quantity,
+        unit_price: pi.unit_price_paise / 100,
+        unit_price_inr: pi.unit_price_paise / 100,
+        unit_price_paise: pi.unit_price_paise,
+        unitPricePaise: pi.unit_price_paise,
+        priceINR: pi.unit_price_paise / 100,
+        subtotal: pi.subtotal_paise / 100,
+        subtotal_inr: pi.subtotal_paise / 100,
+        subtotal_paise: pi.subtotal_paise,
+        subtotalPaise: pi.subtotal_paise
       })),
       prescriptionPref: prescriptionPref || (createdPrescriptionId ? 'RX Attached' : 'Standard'),
       paymentMethod,
+      subtotalINR: result.subtotalINR,
       grandTotalINR: result.grandTotalINR
     }).catch(err => console.warn('[SupabaseSync] Push online order note:', err.message));
 

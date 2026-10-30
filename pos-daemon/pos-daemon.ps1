@@ -102,9 +102,9 @@ $Config = @{
     printerName = $PrinterName
     paperWidthInch = 2.5
     columns = 32
-    storeName = "NOOR OPTICS"
-    storeTagline = "Scandinavian Eyewear Boutique"
-    storeAddress = "Indiranagar 100ft Road, Bengaluru"
+    storeName = "NOOR OPTIC"
+    storeTagline = ""
+    storeAddress = "Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028"
     storePhone = "+91 98765 43210"
     storeGstin = "29AAAAA0000A1Z5"
     orderFreshnessMinutes = 45
@@ -462,27 +462,23 @@ function Format-ReceiptBytes($order) {
     # 1. ESC @ (Initialize)
     $bw.Write([byte[]]@(0x1B, 0x40))
 
-    # 1b. Print Noor Glasses Logo at Top
+    # 1b. Print Noor Glasses Logo at Top (Tightly positioned above store name)
     $LogoRasterFile = Join-Path $ScriptDir "assets\logo_raster.bin"
     if (Test-Path $LogoRasterFile) {
         $logoBytes = [System.IO.File]::ReadAllBytes($LogoRasterFile)
         $bw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
         $bw.Write($logoBytes)
-        $bw.Write([byte[]]@(0x1B, 0x64, 0x01)) # Feed 1 line
     }
 
-    # 2. Header (NO City, NO GSTIN)
+    # 2. Header (NOOR OPTIC, Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028)
     $bw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
     $bw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
     $bw.Write([byte[]]@(0x1D, 0x21, 0x01)) # Double height
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("$($Config.storeName)`n"))
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("NOOR OPTIC`n"))
     $bw.Write([byte[]]@(0x1D, 0x21, 0x00)) # Normal
     $bw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("$($Config.storeTagline)`n"))
-    $cleanAddr = "$($Config.storeAddress)" -replace ",\s*Bengaluru", "" -replace "Bengaluru", ""
-    if ($cleanAddr) { $bw.Write([System.Text.Encoding]::ASCII.GetBytes("$cleanAddr`n")) }
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028`n"))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Ph: $($Config.storePhone)`n"))
-    # GSTIN removed
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($doubleDivider))
 
     # 3. Invoice & Token
@@ -507,38 +503,86 @@ function Format-ReceiptBytes($order) {
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "ITEM / SPEC" "QTY  AMOUNT")))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
-    if ($order.items -and $order.items.Count -gt 0) {
-        foreach ($it in $order.items) {
-            $name = if ($it.product_name) { $it.product_name } elseif ($it.name) { $it.name } elseif ($it.model) { $it.model } else { "Optical Frame" }
+    $rawItems = $order.items
+    if ($rawItems -is [string]) {
+        try { $rawItems = $rawItems | ConvertFrom-Json } catch { $rawItems = @() }
+    }
+    $itemCount = if ($rawItems) { $rawItems.Count } else { 0 }
+
+    $grandT = if ($order.total_payable_inr) { [double]$order.total_payable_inr } `
+              elseif ($order.grand_total) { [double]$order.grand_total } `
+              elseif ($order.total) { [double]$order.total } `
+              elseif ($order.total_payable_paise) { [double]$order.total_payable_paise / 100 } `
+              else { 0.0 }
+    $disc = if ($order.discount_inr) { [double]$order.discount_inr } `
+            elseif ($order.discount_paise) { [double]$order.discount_paise / 100 } `
+            elseif ($order.discount) { [double]$order.discount } `
+            else { 0.0 }
+
+    if ($itemCount -gt 0) {
+        foreach ($it in $rawItems) {
+            $name = if ($it.product_name) { [string]$it.product_name } `
+                    elseif ($it.name) { [string]$it.name } `
+                    elseif ($it.model) { [string]$it.model } `
+                    elseif ($it.sku) { [string]$it.sku } `
+                    else { "Optical Frame" }
+            if ($name -eq "Optical Frame" -and $it.sku) { $name = [string]$it.sku }
+
             $qty = if ($it.quantity) { [int]$it.quantity } else { 1 }
-            $price = if ($it.unit_price_inr) { [double]$it.unit_price_inr } elseif ($it.unitPrice) { [double]$it.unitPrice } elseif ($it.unit_price) { [double]$it.unit_price } else { 0 }
-            $tot = if ($it.subtotal_inr) { [double]$it.subtotal_inr } elseif ($it.subtotal) { [double]$it.subtotal } else { $price * $qty }
+            $price = if ($it.unit_price_inr -ne $null) { [double]$it.unit_price_inr } `
+                     elseif ($it.unit_price_paise -ne $null) { [double]$it.unit_price_paise / 100 } `
+                     elseif ($it.unitPricePaise -ne $null) { [double]$it.unitPricePaise / 100 } `
+                     elseif ($it.pricePaise -ne $null) { [double]$it.pricePaise / 100 } `
+                     elseif ($it.priceINR -ne $null) { [double]$it.priceINR } `
+                     elseif ($it.unitPrice -ne $null) { [double]$it.unitPrice } `
+                     elseif ($it.unit_price -ne $null) { [double]$it.unit_price } `
+                     else { 0.0 }
+
+            $tot = if ($it.subtotal_inr -ne $null) { [double]$it.subtotal_inr } `
+                   elseif ($it.subtotal_paise -ne $null) { [double]$it.subtotal_paise / 100 } `
+                   elseif ($it.subtotalPaise -ne $null) { [double]$it.subtotalPaise / 100 } `
+                   elseif ($it.subtotal -ne $null -and [double]$it.subtotal -gt 0) { [double]$it.subtotal } `
+                   else { $price * $qty }
+
+            if ($tot -eq 0 -and $grandT -gt 0 -and $itemCount -eq 1) {
+                $tot = $grandT
+            }
 
             $cleanName = if ($name.Length -gt 18) { $name.Substring(0, 18) } else { $name }
             $line = Row-Text $cleanName "$qty  Rs.$([Math]::Round($tot))"
             $bw.Write([System.Text.Encoding]::ASCII.GetBytes($line))
+            if ($it.sku -and $it.sku -ne $name) {
+                $bw.Write([System.Text.Encoding]::ASCII.GetBytes(" SKU:   $($it.sku)`n"))
+            }
             if ($it.variant_name) {
                 $bw.Write([System.Text.Encoding]::ASCII.GetBytes(" Color: $($it.variant_name)`n"))
             } elseif ($it.color) {
                 $bw.Write([System.Text.Encoding]::ASCII.GetBytes(" Color: $($it.color)`n"))
             }
-            if ($it.lens_name) {
+            if ($it.lens_name -and $it.lens_name -notmatch "standard") {
                 $bw.Write([System.Text.Encoding]::ASCII.GetBytes(" Lens:  $($it.lens_name)`n"))
-            } elseif ($it.lens) {
+            } elseif ($it.lens -and $it.lens -notmatch "standard") {
                 $bw.Write([System.Text.Encoding]::ASCII.GetBytes(" Lens:  $($it.lens)`n"))
             }
         }
     } else {
-        $grand = if ($order.total_payable_inr) { [double]$order.total_payable_inr } elseif ($order.grand_total) { [double]$order.grand_total } else { 4299 }
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Optical Frame" "1  Rs.$([Math]::Round($grand))")))
+        $fallbackPrice = if ($grandT -gt 0) { $grandT } else { 0.0 }
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Optical Frame" "1  Rs.$([Math]::Round($fallbackPrice))")))
     }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
-    # 6. Totals (NO GST / NO GSTIN / NO TAX lines)
-    $sub = if ($order.subtotal_inr) { [double]$order.subtotal_inr } elseif ($order.subtotal) { [double]$order.subtotal } else { 4299 }
-    $disc = if ($order.discount_inr) { [double]$order.discount_inr } elseif ($order.discount) { [double]$order.discount } else { 0 }
-    $grandT = if ($order.total_payable_inr) { [double]$order.total_payable_inr } elseif ($order.grand_total) { [double]$order.grand_total } elseif ($order.total) { [double]$order.total } else { $sub }
-    $paid = if ($order.amount_paid_inr) { [double]$order.amount_paid_inr } else { $grandT }
+    # 6. Financial Breakdown (NO GST / NO GSTIN / NO TAX lines)
+    $sub = if ($order.subtotal_inr -ne $null) { [double]$order.subtotal_inr } `
+           elseif ($order.subtotal_paise -ne $null) { [double]$order.subtotal_paise / 100 } `
+           elseif ($order.subtotal -ne $null -and [double]$order.subtotal -gt 0) { [double]$order.subtotal } `
+           else { 0.0 }
+    if ($sub -eq 0 -and $grandT -gt 0) {
+        $sub = $grandT + $disc
+    }
+
+    $paid = if ($order.amount_paid_inr) { [double]$order.amount_paid_inr } `
+            elseif ($order.amount_paid_paise) { [double]$order.amount_paid_paise / 100 } `
+            else { $grandT }
     $bal = [Math]::Max(0, $grandT - $paid)
     $paym = if ($order.payment_method) { $order.payment_method.ToUpper() } else { "CASH" }
 
@@ -556,7 +600,7 @@ function Format-ReceiptBytes($order) {
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Balance Due:" $balText)))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
-    # 7. Prescription if attached
+    # 7. Prescription Extraction
     $rx = $order.prescription
     if (-not $rx -and $order.items) {
         $rawIts = $order.items
@@ -572,33 +616,33 @@ function Format-ReceiptBytes($order) {
     if (-not $rx) { $rx = $order.newPrescription }
     if (-not $rx) { $rx = $order }
 
-    $odSphV = if ($rx.od_sph -ne $null -and "$($rx.od_sph)" -ne "") { $rx.od_sph } `
-              elseif ($rx.odSph -ne $null -and "$($rx.odSph)" -ne "") { $rx.odSph } `
-              elseif ($order.od_sph -ne $null -and "$($order.od_sph)" -ne "") { $order.od_sph } `
-              elseif ($order.odSph -ne $null -and "$($order.odSph)" -ne "") { $order.odSph } `
-              else { $null }
+    $getRxVal = {
+        param($keys)
+        foreach ($k in $keys) {
+            if ($rx -and $rx.$k -ne $null -and [string]$rx.$k -ne "" -and [string]$rx.$k -ne "---") { return $rx.$k }
+            if ($order -and $order.$k -ne $null -and [string]$order.$k -ne "" -and [string]$order.$k -ne "---") { return $order.$k }
+        }
+        return $null
+    }
 
-    $osSphV = if ($rx.os_sph -ne $null -and "$($rx.os_sph)" -ne "") { $rx.os_sph } `
-              elseif ($rx.osSph -ne $null -and "$($rx.osSph)" -ne "") { $rx.osSph } `
-              elseif ($order.os_sph -ne $null -and "$($order.os_sph)" -ne "") { $order.os_sph } `
-              elseif ($order.osSph -ne $null -and "$($order.osSph)" -ne "") { $order.osSph } `
-              else { $null }
+    $odSphV = & $getRxVal @('od_sph', 'odSph')
+    $odCylV = & $getRxVal @('od_cyl', 'odCyl')
+    $odAxV  = & $getRxVal @('od_axis', 'odAxis')
+    $osSphV = & $getRxVal @('os_sph', 'osSph')
+    $osCylV = & $getRxVal @('os_cyl', 'osCyl')
+    $osAxV  = & $getRxVal @('os_axis', 'osAxis')
+    $addRaw = & $getRxVal @('addition', 'add')
+    $pdVal  = & $getRxVal @('ipd_distance', 'ipdDistance', 'pd')
+    $docVal = & $getRxVal @('checked_by', 'checkedBy', 'rx_checked_by')
 
-    $odCylV = if ($rx.od_cyl -ne $null -and "$($rx.od_cyl)" -ne "") { $rx.od_cyl } `
-              elseif ($rx.odCyl -ne $null -and "$($rx.odCyl)" -ne "") { $rx.odCyl } `
-              elseif ($order.od_cyl -ne $null -and "$($order.od_cyl)" -ne "") { $order.od_cyl } `
-              elseif ($order.odCyl -ne $null -and "$($order.odCyl)" -ne "") { $order.odCyl } `
-              else { $null }
+    $hasAnyRx = ($odSphV -ne $null) -or ($odCylV -ne $null) -or ($odAxV -ne $null) -or `
+                ($osSphV -ne $null) -or ($osCylV -ne $null) -or ($osAxV -ne $null) -or `
+                ($addRaw -ne $null) -or ($pdVal -ne $null)
 
-    $osCylV = if ($rx.os_cyl -ne $null -and "$($rx.os_cyl)" -ne "") { $rx.os_cyl } `
-              elseif ($rx.osCyl -ne $null -and "$($rx.osCyl)" -ne "") { $rx.osCyl } `
-              elseif ($order.os_cyl -ne $null -and "$($order.os_cyl)" -ne "") { $order.os_cyl } `
-              elseif ($order.osCyl -ne $null -and "$($order.osCyl)" -ne "") { $order.osCyl } `
-              else { $null }
+    $rxMentioned = ($order.prescription_id) -or ($order.prescription_number) -or ($rx.prescription_number) -or `
+                   ($order.prescription_pref -and $order.prescription_pref -match "rx")
 
-    $hasRx = ($odSphV -ne $null) -or ($osSphV -ne $null) -or ($odCylV -ne $null) -or ($osCylV -ne $null) -or ($rx.prescription_number) -or ($order.prescription_number)
-
-    if ($hasRx) {
+    if ($hasAnyRx) {
         $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
         $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
@@ -606,7 +650,7 @@ function Format-ReceiptBytes($order) {
         $bw.Write([byte[]]@(0x1B, 0x61, 0x00))
 
         function Format-Diopter($val) {
-            if ($val -eq $null -or [string]$val -eq "" -or [string]$val -eq "-") { return "  --- " }
+            if ($val -eq $null -or [string]$val -eq "" -or [string]$val -eq "-" -or [string]$val -eq "---") { return "  --- " }
             $str = [string]$val
             $num = 0.0
             if ([double]::TryParse($str, [ref]$num)) {
@@ -618,27 +662,28 @@ function Format-ReceiptBytes($order) {
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Eye    SPH    CYL   AXIS   ADD  `n"))
         $odS = Format-Diopter $odSphV
         $odC = Format-Diopter $odCylV
-        $odAxV = if ($rx.od_axis) { $rx.od_axis } elseif ($rx.odAxis) { $rx.odAxis } elseif ($order.od_axis) { $order.od_axis } elseif ($order.odAxis) { $order.odAxis } else { "---" }
-        $odA = "{0,3}" -f $odAxV
-        $addRaw = if ($rx.addition) { $rx.addition } elseif ($order.addition) { $order.addition } else { $null }
+        $odA = if ($odAxV) { "{0,3}" -f $odAxV } else { "---" }
         $add = if ($addRaw) { Format-Diopter $addRaw } else { " --- " }
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OD   $odS  $odC   $odA  $add`n"))
 
         $osS = Format-Diopter $osSphV
         $osC = Format-Diopter $osCylV
-        $osAxV = if ($rx.os_axis) { $rx.os_axis } elseif ($rx.osAxis) { $rx.osAxis } elseif ($order.os_axis) { $order.os_axis } elseif ($order.osAxis) { $order.osAxis } else { "---" }
-        $osA = "{0,3}" -f $osAxV
+        $osA = if ($osAxV) { "{0,3}" -f $osAxV } else { "---" }
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OS   $osS  $osC   $osA  $add`n"))
 
-        $pdVal = if ($rx.ipd_distance) { $rx.ipd_distance } elseif ($rx.ipdDistance) { $rx.ipdDistance } elseif ($rx.pd) { $rx.pd } elseif ($order.ipd_distance) { $order.ipd_distance } elseif ($order.pd) { $order.pd } else { $null }
         if ($pdVal) {
             $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Distance PD: $pdVal mm`n"))
         }
-
-        $docVal = if ($rx.checked_by) { $rx.checked_by } elseif ($rx.checkedBy) { $rx.checkedBy } elseif ($rx.rx_checked_by) { $rx.rx_checked_by } elseif ($order.checked_by) { $order.checked_by } elseif ($order.rx_checked_by) { $order.rx_checked_by } else { $null }
         if ($docVal) {
             $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Optometrist: $docVal`n"))
         }
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
+    } elseif ($rxMentioned) {
+        $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+        $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
+        $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("PRESCRIPTION NOT PROVIDED`n"))
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
     }
 

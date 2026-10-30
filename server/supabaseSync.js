@@ -534,15 +534,15 @@ async function pushOrderToSupabase(orderPayload) {
         customer_name: orderPayload.customerName || orderPayload.customer_name || 'Walk-in Client',
         customer_email: orderPayload.customerEmail || orderPayload.customer_email || (orderPayload.customerPhone ? `${String(orderPayload.customerPhone).replace(/[^0-9]/g, '')}@nooroptics.in` : 'client@nooroptics.in'),
         customer_phone: orderPayload.customerPhone || orderPayload.customer_phone || null,
-        delivery_address: orderPayload.deliveryAddress || orderPayload.delivery_address || 'Flagship Boutique POS',
-        city: orderPayload.city || 'Bengaluru',
-        pin_code: orderPayload.pinCode || orderPayload.pin_code || '560038',
+        delivery_address: orderPayload.deliveryAddress || orderPayload.delivery_address || 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028',
+        city: orderPayload.city || 'Hyderabad',
+        pin_code: orderPayload.pinCode || orderPayload.pin_code || '500028',
         items: orderPayload.items || [],
-        prescription_pref: orderPayload.prescriptionPref || (orderPayload.prescriptionId ? 'RX Attached' : 'Standard'),
+        prescription_pref: orderPayload.prescriptionPref || ((orderPayload.prescriptionId || orderPayload.od_sph || orderPayload.prescription?.od_sph) ? 'RX Attached' : 'Standard'),
         payment_method: orderPayload.paymentMethod || orderPayload.payment_method || 'CASH',
-        subtotal: orderPayload.subtotalINR || (orderPayload.subtotalPaise ? orderPayload.subtotalPaise / 100 : 0),
+        subtotal: orderPayload.subtotalINR || (orderPayload.subtotalPaise ? orderPayload.subtotalPaise / 100 : orderPayload.totalPayableINR || orderPayload.grandTotalINR || orderPayload.grand_total || 0),
         shipping_fee: 0,
-        grand_total: orderPayload.grandTotalINR || (orderPayload.totalPayablePaise ? orderPayload.totalPayablePaise / 100 : 0),
+        grand_total: orderPayload.grandTotalINR || (orderPayload.totalPayablePaise ? orderPayload.totalPayablePaise / 100 : orderPayload.grand_total || 0),
         status: 'confirmed'
       })
     });

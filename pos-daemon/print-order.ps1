@@ -55,18 +55,16 @@ if (Test-Path $logoFile) {
     $logoBytes = [System.IO.File]::ReadAllBytes($logoFile)
     $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
     $bw.Write($logoBytes)
-    $bw.Write([byte[]]@(0x1B, 0x64, 0x01))
 }
 
-# 2. Header (NO City, NO GSTIN)
+# 2. Header (NOOR OPTIC, Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028)
 $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
 $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
 $bw.Write([byte[]]@(0x1D, 0x21, 0x01))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes("NOOR OPTICS`n"))
+$bw.Write([System.Text.Encoding]::ASCII.GetBytes("NOOR OPTIC`n"))
 $bw.Write([byte[]]@(0x1D, 0x21, 0x00))
 $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes("Scandinavian Eyewear Boutique`n"))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes("Indiranagar 100ft Road`n"))
+$bw.Write([System.Text.Encoding]::ASCII.GetBytes("Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028`n"))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Ph: +91 98765 43210`n"))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes($doubleDivider))
 

@@ -24,7 +24,8 @@ function formatINR(paise) {
  * Generate 58mm formatted plain text receipt for thermal printer
  */
 function format58mmTextReceipt(order, items, settings = {}) {
-  const storeName = settings.store_name || 'NOOR OPTICS';
+  const storeName = settings.store_name || 'NOOR OPTIC';
+  const storeAddress = settings.store_address || 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028';
   const storePhone = settings.store_phone || '+91 98765 43210';
   const storeGstin = settings.store_gstin || '29AAAAA0000A1Z5';
   const dateStr = new Date(order.created_at || Date.now()).toLocaleString('en-IN', {
@@ -53,7 +54,18 @@ function format58mmTextReceipt(order, items, settings = {}) {
 
   let text = '';
   text += center(storeName.toUpperCase()) + '\n';
-  text += center('SCANDINAVIAN EYEWEAR BOUTIQUE') + '\n';
+  // Wrap store address to LINE_WIDTH
+  const addrWords = storeAddress.split(' ');
+  let addrLine = '';
+  addrWords.forEach(w => {
+    if ((addrLine + ' ' + w).trim().length <= LINE_WIDTH) {
+      addrLine = (addrLine + ' ' + w).trim();
+    } else {
+      text += center(addrLine) + '\n';
+      addrLine = w;
+    }
+  });
+  if (addrLine) text += center(addrLine) + '\n';
   text += center('Ph: ' + storePhone) + '\n';
   if (storeGstin) text += center('GSTIN: ' + storeGstin) + '\n';
   text += doubleDivider + '\n';
@@ -102,7 +114,7 @@ function format58mmTextReceipt(order, items, settings = {}) {
   text += divider + '\n';
   text += center('2-Year Frame Warranty') + '\n';
   text += center('14-Day Free Glazing Adjustment') + '\n';
-  text += center('Thank You for Visiting Noor Optics!') + '\n\n\n\n';
+  text += center('Thank You for Choosing Noor!') + '\n\n\n\n';
 
   return text;
 }
@@ -111,8 +123,8 @@ function format58mmTextReceipt(order, items, settings = {}) {
  * Generate 58mm HTML for Browser Print Dialog & Web Preview
  */
 function generate58mmHTML(order, items, settings = {}) {
-  const storeName = settings.store_name || 'NOOR OPTICS';
-  const storeAddress = (settings.store_address || 'Indiranagar 100ft Road').replace(/,\s*Bengaluru/i, '').replace(/Bengaluru/i, '').trim();
+  const storeName = settings.store_name || 'NOOR OPTIC';
+  const storeAddress = settings.store_address || 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028';
   const storePhone = settings.store_phone || '+91 98765 43210';
   const widthMm = settings.printer_nominal_width_mm || 58;
 

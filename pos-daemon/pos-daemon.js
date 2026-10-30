@@ -29,9 +29,9 @@ let config = {
   paperWidthInch: 2.5,
   columns: 32,
   printKOT: false, // Customer requested single bill only, no KOT slip
-  storeName: 'NOOR OPTICS',
-  storeTagline: 'Scandinavian Eyewear Boutique',
-  storeAddress: 'Indiranagar 100ft Road, Bengaluru',
+  storeName: 'NOOR OPTIC',
+  storeTagline: '',
+  storeAddress: 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028',
   storePhone: '+91 98765 43210',
   storeGstin: '29AAAAA0000A1Z5',
   orderFreshnessMinutes: 30,
@@ -208,25 +208,21 @@ function format25InchEscPosReceipt(rawOrder) {
   // 1. Initialize Printer (ESC @)
   writeBytes([0x1B, 0x40]);
 
-  // 1b. Print Noor Glasses Logo at Top of Bill
+  // 1b. Print Noor Glasses Logo at Top of Bill (Positioned tightly above store name)
   if (logoRasterBuffer && logoRasterBuffer.length > 0) {
     writeBytes([0x1B, 0x61, 0x01]); // Center
     writeBytes(logoRasterBuffer);
-    writeBytes([0x1B, 0x64, 0x01]); // Feed 1 line
   }
 
-  // 2. Store Header (Centered, Bold, NO City, NO GSTIN)
+  // 2. Store Header (NOOR OPTIC, Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028)
   writeBytes([0x1B, 0x61, 0x01]); // Center
   writeBytes([0x1B, 0x45, 0x01]); // Bold ON
   writeBytes([0x1D, 0x21, 0x01]); // Double height
-  writeText(`${config.storeName}\n`);
+  writeText('NOOR OPTIC\n');
   writeBytes([0x1D, 0x21, 0x00]); // Normal size
   writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
-  writeText(`${config.storeTagline}\n`);
-  const cleanAddress = (config.storeAddress || 'Indiranagar 100ft Road').replace(/,\s*Bengaluru/i, '').replace(/Bengaluru/i, '').trim();
-  if (cleanAddress) writeText(`${cleanAddress}\n`);
-  writeText(`Ph: ${config.storePhone}\n`);
-  // GSTIN REMOVED as requested
+  writeText('Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028\n');
+  writeText(`Ph: ${config.storePhone || '+91 98765 43210'}\n`);
   writeText(doubleDivider);
 
   // 3. Invoice & Token Header
@@ -241,7 +237,7 @@ function format25InchEscPosReceipt(rawOrder) {
   writeText(row('Date:', dateStr));
   writeText(divider);
 
-  // 4. Customer Information (NO CITY as requested)
+  // 4. Customer Information
   const custName = order.customer_name || 'Walk-in Client';
   const custPhone = order.customer_phone || '-';
   writeText(`Client: ${custName.slice(0, COLS - 8)}\n`);
@@ -252,17 +248,60 @@ function format25InchEscPosReceipt(rawOrder) {
   writeText(row('ITEM / SPEC', 'QTY  AMOUNT'));
   writeText(divider);
 
-  const items = Array.isArray(order.items) ? order.items : [];
+  let items = order.items;
+  if (typeof items === 'string') {
+    try { items = JSON.parse(items); } catch (_) { items = []; }
+  }
+  if (!Array.isArray(items)) items = [];
+
+  const grandTotal = Number(order.total_payable_inr || (order.total_payable_paise ? order.total_payable_paise / 100 : order.grand_total || order.total || 0));
+  const discount = Number(order.discount_inr || (order.discount_paise ? order.discount_paise / 100 : order.discount || 0));
+
   if (items.length === 0) {
-    writeText(row('Optical Frame', '1  ' + formatINR(order.total_payable_inr || order.grand_total || (order.total_payable_paise ? order.total_payable_paise / 100 : 0))));
+    const fallbackName = order.product_name || order.frame_name || order.model || 'Optical Frame';
+    const fallbackPrice = grandTotal > 0 ? grandTotal : 0;
+    writeText(row(fallbackName.slice(0, 18), '1  ' + formatINR(fallbackPrice)));
   } else {
     items.forEach(item => {
-      const name = item.product_name || item.name || item.model || 'Optical Frame';
+      let name = item.product_name || item.name || item.model || item.frame_name || item.sku || '';
+      if (!name || name === 'Optical Frame') {
+        if (item.brand && !/noor/i.test(item.brand)) {
+          name = item.brand + (item.model ? ' ' + item.model : '');
+        } else if (item.model) {
+          name = item.model;
+        } else if (item.sku) {
+          name = item.sku;
+        } else if (item.variant_name && item.variant_name !== 'Standard') {
+          name = item.variant_name;
+        } else {
+          name = 'Optical Frame';
+        }
+      }
       const qty = parseInt(item.quantity || 1, 10);
-      const unitPrice = item.unit_price_inr ? item.unit_price_inr : (item.unit_price_paise ? item.unit_price_paise / 100 : (item.unitPrice || item.unit_price || 0));
-      const lineTotal = item.subtotal_inr ? item.subtotal_inr : (item.subtotal_paise ? item.subtotal_paise / 100 : (item.subtotal || unitPrice * qty));
+      const unitPrice = (item.unit_price_inr != null) ? Number(item.unit_price_inr)
+        : (item.unit_price_paise != null) ? Number(item.unit_price_paise) / 100
+        : (item.unitPricePaise != null) ? Number(item.unitPricePaise) / 100
+        : (item.pricePaise != null) ? Number(item.pricePaise) / 100
+        : (item.priceINR != null) ? Number(item.priceINR)
+        : (item.unitPrice != null) ? Number(item.unitPrice)
+        : (item.unit_price != null) ? Number(item.unit_price)
+        : 0;
+
+      let lineTotal = (item.subtotal_inr != null) ? Number(item.subtotal_inr)
+        : (item.subtotal_paise != null) ? Number(item.subtotal_paise) / 100
+        : (item.subtotalPaise != null) ? Number(item.subtotalPaise) / 100
+        : (item.subtotal != null && Number(item.subtotal) > 0) ? Number(item.subtotal)
+        : (item.lineTotalINR != null) ? Number(item.lineTotalINR)
+        : (unitPrice * qty);
+
+      if (lineTotal === 0 && grandTotal > 0 && items.length === 1) {
+        lineTotal = grandTotal;
+      }
 
       writeText(row(name.slice(0, 18), `${qty}  ${formatINR(lineTotal)}`));
+      if (item.sku && item.sku !== name) {
+        writeText(` SKU: ${item.sku.slice(0, COLS - 7)}\n`);
+      }
       if (item.variant_name || item.color) {
         writeText(` Color: ${(item.variant_name || item.color).slice(0, COLS - 9)}\n`);
       }
@@ -274,10 +313,11 @@ function format25InchEscPosReceipt(rawOrder) {
   writeText(divider);
 
   // 6. Financial Breakdown (NO GST / NO GSTIN / NO TAX line as requested)
-  const subtotal = order.subtotal_inr || (order.subtotal_paise ? order.subtotal_paise / 100 : order.subtotal || 0);
-  const discount = order.discount_inr || (order.discount_paise ? order.discount_paise / 100 : order.discount || 0);
-  const grandTotal = order.total_payable_inr || (order.total_payable_paise ? order.total_payable_paise / 100 : order.grand_total || subtotal);
-  const amountPaid = order.amount_paid_inr || (order.amount_paid_paise ? order.amount_paid_paise / 100 : grandTotal);
+  let subtotal = Number(order.subtotal_inr || (order.subtotal_paise ? order.subtotal_paise / 100 : (order.subtotal != null ? order.subtotal : 0)));
+  if (subtotal === 0 && grandTotal > 0) {
+    subtotal = grandTotal + discount;
+  }
+  const amountPaid = Number(order.amount_paid_inr || (order.amount_paid_paise ? order.amount_paid_paise / 100 : grandTotal));
   const balance = Math.max(0, grandTotal - amountPaid);
   const payMethod = (order.payment_method || (channel === 'POS' ? 'CASH' : 'ONLINE')).toUpperCase();
 
@@ -301,15 +341,33 @@ function format25InchEscPosReceipt(rawOrder) {
 
   // 7. Client Prescription (Rx) Section (100% Reliable Extraction)
   const rx = order.prescription || rawOrder.prescription || order.client_prescription || order.newPrescription || order;
-  const odSphVal = rx.od_sph !== undefined && rx.od_sph !== null && rx.od_sph !== '' ? rx.od_sph : (rx.odSph !== undefined && rx.odSph !== null && rx.odSph !== '' ? rx.odSph : (order.od_sph || order.odSph));
-  const osSphVal = rx.os_sph !== undefined && rx.os_sph !== null && rx.os_sph !== '' ? rx.os_sph : (rx.osSph !== undefined && rx.osSph !== null && rx.osSph !== '' ? rx.osSph : (order.os_sph || order.osSph));
+  const getRxField = (keys) => {
+    for (const k of keys) {
+      if (rx && rx[k] !== undefined && rx[k] !== null && String(rx[k]).trim() !== '' && String(rx[k]).trim() !== '---') return rx[k];
+      if (order && order[k] !== undefined && order[k] !== null && String(order[k]).trim() !== '' && String(order[k]).trim() !== '---') return order[k];
+      if (rawOrder && rawOrder[k] !== undefined && rawOrder[k] !== null && String(rawOrder[k]).trim() !== '' && String(rawOrder[k]).trim() !== '---') return rawOrder[k];
+    }
+    return null;
+  };
 
-  const hasRx = (odSphVal !== undefined && odSphVal !== null && odSphVal !== '') ||
-                (osSphVal !== undefined && osSphVal !== null && osSphVal !== '') ||
-                Boolean(rx.prescription_number || order.prescription_number || order.prescription_id) ||
-                (order.prescription_pref && /rx/i.test(order.prescription_pref));
+  const odSphVal = getRxField(['od_sph', 'odSph']);
+  const odCylVal = getRxField(['od_cyl', 'odCyl']);
+  const odAxisVal = getRxField(['od_axis', 'odAxis']);
+  const osSphVal = getRxField(['os_sph', 'osSph']);
+  const osCylVal = getRxField(['os_cyl', 'osCyl']);
+  const osAxisVal = getRxField(['os_axis', 'osAxis']);
+  const addVal = getRxField(['addition', 'add']);
+  const pdVal = getRxField(['ipd_distance', 'ipdDistance', 'pd']);
+  const docVal = getRxField(['checked_by', 'checkedBy', 'rx_checked_by']);
 
-  if (hasRx) {
+  const hasAnyRxValue = odSphVal !== null || odCylVal !== null || odAxisVal !== null ||
+                        osSphVal !== null || osCylVal !== null || osAxisVal !== null ||
+                        addVal !== null || pdVal !== null;
+
+  const rxExplicitlyMentioned = Boolean(order.prescription_id || order.prescription_number || (rx && rx.prescription_number) ||
+                                        (order.prescription_pref && /rx/i.test(order.prescription_pref)));
+
+  if (hasAnyRxValue) {
     writeBytes([0x1B, 0x61, 0x01]); // Center
     writeBytes([0x1B, 0x45, 0x01]); // Bold ON
     writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
@@ -317,37 +375,30 @@ function format25InchEscPosReceipt(rawOrder) {
     writeBytes([0x1B, 0x61, 0x00]); // Left
 
     function fmtRx(val) {
-      if (val === undefined || val === null || val === '') return '  --- ';
+      if (val === undefined || val === null || val === '' || val === '---') return '  --- ';
       const n = Number(val);
       if (isNaN(n)) return String(val).padStart(6);
       const sign = n > 0 ? '+' : (n < 0 ? '-' : ' ');
       return sign + Math.abs(n).toFixed(2);
     }
     function fmtAx(val) {
-      if (val === undefined || val === null || val === '') return '---';
+      if (val === undefined || val === null || val === '' || val === '---') return '---';
       return String(val).padStart(3);
     }
 
     writeText('Eye    SPH    CYL   AXIS   ADD  \n');
-    const odSph = fmtRx(odSphVal);
-    const odCyl = fmtRx(rx.od_cyl !== undefined && rx.od_cyl !== null ? rx.od_cyl : (rx.odCyl !== undefined ? rx.odCyl : order.od_cyl));
-    const odAx = fmtAx(rx.od_axis !== undefined && rx.od_axis !== null ? rx.od_axis : (rx.odAxis !== undefined ? rx.odAxis : order.od_axis));
-    const add = fmtRx(rx.addition !== undefined && rx.addition !== null ? rx.addition : order.addition);
-    writeText(`OD   ${odSph}  ${odCyl}   ${odAx}  ${add}\n`);
+    writeText(`OD   ${fmtRx(odSphVal)}  ${fmtRx(odCylVal)}   ${fmtAx(odAxisVal)}  ${fmtRx(addVal)}\n`);
+    writeText(`OS   ${fmtRx(osSphVal)}  ${fmtRx(osCylVal)}   ${fmtAx(osAxisVal)}  ${fmtRx(addVal)}\n`);
 
-    const osSph = fmtRx(osSphVal);
-    const osCyl = fmtRx(rx.os_cyl !== undefined && rx.os_cyl !== null ? rx.os_cyl : (rx.osCyl !== undefined ? rx.osCyl : order.os_cyl));
-    const osAx = fmtAx(rx.os_axis !== undefined && rx.os_axis !== null ? rx.os_axis : (rx.osAxis !== undefined ? rx.osAxis : order.os_axis));
-    writeText(`OS   ${osSph}  ${osCyl}   ${osAx}  ${add}\n`);
-
-    const pdVal = rx.ipd_distance || rx.ipdDistance || rx.pd || order.ipd_distance || order.pd;
-    if (pdVal) {
-      writeText(`Distance PD: ${pdVal} mm\n`);
-    }
-    const docVal = rx.checked_by || rx.checkedBy || rx.rx_checked_by || order.rx_checked_by || order.checked_by;
-    if (docVal) {
-      writeText(`Optometrist: ${docVal}\n`);
-    }
+    if (pdVal) writeText(`Distance PD: ${pdVal} mm\n`);
+    if (docVal) writeText(`Optometrist: ${docVal}\n`);
+    writeText(divider);
+  } else if (rxExplicitlyMentioned) {
+    writeBytes([0x1B, 0x61, 0x01]); // Center
+    writeBytes([0x1B, 0x45, 0x01]); // Bold ON
+    writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
+    writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
+    writeText('PRESCRIPTION NOT PROVIDED\n');
     writeText(divider);
   }
 
@@ -698,6 +749,10 @@ async function pollCloudOrders() {
       }
 
       log(`[Cloud Event] Detected newly confirmed website order #${ref}! Triggering automatic print...`);
+
+      if (typeof o.items === 'string') {
+        try { o.items = JSON.parse(o.items); } catch (_) {}
+      }
 
       // Extract prescription from items or query Supabase prescriptions table by phone
       if (!o.prescription && Array.isArray(o.items) && o.items[0]?.prescription) {
