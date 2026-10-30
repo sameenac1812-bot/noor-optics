@@ -1598,7 +1598,7 @@
           category: p.category || (staticMatch ? staticMatch.category : 'Optical'),
           rating: staticMatch ? staticMatch.rating : 4.9,
           reviewsCount: staticMatch ? staticMatch.reviewsCount : 24,
-          image: p.image_url || (staticMatch ? staticMatch.image : 'images/stockholm_noir.jpg'),
+          image: p.image_url || p.image || p.imageUrl || (staticMatch ? staticMatch.image : 'images/stockholm_noir.jpg'),
           colors: colors,
           dimensions: dimensions,
           description: p.description || (staticMatch ? staticMatch.description : 'Bespoke Scandinavian eyewear engineered with optical precision.')
@@ -1634,10 +1634,14 @@
           cloudProducts.forEach(cp => {
             if (!cp || !cp.name) return;
             const idx = state.catalog.findIndex(p => p.id === cp.id || (p.sku && cp.sku && p.sku.toUpperCase() === cp.sku.toUpperCase()));
+            const normalizedCp = {
+              ...cp,
+              image: cp.image || cp.imageUrl || cp.image_url || cp.thumbnail || 'images/stockholm_noir.jpg'
+            };
             if (idx >= 0) {
-              state.catalog[idx] = { ...state.catalog[idx], ...cp };
+              state.catalog[idx] = { ...state.catalog[idx], ...normalizedCp };
             } else {
-              state.catalog.push(cp);
+              state.catalog.push(normalizedCp);
             }
           });
           renderProductGrid();

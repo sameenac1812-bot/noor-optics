@@ -243,7 +243,10 @@
         if (!customErr && Array.isArray(customData) && customData.length > 0 && customData[0].notes) {
           const parsed = JSON.parse(customData[0].notes);
           if (Array.isArray(parsed)) {
-            customProducts = parsed.filter(p => p && p.is_active !== false);
+            customProducts = parsed.filter(p => p && p.is_active !== false).map(p => ({
+              ...p,
+              image: p.image || p.imageUrl || p.image_url || p.thumbnail || 'images/stockholm_noir.jpg'
+            }));
           }
         }
       } catch (e) {

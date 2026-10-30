@@ -447,6 +447,27 @@ const EYEWEAR_CATALOG = [
     ],
     dimensions: { lens: "52mm", bridge: "19mm", temple: "142mm", weight: "21g" },
     description: "Deep burgundy hues polished to a mirror gloss. Sculpted bevels catch ambient light across the cheekbones, providing a tailored European optical look."
+  },
+  {
+    id: "prod-1793298868419",
+    sku: "NOOR BATMAN",
+    name: "meta glasses meta",
+    collection: "meta glasses",
+    price: 55000,
+    originalPrice: null,
+    badge: "New Arrival",
+    shape: "Rectangular",
+    material: "Acetate",
+    fit: "M",
+    category: "Frames",
+    rating: 5.0,
+    reviewsCount: 1,
+    image: "images/meta_glasses.png",
+    colors: [
+      { name: "black", hex: "#111111" }
+    ],
+    dimensions: { lens: "52mm", bridge: "18mm", temple: "145mm", weight: "15g" },
+    description: "Brand: meta glasses | Model: meta | Color: black | Size: M"
   }
 ];
 

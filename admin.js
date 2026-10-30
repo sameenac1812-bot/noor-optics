@@ -1957,34 +1957,67 @@
       });
     }
 
+    // Helper: Client-side downscaling and compression via HTML5 canvas
+    const compressImageFile = (file, maxWidth = 800, maxHeight = 800, quality = 0.82) => {
+      return new Promise((resolve, reject) => {
+        if (!file) return reject(new Error('No file provided'));
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = reject;
+          img.onload = () => {
+            let width = img.width;
+            let height = img.height;
+            if (width > maxWidth || height > maxHeight) {
+              const ratio = Math.min(maxWidth / width, maxHeight / height);
+              width = Math.round(width * ratio);
+              height = Math.round(height * ratio);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    };
+
     // Photo selection: Camera or Upload file picker
     const fileCam = document.getElementById('frm-file-camera');
     const fileUp = document.getElementById('frm-file-upload');
     const handleFramePhoto = async (file) => {
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64 = e.target.result;
+      try {
+        showToast('Compressing frame photo...', 'info');
+        const compressedBase64 = await compressImageFile(file, 800, 800, 0.82);
+
         const prevWrap = document.getElementById('frm-photo-preview-wrap');
         const prevImg = document.getElementById('frm-photo-preview');
-        if (prevImg) prevImg.src = base64;
+        if (prevImg) prevImg.src = compressedBase64;
         if (prevWrap) prevWrap.style.display = 'block';
 
+        // Set authoritative lightweight data URL immediately
+        state.uploadedFrameImageUrl = compressedBase64;
+
         try {
-          showToast('Uploading frame photo...', 'info');
           const res = await apiFetch('/api/products/upload-image', {
             method: 'POST',
-            body: JSON.stringify({ imageBase64: base64 })
+            body: JSON.stringify({ imageBase64: compressedBase64 })
           });
           if (res && res.imageUrl) {
             state.uploadedFrameImageUrl = res.imageUrl;
-            showToast('Frame photo uploaded!', 'success');
           }
-        } catch (err) {
-          state.uploadedFrameImageUrl = base64;
-        }
-      };
-      reader.readAsDataURL(file);
+        } catch (_) {}
+
+        showToast('Frame photo ready!', 'success');
+      } catch (err) {
+        showToast('Failed to process photo: ' + err.message, 'error');
+      }
     };
 
     if (fileCam) fileCam.addEventListener('change', (e) => handleFramePhoto(e.target.files[0]));

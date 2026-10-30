@@ -1386,6 +1386,11 @@ router.post('/products/upload-image', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Image data is required.' });
   }
 
+  // On Vercel serverless / read-only filesystem, return compressed Data URL directly
+  if (process.env.VERCEL) {
+    return res.json({ success: true, imageUrl: imageBase64 });
+  }
+
   try {
     const frameDir = path.join(__dirname, '..', 'images', 'frames');
     if (!fs.existsSync(frameDir)) {
@@ -1404,8 +1409,8 @@ router.post('/products/upload-image', authenticateToken, (req, res) => {
 
     res.json({ success: true, imageUrl: relativeUrl });
   } catch (err) {
-    console.error('Frame photo upload failed:', err);
-    res.status(500).json({ error: 'Failed to save frame image: ' + err.message });
+    console.warn('[Upload-Image] File save fallback to Data URL:', err.message);
+    res.json({ success: true, imageUrl: imageBase64 });
   }
 });
 
