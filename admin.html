@@ -902,8 +902,12 @@
 
           <div class="optic-input-row single-col">
             <div class="optic-input-col">
-              <label class="optic-input-lbl">SKU</label>
-              <input type="text" id="frm-sku" class="optic-text-field" placeholder="Optional" />
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label class="optic-input-lbl">SKU</label>
+                <button type="button" id="btn-gen-sku-add" style="background:none; border:none; color:#2563EB; font-size:11px; font-weight:700; cursor:pointer; padding:2px 4px;">⚡ Generate Unique SKU</button>
+              </div>
+              <input type="text" id="frm-sku" class="optic-text-field" placeholder="Auto-generated if left blank (e.g. NOOR-META-1)" />
+              <div id="frm-sku-notice" style="display:none; font-size:11.5px; margin-top:4px; border-radius:4px; padding:3px 8px;"></div>
             </div>
           </div>
 

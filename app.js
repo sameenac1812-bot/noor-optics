@@ -30,6 +30,15 @@
   // ── DOM Element Cache ──────────────────────────────────────────────────────
   const DOM = {};
 
+  // Helper: Normalize product image URL safely supporting local paths, remote CDN, and base64 Data URLs
+  function formatProductImage(img) {
+    if (!img) return '/images/stockholm_noir.jpg';
+    if (img.startsWith('data:') || img.startsWith('http://') || img.startsWith('https://') || img.startsWith('/')) {
+      return img;
+    }
+    return '/' + img;
+  }
+
   function initDOMCache() {
     DOM.productGrid = document.getElementById('product-grid');
     DOM.catalogCount = document.getElementById('catalog-count');
@@ -285,7 +294,7 @@
               </svg>
             </button>
             <img class="card-img"
-                 src="${(product.image && product.image.startsWith('/')) ? product.image : ('/' + (product.image || 'images/stockholm_noir.jpg'))}"
+                 src="${formatProductImage(product.image)}"
                  alt="${product.name} - ${product.shape} Eyeglasses"
                  loading="lazy"
                  decoding="async"
@@ -529,7 +538,7 @@
       if (!product) return '';
       return `
         <div class="wishlist-item-card">
-          <img class="wishlist-item-img" src="${(product.image && product.image.startsWith('/')) ? product.image : ('/' + (product.image || 'images/stockholm_noir.jpg'))}" alt="${product.name}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
+          <img class="wishlist-item-img" src="${formatProductImage(product.image)}" alt="${product.name}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
           <div class="wishlist-item-info">
             <h5 class="wishlist-item-name">${product.name}</h5>
             <div class="wishlist-item-price">${formatINR(product.price)}</div>
@@ -676,7 +685,7 @@
 
     const html = state.cart.map(item => `
       <div class="cart-item-card" data-cart-key="${item.cartKey}">
-        <img class="cart-item-img" src="${(item.image && item.image.startsWith('/')) ? item.image : ('/' + (item.image || 'images/stockholm_noir.jpg'))}" alt="${item.name}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
+        <img class="cart-item-img" src="${formatProductImage(item.image)}" alt="${item.name}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
         <div class="cart-item-details">
           <h5 class="cart-item-title">${item.name}</h5>
           <span class="cart-item-variant">Color: ${item.color}</span>
@@ -771,15 +780,16 @@
       </span>
     `).join('');
 
+    const dims = product.dimensions || {};
     const specsHtml = `
       <table class="quickview-specs-table">
         <tbody>
-          <tr><td class="spec-name">Lens Width</td><td class="spec-val">${product.dimensions.lens}</td></tr>
-          <tr><td class="spec-name">Bridge Width</td><td class="spec-val">${product.dimensions.bridge}</td></tr>
-          <tr><td class="spec-name">Temple Length</td><td class="spec-val">${product.dimensions.temple}</td></tr>
-          <tr><td class="spec-name">Total Weight</td><td class="spec-val">${product.dimensions.weight}</td></tr>
-          <tr><td class="spec-name">Frame Material</td><td class="spec-val">${product.material}</td></tr>
-          <tr><td class="spec-name">Recommended Fit</td><td class="spec-val">${product.fit}</td></tr>
+          <tr><td class="spec-name">Lens Width</td><td class="spec-val">${dims.lens || '52mm'}</td></tr>
+          <tr><td class="spec-name">Bridge Width</td><td class="spec-val">${dims.bridge || '18mm'}</td></tr>
+          <tr><td class="spec-name">Temple Length</td><td class="spec-val">${dims.temple || '145mm'}</td></tr>
+          <tr><td class="spec-name">Total Weight</td><td class="spec-val">${dims.weight || '15g'}</td></tr>
+          <tr><td class="spec-name">Frame Material</td><td class="spec-val">${product.material || 'Premium Acetate'}</td></tr>
+          <tr><td class="spec-name">Recommended Fit</td><td class="spec-val">${product.fit || 'Regular'}</td></tr>
         </tbody>
       </table>
     `;
@@ -787,7 +797,7 @@
     DOM.quickViewContainer.innerHTML = `
       <div class="quickview-grid">
         <div class="quickview-gallery">
-          <img class="quickview-img" src="${(product.image && product.image.startsWith('/')) ? product.image : ('/' + (product.image || 'images/stockholm_noir.jpg'))}" alt="${product.name}" id="qv-main-img" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
+          <img class="quickview-img" src="${formatProductImage(product.image)}" alt="${product.name}" id="qv-main-img" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
         </div>
         <div class="quickview-info">
           <div>
@@ -894,7 +904,7 @@
     if (DOM.checkoutItemsPreview) {
       DOM.checkoutItemsPreview.innerHTML = state.cart.map(item => `
         <div class="checkout-preview-item">
-          <img class="checkout-preview-img" src="${(item.image && item.image.startsWith('/')) ? item.image : ('/' + (item.image || 'images/stockholm_noir.jpg'))}" alt="${item.name}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
+          <img class="checkout-preview-img" src="${formatProductImage(item.image)}" alt="${item.name}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
           <div>
             <div class="checkout-preview-title">${item.name}</div>
             <div class="checkout-preview-meta">Qty: ${item.quantity} · ${item.color}</div>
@@ -1621,13 +1631,17 @@
     if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
       window.NoorSupabase.fetchCatalog().then(cloudProducts => {
         if (Array.isArray(cloudProducts) && cloudProducts.length > 0) {
-          const existingIds = new Set(state.catalog.map(p => p.id));
-          const newFromCloud = cloudProducts.filter(cp => !existingIds.has(cp.id));
-          if (newFromCloud.length > 0) {
-            state.catalog = [...state.catalog, ...newFromCloud];
-            renderProductGrid();
-            console.log(`✓ Merged ${newFromCloud.length} products from Supabase cloud.`);
-          }
+          cloudProducts.forEach(cp => {
+            if (!cp || !cp.name) return;
+            const idx = state.catalog.findIndex(p => p.id === cp.id || (p.sku && cp.sku && p.sku.toUpperCase() === cp.sku.toUpperCase()));
+            if (idx >= 0) {
+              state.catalog[idx] = { ...state.catalog[idx], ...cp };
+            } else {
+              state.catalog.push(cp);
+            }
+          });
+          renderProductGrid();
+          console.log(`✓ Merged and synchronized ${cloudProducts.length} products from Supabase cloud.`);
         }
       });
     }

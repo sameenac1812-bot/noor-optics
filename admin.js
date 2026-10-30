@@ -1790,6 +1790,55 @@
     const btnOpen = document.getElementById('btn-open-add-frame');
     const form = document.getElementById('form-add-frame');
 
+    // SKU auto-generator & duplicate checking
+    const skuInput = document.getElementById('frm-sku');
+    const skuNotice = document.getElementById('frm-sku-notice');
+    const btnGenSku = document.getElementById('btn-gen-sku-add');
+
+    const generateFreshSku = () => {
+      const brand = document.getElementById('frm-brand')?.value.trim() || 'NOOR';
+      const model = document.getElementById('frm-model')?.value.trim() || '';
+      const prefix = `NOOR-${(model || brand).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'FRAME'}`;
+      let candidate = `${prefix}-${Math.floor(100 + Math.random() * 900)}`;
+      let count = 0;
+      while (state.inventoryList.some(p => p.sku && p.sku.toUpperCase() === candidate.toUpperCase()) && count < 50) {
+        candidate = `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+        count++;
+      }
+      return candidate;
+    };
+
+    if (btnGenSku && skuInput) {
+      btnGenSku.addEventListener('click', () => {
+        skuInput.value = generateFreshSku();
+        checkSkuDuplicate();
+      });
+    }
+
+    const checkSkuDuplicate = () => {
+      if (!skuInput || !skuNotice) return;
+      const val = skuInput.value.trim().toUpperCase();
+      if (!val) {
+        skuNotice.style.display = 'none';
+        return;
+      }
+      const existing = state.inventoryList.find(p => p.sku && p.sku.toUpperCase() === val);
+      if (existing) {
+        skuNotice.style.display = 'block';
+        skuNotice.style.background = '#FEF3C7';
+        skuNotice.style.color = '#92400E';
+        skuNotice.style.border = '1px solid #FCD34D';
+        skuNotice.innerHTML = `⚠️ <strong>Existing SKU:</strong> Matches "<em>${escapeHtml(existing.name)}</em>". Saving will update its specifications and add to stock.`;
+      } else {
+        skuNotice.style.display = 'none';
+      }
+    };
+
+    if (skuInput) {
+      skuInput.addEventListener('input', checkSkuDuplicate);
+      skuInput.addEventListener('blur', checkSkuDuplicate);
+    }
+
     if (btnOpen && modal) {
       btnOpen.addEventListener('click', () => {
         form?.reset();
@@ -1798,6 +1847,7 @@
         if (prevWrap) prevWrap.style.display = 'none';
         if (prevImg) prevImg.src = '';
         state.uploadedFrameImageUrl = null;
+        if (skuNotice) skuNotice.style.display = 'none';
         modal.classList.add('open');
         document.body.classList.add('modal-open');
       });
@@ -1844,7 +1894,7 @@
       const size = document.getElementById('frm-size')?.value.trim() || '52-18';
       let sku = document.getElementById('frm-sku')?.value.trim().toUpperCase() || '';
       if (!sku) {
-        sku = `NOOR-${(model || brand).toUpperCase().replace(/[^A-Z0-9]/g, '')}-${Date.now().toString().slice(-4)}`;
+        sku = generateFreshSku();
       }
       const wholesale = Number(document.getElementById('frm-wholesale')?.value) || 0;
       const retail = Number(document.getElementById('frm-retail')?.value) || 0;
@@ -1855,7 +1905,7 @@
       const imageUrl = state.uploadedFrameImageUrl || 'images/stockholm_noir.jpg';
 
       try {
-        showToast('Adding frame to stock...', 'info');
+        showToast('Saving frame to stock...', 'info');
         const payload = {
           name,
           sku,
@@ -1878,7 +1928,7 @@
           ]
         };
 
-        await apiFetch('/api/products', {
+        const saveRes = await apiFetch('/api/products', {
           method: 'POST',
           body: JSON.stringify(payload)
         });
@@ -1888,7 +1938,10 @@
           await window.NoorSupabase.saveProduct(payload).catch(e => console.warn('Supabase product dual-write note:', e));
         }
 
-        showToast(`Frame "${name}" added to stock successfully!`, 'success');
+        const successMsg = saveRes && saveRes.updated
+          ? `✓ Frame "${name}" (${sku}) updated with new specifications & stock!`
+          : `✓ Frame "${name}" added to stock successfully!`;
+        showToast(successMsg, 'success');
         modal.classList.remove('open');
         document.body.classList.remove('modal-open');
         await loadInventory();

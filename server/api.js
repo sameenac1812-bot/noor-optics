@@ -259,6 +259,9 @@ router.get('/roles', authenticateToken, (req, res) => {
 // ==============================================================================
 
 router.get('/products', (req, res) => {
+  const includeInactive = req.query.includeInactive === 'true';
+  const filterClause = includeInactive ? '' : 'WHERE p.is_active = 1 OR p.is_active IS NULL';
+
   const products = db.prepare(`
     SELECT p.*, s.name as supplier_name,
       (SELECT SUM(ib.available_qty)
@@ -267,6 +270,7 @@ router.get('/products', (req, res) => {
        WHERE pv.product_id = p.id) as total_stock
     FROM products p
     LEFT JOIN suppliers s ON p.supplier_id = s.id
+    ${filterClause}
     ORDER BY p.name ASC
   `).all();
 
@@ -295,64 +299,158 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
     supplierId, reorderThreshold, imageUrl, description, variants
   } = req.body;
 
-  if (!name || !sku || !sellingPriceINR) {
+  if (!name || !sku || sellingPriceINR === undefined || sellingPriceINR === null) {
     return res.status(400).json({ error: 'Name, SKU, and Selling Price are required.' });
   }
 
-  const productId = 'prod-' + Date.now();
+  const cleanSku = String(sku).trim().toUpperCase();
   const sellingPaise = Math.round(Number(sellingPriceINR) * 100);
   const origPaise = originalPriceINR ? Math.round(Number(originalPriceINR) * 100) : null;
   const costPaise = purchaseCostINR ? Math.round(Number(purchaseCostINR) * 100) : 0;
+  const cleanReorderThreshold = Number(reorderThreshold) || 5;
+  const cleanImageUrl = imageUrl || 'images/stockholm_noir.jpg';
+  const cleanDesc = description || '';
 
-  const createTx = db.transaction(() => {
-    db.prepare(`
-      INSERT INTO products (
-        id, sku, name, brand, shape, material, fit, category,
-        selling_price_paise, original_price_paise, purchase_cost_paise,
-        supplier_id, reorder_threshold, image_url, description
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      productId, sku.toUpperCase(), name, brand || 'Noor Optics',
-      shape || 'Rectangular', material || 'Japanese Titanium',
-      fit || 'Regular', category || 'Optical', sellingPaise, origPaise,
-      costPaise, supplierId || null, Number(reorderThreshold) || 5,
-      imageUrl || 'images/stockholm_noir.jpg', description || ''
-    );
+  try {
+    // 1. Check if a frame with this SKU already exists
+    const existing = db.prepare('SELECT id, name, sku FROM products WHERE LOWER(sku) = LOWER(?)').get(cleanSku);
 
-    // Variants
-    const varList = Array.isArray(variants) && variants.length > 0 ? variants : [{ colorName: 'Standard', colorHex: '#111111' }];
-    varList.forEach((v, idx) => {
-      const varId = `var-${productId}-${idx + 1}`;
-      const varSku = `${sku.toUpperCase()}-${(v.colorName || 'STD').substring(0, 3).toUpperCase()}`;
-      const barcode = `8901${Math.floor(100000 + Math.random() * 900000)}`;
-
+    if (existing) {
+      // Upsert: Update existing product details & inventory
+      const productId = existing.id;
       db.prepare(`
-        INSERT INTO product_variants (id, product_id, sku, barcode, color_name, color_hex)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(varId, productId, varSku, barcode, v.colorName || 'Standard', v.colorHex || '#111111');
+        UPDATE products SET
+          name = ?,
+          brand = ?,
+          shape = ?,
+          material = ?,
+          fit = ?,
+          category = ?,
+          selling_price_paise = ?,
+          original_price_paise = ?,
+          purchase_cost_paise = ?,
+          supplier_id = COALESCE(?, supplier_id),
+          reorder_threshold = ?,
+          image_url = ?,
+          description = ?,
+          is_active = 1,
+          updated_at = datetime('now')
+        WHERE id = ?
+      `).run(
+        name, brand || 'Noor Optics',
+        shape || 'Rectangular', material || 'Japanese Titanium',
+        fit || 'Regular', category || 'Optical',
+        sellingPaise, origPaise, costPaise,
+        supplierId || null, cleanReorderThreshold,
+        cleanImageUrl, cleanDesc,
+        productId
+      );
 
-      db.prepare(`
-        INSERT INTO inventory_balances (id, variant_id, location_id, available_qty, reserved_qty)
-        VALUES (?, ?, 'loc-main', ?, 0)
-      `).run(`bal-${varId}`, varId, Number(v.initialStock) || 10);
+      // Handle variants & inventory stock
+      const varList = Array.isArray(variants) && variants.length > 0 ? variants : [{ colorName: 'Standard', colorHex: '#111111' }];
+      varList.forEach((v, idx) => {
+        let variant = db.prepare('SELECT id FROM product_variants WHERE product_id = ? LIMIT 1').get(productId);
+        let varId;
+        if (!variant) {
+          varId = `var-${productId}-${idx + 1}`;
+          const varSku = `${cleanSku}-${(v.colorName || 'STD').substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+          const barcode = `8901${Math.floor(100000 + Math.random() * 900000)}`;
+          db.prepare(`
+            INSERT INTO product_variants (id, product_id, sku, barcode, color_name, color_hex)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(varId, productId, varSku, barcode, v.colorName || 'Standard', v.colorHex || '#111111');
+        } else {
+          varId = variant.id;
+          db.prepare(`
+            UPDATE product_variants SET
+              color_name = COALESCE(?, color_name),
+              color_hex = COALESCE(?, color_hex)
+            WHERE id = ?
+          `).run(v.colorName || null, v.colorHex || null, varId);
+        }
 
+        const addQty = Number(v.initialStock) || 0;
+        const bal = db.prepare('SELECT available_qty FROM inventory_balances WHERE variant_id = ? AND location_id = ?').get(varId, 'loc-main');
+        if (bal) {
+          const newQty = bal.available_qty + addQty;
+          db.prepare('UPDATE inventory_balances SET available_qty = ? WHERE variant_id = ? AND location_id = ?').run(newQty, varId, 'loc-main');
+          db.prepare(`
+            INSERT INTO stock_movements (id, variant_id, location_id, change_qty, balance_after, movement_type, reason, created_by_user_id)
+            VALUES (?, ?, 'loc-main', ?, ?, 'ADJUSTMENT', 'Stock update/re-stock', ?)
+          `).run('mov-' + Date.now() + '-' + idx, varId, addQty, newQty, req.user.id);
+        } else {
+          db.prepare(`
+            INSERT INTO inventory_balances (id, variant_id, location_id, available_qty, reserved_qty)
+            VALUES (?, ?, 'loc-main', ?, 0)
+          `).run(`bal-${varId}`, varId, addQty);
+        }
+      });
+
+      logAudit(req.user.id, req.user.email, 'PRODUCT_UPDATED', 'PRODUCT', productId, { name, sku: cleanSku }, req);
+
+      pushProductToCloud({
+        id: productId, sku: cleanSku, name, brand, shape, material, fit, category,
+        sellingPriceINR, originalPriceINR, purchaseCostINR, imageUrl: cleanImageUrl, description: cleanDesc, variants
+      }).catch(() => {});
+
+      return res.json({ success: true, id: productId, updated: true, message: `Frame with SKU "${cleanSku}" updated successfully.` });
+    }
+
+    // 2. Insert new product
+    const productId = 'prod-' + Date.now();
+    const createTx = db.transaction(() => {
       db.prepare(`
-        INSERT INTO stock_movements (id, variant_id, location_id, change_qty, balance_after, movement_type, reason, created_by_user_id)
-        VALUES (?, ?, 'loc-main', ?, ?, 'ADJUSTMENT', 'Initial stock creation', ?)
-      `).run('mov-' + Date.now() + '-' + idx, varId, Number(v.initialStock) || 10, Number(v.initialStock) || 10, req.user.id);
+        INSERT INTO products (
+          id, sku, name, brand, shape, material, fit, category,
+          selling_price_paise, original_price_paise, purchase_cost_paise,
+          supplier_id, reorder_threshold, image_url, description
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        productId, cleanSku, name, brand || 'Noor Optics',
+        shape || 'Rectangular', material || 'Japanese Titanium',
+        fit || 'Regular', category || 'Optical', sellingPaise, origPaise,
+        costPaise, supplierId || null, cleanReorderThreshold,
+        cleanImageUrl, cleanDesc
+      );
+
+      // Variants
+      const varList = Array.isArray(variants) && variants.length > 0 ? variants : [{ colorName: 'Standard', colorHex: '#111111' }];
+      varList.forEach((v, idx) => {
+        const varId = `var-${productId}-${idx + 1}`;
+        const varSku = `${cleanSku}-${(v.colorName || 'STD').substring(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+        const barcode = `8901${Math.floor(100000 + Math.random() * 900000)}`;
+
+        db.prepare(`
+          INSERT INTO product_variants (id, product_id, sku, barcode, color_name, color_hex)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(varId, productId, varSku, barcode, v.colorName || 'Standard', v.colorHex || '#111111');
+
+        db.prepare(`
+          INSERT INTO inventory_balances (id, variant_id, location_id, available_qty, reserved_qty)
+          VALUES (?, ?, 'loc-main', ?, 0)
+        `).run(`bal-${varId}`, varId, Number(v.initialStock) || 10);
+
+        db.prepare(`
+          INSERT INTO stock_movements (id, variant_id, location_id, change_qty, balance_after, movement_type, reason, created_by_user_id)
+          VALUES (?, ?, 'loc-main', ?, ?, 'ADJUSTMENT', 'Initial stock creation', ?)
+        `).run('mov-' + Date.now() + '-' + idx, varId, Number(v.initialStock) || 10, Number(v.initialStock) || 10, req.user.id);
+      });
     });
-  });
 
-  createTx();
-  logAudit(req.user.id, req.user.email, 'PRODUCT_CREATED', 'PRODUCT', productId, { name, sku }, req);
+    createTx();
+    logAudit(req.user.id, req.user.email, 'PRODUCT_CREATED', 'PRODUCT', productId, { name, sku: cleanSku }, req);
 
-  // Sync frame to Supabase cloud storage so it is permanently saved and appears on website
-  pushProductToCloud({
-    id: productId, sku, name, brand, shape, material, fit, category,
-    sellingPriceINR, originalPriceINR, purchaseCostINR, imageUrl, description, variants
-  }).catch(() => {});
+    // Sync frame to Supabase cloud storage so it is permanently saved and appears on website
+    pushProductToCloud({
+      id: productId, sku: cleanSku, name, brand, shape, material, fit, category,
+      sellingPriceINR, originalPriceINR, purchaseCostINR, imageUrl: cleanImageUrl, description: cleanDesc, variants
+    }).catch(() => {});
 
-  res.json({ success: true, id: productId });
+    return res.json({ success: true, id: productId });
+  } catch (err) {
+    console.error('[API /products] Error creating/updating product:', err);
+    return res.status(400).json({ error: err.message || 'Failed to save optical frame.' });
+  }
 });
 
 router.put('/products/:id', authenticateToken, requirePermission('products:manage'), (req, res) => {
