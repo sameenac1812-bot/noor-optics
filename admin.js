@@ -1661,12 +1661,21 @@
       if (Array.isArray(state.inventoryList) && state.inventoryList.length > 0) {
         state.inventoryList.forEach(existingItem => {
           if (!existingItem || !existingItem.sku) return;
-          const found = list.find(p => p.id === existingItem.id || (p.sku && existingItem.sku && p.sku.toUpperCase() === existingItem.sku.toUpperCase()));
-          if (!found) {
+          const foundIdx = list.findIndex(p => p.id === existingItem.id || (p.sku && existingItem.sku && p.sku.toUpperCase() === existingItem.sku.toUpperCase()));
+          if (foundIdx === -1) {
             list.unshift(existingItem);
+          } else {
+            list[foundIdx] = { ...list[foundIdx], ...existingItem };
           }
         });
       }
+
+      // 4. Authoritative Sorting: Newest frames ALWAYS stay at the very top of the inventory ledger!
+      list.sort((a, b) => {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return timeB - timeA;
+      });
 
       state.inventoryList = list;
       renderInventoryTable();
@@ -2101,7 +2110,7 @@
         // 1. Immediately cache in localStorage (zero chance of disappearing)
         try {
           const cacheCopy = { ...savedItem };
-          if (cacheCopy.image_url && cacheCopy.image_url.startsWith('data:') && cacheCopy.image_url.length > 80000) {
+          if (cacheCopy.image_url && cacheCopy.image_url.startsWith('data:')) {
             cacheCopy.image_url = 'images/meta_glasses.png';
           }
           let localList = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
@@ -2114,13 +2123,18 @@
           localStorage.setItem('noor_custom_frames', JSON.stringify(localList));
         } catch (_) {}
 
-        // 2. Immediately insert/update into active state.inventoryList
+        // 2. Immediately insert/update into active state.inventoryList at index 0
         const curIdx = state.inventoryList.findIndex(p => p.id === savedItem.id || (p.sku && p.sku.toUpperCase() === sku.toUpperCase()));
         if (curIdx >= 0) {
           state.inventoryList[curIdx] = { ...state.inventoryList[curIdx], ...savedItem };
         } else {
           state.inventoryList.unshift(savedItem);
         }
+        state.inventoryList.sort((a, b) => {
+          const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return timeB - timeA;
+        });
 
         // 3. Reset filters so the newly added frame is directly in view
         state.inventorySearchQuery = '';

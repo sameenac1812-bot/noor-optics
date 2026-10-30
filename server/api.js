@@ -277,7 +277,7 @@ router.get('/products', async (req, res) => {
     FROM products p
     LEFT JOIN suppliers s ON p.supplier_id = s.id
     ${filterClause}
-    ORDER BY p.name ASC
+    ORDER BY p.created_at DESC, p.id DESC
   `).all();
 
   const getVariants = db.prepare(`
