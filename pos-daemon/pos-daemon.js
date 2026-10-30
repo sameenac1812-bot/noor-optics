@@ -526,7 +526,9 @@ async function format25InchEscPosQrSticker(item) {
   if (price && !price.toUpperCase().startsWith('RS') && !price.toUpperCase().startsWith('M.R.P')) {
     price = 'Rs. ' + price;
   }
-  const qrUrl = `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`;
+
+  // 1. Ultra-clean minimal payload: pure SKU (Version 1, 21x21 modules, maximum scanner recognition, zero thermal blotting)
+  const qrPayload = (item.qrPayload || sku).trim().toUpperCase();
 
   const widthDots = 384;
   const widthBytes = 48; // 384 / 8 = 48 bytes per line
@@ -535,7 +537,8 @@ async function format25InchEscPosQrSticker(item) {
 
   if (QRCode) {
     try {
-      const qr = QRCode.create(qrUrl, { errorCorrectionLevel: 'M' });
+      // EC Level M gives 15% recovery with lowest practical version (Version 1 for SKU)
+      const qr = QRCode.create(qrPayload, { errorCorrectionLevel: 'M' });
       qrMatrix = qr;
       qrSize = qr.modules.size;
     } catch (e) {
@@ -543,18 +546,21 @@ async function format25InchEscPosQrSticker(item) {
     }
   }
 
-  const qrScale = 4; // 29 * 4 = 116 dots (~14.5mm)
-  const qrQuiet = 2;
-  const qrModules = (qrSize > 0) ? (qrSize + qrQuiet * 2) : 33;
-  const qrPix = qrModules * qrScale; // e.g. 33 * 4 = 132 dots (~16.5mm)
+  // Thin-line anti-blotting configuration:
+  // Scale 3 = 3 dots per module (0.375mm) -> crisp, fine lines, avoids heat accumulation
+  // Quiet zone 4 = 12 dots pure white margin -> ensures scanner camera locks on instantly
+  const qrScale = 3;
+  const qrQuiet = 4;
+  const qrModules = (qrSize > 0) ? (qrSize + qrQuiet * 2) : 29;
+  const qrPix = qrModules * qrScale; // 29 * 3 = 87 dots (~10.9mm)
 
-  // Total height: QR (132) + SKU (18) + Name (14) + Price (18) + margins = ~200 dots (~25mm)
-  const totalHeight = qrPix + 80;
+  // Total compact height: QR (87) + SKU (10) + Name (10) + Price (10) + margins = ~129 dots (~16mm)
+  const totalHeight = qrPix + 55;
   const raster = Buffer.alloc(widthBytes * totalHeight, 0);
 
   // Center QR horizontally
   const qrStartX = Math.floor((widthDots - qrPix) / 2);
-  const qrStartY = 6;
+  const qrStartY = 4;
 
   if (qrMatrix) {
     for (let my = 0; my < qrModules; my++) {
@@ -578,31 +584,31 @@ async function format25InchEscPosQrSticker(item) {
     }
   }
 
-  // Draw SKU Centered under QR
-  let curY = qrStartY + qrPix + 6;
-  const skuWidth = sku.length * 6 * 2;
+  // Draw SKU Centered under QR (Scale 1: 5x7 dots, compact & crisp)
+  let curY = qrStartY + qrPix + 4;
+  const skuWidth = sku.length * 6 * 1;
   const skuX = Math.max(0, Math.floor((widthDots - skuWidth) / 2));
-  drawBitmapText(raster, widthBytes, sku, skuX, curY, 2);
-  curY += 18;
+  drawBitmapText(raster, widthBytes, sku, skuX, curY, 1);
+  curY += 10;
 
-  // Draw Frame Name Centered
+  // Draw Frame Name Centered (Scale 1: 5x7 dots)
   if (name) {
     const nameWidth = name.length * 6 * 1;
     const nameX = Math.max(0, Math.floor((widthDots - nameWidth) / 2));
     drawBitmapText(raster, widthBytes, name, nameX, curY, 1);
-    curY += 14;
+    curY += 10;
   }
 
-  // Draw Price Centered
+  // Draw Price Centered (Scale 1: 5x7 dots)
   if (price) {
-    const priceWidth = price.length * 6 * 2;
+    const priceWidth = price.length * 6 * 1;
     const priceX = Math.max(0, Math.floor((widthDots - priceWidth) / 2));
-    drawBitmapText(raster, widthBytes, price, priceX, curY, 2);
-    curY += 18;
+    drawBitmapText(raster, widthBytes, price, priceX, curY, 1);
+    curY += 10;
   }
 
-  // Build ESC/POS GS v 0 1-bit raster binary
-  const finalHeight = Math.max(120, curY + 6);
+  // Build ESC/POS GS v 0 1-bit raster binary (Compact ~16mm height)
+  const finalHeight = curY + 4;
   const slicedRaster = raster.slice(0, widthBytes * finalHeight);
 
   const header = Buffer.from([

@@ -2997,26 +2997,26 @@
       price = 'Rs. ' + price;
     }
 
-    const tagWidthMm = widthMm || 26;
-    const tagHeightMm = heightMm || 32;
+    const tagWidthMm = widthMm || 22;
+    const tagHeightMm = heightMm || 26;
 
     return `
-      <div class="frame-sticker" style="width:${tagWidthMm}mm; min-height:${tagHeightMm}mm; background-color:#FFFFFF !important; color:#000000 !important; box-sizing:border-box; border-radius:2mm; padding:2mm 1.5mm 1.5mm 1.5mm; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; overflow:hidden; position:relative; border:1px solid #000000; font-family:'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; margin:0 auto; text-align:center;">
-        <!-- Top: Centered Crisp Square QR Code -->
-        <div style="width:16mm; height:16mm; background:#FFFFFF; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-sizing:border-box; margin-bottom:1.5mm;">
-          ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" style="width:100%; height:100%; display:block; object-fit:contain; image-rendering:pixelated;" />` : `<div style="font-size:7pt; font-weight:bold;">QR</div>`}
+      <div class="frame-sticker" style="width:${tagWidthMm}mm; min-height:${tagHeightMm}mm; background-color:#FFFFFF !important; color:#000000 !important; box-sizing:border-box; border-radius:1.5mm; padding:1.2mm 1mm 1mm 1mm; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; overflow:hidden; position:relative; border:1px solid #000000; font-family:'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; margin:0 auto; text-align:center;">
+        <!-- Top: Centered Crisp Square QR Code (Compact & Thin Lines) -->
+        <div style="width:11mm; height:11mm; background:#FFFFFF; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-sizing:border-box; margin-bottom:0.8mm;">
+          ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" style="width:100%; height:100%; display:block; object-fit:contain; image-rendering:pixelated;" />` : `<div style="font-size:6pt; font-weight:bold;">QR</div>`}
         </div>
 
         <!-- Frame Unique Code / SKU -->
-        <div style="font-size:7.5pt; font-weight:900; line-height:1.15; letter-spacing:0.04em; color:#000000 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; text-transform:uppercase;">
+        <div style="font-size:6.5pt; font-weight:900; line-height:1.1; letter-spacing:0.02em; color:#000000 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; text-transform:uppercase;">
           ${escapeHtml(sku)}
         </div>
 
         <!-- Short Frame Name / Model -->
-        ${name ? `<div style="font-size:5.8pt; font-weight:600; line-height:1.15; color:#111111 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; margin-top:0.6mm;">${escapeHtml(name)}</div>` : ''}
+        ${name ? `<div style="font-size:5.2pt; font-weight:600; line-height:1.1; color:#111111 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; margin-top:0.4mm;">${escapeHtml(name)}</div>` : ''}
 
         <!-- Current Retail Price (Rs.) -->
-        ${price ? `<div style="font-size:7pt; font-weight:900; line-height:1.15; color:#000000 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; margin-top:1mm;">${escapeHtml(price)}</div>` : ''}
+        ${price ? `<div style="font-size:6.2pt; font-weight:900; line-height:1.1; color:#000000 !important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; margin-top:0.6mm;">${escapeHtml(price)}</div>` : ''}
       </div>
     `;
   }
@@ -3025,7 +3025,7 @@
    * Render unified 384-dot ESC/POS raster for a frame sticker via HTML5 Canvas
    * Perfectly matches reference image down to the dot, zero bleeding, zero large text.
    */
-  async function renderStickerToUnifiedRaster(frame, widthMm = 26, heightMm = 32) {
+  async function renderStickerToUnifiedRaster(frame, widthMm = 22, heightMm = 26) {
     const sku = (frame.sku || frame.id || 'NOOR-FRAME').toUpperCase();
     const name = (frame.name || '').slice(0, 24);
     let price = frame.selling_price_paise ? formatINR(frame.selling_price_paise, true) : (frame.selling_price_inr ? formatINR(frame.selling_price_inr * 100, true) : '');
@@ -3034,8 +3034,9 @@
       price = 'Rs. ' + price;
     }
 
-    const qrUrl = `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`;
-    const qrDataUrl = await generateQrDataUrl(qrUrl, 240);
+    // Direct Frame SKU = Version 1 (21x21 modules), simplest QR design, zero thermal blotting, fastest camera recognition!
+    const qrPayload = sku;
+    const qrDataUrl = await generateQrDataUrl(qrPayload, 180);
 
     return new Promise((resolve) => {
       const img = new Image();

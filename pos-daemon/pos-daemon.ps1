@@ -288,9 +288,9 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
                 Add-Type -Path $dll -ErrorAction SilentlyContinue
                 Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
                 $gen = New-Object QRCoder.QRCodeGenerator
-                $data = $gen.CreateQrCode("HTTPS://NOOROPTICS.VERCEL.APP/Q/$sku", [QRCoder.QRCodeGenerator+ECCLevel]::M)
+                $data = $gen.CreateQrCode($sku, [QRCoder.QRCodeGenerator+ECCLevel]::M)
                 $qr = New-Object QRCoder.QRCode($data)
-                $qrBmp = $qr.GetGraphic(3, [System.Drawing.Color]::Black, [System.Drawing.Color]::White, $false)
+                $qrBmp = $qr.GetGraphic(3, [System.Drawing.Color]::Black, [System.Drawing.Color]::White, $true)
                 $qr.Dispose(); $data.Dispose(); $gen.Dispose()
             } catch {}
         }
@@ -298,7 +298,7 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
         # Fallback to online API if QRCoder is unavailable
         if (-not $qrBmp) {
             try {
-                $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=87x87&margin=0&data=$([System.Uri]::EscapeDataString("HTTPS://NOOROPTICS.VERCEL.APP/Q/$sku"))"
+                $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=87x87&margin=4&data=$([System.Uri]::EscapeDataString($sku))"
                 $wc = New-Object System.Net.WebClient
                 $imgData = $wc.DownloadData($qrApiUrl)
                 $msImg = New-Object System.IO.MemoryStream($imgData, 0, $imgData.Length)
