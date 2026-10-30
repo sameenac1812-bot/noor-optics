@@ -290,7 +290,7 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
                 $gen = New-Object QRCoder.QRCodeGenerator
                 $data = $gen.CreateQrCode($sku, [QRCoder.QRCodeGenerator+ECCLevel]::M)
                 $qr = New-Object QRCoder.QRCode($data)
-                $qrBmp = $qr.GetGraphic(3, [System.Drawing.Color]::Black, [System.Drawing.Color]::White, $true)
+                $qrBmp = $qr.GetGraphic(4, [System.Drawing.Color]::Black, [System.Drawing.Color]::White, $true)
                 $qr.Dispose(); $data.Dispose(); $gen.Dispose()
             } catch {}
         }

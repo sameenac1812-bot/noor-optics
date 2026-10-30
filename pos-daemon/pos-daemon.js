@@ -547,15 +547,15 @@ async function format25InchEscPosQrSticker(item) {
   }
 
   // Thin-line anti-blotting configuration:
-  // Scale 3 = 3 dots per module (0.375mm) -> crisp, fine lines, avoids heat accumulation
-  // Quiet zone 4 = 12 dots pure white margin -> ensures scanner camera locks on instantly
-  const qrScale = 3;
+  // Scale 4 = 4 dots per module cell (~14.5mm size, easy for cameras to see)
+  // Quiet zone 4 = 16 dots pure white margin -> ensures scanner camera locks on instantly
+  const qrScale = 4;
   const qrQuiet = 4;
   const qrModules = (qrSize > 0) ? (qrSize + qrQuiet * 2) : 29;
-  const qrPix = qrModules * qrScale; // 29 * 3 = 87 dots (~10.9mm)
+  const qrPix = qrModules * qrScale; // 29 * 4 = 116 dots (~14.5mm)
 
-  // Total compact height: QR (87) + SKU (10) + Name (10) + Price (10) + margins = ~129 dots (~16mm)
-  const totalHeight = qrPix + 55;
+  // Total compact height: QR (116) + SKU (12) + Name (11) + Price (12) + margins = ~164 dots (~20.5mm)
+  const totalHeight = qrPix + 65;
   const raster = Buffer.alloc(widthBytes * totalHeight, 0);
 
   // Center QR horizontally
@@ -571,8 +571,19 @@ async function format25InchEscPosQrSticker(item) {
           ? Boolean(qrMatrix.modules.data[actualY * qrSize + actualX])
           : false;
         if (isBlack) {
-          for (let dy = 0; dy < qrScale; dy++) {
-            for (let dx = 0; dx < qrScale; dx++) {
+          // Keep the 3 corner finder patterns (7x7 modules) solid so camera locks on instantly
+          const isFinder = (
+            (actualX < 7 && actualY < 7) ||
+            (actualX >= qrSize - 7 && actualY < 7) ||
+            (actualX < 7 && actualY >= qrSize - 7)
+          );
+
+          // For inside data lines: draw 3x3 active dots inside 4x4 cell (leaves 1-dot margin, THIN lines, zero blotting)
+          const wDot = isFinder ? qrScale : 3;
+          const hDot = isFinder ? qrScale : 3;
+
+          for (let dy = 0; dy < hDot; dy++) {
+            for (let dx = 0; dx < wDot; dx++) {
               const px = qrStartX + mx * qrScale + dx;
               const py = qrStartY + my * qrScale + dy;
               const bIdx = py * widthBytes + Math.floor(px / 8);
@@ -585,18 +596,18 @@ async function format25InchEscPosQrSticker(item) {
   }
 
   // Draw SKU Centered under QR (Scale 1: 5x7 dots, compact & crisp)
-  let curY = qrStartY + qrPix + 4;
+  let curY = qrStartY + qrPix + 5;
   const skuWidth = sku.length * 6 * 1;
   const skuX = Math.max(0, Math.floor((widthDots - skuWidth) / 2));
   drawBitmapText(raster, widthBytes, sku, skuX, curY, 1);
-  curY += 10;
+  curY += 12;
 
   // Draw Frame Name Centered (Scale 1: 5x7 dots)
   if (name) {
     const nameWidth = name.length * 6 * 1;
     const nameX = Math.max(0, Math.floor((widthDots - nameWidth) / 2));
     drawBitmapText(raster, widthBytes, name, nameX, curY, 1);
-    curY += 10;
+    curY += 11;
   }
 
   // Draw Price Centered (Scale 1: 5x7 dots)
@@ -604,7 +615,7 @@ async function format25InchEscPosQrSticker(item) {
     const priceWidth = price.length * 6 * 1;
     const priceX = Math.max(0, Math.floor((widthDots - priceWidth) / 2));
     drawBitmapText(raster, widthBytes, price, priceX, curY, 1);
-    curY += 10;
+    curY += 12;
   }
 
   // Build ESC/POS GS v 0 1-bit raster binary (Compact ~16mm height)
