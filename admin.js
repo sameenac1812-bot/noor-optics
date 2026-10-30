@@ -111,6 +111,15 @@
       .replace(/'/g, '&#039;');
   }
 
+  // Safe image URL formatter supporting local, remote, and base64 Data URLs
+  function formatProductImage(img) {
+    if (!img) return '/images/stockholm_noir.jpg';
+    if (img.startsWith('data:') || img.startsWith('http://') || img.startsWith('https://') || img.startsWith('/')) {
+      return img;
+    }
+    return '/' + img;
+  }
+
   // ── Toast Notifications ───────────────────────────────────────────────────
   function showToast(message, type = 'info') {
     let container = document.getElementById('admin-toast-container');
@@ -1559,8 +1568,65 @@
   // ═══════════════════════════════════════════════════════════════════════════
   async function loadInventory() {
     try {
-      const res = await apiFetch('/api/products');
-      state.inventoryList = Array.isArray(res) ? res : [];
+      const res = await apiFetch('/api/products').catch(() => []);
+      let list = Array.isArray(res) ? [...res] : [];
+
+      // 1. Merge Supabase Cloud Catalog (Guarantees persistence across serverless cold starts)
+      if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
+        try {
+          const cloudProducts = await window.NoorSupabase.fetchCatalog();
+          if (Array.isArray(cloudProducts) && cloudProducts.length > 0) {
+            cloudProducts.forEach(cp => {
+              if (!cp || !cp.name) return;
+              const idx = list.findIndex(p => p.id === cp.id || (p.sku && cp.sku && p.sku.toUpperCase() === cp.sku.toUpperCase()));
+              const formattedItem = {
+                id: cp.id,
+                sku: (cp.sku || 'NOOR-FRAME').toUpperCase(),
+                name: cp.name,
+                brand: cp.brand || cp.collection || 'Noor Optics',
+                category: cp.category || 'Frames',
+                shape: cp.shape || 'Rectangular',
+                material: cp.material || 'Acetate',
+                fit: cp.fit || 'Regular',
+                selling_price_inr: Number(cp.price) || (cp.selling_price_paise ? cp.selling_price_paise / 100 : 0),
+                purchase_cost_inr: Number(cp.purchaseCostINR || cp.cost) || 0,
+                total_stock: Number(cp.stock !== undefined ? cp.stock : (cp.initialStock !== undefined ? cp.initialStock : 10)),
+                reorder_threshold: Number(cp.reorder_threshold || cp.reorderThreshold || 2),
+                image_url: cp.image || cp.imageUrl || 'images/stockholm_noir.jpg',
+                description: cp.description || '',
+                is_active: cp.is_active !== false ? 1 : 0,
+                created_at: cp.created_at || new Date().toISOString(),
+                updated_at: cp.updated_at || new Date().toISOString()
+              };
+              if (idx >= 0) {
+                list[idx] = { ...list[idx], ...formattedItem };
+              } else {
+                list.unshift(formattedItem);
+              }
+            });
+          }
+        } catch (cloudErr) {
+          console.warn('Supabase inventory merge note:', cloudErr);
+        }
+      }
+
+      // 2. Merge LocalStorage Cache (Guarantees zero-second immediate retention on client)
+      try {
+        const localCached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
+        if (Array.isArray(localCached)) {
+          localCached.forEach(localItem => {
+            if (!localItem || !localItem.name) return;
+            const idx = list.findIndex(p => p.id === localItem.id || (p.sku && localItem.sku && p.sku.toUpperCase() === localItem.sku.toUpperCase()));
+            if (idx >= 0) {
+              list[idx] = { ...list[idx], ...localItem };
+            } else {
+              list.unshift(localItem);
+            }
+          });
+        }
+      } catch (_) {}
+
+      state.inventoryList = list;
       renderInventoryTable();
     } catch (err) {
       console.error('Failed to load inventory:', err);
@@ -1637,7 +1703,7 @@
           return `
             <div class="optic-inv-card">
               <div class="optic-inv-thumb">
-                ${p.image_url ? `<img src="${p.image_url.startsWith('/') ? p.image_url : '/' + p.image_url}" alt="${escapeHtml(p.name)}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />` : `
+                ${p.image_url ? `<img src="${formatProductImage(p.image_url)}" alt="${escapeHtml(p.name)}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />` : `
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="1.8">
                     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
                     <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
@@ -1689,7 +1755,7 @@
               <input type="checkbox" class="frame-row-checkbox" data-id="${p.id}" ${isChecked ? 'checked' : ''} />
             </td>
             <td>
-              <img src="${escapeHtml(p.image_url ? (p.image_url.startsWith('/') ? p.image_url : '/' + p.image_url) : '/images/stockholm_noir.jpg')}" alt="${escapeHtml(p.name)}" class="frame-thumbnail-img" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />
+              <img src="${formatProductImage(p.image_url)}" alt="${escapeHtml(p.name)}" class="frame-thumbnail-img" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />
             </td>
             <td><strong>${escapeHtml(p.name)}</strong></td>
             <td><code style="font-weight:700; color:#111;">${escapeHtml(p.sku)}</code></td>
@@ -1774,6 +1840,13 @@
       if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
         window.NoorSupabase.deleteProduct(productId).catch(() => {});
       }
+      try {
+        let localList = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
+        localList = localList.filter(p => p.id !== productId && p.sku !== sku);
+        localStorage.setItem('noor_custom_frames', JSON.stringify(localList));
+      } catch (_) {}
+      state.inventoryList = state.inventoryList.filter(p => p.id !== productId && p.sku !== sku);
+      renderInventoryTable();
       showToast(res.message || `Frame "${name}" deleted successfully.`, 'success');
       state.selectedFrameIds.delete(productId);
       await loadInventory();
@@ -1933,7 +2006,60 @@
           body: JSON.stringify(payload)
         });
 
-        // Dual-write to Supabase cloud for immediate persistence and website display
+        // Construct the authoritative in-memory frame object
+        const savedItem = {
+          id: (saveRes && saveRes.id) || ('prod-' + Date.now()),
+          sku: sku.toUpperCase(),
+          name,
+          brand,
+          category: 'Frames',
+          shape: 'Rectangular',
+          material: 'Acetate',
+          fit: size,
+          selling_price_inr: retail,
+          purchase_cost_inr: wholesale,
+          total_stock: quantity,
+          reorder_threshold: lowStock,
+          image_url: imageUrl,
+          description: `Brand: ${brand} | Model: ${model} | Color: ${color} | Size: ${size}`,
+          is_active: 1,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        // 1. Immediately cache in localStorage (zero chance of disappearing)
+        try {
+          let localList = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
+          const existIdx = localList.findIndex(p => p.id === savedItem.id || (p.sku && p.sku.toUpperCase() === sku.toUpperCase()));
+          if (existIdx >= 0) {
+            localList[existIdx] = savedItem;
+          } else {
+            localList.unshift(savedItem);
+          }
+          localStorage.setItem('noor_custom_frames', JSON.stringify(localList));
+        } catch (_) {}
+
+        // 2. Immediately insert/update into active state.inventoryList
+        const curIdx = state.inventoryList.findIndex(p => p.id === savedItem.id || (p.sku && p.sku.toUpperCase() === sku.toUpperCase()));
+        if (curIdx >= 0) {
+          state.inventoryList[curIdx] = { ...state.inventoryList[curIdx], ...savedItem };
+        } else {
+          state.inventoryList.unshift(savedItem);
+        }
+
+        // 3. Reset filters so the newly added frame is directly in view
+        state.inventorySearchQuery = '';
+        state.inventoryOpticCategory = 'ALL';
+        document.querySelectorAll('.optic-cat-pill').forEach(btn => {
+          btn.classList.toggle('active', btn.getAttribute('data-inv-cat') === 'ALL');
+        });
+        const searchInput = document.getElementById('optic-inv-search');
+        if (searchInput) searchInput.value = '';
+
+        // Instant table re-render
+        renderInventoryTable();
+
+        // 4. Dual-write to Supabase cloud for multi-device sync and website display
         if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
           await window.NoorSupabase.saveProduct(payload).catch(e => console.warn('Supabase product dual-write note:', e));
         }
@@ -1944,7 +2070,9 @@
         showToast(successMsg, 'success');
         modal.classList.remove('open');
         document.body.classList.remove('modal-open');
-        await loadInventory();
+
+        // Background catalog refreshes
+        loadInventory();
         if (typeof loadDashboard === 'function') loadDashboard();
         if (typeof loadPosCatalog === 'function') loadPosCatalog();
 

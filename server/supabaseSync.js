@@ -820,8 +820,26 @@ async function syncSupabaseProducts(db) {
 
         console.log(`[SupabaseSync] Restored cloud product "${cp.name}" (${sku}) into local inventory.`);
       } else {
-        // Ensure active
-        db.prepare('UPDATE products SET is_active = 1 WHERE id = ?').run(existing.id);
+        // Update existing product with latest cloud specifications & ensure active
+        db.prepare(`
+          UPDATE products SET
+            name = COALESCE(?, name),
+            brand = COALESCE(?, brand),
+            selling_price_paise = ?,
+            original_price_paise = ?,
+            purchase_cost_paise = ?,
+            image_url = COALESCE(?, image_url),
+            description = COALESCE(?, description),
+            is_active = 1,
+            updated_at = datetime('now')
+          WHERE id = ?
+        `).run(cp.name, cp.brand || null, sellingPaise, origPaise, costPaise, cp.image || null, cp.description || null, existing.id);
+
+        // Update balance if variant exists
+        const vRow = db.prepare('SELECT id FROM product_variants WHERE product_id = ? LIMIT 1').get(existing.id);
+        if (vRow) {
+          db.prepare('UPDATE inventory_balances SET available_qty = ? WHERE variant_id = ? AND location_id = ?').run(stockQty, vRow.id, 'loc-main');
+        }
       }
     }
   } catch (err) {

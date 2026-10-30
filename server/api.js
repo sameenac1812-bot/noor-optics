@@ -27,6 +27,7 @@ const {
 const { generateInvoicePDF } = require('./pdfInvoice');
 const {
   syncSupabaseOrders,
+  syncSupabaseProducts,
   pushOrderToSupabase,
   pushCustomerToSupabase,
   pushPrescriptionToSupabase,
@@ -258,7 +259,12 @@ router.get('/roles', authenticateToken, (req, res) => {
 // 3. PRODUCTS & VARIANTS
 // ==============================================================================
 
-router.get('/products', (req, res) => {
+router.get('/products', async (req, res) => {
+  // Sync latest cloud products from Supabase before querying SQLite
+  try {
+    await syncSupabaseProducts(db);
+  } catch (_) {}
+
   const includeInactive = req.query.includeInactive === 'true';
   const filterClause = includeInactive ? '' : 'WHERE p.is_active = 1 OR p.is_active IS NULL';
 

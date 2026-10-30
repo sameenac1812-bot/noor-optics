@@ -1645,6 +1645,42 @@
         }
       });
     }
+
+    // Client-side cache merge (ensures zero latency retention for newly added items)
+    try {
+      const localCached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
+      if (Array.isArray(localCached) && localCached.length > 0) {
+        localCached.forEach(lc => {
+          if (!lc || !lc.name) return;
+          const idx = state.catalog.findIndex(p => p.id === lc.id || (p.sku && lc.sku && p.sku.toUpperCase() === lc.sku.toUpperCase()));
+          const formatted = {
+            id: lc.id,
+            sku: lc.sku,
+            name: lc.name,
+            collection: lc.brand || 'Noor Signature',
+            price: Number(lc.selling_price_inr || lc.price || 2999),
+            originalPrice: lc.original_price_inr ? Number(lc.original_price_inr) : null,
+            badge: 'New Arrival',
+            shape: lc.shape || 'Rectangular',
+            material: lc.material || 'Acetate',
+            fit: lc.fit || 'Regular',
+            category: lc.category || 'Optical',
+            rating: 5.0,
+            reviewsCount: 12,
+            image: lc.image_url || lc.image || 'images/stockholm_noir.jpg',
+            colors: [{ name: 'Standard', hex: '#111111' }],
+            dimensions: { lens: '52mm', bridge: '18mm', temple: '145mm', weight: '15g' },
+            description: lc.description || ''
+          };
+          if (idx >= 0) {
+            state.catalog[idx] = { ...state.catalog[idx], ...formatted };
+          } else {
+            state.catalog.unshift(formatted);
+          }
+        });
+        renderProductGrid();
+      }
+    } catch (_) {}
   }
 
   // Run on DOM Ready
