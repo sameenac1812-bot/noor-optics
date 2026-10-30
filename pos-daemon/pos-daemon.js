@@ -56,6 +56,131 @@ if (fs.existsSync(CONFIG_FILE)) {
   }
 }
 
+// ── Optical Frame Catalog Cache & Resolver ────────────────────────────────────
+let catalogProducts = [
+  { id: 'noor-01', name: 'The Stockholm Noir', sku: 'NOOR-STK-01', brand: 'NOOR', selling_price_inr: 3499 },
+  { id: 'noor-02', name: 'The Copenhagen Round', sku: 'NOOR-CPH-02', brand: 'NOOR', selling_price_inr: 3899 },
+  { id: 'noor-03', name: 'The Oslo Crystal', sku: 'NOOR-OSL-03', brand: 'NOOR', selling_price_inr: 3699 },
+  { id: 'noor-04', name: 'The Kyoto Havana', sku: 'NOOR-KYO-04', brand: 'NOOR', selling_price_inr: 4199 },
+  { id: 'noor-05', name: 'The Milan Aureum', sku: 'NOOR-MIL-05', brand: 'NOOR', selling_price_inr: 4599 },
+  { id: 'noor-06', name: 'The Zurich Titanium', sku: 'NOOR-ZUR-06', brand: 'NOOR', selling_price_inr: 4999 },
+  { id: 'noor-07', name: 'The Berlin Hex', sku: 'NOOR-BER-07', brand: 'NOOR', selling_price_inr: 3799 },
+  { id: 'noor-08', name: 'The Helsinki Quad', sku: 'NOOR-HEL-08', brand: 'NOOR', selling_price_inr: 4099 },
+  { id: 'noor-09', name: 'The Reykjavik Pilot', sku: 'NOOR-REY-09', brand: 'NOOR', selling_price_inr: 4399 },
+  { id: 'noor-10', name: 'The Vienna Silhouette', sku: 'NOOR-VIE-10', brand: 'NOOR', selling_price_inr: 4799 },
+  { id: 'noor-11', name: 'The Amber Arch', sku: 'NOOR-AMB-11', brand: 'NOOR', selling_price_inr: 3999 },
+  { id: 'noor-12', name: 'The Tokyo Steel', sku: 'NOOR-TOK-12', brand: 'NOOR', selling_price_inr: 3799 },
+  { id: 'prod-1793298868419', name: 'meta glasses meta', sku: 'NOOR BATMAN', brand: 'meta glasses', selling_price_inr: 55000 },
+  { id: 'prod-1793380282448', name: 'RayBan Aviator Gold', sku: 'NOOR-RB-GOLD-2425', brand: 'RayBan', selling_price_inr: 12500 }
+];
+
+async function refreshCatalogCache() {
+  if (!config.supabaseUrl || !config.supabaseAnonKey) return;
+  try {
+    // 1. Fetch custom frames from SYS-CATALOG-PRODUCTS
+    const resCust = await fetch(`${config.supabaseUrl}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, {
+      headers: { 'apikey': config.supabaseAnonKey, 'Authorization': `Bearer ${config.supabaseAnonKey}` }
+    });
+    if (resCust.ok) {
+      const data = await resCust.json();
+      if (Array.isArray(data) && data[0] && data[0].notes) {
+        try {
+          const parsed = JSON.parse(data[0].notes);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(p => {
+              if (p && p.id && !catalogProducts.some(cp => cp.id === p.id)) {
+                catalogProducts.push(p);
+              }
+            });
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 2. Fetch standard catalog frames
+    const resProd = await fetch(`${config.supabaseUrl}/rest/v1/products?select=*`, {
+      headers: { 'apikey': config.supabaseAnonKey, 'Authorization': `Bearer ${config.supabaseAnonKey}` }
+    });
+    if (resProd.ok) {
+      const stdProds = await resProd.json();
+      if (Array.isArray(stdProds)) {
+        stdProds.forEach(p => {
+          if (p && p.id && !catalogProducts.some(cp => cp.id === p.id)) {
+            catalogProducts.push(p);
+          }
+        });
+      }
+    }
+  } catch (_) {}
+}
+refreshCatalogCache();
+
+function resolveItemDetails(item, order) {
+  let name = item.product_name || item.name || item.model || item.frame_name || '';
+  if (name && name !== 'Optical Frame' && name !== 'Frame') {
+    return {
+      name,
+      sku: item.sku || '',
+      brand: item.brand || '',
+      color: item.variant_name || item.color || ''
+    };
+  }
+
+  const vId = String(item.variantId || item.id || item.productId || '');
+  const itemSku = String(item.sku || '').toUpperCase();
+  const unitPrice = (item.unit_price_inr != null) ? Number(item.unit_price_inr)
+    : (item.unitPricePaise != null) ? Number(item.unitPricePaise) / 100
+    : (item.unit_price_paise != null) ? Number(item.unit_price_paise) / 100
+    : (item.priceINR != null) ? Number(item.priceINR)
+    : (item.pricePaise != null) ? Number(item.pricePaise) / 100
+    : (item.unitPrice != null) ? Number(item.unitPrice)
+    : 0;
+
+  // 1. Direct match on ID or SKU
+  let match = catalogProducts.find(p =>
+    (vId && (p.id === vId || vId.includes(p.id) || (p.variants && p.variants.some(v => v.id === vId)))) ||
+    (itemSku && (p.sku && p.sku.toUpperCase() === itemSku))
+  );
+
+  // 2. Base ID match (e.g. var-prod-1793380443146-1 -> prod-1793380443146)
+  if (!match && vId.startsWith('var-prod-')) {
+    const baseId = vId.replace(/^var-/, '').replace(/-\d+$/, '');
+    match = catalogProducts.find(p => p.id === baseId || p.id.includes(baseId));
+  }
+
+  // 3. Price-based match for catalog products (e.g. 55000 -> meta glasses meta)
+  if (!match && unitPrice > 0) {
+    match = catalogProducts.find(p => {
+      const pPrice = Number(p.selling_price_inr || (p.selling_price_paise ? p.selling_price_paise / 100 : p.price || 0));
+      return Math.abs(pPrice - unitPrice) < 1;
+    });
+  }
+
+  if (match) {
+    return {
+      name: match.name || match.model || match.sku || 'Noor Optical Frame',
+      sku: item.sku || match.sku || '',
+      brand: item.brand || match.brand || 'NOOR',
+      color: item.variant_name || item.color || match.color_name || 'Standard'
+    };
+  }
+
+  // 4. Fallback from order-level fields
+  if (order && order.frame_name && order.frame_name !== 'Optical Frame') {
+    return { name: order.frame_name, sku: item.sku || order.sku || '', brand: item.brand || '', color: item.variant_name || item.color || '' };
+  }
+  if (order && order.product_name && order.product_name !== 'Optical Frame') {
+    return { name: order.product_name, sku: item.sku || order.sku || '', brand: item.brand || '', color: item.variant_name || item.color || '' };
+  }
+
+  return {
+    name: item.sku || 'Optical Frame',
+    sku: item.sku || '',
+    brand: item.brand || '',
+    color: item.variant_name || item.color || ''
+  };
+}
+
 // ── Smart Thermal Printer Auto-Discovery ──────────────────────────────────────
 function autoDetectPrinter() {
   try {
@@ -228,8 +353,9 @@ function format25InchEscPosReceipt(rawOrder) {
   // 3. Invoice & Token Header
   writeBytes([0x1B, 0x61, 0x00]); // Left align
   const token = order.token_number || order.token || 1;
-  const channel = (order.channel || 'IN-STORE').toUpperCase();
-  writeText(row(`TOKEN #${token}`, `[${channel}]`));
+  const channel = (order.channel || (order.delivery_address && /pos|boutique|flagship|store|rethibowli/i.test(order.delivery_address) ? 'IN-STORE' : 'ONLINE')).toUpperCase();
+  const channelLabel = (channel === 'POS' || channel === 'IN-STORE') ? '[IN-STORE]' : '[WEBSITE]';
+  writeText(row(`TOKEN #${token}`, channelLabel));
   writeText(row('Invoice:', order.order_number || order.order_ref || 'NOOR-INV'));
   const dateStr = order.created_at ? new Date(order.created_at).toLocaleString('en-IN', {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
@@ -258,25 +384,18 @@ function format25InchEscPosReceipt(rawOrder) {
   const discount = Number(order.discount_inr || (order.discount_paise ? order.discount_paise / 100 : order.discount || 0));
 
   if (items.length === 0) {
-    const fallbackName = order.product_name || order.frame_name || order.model || 'Optical Frame';
+    const fallback = resolveItemDetails({}, order);
     const fallbackPrice = grandTotal > 0 ? grandTotal : 0;
-    writeText(row(fallbackName.slice(0, 18), '1  ' + formatINR(fallbackPrice)));
+    writeText(row(fallback.name.slice(0, 18), '1  ' + formatINR(fallbackPrice)));
+    if (fallback.sku && fallback.sku !== fallback.name) {
+      writeText(` SKU:   ${fallback.sku.slice(0, COLS - 8)}\n`);
+    }
   } else {
     items.forEach(item => {
-      let name = item.product_name || item.name || item.model || item.frame_name || item.sku || '';
-      if (!name || name === 'Optical Frame') {
-        if (item.brand && !/noor/i.test(item.brand)) {
-          name = item.brand + (item.model ? ' ' + item.model : '');
-        } else if (item.model) {
-          name = item.model;
-        } else if (item.sku) {
-          name = item.sku;
-        } else if (item.variant_name && item.variant_name !== 'Standard') {
-          name = item.variant_name;
-        } else {
-          name = 'Optical Frame';
-        }
-      }
+      const details = resolveItemDetails(item, order);
+      const name = details.name;
+      const sku = item.sku || details.sku;
+      const color = item.variant_name || item.color || details.color;
       const qty = parseInt(item.quantity || 1, 10);
       const unitPrice = (item.unit_price_inr != null) ? Number(item.unit_price_inr)
         : (item.unit_price_paise != null) ? Number(item.unit_price_paise) / 100
@@ -299,14 +418,14 @@ function format25InchEscPosReceipt(rawOrder) {
       }
 
       writeText(row(name.slice(0, 18), `${qty}  ${formatINR(lineTotal)}`));
-      if (item.sku && item.sku !== name) {
-        writeText(` SKU: ${item.sku.slice(0, COLS - 7)}\n`);
+      if (sku && sku !== name) {
+        writeText(` SKU:   ${sku.slice(0, COLS - 8)}\n`);
       }
-      if (item.variant_name || item.color) {
-        writeText(` Color: ${(item.variant_name || item.color).slice(0, COLS - 9)}\n`);
+      if (color && color !== 'Standard') {
+        writeText(` Color: ${color.slice(0, COLS - 8)}\n`);
       }
       if (item.lens || (item.lens_name && !/standard/i.test(item.lens_name))) {
-        writeText(` Lens: ${(item.lens || item.lens_name).slice(0, COLS - 8)}\n`);
+        writeText(` Lens:  ${(item.lens || item.lens_name).slice(0, COLS - 8)}\n`);
       }
     });
   }
@@ -731,6 +850,8 @@ async function pollCloudOrders() {
     state.cloudConnected = true;
     const orders = await res.json();
     if (!Array.isArray(orders)) return;
+
+    await refreshCatalogCache().catch(() => {});
 
     const now = Date.now();
     const freshnessMs = (config.orderFreshnessMinutes || 30) * 60 * 1000;

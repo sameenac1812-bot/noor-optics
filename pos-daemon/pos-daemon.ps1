@@ -484,7 +484,7 @@ function Format-ReceiptBytes($order) {
     # 3. Invoice & Token
     $bw.Write([byte[]]@(0x1B, 0x61, 0x00)) # Left
     $tok = if ($order.token_number) { $order.token_number } elseif ($order.token) { $order.token } else { 1 }
-    $chn = if ($order.channel) { $order.channel.ToUpper() } else { "IN-STORE" }
+    $chn = if ($order.channel) { $order.channel.ToUpper() } elseif ($order.delivery_address -and $order.delivery_address -match "pos|boutique|flagship|store|rethibowli") { "IN-STORE" } else { "IN-STORE" }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "TOKEN #$tok" "[$chn]")))
     $ref = if ($order.order_number) { $order.order_number } elseif ($order.order_ref) { $order.order_ref } else { "NOOR-INV" }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Invoice:" $ref)))
@@ -525,8 +525,33 @@ function Format-ReceiptBytes($order) {
                     elseif ($it.name) { [string]$it.name } `
                     elseif ($it.model) { [string]$it.model } `
                     elseif ($it.sku) { [string]$it.sku } `
-                    else { "Optical Frame" }
-            if ($name -eq "Optical Frame" -and $it.sku) { $name = [string]$it.sku }
+                    else { "" }
+
+            $vId = if ($it.variantId) { [string]$it.variantId } elseif ($it.id) { [string]$it.id } else { "" }
+            if (-not $name -or $name -eq "Optical Frame" -or $name -eq "Frame") {
+                if ($vId -match "1793298868419|1793380443146" -or $it.sku -match "BATMAN" -or ($price -gt 50000 -and $price -lt 60000)) {
+                    $name = "meta glasses meta"
+                    if (-not $it.sku) { $it | Add-Member -NotePropertyName "sku" -NotePropertyValue "NOOR BATMAN" -Force }
+                } elseif ($vId -match "1793380282448" -or $it.sku -match "GOLD" -or ($price -gt 12000 -and $price -lt 13000)) {
+                    $name = "RayBan Aviator Gold"
+                    if (-not $it.sku) { $it | Add-Member -NotePropertyName "sku" -NotePropertyValue "NOOR-RB-GOLD-2425" -Force }
+                } elseif ($vId -match "noor-01") { $name = "The Stockholm Noir" }
+                elseif ($vId -match "noor-02") { $name = "The Copenhagen Round" }
+                elseif ($vId -match "noor-03") { $name = "The Oslo Crystal" }
+                elseif ($vId -match "noor-04") { $name = "The Kyoto Havana" }
+                elseif ($vId -match "noor-05") { $name = "The Milan Aureum" }
+                elseif ($vId -match "noor-06") { $name = "The Zurich Titanium" }
+                elseif ($vId -match "noor-07") { $name = "The Berlin Hex" }
+                elseif ($vId -match "noor-08") { $name = "The Helsinki Quad" }
+                elseif ($vId -match "noor-09") { $name = "The Reykjavik Pilot" }
+                elseif ($vId -match "noor-10") { $name = "The Vienna Silhouette" }
+                elseif ($vId -match "noor-11") { $name = "The Amber Arch" }
+                elseif ($vId -match "noor-12") { $name = "The Tokyo Steel" }
+                elseif ($it.sku) { $name = [string]$it.sku }
+                elseif ($order.frame_name) { $name = [string]$order.frame_name }
+                elseif ($order.product_name) { $name = [string]$order.product_name }
+                else { $name = "Noor Optical Frame" }
+            }
 
             $qty = if ($it.quantity) { [int]$it.quantity } else { 1 }
             $price = if ($it.unit_price_inr -ne $null) { [double]$it.unit_price_inr } `

@@ -143,10 +143,13 @@ app.get('/admin', (req, res) => {
 
 // Serve Static Front-end Files (Storefront, CSS, JS, Images)
 app.use(express.static(path.join(__dirname), {
-  maxAge: '1h',
   setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.html')) {
-      res.setHeader('Cache-Control', 'no-cache');
+    if (filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
     }
   }
 }));
