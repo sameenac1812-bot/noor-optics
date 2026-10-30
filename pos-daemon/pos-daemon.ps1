@@ -268,6 +268,37 @@ function Convert-DataUrlToEscPosRaster([string]$dataUrl) {
     }
 }
 
+# Pre-load QRCoder engine if present
+$qrCoderDll = Join-Path $ScriptDir "assets\QRCoder.dll"
+if (Test-Path $qrCoderDll) {
+    try {
+        Add-Type -Path $qrCoderDll -ErrorAction SilentlyContinue
+    } catch {}
+}
+
+function Generate-QrRaster([string]$text) {
+    if (-not $text) { return @() }
+    $dll = Join-Path $ScriptDir "assets\QRCoder.dll"
+    if (Test-Path $dll) {
+        try {
+            Add-Type -Path $dll -ErrorAction SilentlyContinue
+            Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
+            $gen = New-Object QRCoder.QRCodeGenerator
+            $data = $gen.CreateQrCode($text, [QRCoder.QRCodeGenerator+ECCLevel]::M)
+            $qr = New-Object QRCoder.QRCode($data)
+            # 3 pixels per module gives 87x87 dots (~10.8mm) - exact size for optical temple tag!
+            $bmp = $qr.GetGraphic(3, [System.Drawing.Color]::Black, [System.Drawing.Color]::White, $false)
+            $raster = Convert-BitmapToEscPosRaster $bmp
+            $bmp.Dispose()
+            $qr.Dispose()
+            $data.Dispose()
+            $gen.Dispose()
+            return $raster
+        } catch {}
+    }
+    return @()
+}
+
 # Format 2.5-Inch (32 Column) ESC/POS Receipt
 function Format-ReceiptBytes($order) {
     $ms = New-Object System.IO.MemoryStream
@@ -343,7 +374,7 @@ function Format-ReceiptBytes($order) {
 
     if ($order.items -and $order.items.Count -gt 0) {
         foreach ($it in $order.items) {
-            $name = if ($it.product_name) { $it.product_name } elseif ($it.name) { $it.name } else { "Frame" }
+            $name = if ($it.product_name) { $it.product_name } elseif ($it.name) { $it.name } elseif ($it.model) { $it.model } else { "Optical Frame" }
             $qty = if ($it.quantity) { [int]$it.quantity } else { 1 }
             $price = if ($it.unit_price_inr) { [double]$it.unit_price_inr } elseif ($it.unitPrice) { [double]$it.unitPrice } elseif ($it.unit_price) { [double]$it.unit_price } else { 0 }
             $tot = if ($it.subtotal_inr) { [double]$it.subtotal_inr } elseif ($it.subtotal) { [double]$it.subtotal } else { $price * $qty }
@@ -356,7 +387,9 @@ function Format-ReceiptBytes($order) {
             } elseif ($it.color) {
                 $bw.Write([System.Text.Encoding]::ASCII.GetBytes(" Color: $($it.color)`n"))
             }
-            if ($it.lens) {
+            if ($it.lens_name) {
+                $bw.Write([System.Text.Encoding]::ASCII.GetBytes(" Lens:  $($it.lens_name)`n"))
+            } elseif ($it.lens) {
                 $bw.Write([System.Text.Encoding]::ASCII.GetBytes(" Lens:  $($it.lens)`n"))
             }
         }
@@ -404,12 +437,31 @@ function Format-ReceiptBytes($order) {
     if (-not $rx) { $rx = $order.newPrescription }
     if (-not $rx) { $rx = $order }
 
-    $odSphV = $rx.od_sph
-    if ($odSphV -eq $null -or $odSphV -eq '') { $odSphV = $order.od_sph }
-    $osSphV = $rx.os_sph
-    if ($osSphV -eq $null -or $osSphV -eq '') { $osSphV = $order.os_sph }
+    $odSphV = if ($rx.od_sph -ne $null -and "$($rx.od_sph)" -ne "") { $rx.od_sph } `
+              elseif ($rx.odSph -ne $null -and "$($rx.odSph)" -ne "") { $rx.odSph } `
+              elseif ($order.od_sph -ne $null -and "$($order.od_sph)" -ne "") { $order.od_sph } `
+              elseif ($order.odSph -ne $null -and "$($order.odSph)" -ne "") { $order.odSph } `
+              else { $null }
 
-    $hasRx = ($odSphV -ne $null -and $odSphV -ne '') -or ($osSphV -ne $null -and $osSphV -ne '')
+    $osSphV = if ($rx.os_sph -ne $null -and "$($rx.os_sph)" -ne "") { $rx.os_sph } `
+              elseif ($rx.osSph -ne $null -and "$($rx.osSph)" -ne "") { $rx.osSph } `
+              elseif ($order.os_sph -ne $null -and "$($order.os_sph)" -ne "") { $order.os_sph } `
+              elseif ($order.osSph -ne $null -and "$($order.osSph)" -ne "") { $order.osSph } `
+              else { $null }
+
+    $odCylV = if ($rx.od_cyl -ne $null -and "$($rx.od_cyl)" -ne "") { $rx.od_cyl } `
+              elseif ($rx.odCyl -ne $null -and "$($rx.odCyl)" -ne "") { $rx.odCyl } `
+              elseif ($order.od_cyl -ne $null -and "$($order.od_cyl)" -ne "") { $order.od_cyl } `
+              elseif ($order.odCyl -ne $null -and "$($order.odCyl)" -ne "") { $order.odCyl } `
+              else { $null }
+
+    $osCylV = if ($rx.os_cyl -ne $null -and "$($rx.os_cyl)" -ne "") { $rx.os_cyl } `
+              elseif ($rx.osCyl -ne $null -and "$($rx.osCyl)" -ne "") { $rx.osCyl } `
+              elseif ($order.os_cyl -ne $null -and "$($order.os_cyl)" -ne "") { $order.os_cyl } `
+              elseif ($order.osCyl -ne $null -and "$($order.osCyl)" -ne "") { $order.osCyl } `
+              else { $null }
+
+    $hasRx = ($odSphV -ne $null) -or ($osSphV -ne $null) -or ($odCylV -ne $null) -or ($osCylV -ne $null) -or ($rx.prescription_number) -or ($order.prescription_number)
 
     if ($hasRx) {
         $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
@@ -418,39 +470,37 @@ function Format-ReceiptBytes($order) {
         $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
         $bw.Write([byte[]]@(0x1B, 0x61, 0x00))
 
+        function Format-Diopter($val) {
+            if ($val -eq $null -or [string]$val -eq "" -or [string]$val -eq "-") { return "  --- " }
+            $str = [string]$val
+            $num = 0.0
+            if ([double]::TryParse($str, [ref]$num)) {
+                return "{0:+0.00;-0.00; 0.00}" -f $num
+            }
+            return "{0,6}" -f $str
+        }
+
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Eye    SPH    CYL   AXIS   ADD  `n"))
-        $odS = "{0:+0.00;-0.00; 0.00}" -f [double]$odSphV
-        $odCylV = 0.0
-        if ($rx.od_cyl -ne $null -and $rx.od_cyl -ne '') { $odCylV = [double]$rx.od_cyl } elseif ($order.od_cyl -ne $null -and $order.od_cyl -ne '') { $odCylV = [double]$order.od_cyl }
-        $odC = "{0:+0.00;-0.00; 0.00}" -f $odCylV
-        $odAxV = 0
-        if ($rx.od_axis) { $odAxV = $rx.od_axis } elseif ($order.od_axis) { $odAxV = $order.od_axis }
+        $odS = Format-Diopter $odSphV
+        $odC = Format-Diopter $odCylV
+        $odAxV = if ($rx.od_axis) { $rx.od_axis } elseif ($rx.odAxis) { $rx.odAxis } elseif ($order.od_axis) { $order.od_axis } elseif ($order.odAxis) { $order.odAxis } else { "---" }
         $odA = "{0,3}" -f $odAxV
-        $addV = 0.0
-        if ($rx.addition -ne $null -and $rx.addition -ne '') { $addV = [double]$rx.addition } elseif ($order.addition -ne $null -and $order.addition -ne '') { $addV = [double]$order.addition }
-        $add = "{0:+0.00;-0.00; 0.00}" -f $addV
+        $addRaw = if ($rx.addition) { $rx.addition } elseif ($order.addition) { $order.addition } else { $null }
+        $add = if ($addRaw) { Format-Diopter $addRaw } else { " --- " }
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OD   $odS  $odC   $odA  $add`n"))
 
-        $osS = "{0:+0.00;-0.00; 0.00}" -f [double]$osSphV
-        $osCylV = 0.0
-        if ($rx.os_cyl -ne $null -and $rx.os_cyl -ne '') { $osCylV = [double]$rx.os_cyl } elseif ($order.os_cyl -ne $null -and $order.os_cyl -ne '') { $osCylV = [double]$order.os_cyl }
-        $osC = "{0:+0.00;-0.00; 0.00}" -f $osCylV
-        $osAxV = 0
-        if ($rx.os_axis) { $osAxV = $rx.os_axis } elseif ($order.os_axis) { $osAxV = $order.os_axis }
+        $osS = Format-Diopter $osSphV
+        $osC = Format-Diopter $osCylV
+        $osAxV = if ($rx.os_axis) { $rx.os_axis } elseif ($rx.osAxis) { $rx.osAxis } elseif ($order.os_axis) { $order.os_axis } elseif ($order.osAxis) { $order.osAxis } else { "---" }
         $osA = "{0,3}" -f $osAxV
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OS   $osS  $osC   $osA  $add`n"))
 
-        $pdVal = $rx.ipd_distance
-        if (-not $pdVal) { $pdVal = $rx.pd }
-        if (-not $pdVal) { $pdVal = $order.ipd_distance }
-        if (-not $pdVal) { $pdVal = $order.pd }
+        $pdVal = if ($rx.ipd_distance) { $rx.ipd_distance } elseif ($rx.ipdDistance) { $rx.ipdDistance } elseif ($rx.pd) { $rx.pd } elseif ($order.ipd_distance) { $order.ipd_distance } elseif ($order.pd) { $order.pd } else { $null }
         if ($pdVal) {
             $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Distance PD: $pdVal mm`n"))
         }
 
-        $docVal = $rx.checked_by
-        if (-not $docVal) { $docVal = $rx.rx_checked_by }
-        if (-not $docVal) { $docVal = $order.checked_by }
+        $docVal = if ($rx.checked_by) { $rx.checked_by } elseif ($rx.checkedBy) { $rx.checkedBy } elseif ($rx.rx_checked_by) { $rx.rx_checked_by } elseif ($order.checked_by) { $order.checked_by } elseif ($order.rx_checked_by) { $order.rx_checked_by } else { $null }
         if ($docVal) {
             $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Optometrist: $docVal`n"))
         }
@@ -732,15 +782,18 @@ while ($running) {
                         $qrText = "HTTPS://NOOROPTICS.VERCEL.APP/Q/$sku"
                         $rasterBytes = $null
 
-                        # 1. Check pre-computed GS v 0 raster from admin.js
-                        if ($item.qrRasterBase64) {
+                        # 1. Native Offline QRCoder Generation (100% offline, pure .NET, instant!)
+                        $rasterBytes = Generate-QrRaster $qrText
+
+                        # 2. Check pre-computed GS v 0 raster from admin.js
+                        if (-not $rasterBytes -and $item.qrRasterBase64) {
                             try {
                                 $r = [Convert]::FromBase64String([string]$item.qrRasterBase64)
                                 if ($r -and $r.Length -gt 8) { $rasterBytes = $r }
                             } catch {}
                         }
 
-                        # 2. Check PNG data URL from admin.js
+                        # 3. Check PNG data URL from admin.js
                         if (-not $rasterBytes -and $item.qrDataUrl) {
                             try {
                                 $r = Convert-DataUrlToEscPosRaster ([string]$item.qrDataUrl)
@@ -748,7 +801,7 @@ while ($running) {
                             } catch {}
                         }
 
-                        # 3. Cloud/System fallback: generate QR bitmap via online API if offline raster wasn't attached
+                        # 4. Cloud/System fallback: generate QR bitmap via online API if offline raster wasn't attached
                         if (-not $rasterBytes) {
                             try {
                                 $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&margin=0&data=$([System.Uri]::EscapeDataString($qrText))"
@@ -765,7 +818,7 @@ while ($running) {
 
                         # Write 2D QR Bit Image (GS v 0) - NEVER prints text link!
                         if ($rasterBytes -and $rasterBytes.Length -gt 0) {
-                            $allBw.Write($rasterBytes)
+                            $allBw.Write([byte[]]$rasterBytes)
                             $allBw.Write([byte[]]@(0x1B, 0x64, 0x01)) # 1 dot line feed
                         }
 

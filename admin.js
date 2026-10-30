@@ -3902,11 +3902,16 @@
           const claimedUtr = document.getElementById('pos-claimed-utr') ? document.getElementById('pos-claimed-utr').value.trim() : null;
           const notes = document.getElementById('pos-bill-notes')?.value.trim() || null;
 
+          // ── 1. PRESERVE CART & PRESCRIPTION SNAPSHOT BEFORE STATE RESET ──
+          const cartSnapshot = state.posCart.map(item => ({ ...item }));
+          const rxSnapshot = state.posDraftPrescription || state.posSelectedPrescription || null;
+          const subtotalPaiseSnapshot = state.posCart.reduce((sum, item) => sum + (item.lineTotalPaise || 0), 0);
+
           const payload = {
             customerId: clientPayload.id || null,
             clientDetails: clientPayload.id ? null : clientPayload,
             prescriptionId: state.posSelectedPrescription ? state.posSelectedPrescription.id : null,
-            newPrescription: state.posDraftPrescription || (state.uploadedRxImageUrl ? { imageUrl: state.uploadedRxImageUrl } : null),
+            newPrescription: rxSnapshot || (state.uploadedRxImageUrl ? { imageUrl: state.uploadedRxImageUrl } : null),
             customerName: clientPayload.name,
             customerPhone: clientPayload.phone || null,
             customerCity: clientPayload.city || null,
@@ -3917,10 +3922,18 @@
             notes,
             claimedUpiRef: claimedUtr,
             isVerifiedAtCounter: true,
-            items: state.posCart.map(item => ({
+            items: cartSnapshot.map(item => ({
+              productId: item.productId,
               variantId: item.variantId,
+              name: item.name,
+              product_name: item.name,
+              sku: item.sku,
+              color: item.color,
+              variant_name: item.color,
+              lensName: item.lensName || 'Standard Demo Lens',
               quantity: item.quantity,
-              unitPricePaise: item.pricePaise
+              unitPricePaise: item.pricePaise,
+              priceINR: item.priceINR
             }))
           };
 
@@ -3931,7 +3944,38 @@
 
           showToast(`Sale completed! Invoice: ${res.invoiceNumber} (Token #${res.tokenNumber})`, 'success');
 
-          // Reset cart & inputs
+          // Instant automatic bill printout with complete embedded prescription
+          if (res.orderId) {
+            const fullOrderSnapshot = {
+              id: res.orderId,
+              order_number: res.orderNumber || res.invoiceNumber,
+              token_number: res.tokenNumber,
+              customer_name: payload.customerName || 'Walk-in Client',
+              customer_phone: payload.customerPhone,
+              channel: 'IN-STORE',
+              items: cartSnapshot.map(i => ({
+                product_name: i.name || i.product_name || i.model || 'Optical Frame',
+                name: i.name || i.product_name || 'Optical Frame',
+                sku: i.sku || 'NOOR-FRAME',
+                variant_name: i.color || i.colorName || i.variantName || 'Standard',
+                color: i.color || i.colorName || 'Standard',
+                lens_name: i.lensName || 'Standard Demo Lens',
+                quantity: i.quantity || 1,
+                unit_price_inr: (i.pricePaise || 0) / 100,
+                subtotal_inr: ((i.pricePaise || 0) * (i.quantity || 1)) / 100
+              })),
+              subtotal_inr: (subtotalPaiseSnapshot || 0) / 100,
+              discount_inr: discountINR,
+              total_payable_inr: res.totalPayableINR,
+              amount_paid_inr: res.totalPayableINR,
+              payment_method: state.posPaymode,
+              prescription: rxSnapshot,
+              ...(rxSnapshot || {})
+            };
+            instantPrintReceipt(res.orderId, false, fullOrderSnapshot);
+          }
+
+          // Reset cart & inputs AFTER snapshot has been sent to printer
           state.posCart = [];
           state.posSelectedClient = null;
           state.posSelectedPrescription = null;
@@ -3957,34 +4001,6 @@
           loadDashboard();
           loadOrders();
           if (typeof loadClients === 'function') loadClients();
-
-          // Instant automatic bill printout with complete embedded prescription
-          if (res.orderId) {
-            const rxData = state.posDraftPrescription || state.posSelectedPrescription || null;
-            const fullOrderSnapshot = {
-              id: res.orderId,
-              order_number: res.orderNumber || res.invoiceNumber,
-              token_number: res.tokenNumber,
-              customer_name: payload.customerName || 'Walk-in Client',
-              customer_phone: payload.customerPhone,
-              channel: 'IN-STORE',
-              items: state.posCart.map(i => ({
-                product_name: i.name || i.model || 'Frame',
-                variant_name: i.colorName || i.variantName,
-                lens_name: i.lensName,
-                quantity: i.quantity,
-                unit_price_inr: (i.pricePaise || 0) / 100,
-                subtotal_inr: ((i.pricePaise || 0) * i.quantity) / 100
-              })),
-              subtotal_inr: (subtotalPaise || 0) / 100,
-              discount_inr: discountINR,
-              total_payable_inr: res.totalPayableINR,
-              amount_paid_inr: res.totalPayableINR,
-              payment_method: state.posPaymode,
-              ...(rxData || {})
-            };
-            instantPrintReceipt(res.orderId, false, fullOrderSnapshot);
-          }
 
           // Show Order Done modal
           const successModal = document.getElementById('modal-order-success');
@@ -4094,13 +4110,14 @@
 
     const field = state.activeDiopterTarget.field;
 
-    // Update the corresponding button text and internal data attribute
+    // Update the corresponding button text, internal data attribute, and input field
     let btnId = '';
-    if (field === 'od_sph') btnId = 'rx-od-sph-btn';
-    else if (field === 'od_cyl') btnId = 'rx-od-cyl-btn';
-    else if (field === 'os_sph') btnId = 'rx-os-sph-btn';
-    else if (field === 'os_cyl') btnId = 'rx-os-cyl-btn';
-    else if (field === 'addition') btnId = 'rx-addition-btn';
+    let inputId = '';
+    if (field === 'od_sph') { btnId = 'rx-od-sph-btn'; inputId = 'rx-od-sph-input'; }
+    else if (field === 'od_cyl') { btnId = 'rx-od-cyl-btn'; inputId = 'rx-od-cyl-input'; }
+    else if (field === 'os_sph') { btnId = 'rx-os-sph-btn'; inputId = 'rx-os-sph-input'; }
+    else if (field === 'os_cyl') { btnId = 'rx-os-cyl-btn'; inputId = 'rx-os-cyl-input'; }
+    else if (field === 'addition') { btnId = 'rx-addition-btn'; inputId = 'rx-addition-input'; }
 
     const btn = document.getElementById(btnId);
     if (btn) {
@@ -4109,6 +4126,10 @@
       if (valSpan) {
         valSpan.textContent = val || 'Select';
       }
+    }
+    const input = document.getElementById(inputId);
+    if (input) {
+      input.value = val;
     }
 
     if (sheet) sheet.classList.remove('open');
@@ -4160,8 +4181,17 @@
       const btn = document.getElementById(item.id);
       if (btn) {
         btn.addEventListener('click', () => {
-          const currentVal = btn.dataset.val || '';
+          const inputId = item.id.replace('-btn', '-input');
+          const currentVal = document.getElementById(inputId)?.value.trim() || btn.dataset.val || '';
           openDiopterSelector(item.field, item.label, currentVal);
+        });
+      }
+      // Also listen to direct typing in input field
+      const inputId = item.id.replace('-btn', '-input');
+      const inputEl = document.getElementById(inputId);
+      if (inputEl) {
+        inputEl.addEventListener('input', () => {
+          if (btn) btn.dataset.val = inputEl.value.trim();
         });
       }
     });
@@ -4217,13 +4247,13 @@
     // Save RX Button Handler
     if (btnSaveRx) {
       btnSaveRx.addEventListener('click', async () => {
-        const odSph = document.getElementById('rx-od-sph-btn')?.dataset.val || '';
-        const odCyl = document.getElementById('rx-od-cyl-btn')?.dataset.val || '';
+        const odSph = document.getElementById('rx-od-sph-input')?.value.trim() || document.getElementById('rx-od-sph-btn')?.dataset.val || '';
+        const odCyl = document.getElementById('rx-od-cyl-input')?.value.trim() || document.getElementById('rx-od-cyl-btn')?.dataset.val || '';
         const odAxis = document.getElementById('rx-od-axis-input')?.value || null;
-        const osSph = document.getElementById('rx-os-sph-btn')?.dataset.val || '';
-        const osCyl = document.getElementById('rx-os-cyl-btn')?.dataset.val || '';
+        const osSph = document.getElementById('rx-os-sph-input')?.value.trim() || document.getElementById('rx-os-sph-btn')?.dataset.val || '';
+        const osCyl = document.getElementById('rx-os-cyl-input')?.value.trim() || document.getElementById('rx-os-cyl-btn')?.dataset.val || '';
         const osAxis = document.getElementById('rx-os-axis-input')?.value || null;
-        const addition = document.getElementById('rx-addition-btn')?.dataset.val || '';
+        const addition = document.getElementById('rx-addition-input')?.value.trim() || document.getElementById('rx-addition-btn')?.dataset.val || '';
         const ipdD = document.getElementById('rx-ipd-d-input')?.value || null;
         const ipdN = document.getElementById('rx-ipd-n-input')?.value || null;
         const checkedBy = document.getElementById('rx-checked-by-input')?.value.trim() || (state.user?.name || 'Optometrist');
@@ -4307,6 +4337,11 @@
         btn.dataset.val = val || '';
         const span = btn.querySelector('.combobox-val');
         if (span) span.textContent = val || 'Select';
+      }
+      const inputId = id.replace('-btn', '-input');
+      const input = document.getElementById(inputId);
+      if (input) {
+        input.value = val || '';
       }
     };
 

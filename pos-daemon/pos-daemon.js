@@ -257,7 +257,7 @@ function format25InchEscPosReceipt(rawOrder) {
     writeText(row('Optical Frame', '1  ' + formatINR(order.total_payable_inr || order.grand_total || (order.total_payable_paise ? order.total_payable_paise / 100 : 0))));
   } else {
     items.forEach(item => {
-      const name = item.product_name || item.name || 'Frame';
+      const name = item.product_name || item.name || item.model || 'Optical Frame';
       const qty = parseInt(item.quantity || 1, 10);
       const unitPrice = item.unit_price_inr ? item.unit_price_inr : (item.unit_price_paise ? item.unit_price_paise / 100 : (item.unitPrice || item.unit_price || 0));
       const lineTotal = item.subtotal_inr ? item.subtotal_inr : (item.subtotal_paise ? item.subtotal_paise / 100 : (item.subtotal || unitPrice * qty));
@@ -301,8 +301,8 @@ function format25InchEscPosReceipt(rawOrder) {
 
   // 7. Client Prescription (Rx) Section (100% Reliable Extraction)
   const rx = order.prescription || rawOrder.prescription || order.client_prescription || order.newPrescription || order;
-  const odSphVal = rx.od_sph !== undefined && rx.od_sph !== null && rx.od_sph !== '' ? rx.od_sph : order.od_sph;
-  const osSphVal = rx.os_sph !== undefined && rx.os_sph !== null && rx.os_sph !== '' ? rx.os_sph : order.os_sph;
+  const odSphVal = rx.od_sph !== undefined && rx.od_sph !== null && rx.od_sph !== '' ? rx.od_sph : (rx.odSph !== undefined && rx.odSph !== null && rx.odSph !== '' ? rx.odSph : (order.od_sph || order.odSph));
+  const osSphVal = rx.os_sph !== undefined && rx.os_sph !== null && rx.os_sph !== '' ? rx.os_sph : (rx.osSph !== undefined && rx.osSph !== null && rx.osSph !== '' ? rx.osSph : (order.os_sph || order.osSph));
 
   const hasRx = (odSphVal !== undefined && odSphVal !== null && odSphVal !== '') ||
                 (osSphVal !== undefined && osSphVal !== null && osSphVal !== '') ||
@@ -317,9 +317,9 @@ function format25InchEscPosReceipt(rawOrder) {
     writeBytes([0x1B, 0x61, 0x00]); // Left
 
     function fmtRx(val) {
-      if (val === undefined || val === null || val === '') return ' 0.00';
+      if (val === undefined || val === null || val === '') return '  --- ';
       const n = Number(val);
-      if (isNaN(n)) return String(val).padStart(5);
+      if (isNaN(n)) return String(val).padStart(6);
       const sign = n > 0 ? '+' : (n < 0 ? '-' : ' ');
       return sign + Math.abs(n).toFixed(2);
     }
@@ -330,21 +330,21 @@ function format25InchEscPosReceipt(rawOrder) {
 
     writeText('Eye    SPH    CYL   AXIS   ADD  \n');
     const odSph = fmtRx(odSphVal);
-    const odCyl = fmtRx(rx.od_cyl !== undefined && rx.od_cyl !== null ? rx.od_cyl : order.od_cyl);
-    const odAx = fmtAx(rx.od_axis !== undefined && rx.od_axis !== null ? rx.od_axis : order.od_axis);
+    const odCyl = fmtRx(rx.od_cyl !== undefined && rx.od_cyl !== null ? rx.od_cyl : (rx.odCyl !== undefined ? rx.odCyl : order.od_cyl));
+    const odAx = fmtAx(rx.od_axis !== undefined && rx.od_axis !== null ? rx.od_axis : (rx.odAxis !== undefined ? rx.odAxis : order.od_axis));
     const add = fmtRx(rx.addition !== undefined && rx.addition !== null ? rx.addition : order.addition);
     writeText(`OD   ${odSph}  ${odCyl}   ${odAx}  ${add}\n`);
 
     const osSph = fmtRx(osSphVal);
-    const osCyl = fmtRx(rx.os_cyl !== undefined && rx.os_cyl !== null ? rx.os_cyl : order.os_cyl);
-    const osAx = fmtAx(rx.os_axis !== undefined && rx.os_axis !== null ? rx.os_axis : order.os_axis);
+    const osCyl = fmtRx(rx.os_cyl !== undefined && rx.os_cyl !== null ? rx.os_cyl : (rx.osCyl !== undefined ? rx.osCyl : order.os_cyl));
+    const osAx = fmtAx(rx.os_axis !== undefined && rx.os_axis !== null ? rx.os_axis : (rx.osAxis !== undefined ? rx.osAxis : order.os_axis));
     writeText(`OS   ${osSph}  ${osCyl}   ${osAx}  ${add}\n`);
 
-    const pdVal = rx.ipd_distance || rx.pd || order.ipd_distance || order.pd;
+    const pdVal = rx.ipd_distance || rx.ipdDistance || rx.pd || order.ipd_distance || order.pd;
     if (pdVal) {
       writeText(`Distance PD: ${pdVal} mm\n`);
     }
-    const docVal = rx.checked_by || rx.rx_checked_by || order.rx_checked_by || order.checked_by;
+    const docVal = rx.checked_by || rx.checkedBy || rx.rx_checked_by || order.rx_checked_by || order.checked_by;
     if (docVal) {
       writeText(`Optometrist: ${docVal}\n`);
     }

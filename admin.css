@@ -3568,11 +3568,13 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 /* ── Diopter Selector Bottom Sheet (Matches Reference Screenshot 3) ───────── */
 .diopter-sheet-overlay {
   align-items: flex-end;
+  z-index: 300 !important;
 }
 
 @media (min-width: 640px) {
   .diopter-sheet-overlay {
     align-items: center;
+    z-index: 300 !important;
   }
 }
 

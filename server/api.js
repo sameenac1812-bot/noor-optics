@@ -1489,25 +1489,27 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       const lineSubtotal = unitPrice * qty;
       subtotalPaise += lineSubtotal;
 
+      const prodName = item.product_name || item.name || item.model || (variant ? variant.prod_name : 'Noor Optical Frame');
+      const varSku = item.sku || (variant ? variant.sku : 'NOOR-POS-FRAME');
+      const varColor = item.color || item.variant_name || (variant ? variant.color_name : 'Standard Frame');
       const brand = item.brand || (variant ? (variant.brand || 'Noor Optics') : 'Noor Optics');
-      const model = item.model || (variant ? variant.prod_name : 'Noor Optical Frame');
+      const model = item.model || prodName;
       const shape = item.shape || (variant ? (variant.shape || 'Optical') : 'Optical');
-      const color = item.color || (variant ? variant.color_name : 'Standard Frame');
       const size = item.size || (variant ? (variant.fit || 'Regular') : 'Regular');
 
       preparedItems.push({
         id: 'oit-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
         order_id: orderId,
-        variant_id: variant ? variant.id : 'var-noor-01-1',
-        product_name: variant ? variant.prod_name : 'Noor Optical Frame',
-        variant_name: variant ? variant.color_name : 'Standard Frame',
-        sku: variant ? variant.sku : 'NOOR-POS-FRAME',
+        variant_id: variant ? variant.id : (item.variantId || 'var-noor-01-1'),
+        product_name: prodName,
+        variant_name: varColor,
+        sku: varSku,
         brand,
         model,
         shape,
-        color,
+        color: varColor,
         size,
-        lens_name: item.lensName || 'Standard Demo Lens',
+        lens_name: item.lensName || item.lens_name || 'Standard Demo Lens',
         unit_price_paise: unitPrice,
         purchase_cost_paise: variant ? variant.purchase_cost_paise : 145000,
         quantity: qty,
@@ -1669,7 +1671,18 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       customerName: result.customerName,
       customerPhone: req.body.customerPhone || (req.body.clientDetails && req.body.clientDetails.phone),
       customerEmail: req.body.customerEmail || (req.body.clientDetails && req.body.clientDetails.email),
-      items: req.body.items,
+      items: preparedItems.map(pi => ({
+        id: pi.id,
+        name: pi.product_name,
+        product_name: pi.product_name,
+        sku: pi.sku,
+        color: pi.color,
+        variant_name: pi.variant_name,
+        lensName: pi.lens_name,
+        quantity: pi.quantity,
+        unit_price: pi.unit_price_paise / 100,
+        subtotal: pi.subtotal_paise / 100
+      })),
       prescriptionId: result.prescriptionId,
       paymentMethod: req.body.paymentMethod,
       grandTotalINR: result.totalPayableINR
