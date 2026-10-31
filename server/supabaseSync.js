@@ -795,7 +795,7 @@ async function syncSupabaseProducts(db) {
       const img = cp.image || cp.imageUrl || cp.image_url || 'images/stockholm_noir.jpg';
 
       // Check if product exists in local SQLite (never collide on generic placeholder)
-      const existing = db.prepare('SELECT id FROM products WHERE id = ? OR (sku IS NOT NULL AND LOWER(sku) = LOWER(?) AND LOWER(sku) != "noor-frame")').get(prodId, sku);
+      const existing = db.prepare("SELECT id FROM products WHERE id = ? OR (sku IS NOT NULL AND LOWER(sku) = LOWER(?) AND LOWER(sku) != 'noor-frame')").get(prodId, sku);
       if (!existing) {
         db.prepare(`
           INSERT INTO products (

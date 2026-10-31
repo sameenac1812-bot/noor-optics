@@ -2231,111 +2231,116 @@ router.post('/orders/online', (req, res) => {
 // ==============================================================================
 
 router.get('/orders', authenticateToken, requirePermission('orders:view'), async (req, res) => {
-  // Sync incoming cloud orders so mobile phone orders appear immediately
-  await syncSupabaseOrders(db).catch(() => {});
+  try {
+    // Sync incoming cloud orders so mobile phone orders appear immediately
+    await syncSupabaseOrders(db).catch(() => {});
 
-  const { channel, paymentStatus, status, limit = 50 } = req.query;
+    const { channel, paymentStatus, status, limit = 50 } = req.query;
 
-  let sql = `
-    SELECT
-      o.*,
-      u.name as staff_name,
-      COALESCE(o.customer_name, c.name) as customer_name,
-      COALESCE(o.customer_phone, c.phone) as customer_phone,
-      c.client_code,
-      c.age as client_age,
-      c.city as client_city,
-      pr.prescription_number,
-      pr.od_sph, pr.od_cyl, pr.od_axis,
-      pr.os_sph, pr.os_cyl, pr.os_axis,
-      pr.addition,
-      pr.ipd_distance, pr.ipd_near,
-      pr.checked_by as rx_checked_by,
-      pr.notes as rx_notes,
-      pr.image_url as rx_image_url
-    FROM orders o
-    LEFT JOIN users u ON o.staff_user_id = u.id
-    LEFT JOIN customers c ON o.customer_id = c.id
-    LEFT JOIN prescriptions pr ON o.prescription_id = pr.id
-    WHERE 1=1
-      AND o.order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
-      AND o.id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
-  `;
-  const params = [];
+    let sql = `
+      SELECT
+        o.*,
+        u.name as staff_name,
+        COALESCE(o.customer_name, c.name) as customer_name,
+        COALESCE(o.customer_phone, c.phone) as customer_phone,
+        c.client_code,
+        c.age as client_age,
+        c.city as client_city,
+        pr.prescription_number,
+        pr.od_sph, pr.od_cyl, pr.od_axis,
+        pr.os_sph, pr.os_cyl, pr.os_axis,
+        pr.addition,
+        pr.ipd_distance, pr.ipd_near,
+        pr.checked_by as rx_checked_by,
+        pr.notes as rx_notes,
+        pr.image_url as rx_image_url
+      FROM orders o
+      LEFT JOIN users u ON o.staff_user_id = u.id
+      LEFT JOIN customers c ON o.customer_id = c.id
+      LEFT JOIN prescriptions pr ON o.prescription_id = pr.id
+      WHERE 1=1
+        AND o.order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
+        AND o.id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
+    `;
+    const params = [];
 
-  if (channel) {
-    sql += ' AND o.channel = ?';
-    params.push(channel);
-  }
-  if (paymentStatus) {
-    sql += ' AND o.payment_status = ?';
-    params.push(paymentStatus);
-  }
-  if (status) {
-    sql += ' AND o.status = ?';
-    params.push(status);
-  }
-
-  sql += ' ORDER BY replace(o.created_at, " ", "T") DESC, o.rowid DESC LIMIT ?';
-  params.push(parseInt(limit, 10));
-
-  const orders = db.prepare(sql).all(...params);
-  const getItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?');
-  const getLatestRxForCustomer = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1');
-  const getCustByPhone = db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0 LIMIT 1');
-
-  const formatted = orders.map(o => {
-    let rx = null;
-    if (!o.prescription_number && o.customer_id) {
-      rx = getLatestRxForCustomer.get(o.customer_id);
-    } else if (!o.prescription_number && o.customer_phone) {
-      const cust = getCustByPhone.get(o.customer_phone.trim());
-      if (cust) rx = getLatestRxForCustomer.get(cust.id);
+    if (channel) {
+      sql += ' AND o.channel = ?';
+      params.push(channel);
+    }
+    if (paymentStatus) {
+      sql += ' AND o.payment_status = ?';
+      params.push(paymentStatus);
+    }
+    if (status) {
+      sql += ' AND o.status = ?';
+      params.push(status);
     }
 
-    let normCreatedAt = o.created_at;
-    if (normCreatedAt && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(normCreatedAt)) {
-      normCreatedAt = normCreatedAt.replace(' ', 'T') + 'Z';
-    } else if (normCreatedAt && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(normCreatedAt) && !normCreatedAt.includes('Z') && !normCreatedAt.includes('+')) {
-      normCreatedAt = normCreatedAt + 'Z';
-    }
+    sql += " ORDER BY replace(o.created_at, ' ', 'T') DESC, o.rowid DESC LIMIT ?";
+    params.push(parseInt(limit, 10));
 
-    return {
-      ...o,
-      created_at: normCreatedAt,
-      prescription_id: o.prescription_id || (rx ? rx.id : null),
-      prescription_number: o.prescription_number || (rx ? rx.prescription_number : null),
-      od_sph: o.od_sph || (rx ? rx.od_sph : null),
-      od_cyl: o.od_cyl || (rx ? rx.od_cyl : null),
-      od_axis: o.od_axis !== undefined && o.od_axis !== null ? o.od_axis : (rx ? rx.od_axis : null),
-      os_sph: o.os_sph || (rx ? rx.os_sph : null),
-      os_cyl: o.os_cyl || (rx ? rx.os_cyl : null),
-      os_axis: o.os_axis !== undefined && o.os_axis !== null ? o.os_axis : (rx ? rx.os_axis : null),
-      addition: o.addition || (rx ? rx.addition : null),
-      ipd_distance: o.ipd_distance || (rx ? rx.ipd_distance : null),
-      ipd_near: o.ipd_near || (rx ? rx.ipd_near : null),
-      rx_checked_by: o.rx_checked_by || (rx ? rx.checked_by : null),
-      rx_notes: o.rx_notes || (rx ? rx.notes : null),
-      subtotal_inr: o.subtotal_paise / 100,
-      discount_inr: o.discount_paise / 100,
-      total_payable_inr: o.total_payable_paise / 100,
-      amount_paid_inr: o.amount_paid_paise / 100,
-      items: getItems.all(o.id).map(i => ({
-        ...i,
-        unit_price_inr: i.unit_price_paise / 100,
-        subtotal_inr: i.subtotal_paise / 100
-      }))
-    };
-  });
+    const orders = db.prepare(sql).all(...params);
+    const getItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?');
+    const getLatestRxForCustomer = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1');
+    const getCustByPhone = db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0 LIMIT 1');
 
-  // Strictly sort newest first
-  formatted.sort((a, b) => {
-    const tA = new Date(a.created_at).getTime() || 0;
-    const tB = new Date(b.created_at).getTime() || 0;
-    return tB - tA;
-  });
+    const formatted = orders.map(o => {
+      let rx = null;
+      if (!o.prescription_number && o.customer_id) {
+        rx = getLatestRxForCustomer.get(o.customer_id);
+      } else if (!o.prescription_number && o.customer_phone) {
+        const cust = getCustByPhone.get(o.customer_phone.trim());
+        if (cust) rx = getLatestRxForCustomer.get(cust.id);
+      }
 
-  res.json(formatted);
+      let normCreatedAt = o.created_at;
+      if (normCreatedAt && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(normCreatedAt)) {
+        normCreatedAt = normCreatedAt.replace(' ', 'T') + 'Z';
+      } else if (normCreatedAt && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(normCreatedAt) && !normCreatedAt.includes('Z') && !normCreatedAt.includes('+')) {
+        normCreatedAt = normCreatedAt + 'Z';
+      }
+
+      return {
+        ...o,
+        created_at: normCreatedAt,
+        prescription_id: o.prescription_id || (rx ? rx.id : null),
+        prescription_number: o.prescription_number || (rx ? rx.prescription_number : null),
+        od_sph: o.od_sph || (rx ? rx.od_sph : null),
+        od_cyl: o.od_cyl || (rx ? rx.od_cyl : null),
+        od_axis: o.od_axis !== undefined && o.od_axis !== null ? o.od_axis : (rx ? rx.od_axis : null),
+        os_sph: o.os_sph || (rx ? rx.os_sph : null),
+        os_cyl: o.os_cyl || (rx ? rx.os_cyl : null),
+        os_axis: o.os_axis !== undefined && o.os_axis !== null ? o.os_axis : (rx ? rx.os_axis : null),
+        addition: o.addition || (rx ? rx.addition : null),
+        ipd_distance: o.ipd_distance || (rx ? rx.ipd_distance : null),
+        ipd_near: o.ipd_near || (rx ? rx.ipd_near : null),
+        rx_checked_by: o.rx_checked_by || (rx ? rx.checked_by : null),
+        rx_notes: o.rx_notes || (rx ? rx.notes : null),
+        subtotal_inr: o.subtotal_paise / 100,
+        discount_inr: o.discount_paise / 100,
+        total_payable_inr: o.total_payable_paise / 100,
+        amount_paid_inr: o.amount_paid_paise / 100,
+        items: getItems.all(o.id).map(i => ({
+          ...i,
+          unit_price_inr: i.unit_price_paise / 100,
+          subtotal_inr: i.subtotal_paise / 100
+        }))
+      };
+    });
+
+    // Strictly sort newest first
+    formatted.sort((a, b) => {
+      const tA = new Date(a.created_at).getTime() || 0;
+      const tB = new Date(b.created_at).getTime() || 0;
+      return tB - tA;
+    });
+
+    res.json(formatted);
+  } catch (err) {
+    console.error('Error fetching orders:', err);
+    res.status(500).json({ error: 'Failed to retrieve orders: ' + err.message });
+  }
 });
 
 router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), (req, res) => {
