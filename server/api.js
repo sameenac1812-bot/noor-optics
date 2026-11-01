@@ -2025,8 +2025,11 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
 router.post('/orders/online', (req, res) => {
   const {
     customerName, customerEmail, customerPhone, customerAge, age, deliveryAddress, city, pinCode,
-    prescriptionPref, prescription, paymentMethod = 'UPI_GPAY', items
+    prescriptionPref, prescription, paymentMethod = 'UPI_GPAY', items,
+    claimedUpiRef = null
   } = req.body;
+
+  const resolvedUpiRef = claimedUpiRef || req.body.claimedUtr || req.body.upiUtr || null;
 
   if (!customerName || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Customer name and items are required.' });
@@ -2211,14 +2214,14 @@ router.post('/orders/online', (req, res) => {
         ?, ?, ?, 'ONLINE', ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?,
         'CONFIRMED', 'AWAITING_VERIFICATION', ?, ?, ?,
-        0, ?, 'Online Storefront Order', ?, ?
+        0, ?, ?, ?, ?
       )
     `).run(
       orderId, orderNumber, tokenNumber, customerId, customerName, customerPhone || null,
       customerEmail || null, finalAge, deliveryAddress || null, city || 'Bengaluru', pinCode || null,
       prescriptionPref || (finalPrescriptionId ? 'RX Attached' : 'call-optometrist'), finalPrescriptionId,
       subtotalPaise, taxPaise, totalPayablePaise,
-      totalPayablePaise, nowIso, nowIso
+      totalPayablePaise, resolvedUpiRef ? `Online Storefront Order (UPI Ref: ${resolvedUpiRef})` : 'Online Storefront Order', nowIso, nowIso
     );
 
     const insertItem = db.prepare(`
@@ -2236,11 +2239,14 @@ router.post('/orders/online', (req, res) => {
       );
     });
 
-    // Record Pending Payment
+    // Record Pending Payment with Claimed UTR
+    const upiNotes = resolvedUpiRef
+      ? `Online UPI Claimed UTR: ${resolvedUpiRef}`
+      : 'Online Checkout awaiting UPI / Doorstep verification';
     db.prepare(`
-      INSERT INTO payments (id, order_id, payment_method, amount_paise, status, notes)
-      VALUES (?, ?, ?, ?, 'PENDING_VERIFICATION', 'Online Checkout awaiting UPI / Doorstep verification')
-    `).run('pay-' + Date.now(), orderId, paymentMethod, totalPayablePaise);
+      INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes)
+      VALUES (?, ?, ?, ?, 'PENDING_VERIFICATION', ?, ?)
+    `).run('pay-' + Date.now(), orderId, paymentMethod, totalPayablePaise, resolvedUpiRef, upiNotes);
 
     // Create Invoice Record
     const invoiceId = 'inv-' + Date.now();
@@ -2373,11 +2379,15 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
         pr.ipd_distance, pr.ipd_near,
         pr.checked_by as rx_checked_by,
         pr.notes as rx_notes,
-        pr.image_url as rx_image_url
+        pr.image_url as rx_image_url,
+        pay.id as payment_id,
+        pay.claimed_upi_ref,
+        pay.status as payment_record_status
       FROM orders o
       LEFT JOIN users u ON o.staff_user_id = u.id
       LEFT JOIN customers c ON o.customer_id = c.id
       LEFT JOIN prescriptions pr ON o.prescription_id = pr.id
+      LEFT JOIN payments pay ON o.id = pay.order_id
       WHERE 1=1
         AND o.order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
         AND o.id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
@@ -2482,12 +2492,16 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), (
       pr.ipd_distance, pr.ipd_near,
       pr.checked_by as rx_checked_by,
       pr.notes as rx_notes,
-      pr.image_url as rx_image_url
+      pr.image_url as rx_image_url,
+      pay.id as payment_id,
+      pay.claimed_upi_ref,
+      pay.status as payment_record_status
     FROM orders o
     LEFT JOIN users u ON o.staff_user_id = u.id
     LEFT JOIN invoices inv ON o.id = inv.order_id
     LEFT JOIN customers c ON o.customer_id = c.id
     LEFT JOIN prescriptions pr ON o.prescription_id = pr.id
+    LEFT JOIN payments pay ON o.id = pay.order_id
     WHERE o.id = ?
   `).get(req.params.id);
 
@@ -2536,13 +2550,48 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), (
 });
 
 router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:manage'), (req, res) => {
-  const { status } = req.body;
-  if (!['PENDING', 'CONFIRMED', 'PROCESSING', 'COMPLETED', 'CANCELLED'].includes(status)) {
+  const { status, paymentStatus, reasonOrNotes } = req.body;
+  const orderId = req.params.id;
+
+  if (status && !['PENDING', 'CONFIRMED', 'PROCESSING', 'COMPLETED', 'CANCELLED', 'DELIVERED', 'REFUNDED'].includes(status)) {
     return res.status(400).json({ error: 'Invalid order status' });
   }
 
-  db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, req.params.id);
-  logAudit(req.user.id, req.user.email, 'ORDER_STATUS_CHANGED', 'ORDER', req.params.id, { newStatus: status }, req);
+  if (paymentStatus) {
+    if (!['VERIFIED', 'AWAITING_VERIFICATION', 'UNPAID', 'REJECTED', 'REFUNDED'].includes(paymentStatus)) {
+      return res.status(400).json({ error: 'Invalid payment status' });
+    }
+
+    if (paymentStatus === 'VERIFIED') {
+      db.prepare(`
+        UPDATE orders SET
+          payment_status = 'VERIFIED',
+          amount_paid_paise = total_payable_paise,
+          outstanding_paise = 0,
+          updated_at = datetime('now')
+        WHERE id = ?
+      `).run(orderId);
+      db.prepare("UPDATE payments SET status = 'VERIFIED', notes = COALESCE(notes, '') || ' | Verified by Staff' WHERE order_id = ?").run(orderId);
+      db.prepare("UPDATE invoices SET payment_status = 'VERIFIED', amount_paid_paise = grand_total_paise WHERE order_id = ?").run(orderId);
+    } else if (paymentStatus === 'REJECTED') {
+      db.prepare(`
+        UPDATE orders SET
+          payment_status = 'REJECTED',
+          notes = CASE WHEN notes IS NOT NULL THEN notes || ' | ' || ? ELSE ? END,
+          updated_at = datetime('now')
+        WHERE id = ?
+      `).run(reasonOrNotes || 'Payment rejected / UTR mismatch', reasonOrNotes || 'Payment rejected / UTR mismatch', orderId);
+      db.prepare("UPDATE payments SET status = 'REJECTED', notes = ? WHERE order_id = ?").run(reasonOrNotes || 'Payment rejected / UTR mismatch', orderId);
+    } else {
+      db.prepare("UPDATE orders SET payment_status = ?, updated_at = datetime('now') WHERE id = ?").run(paymentStatus, orderId);
+    }
+  }
+
+  if (status) {
+    db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, orderId);
+  }
+
+  logAudit(req.user.id, req.user.email, 'ORDER_STATUS_CHANGED', 'ORDER', orderId, { newStatus: status, newPaymentStatus: paymentStatus }, req);
   res.json({ success: true });
 });
 

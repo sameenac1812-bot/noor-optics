@@ -966,18 +966,60 @@
     if (DOM.checkoutContentNormal) DOM.checkoutContentNormal.style.display = 'grid';
     if (DOM.checkoutContentSuccess) DOM.checkoutContentSuccess.style.display = 'none';
 
-    // Refresh payment choice & UPI QR display state
+    // Refresh payment choice & dynamic locked UPI QR display
     const payRadio = document.querySelector('input[name="checkout-pay"]:checked');
     const upiPanel = document.getElementById('checkout-upi-qr-panel');
     const submitBtn = document.getElementById('btn-submit-order');
     if (upiPanel) {
-      upiPanel.style.display = payRadio && payRadio.value === 'upi' ? 'block' : 'none';
+      const isUpi = payRadio && payRadio.value === 'upi';
+      upiPanel.style.display = isUpi ? 'block' : 'none';
+      if (isUpi) renderCheckoutUpiPanel();
     }
     if (submitBtn) {
       submitBtn.textContent = payRadio && payRadio.value === 'upi' ? 'Confirm Order & Pay via UPI' : 'Place Order';
     }
 
     openModal(DOM.checkoutModal);
+  }
+
+  // Helper: Generates locked dynamic UPI QR and deep links for exact order total
+  function renderCheckoutUpiPanel() {
+    const subtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+    const threshold = (window.NOOR_BRAND && window.NOOR_BRAND.freeShippingThreshold) || 1999;
+    const shipping = subtotal >= threshold ? 0 : 199;
+    const grandTotal = subtotal + shipping;
+
+    const amountDisplay = document.getElementById('checkout-upi-amount-display');
+    if (amountDisplay) amountDisplay.textContent = formatINR(grandTotal);
+
+    // Pre-locked UPI URI with exact total amount and merchant identity
+    const upiUri = `upi://pay?pa=9182341567@mairtel&pn=Noor%20Optic&am=${grandTotal.toFixed(2)}&cu=INR&tn=Noor%20Optics%20Eyewear&mc=5999`;
+
+    const mobileBtn = document.getElementById('btn-open-upi-app');
+    if (mobileBtn) {
+      mobileBtn.href = upiUri;
+    }
+
+    const qrBox = document.getElementById('checkout-dynamic-qr-box');
+    if (qrBox) {
+      if (typeof QRCode !== 'undefined') {
+        qrBox.innerHTML = '';
+        try {
+          new QRCode(qrBox, {
+            text: upiUri,
+            width: 190,
+            height: 190,
+            colorDark: '#0A2540',
+            colorLight: '#FFFFFF',
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        } catch (_) {
+          qrBox.innerHTML = '<img src="/images/upi-qr.png" alt="Scan to pay using UPI" style="width:190px;height:190px;display:block;object-fit:contain;margin:0 auto;" />';
+        }
+      } else {
+        qrBox.innerHTML = '<img src="/images/upi-qr.png" alt="Scan to pay using UPI" style="width:190px;height:190px;display:block;object-fit:contain;margin:0 auto;" />';
+      }
+    }
   }
 
   async function handleDemoOrderSubmit(e) {
@@ -992,6 +1034,21 @@
     const pin = (document.getElementById('checkout-pin')?.value || '').trim() || '560038';
     const rxChoice = document.querySelector('input[name="checkout-rx"]:checked')?.value || 'call-optometrist';
     const payChoice = document.querySelector('input[name="checkout-pay"]:checked')?.value || 'cod';
+
+    let utrVal = '';
+    if (payChoice === 'upi') {
+      const utrInput = document.getElementById('checkout-upi-utr');
+      utrVal = (utrInput?.value || '').trim();
+      if (!utrVal || utrVal.length < 8) {
+        if (utrInput) {
+          utrInput.focus();
+          utrInput.style.borderColor = '#DC2626';
+          utrInput.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.2)';
+        }
+        showToast('Please enter the 12-digit UPI Reference / UTR Number from your payment app.', 'warning');
+        return;
+      }
+    }
 
     let prescriptionData = null;
     if (rxChoice === 'enter-rx') {
@@ -1067,6 +1124,8 @@
           prescriptionPref: rxChoice,
           prescription: prescriptionData,
           paymentMethod: payChoice === 'upi' ? 'UPI_GPAY' : (payChoice === 'card' ? 'CARD' : 'CASH'),
+          claimedUpiRef: utrVal || null,
+          upiScreenshot: state.uploadedUpiScreenshot || null,
           items: state.cart.map(item => ({
             id: item.id,
             name: item.name,
@@ -1156,7 +1215,7 @@
           </div>
           <div class="receipt-detail-item">
             <span class="receipt-item-label">Payment</span>
-            <span class="receipt-item-val">${payChoice === 'upi' ? 'Instant UPI / Google Pay (Demo)' : (payChoice === 'card' ? 'Card Payment (Demo)' : 'Cash / UPI on Delivery (Demo)')}</span>
+            <span class="receipt-item-val" style="${payChoice === 'upi' ? 'color:#B45309; font-weight:700;' : ''}">${payChoice === 'upi' ? `⏳ Awaiting UPI Verification (UTR: ${escapeHtml(utrVal)})` : (payChoice === 'card' ? 'Card Payment' : 'Cash on Delivery')}</span>
           </div>
         </div>
         <div class="receipt-total-row">
@@ -1166,9 +1225,20 @@
       `;
     }
 
-    // Switch Views inside Modal
+    // Switch Views inside Modal and customize heading
     if (DOM.checkoutContentNormal) DOM.checkoutContentNormal.style.display = 'none';
-    if (DOM.checkoutContentSuccess) DOM.checkoutContentSuccess.style.display = 'block';
+    if (DOM.checkoutContentSuccess) {
+      DOM.checkoutContentSuccess.style.display = 'block';
+      const successH3 = DOM.checkoutContentSuccess.querySelector('h3');
+      const successP = DOM.checkoutContentSuccess.querySelector('p');
+      if (payChoice === 'upi') {
+        if (successH3) successH3.textContent = 'Order Placed – Payment Verification in Progress';
+        if (successP) successP.textContent = `Thank you for your order! We have registered your 12-digit UPI Reference (${utrVal}). Our optical team is verifying the transaction credit with our bank account. Spectacle crafting will begin immediately once approved.`;
+      } else {
+        if (successH3) successH3.textContent = 'Order Placed Successfully';
+        if (successP) successP.textContent = 'Thank you for choosing Noor Optics. Your bespoke Scandinavian eyewear order has been confirmed. Our master optometrist will verify your prescription details before precision glazing.';
+      }
+    }
 
     // Clear Cart after successful checkout
     state.cart = [];
@@ -1442,13 +1512,44 @@
           const upiPanel = document.getElementById('checkout-upi-qr-panel');
           const submitBtn = document.getElementById('btn-submit-order');
           if (upiPanel) {
-            upiPanel.style.display = radio.value === 'upi' ? 'block' : 'none';
+            const isUpi = radio.value === 'upi';
+            upiPanel.style.display = isUpi ? 'block' : 'none';
+            if (isUpi) renderCheckoutUpiPanel();
           }
           if (submitBtn) {
             submitBtn.textContent = radio.value === 'upi' ? 'Confirm Order & Pay via UPI' : 'Place Order';
           }
         });
       });
+
+      // UPI ID Copy Helper
+      const vpaCopyEl = document.getElementById('checkout-upi-vpa-copy');
+      if (vpaCopyEl) {
+        vpaCopyEl.addEventListener('click', () => {
+          navigator.clipboard.writeText('9182341567@mairtel');
+          showToast('UPI ID copied: 9182341567@mairtel', 'success');
+        });
+      }
+
+      // UPI Screenshot Upload Trigger
+      const btnUpload = document.getElementById('btn-upload-upi-receipt');
+      const fileInput = document.getElementById('checkout-upi-file');
+      const badgeEl = document.getElementById('upi-file-badge');
+      if (btnUpload && fileInput) {
+        btnUpload.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (file) {
+            if (badgeEl) badgeEl.textContent = '✓ ' + file.name.slice(0, 20);
+            const reader = new FileReader();
+            reader.onload = (re) => {
+              state.uploadedUpiScreenshot = re.target.result;
+              showToast('Screenshot attached.', 'success');
+            };
+            reader.readAsDataURL(file);
+          }
+        });
+      }
     }
 
     const btnCloseSuccess = document.getElementById('btn-close-success-order');

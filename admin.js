@@ -627,18 +627,22 @@
     const allCount = cleanOrders.length;
     const instoreCount = cleanOrders.filter(o => o.channel === 'POS').length;
     const websiteCount = cleanOrders.filter(o => o.channel === 'ONLINE' || o.channel === 'WEBSITE').length;
+    const upiPendingCount = cleanOrders.filter(o => o.payment_status === 'AWAITING_VERIFICATION').length;
     const badgeAll = document.getElementById('count-all-orders');
     const badgeInstore = document.getElementById('count-instore-orders');
     const badgeWebsite = document.getElementById('count-website-orders');
+    const badgeUpiPending = document.getElementById('count-upi-pending');
     if (badgeAll) badgeAll.textContent = allCount;
     if (badgeInstore) badgeInstore.textContent = instoreCount;
     if (badgeWebsite) badgeWebsite.textContent = websiteCount;
+    if (badgeUpiPending) badgeUpiPending.textContent = upiPendingCount;
 
     // Filter list
     const filtered = cleanOrders.filter(o => {
       // Channel match
       if (channel === 'POS' && o.channel !== 'POS') return false;
       if (channel === 'WEBSITE' && o.channel !== 'ONLINE' && o.channel !== 'WEBSITE') return false;
+      if (channel === 'UPI_PENDING' && o.payment_status !== 'AWAITING_VERIFICATION') return false;
 
       // Status
       if (statusFilter && o.status !== statusFilter) return false;
@@ -705,9 +709,12 @@
                 </div>
                 <div class="bill-card-right">
                   <div class="bill-due-badge-wrap">
-                    ${isDue
-                      ? `<span class="bill-due-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span class="badge-due-red">DUE</span>`
-                      : `<span class="bill-paid-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span class="badge-paid-green">PAID</span>`
+                    ${o.payment_status === 'AWAITING_VERIFICATION'
+                      ? `<span class="bill-due-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span style="background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; font-weight:800; font-size:0.68rem; padding:2px 6px; border-radius:4px;">VERIFY UPI</span>`
+                      : (isDue
+                        ? `<span class="bill-due-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span class="badge-due-red">DUE</span>`
+                        : `<span class="bill-paid-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span class="badge-paid-green">PAID</span>`
+                      )
                     }
                   </div>
                   <div class="bill-sub-badges-row">
@@ -718,6 +725,17 @@
                   <button type="button" class="optic-dots-btn" onclick="openBillActionSheet('${o.id}', event)" title="Manage bill options">•••</button>
                 </div>
               </div>
+              ${o.payment_status === 'AWAITING_VERIFICATION' ? `
+                <div style="background:#FFFBEB; border-top:1px dashed #FDE68A; padding:6px 12px; display:flex; align-items:center; justify-content:space-between; font-size:0.75rem;">
+                  <span style="color:#92400E; font-weight:700;">
+                    UTR: <code style="font-family:monospace; font-weight:800; font-size:0.82rem; background:#FEF3C7; padding:2px 4px; border-radius:3px;">${escapeHtml(o.claimed_upi_ref || (o.notes && o.notes.includes('UPI Ref:') ? o.notes.split('UPI Ref:')[1].replace(')', '').trim() : 'Submitted'))}</code>
+                  </span>
+                  <div style="display:flex; gap:6px;">
+                    <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:700; padding:3px 8px; font-size:0.72rem;" onclick="event.stopPropagation(); confirmUpiPayment('${o.id}', '${o.payment_id || ''}')">✓ Approve</button>
+                    <button type="button" class="btn-table-action" style="background:#DC2626; color:#FFF; font-weight:700; padding:3px 8px; font-size:0.72rem;" onclick="event.stopPropagation(); rejectUpiPayment('${o.id}', '${o.payment_id || ''}')">✗ Reject</button>
+                  </div>
+                </div>
+              ` : ''}
             </div>
           `;
         }).join('');
@@ -910,6 +928,46 @@
     }
   };
 
+  // ── UPI Payment Verification Handlers ─────────────────────────────────────
+  window.confirmUpiPayment = async function (orderId, paymentId) {
+    if (!confirm('Confirm receipt of UPI payment for this order?')) return;
+    try {
+      await apiFetch(`/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ paymentStatus: 'VERIFIED' })
+      });
+      showToast('Payment verified and marked as PAID.', 'success');
+      const modal = document.getElementById('modal-order-details');
+      if (modal && modal.classList.contains('open')) {
+        modal.classList.remove('open');
+      }
+      await loadOrders(true);
+      if (typeof loadDashboard === 'function') loadDashboard();
+    } catch (err) {
+      showToast('Verification failed: ' + err.message, 'error');
+    }
+  };
+
+  window.rejectUpiPayment = async function (orderId, paymentId) {
+    const reason = prompt('Enter reason for rejecting payment (e.g. "Credit not received in bank", "Underpaid"):', 'Credit not received in bank account');
+    if (!reason) return;
+    try {
+      await apiFetch(`/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ paymentStatus: 'REJECTED', reasonOrNotes: reason })
+      });
+      showToast('Order payment marked as REJECTED.', 'warning');
+      const modal = document.getElementById('modal-order-details');
+      if (modal && modal.classList.contains('open')) {
+        modal.classList.remove('open');
+      }
+      await loadOrders(true);
+      if (typeof loadDashboard === 'function') loadDashboard();
+    } catch (err) {
+      showToast('Rejection failed: ' + err.message, 'error');
+    }
+  };
+
   // ── View Order Details Modal ──────────────────────────────────────────────
   window.viewOrderDetails = async function (orderId) {
     window._activeViewingOrderId = orderId;
@@ -957,6 +1015,27 @@
     }).join('');
 
     contentEl.innerHTML = `
+      ${(order.claimed_upi_ref || (order.notes && order.notes.includes('UPI Ref:')) || order.payment_status === 'AWAITING_VERIFICATION') ? `
+        <div style="background:#FFFBEB; border:1.5px solid #F59E0B; border-radius:8px; padding:14px 16px; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <div style="font-size:0.75rem; font-weight:800; color:#92400E; text-transform:uppercase; letter-spacing:0.04em;">⚠️ UPI Payment Verification Pending</div>
+            <div style="font-size:1.1rem; font-weight:800; color:#78350F; margin-top:3px; display:flex; align-items:center; gap:8px;">
+              <span>Claimed UTR:</span>
+              <span style="font-family:monospace; background:#FEF3C7; padding:2px 8px; border-radius:4px; border:1px solid #FDE68A; user-select:all;">${escapeHtml(order.claimed_upi_ref || (order.notes && order.notes.includes('UPI Ref:') ? order.notes.split('UPI Ref:')[1].replace(')', '').trim() : 'Submitted'))}</span>
+              <button type="button" class="btn-table-action" style="font-size:0.72rem; padding:2px 8px; background:#FFFFFF; border:1px solid #CBD5E1;" onclick="navigator.clipboard.writeText('${escapeHtml(order.claimed_upi_ref || (order.notes && order.notes.includes('UPI Ref:') ? order.notes.split('UPI Ref:')[1].replace(')', '').trim() : ''))}'); showToast('UTR copied to clipboard!', 'success');">📋 Copy UTR</button>
+            </div>
+            <div style="font-size:0.78rem; color:#A16207; margin-top:4px;">
+              Check your bank SMS / Airtel app for <strong>₹${((order.total_payable_paise || 0)/100).toLocaleString('en-IN')}</strong> from ${escapeHtml(order.customer_name || 'Client')}.
+            </div>
+          </div>
+          ${order.payment_status === 'AWAITING_VERIFICATION' ? `
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800; padding:6px 14px; font-size:0.85rem;" onclick="confirmUpiPayment('${order.id}', '${order.payment_id || ''}')">✓ Approve & Mark Paid</button>
+              <button type="button" class="btn-table-action" style="background:#DC2626; color:#FFF; font-weight:700; padding:6px 14px; font-size:0.85rem;" onclick="rejectUpiPayment('${order.id}', '${order.payment_id || ''}')">✗ Reject</button>
+            </div>
+          ` : ''}
+        </div>
+      ` : ''}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem; background:#FAFAFC; padding:1.25rem; border-radius:6px; border:1px solid #E5E7EB;">
         <div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -1138,6 +1217,10 @@
     // Dynamic actions based on order status and channel
     actionsEl.innerHTML = `
       <button type="button" class="btn-header-action" data-close-modal>Close</button>
+      ${order.payment_status === 'AWAITING_VERIFICATION' ? `
+        <button type="button" class="btn-header-action" style="background:#16A34A; color:#FFF; font-weight:800;" onclick="confirmUpiPayment('${order.id}', '${order.payment_id || ''}')">✓ Approve UPI Payment</button>
+        <button type="button" class="btn-header-action" style="background:#DC2626; color:#FFF; font-weight:700;" onclick="rejectUpiPayment('${order.id}', '${order.payment_id || ''}')">✗ Reject Payment</button>
+      ` : ''}
       <button type="button" class="btn-header-action" onclick="window.open('/api/invoices/order/${order.id}/pdf', '_blank')">📄 Tax Invoice PDF</button>
       <button type="button" class="btn-header-action btn-secondary" onclick="previewThermalReceipt('${order.id}')">🖨️ Thermal Receipt</button>
       ${order.prescription_id ? `<button type="button" class="btn-header-action" style="background:#059669; color:#FFF; font-weight:700;" onclick="printPrescriptionRecord('${order.prescription_id}')">👓 Prescription RX</button>` : ''}
