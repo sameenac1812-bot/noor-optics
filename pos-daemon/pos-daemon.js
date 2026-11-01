@@ -291,6 +291,69 @@ function savePrintedHistory() {
   }
 }
 
+// ── Fail-Safe Print Retry Queue (Zero-Missed-Bill Guarantee) ──────────────────
+const RETRY_QUEUE_FILE = path.join(SCRIPT_DIR, '.print_retry_queue.json');
+let retryQueue = [];
+try {
+  if (fs.existsSync(RETRY_QUEUE_FILE)) {
+    retryQueue = JSON.parse(fs.readFileSync(RETRY_QUEUE_FILE, 'utf8') || '[]');
+  }
+} catch (_) { retryQueue = []; }
+
+function saveRetryQueue() {
+  try {
+    fs.writeFileSync(RETRY_QUEUE_FILE, JSON.stringify(retryQueue, null, 2), 'utf8');
+  } catch (e) {
+    console.error('[Daemon] Error saving retry queue:', e.message);
+  }
+}
+
+function enqueueFailedPrintJob(order, docName = 'Customer Bill') {
+  const ref = order.order_number || order.order_ref || order.id;
+  if (!ref) return;
+  if (retryQueue.some(j => j.ref === ref)) return;
+  log(`[Queue] Adding order #${ref} to automatic retry queue (will retry until printed)...`, 'WARN');
+  retryQueue.push({
+    ref,
+    order,
+    docName,
+    addedAt: new Date().toISOString(),
+    attempts: 0
+  });
+  saveRetryQueue();
+}
+
+let isProcessingRetry = false;
+async function processRetryQueue() {
+  if (isProcessingRetry || retryQueue.length === 0) return;
+  isProcessingRetry = true;
+  try {
+    const stillPending = [];
+    for (const job of retryQueue) {
+      job.attempts = (job.attempts || 0) + 1;
+      try {
+        const receiptBinary = format25InchEscPosReceipt(job.order);
+        const result = await spoolBytesToPrinter(receiptBinary, job.docName || `Bill-${job.ref}`);
+        if (result.success) {
+          log(`[Retry Queue] SUCCESS: Pending Bill #${job.ref} successfully printed on attempt ${job.attempts}!`);
+          printedHistory[job.ref] = new Date().toISOString();
+          savePrintedHistory();
+        } else {
+          stillPending.push(job);
+        }
+      } catch (err) {
+        stillPending.push(job);
+      }
+    }
+    if (stillPending.length !== retryQueue.length) {
+      retryQueue = stillPending;
+      saveRetryQueue();
+    }
+  } finally {
+    isProcessingRetry = false;
+  }
+}
+
 // ── State Metrics ─────────────────────────────────────────────────────────────
 const state = {
   startTime: Date.now(),
@@ -848,12 +911,12 @@ async function format25InchEscPosQrSticker(item) {
 }
 
 // ── Process Print Order ───────────────────────────────────────────────────────
-async function processPrintOrder(order, isManualReprint = false) {
+async function processPrintOrder(order, forcePrint = false) {
   const orderRef = order.order_number || order.order_ref || order.id;
   if (!orderRef) return { success: false, error: 'Missing order reference' };
 
-  // Check duplicate prevention
-  if (!isManualReprint && printedHistory[orderRef]) {
+  // Skip duplicate ONLY for background pollers if already physically printed
+  if (!forcePrint && printedHistory[orderRef] && printedHistory[orderRef] !== 'SKIPPED_STALE') {
     log(`Duplicate print skipped for order ${orderRef} (Already printed at ${printedHistory[orderRef]})`);
     return { success: true, skippedDuplicate: true, orderNumber: orderRef, printedAt: printedHistory[orderRef] };
   }
@@ -867,7 +930,9 @@ async function processPrintOrder(order, isManualReprint = false) {
     savePrintedHistory();
     return { success: true, orderNumber: orderRef, printedAt: printedHistory[orderRef] };
   } else {
-    return { success: false, error: result.error, orderNumber: orderRef };
+    // Zero-drop failure recovery: enqueue to retry queue so bill prints as soon as printer is ready
+    enqueueFailedPrintJob(order, `Bill-${orderRef}`);
+    return { success: false, error: result.error, orderNumber: orderRef, queuedForRetry: true };
   }
 }
 
@@ -875,7 +940,7 @@ async function processPrintOrder(order, isManualReprint = false) {
 async function pollCloudOrders() {
   if (!config.supabaseUrl || !config.supabaseAnonKey) return;
   try {
-    const res = await fetch(`${config.supabaseUrl}/rest/v1/orders?select=*&order=created_at.desc&limit=15`, {
+    const res = await fetch(`${config.supabaseUrl}/rest/v1/orders?select=*&order=created_at.desc&limit=25`, {
       headers: {
         'apikey': config.supabaseAnonKey,
         'Authorization': `Bearer ${config.supabaseAnonKey}`
@@ -894,22 +959,21 @@ async function pollCloudOrders() {
     await refreshCatalogCache().catch(() => { });
 
     const now = Date.now();
-    const freshnessMs = (config.orderFreshnessMinutes || 30) * 60 * 1000;
+    // 24 hour window ensures orders placed overnight or while PC is off are never missed
+    const freshnessMs = 24 * 60 * 60 * 1000;
 
     for (const o of orders) {
       const ref = o.order_ref;
-      if (!ref || /TEST/i.test(ref)) continue;
-      if (printedHistory[ref]) continue;
+      if (!ref || /TEST-REF|GHOST-TEST/i.test(ref)) continue;
+      // Skip if already successfully printed
+      if (printedHistory[ref] && printedHistory[ref] !== 'SKIPPED_STALE') continue;
 
-      // Check freshness window (never print historical backlog on restart)
       const orderTime = o.created_at ? new Date(o.created_at).getTime() : 0;
       if (orderTime && (now - orderTime > freshnessMs)) {
-        // Mark as recorded so it doesn't prompt again
-        printedHistory[ref] = 'SKIPPED_STALE';
         continue;
       }
 
-      log(`[Cloud Event] Detected newly confirmed website order #${ref}! Triggering automatic print...`);
+      log(`[Cloud Event] Detected confirmed order #${ref}! Triggering automatic print...`);
 
       if (typeof o.items === 'string') {
         try { o.items = JSON.parse(o.items); } catch (_) { }
@@ -994,6 +1058,17 @@ async function pollCloudPrintQueue() {
             remainingJobs.push(job);
           }
         }
+      } else if (job.type === 'receipt' || job.order) {
+        log(`[Cloud Queue] Processing receipt print job ${jobId}...`);
+        const orderToPrint = job.order || job;
+        const result = await processPrintOrder(orderToPrint, true);
+        if (result.success) {
+          printedHistory[jobId] = new Date().toISOString();
+          changed = true;
+          log(`[Cloud Queue] SUCCESS: Printed bill for order ${jobId}!`);
+        } else {
+          remainingJobs.push(job);
+        }
       } else {
         remainingJobs.push(job);
       }
@@ -1062,15 +1137,15 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 3. POST /api/print (In-Store Checkout or Manual Reprint)
+  // 3. POST /api/print (In-Store Checkout or Manual Reprint - Guaranteed Print)
   if (req.method === 'POST' && url.pathname === '/api/print') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body || '{}');
-        const isManual = Boolean(payload.manualReprint);
-        const result = await processPrintOrder(payload.order || payload, isManual);
+        // Always force print for explicit cashier/POS print requests
+        const result = await processPrintOrder(payload.order || payload, true);
         res.writeHead(result.success ? 200 : 500, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(result));
       } catch (err) {
@@ -1159,13 +1234,17 @@ server.listen(config.port, '0.0.0.0', () => {
   log(`Mode: Single Customer Bill (KOT: ${config.printKOT})`);
   log(`=======================================================`);
 
-  // Start Cloud Listener Loop (every 5 seconds)
-  setInterval(pollCloudOrders, 5000);
+  // Start Cloud Listener Loop (every 2 seconds for instant storefront order printing)
+  setInterval(pollCloudOrders, 2000);
   pollCloudOrders();
 
-  // Start Cloud Print Queue Worker (every 3 seconds)
-  setInterval(pollCloudPrintQueue, 3000);
+  // Start Cloud Print Queue Worker (every 2 seconds)
+  setInterval(pollCloudPrintQueue, 2000);
   pollCloudPrintQueue();
+
+  // Start Automatic Retry Queue Worker for offline/recovered printer (every 3 seconds)
+  setInterval(processRetryQueue, 3000);
+  processRetryQueue();
 });
 
 server.on('error', err => {

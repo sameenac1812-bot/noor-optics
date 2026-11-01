@@ -506,24 +506,22 @@
 
   async function loadOrders(silent = false) {
     try {
+      // Clear legacy purge timestamp so historical orders never disappear
+      try { localStorage.removeItem('noor_orders_purged_at'); } catch (_) {}
+
       const res = await apiFetch('/api/orders?limit=150');
       let incoming = Array.isArray(res) ? res : (res.orders || []);
 
-      // Filter against persistent tombstones and purge timestamp
+      // Filter against persistent tombstones
       const localDeleted = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
       const localDeletedSet = new Set(localDeleted.map(x => String(x).toLowerCase().trim()));
-      const purgedAt = Number(localStorage.getItem('noor_orders_purged_at')) || 0;
 
       incoming = incoming.filter(o => {
         if (!o) return false;
-        if (o.order_number && /TEST/i.test(o.order_number)) return false;
-        if (o.customer_name && /test/i.test(o.customer_name)) return false;
+        if (o.order_number && /TEST-REF|GHOST-TEST/i.test(o.order_number)) return false;
+        if (o.customer_name && /Concierge Test/i.test(o.customer_name)) return false;
         if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
         if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
-        if (purgedAt && o.created_at) {
-          const t = new Date(o.created_at).getTime();
-          if (t && t <= purgedAt) return false;
-        }
         return true;
       });
 
@@ -592,18 +590,13 @@
     // Filter out dummy test ghost orders and local tombstones
     const localDeleted = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
     const localDeletedSet = new Set(localDeleted.map(x => String(x).toLowerCase().trim()));
-    const purgedAt = Number(localStorage.getItem('noor_orders_purged_at')) || 0;
 
     const cleanOrders = state.ordersCache.filter(o => {
       if (!o) return false;
-      if (o.order_number && /TEST/i.test(o.order_number)) return false;
-      if (o.customer_name && /test/i.test(o.customer_name)) return false;
+      if (o.order_number && /TEST-REF|GHOST-TEST/i.test(o.order_number)) return false;
+      if (o.customer_name && /Concierge Test/i.test(o.customer_name)) return false;
       if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
       if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
-      if (purgedAt && o.created_at) {
-        const t = new Date(o.created_at).getTime();
-        if (t && t <= purgedAt) return false;
-      }
       return true;
     });
 
@@ -1242,6 +1235,339 @@
     }
   }
 
+  // ── Direct Cloud Operations for Optical Frames (Zero-Dependency) ───────────
+  async function directFetchCloudProductTombstones() {
+    try {
+      const res = await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+        headers: { 'apikey': CLOUD_SYNC_CFG.key, 'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}` }
+      });
+      if (!res.ok) return new Set();
+      const list = await res.json();
+      if (!Array.isArray(list) || list.length === 0 || !list[0].notes) return new Set();
+      const parsed = JSON.parse(list[0].notes);
+      const arr = Array.isArray(parsed) ? parsed : (parsed.products || []);
+      const set = new Set();
+      arr.forEach(t => set.add(String(t).toLowerCase().trim()));
+      return set;
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  async function directFetchSupabaseCatalog(tombstones = null) {
+    try {
+      const SUPABASE_URL = CLOUD_SYNC_CFG.url;
+      const SUPABASE_ANON_KEY = CLOUD_SYNC_CFG.key;
+      const headers = {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      };
+
+      const deletedTokens = tombstones || getDeletedProductTokens();
+
+      // 1. Base products
+      let baseList = [];
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/products?is_active=eq.true&order=created_at.asc`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            baseList = data
+              .filter(item => {
+                if (!item) return false;
+                const pId = item.id ? String(item.id).toLowerCase().trim() : '';
+                const pName = item.name ? String(item.name).toLowerCase().trim() : '';
+                const pSku = (item.sku || ('NOOR-' + (item.id || '').replace('noor-', '').padStart(2, '0'))).toLowerCase().trim();
+                return !deletedTokens.has(pId) && !deletedTokens.has(pName) && !deletedTokens.has(pSku);
+              })
+              .map(item => ({
+                id: item.id,
+                sku: item.sku || ('NOOR-' + item.id.replace('noor-', '').padStart(2, '0')).toUpperCase(),
+                name: item.name,
+                brand: item.collection || 'Noor Optics',
+                collection: item.collection,
+                category: item.category || 'Frames',
+                shape: item.shape || 'Rectangular',
+                material: item.material || 'Acetate',
+                fit: item.fit || 'Regular',
+                selling_price_inr: Number(item.price) || 0,
+                purchase_cost_inr: 0,
+                total_stock: 10,
+                reorder_threshold: 2,
+                image_url: item.image || 'images/stockholm_noir.jpg',
+                description: item.description || '',
+                is_active: 1,
+                created_at: item.created_at || new Date().toISOString()
+              }));
+          }
+        }
+      } catch (_) {}
+
+      // 2. Custom products
+      let customList = [];
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, { headers });
+        if (res.ok) {
+          const list = await res.json();
+          if (list[0]?.notes) {
+            const parsed = JSON.parse(list[0].notes);
+            if (Array.isArray(parsed)) {
+              customList = parsed
+                .filter(p => {
+                  if (!p || p.is_active === false) return false;
+                  const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+                  const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+                  const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+                  return !deletedTokens.has(pId) && !deletedTokens.has(pName) && !deletedTokens.has(pSku);
+                })
+                .map(cp => ({
+                  id: cp.id,
+                  sku: cp.sku || ('NOOR-' + (cp.name || 'FRAME').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)),
+                  name: cp.name,
+                  brand: cp.brand || cp.collection || 'Noor Optics',
+                  category: cp.category || 'Frames',
+                  shape: cp.shape || 'Rectangular',
+                  material: cp.material || 'Acetate',
+                  fit: cp.fit || 'Regular',
+                  selling_price_inr: Number(cp.price || cp.selling_price_inr || 0),
+                  purchase_cost_inr: Number(cp.purchaseCostINR || cp.purchase_cost_inr || 0),
+                  total_stock: Number(cp.stock !== undefined ? cp.stock : (cp.initialStock !== undefined ? cp.initialStock : 10)),
+                  reorder_threshold: Number(cp.reorder_threshold || 2),
+                  image_url: cp.image || cp.imageUrl || cp.image_url || 'images/stockholm_noir.jpg',
+                  description: cp.description || '',
+                  is_active: 1,
+                  created_at: cp.created_at || new Date().toISOString()
+                }));
+            }
+          }
+        }
+      } catch (_) {}
+
+      const productMap = new Map();
+      baseList.forEach(p => productMap.set(p.id, p));
+      customList.forEach(p => productMap.set(p.id, p));
+      return Array.from(productMap.values());
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function directClearAllSupabaseInventory(additionalTokens = []) {
+    const SUPABASE_URL = CLOUD_SYNC_CFG.url;
+    const SUPABASE_ANON_KEY = CLOUD_SYNC_CFG.key;
+    const headers = {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json'
+    };
+
+    // 1. Wipe SYS-CATALOG-PRODUCTS
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ notes: '[]', updated_at: new Date().toISOString() })
+      });
+    } catch (_) {}
+
+    // 2. Deactivate products table
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/products?id=not.is.null`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ is_active: false })
+      }).catch(() => {});
+    } catch (_) {}
+
+    // 3. Collect all base and custom tokens
+    const baseTokens = [
+      'noor-01', 'noor-02', 'noor-03', 'noor-04', 'noor-05', 'noor-06',
+      'noor-07', 'noor-08', 'noor-09', 'noor-10', 'noor-11', 'noor-12',
+      'noor-13', 'noor-14', 'noor-15', 'noor-16', 'noor-17', 'noor-18',
+      'NOOR-STK-01', 'NOOR-CPH-02', 'NOOR-OSL-03', 'NOOR-KYO-04', 'NOOR-MIL-05', 'NOOR-ZUR-06',
+      'NOOR-BER-07', 'NOOR-HEL-08', 'NOOR-REY-09', 'NOOR-VIE-10', 'NOOR-AMB-11', 'NOOR-TKY-12',
+      'NOOR-GOT-13', 'NOOR-MAL-14', 'NOOR-ARC-15', 'NOOR-NRD-16', 'NOOR-BER-17', 'NOOR-BOR-18',
+      'The Stockholm Noir', 'The Copenhagen Round', 'The Oslo Crystal', 'The Kyoto Havana',
+      'The Milan Aureum', 'The Zurich Titanium', 'The Berlin Hex', 'The Helsinki Quad',
+      'The Reykjavik Pilot', 'The Vienna Silhouette', 'The Amber Arch', 'The Tokyo Steel',
+      'The Gothenburg Wire', 'The Malmö Clear', 'The Arctic Sun-Optic', 'The Nord Fjord',
+      'The Bergen Dual', 'The Bordeaux Edge'
+    ];
+
+    const tokensToTomb = new Set(baseTokens.map(t => t.toLowerCase().trim()));
+    if (Array.isArray(additionalTokens)) {
+      additionalTokens.forEach(t => { if (t) tokensToTomb.add(String(t).toLowerCase().trim()); });
+    }
+
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      let tombList = [];
+      let recordExists = false;
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0) {
+          recordExists = true;
+          try {
+            const parsed = JSON.parse(list[0].notes || '{}');
+            if (Array.isArray(parsed)) tombList = parsed;
+            else if (parsed.products) tombList = parsed.products;
+          } catch (_) {}
+        }
+      }
+
+      tombList.forEach(t => tokensToTomb.add(String(t).toLowerCase().trim()));
+      const finalArr = Array.from(tokensToTomb);
+
+      const payload = {
+        notes: JSON.stringify({ products: finalArr, updated_at: new Date().toISOString() }),
+        updated_at: new Date().toISOString()
+      };
+
+      if (recordExists) {
+        await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify(payload)
+        });
+      } else {
+        await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            id: 'tombstone-products-global',
+            client_code: 'SYS-TOMBSTONE-PRODUCTS',
+            name: 'System Product Tombstones',
+            city: 'Bengaluru',
+            is_archived: false,
+            ...payload
+          })
+        });
+      }
+    } catch (_) {}
+  }
+
+  async function directDeleteSupabaseProduct(productId, sku, name) {
+    if (!productId && !sku && !name) return;
+    const SUPABASE_URL = CLOUD_SYNC_CFG.url;
+    const SUPABASE_ANON_KEY = CLOUD_SYNC_CFG.key;
+    const headers = {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json'
+    };
+
+    const tokens = new Set();
+    if (productId) tokens.add(String(productId).toLowerCase().trim());
+    if (sku) tokens.add(String(sku).toLowerCase().trim());
+    if (name) tokens.add(String(name).toLowerCase().trim());
+
+    // 1. Delete and deactivate from Supabase `products` table
+    try {
+      const orParts = [];
+      if (productId) orParts.push(`id.eq.${encodeURIComponent(productId)}`);
+      if (sku) orParts.push(`id.eq.${encodeURIComponent(sku)}`);
+      if (orParts.length > 0) {
+        const orQuery = orParts.join(',');
+        await fetch(`${SUPABASE_URL}/rest/v1/products?or=(${orQuery})`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ is_active: false })
+        }).catch(() => {});
+        await fetch(`${SUPABASE_URL}/rest/v1/products?or=(${orQuery})`, {
+          method: 'DELETE',
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('Products table cloud delete note:', e);
+    }
+
+    // 2. Remove from SYS-CATALOG-PRODUCTS
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, {
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0 && list[0].notes) {
+          let currentList = [];
+          try { currentList = JSON.parse(list[0].notes); } catch (_) { currentList = []; }
+          const prevLen = currentList.length;
+          currentList = currentList.filter(p => {
+            if (!p) return false;
+            const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+            const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+            const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+            if (tokens.has(pId) || tokens.has(pSku) || tokens.has(pName)) return false;
+            return true;
+          });
+          if (currentList.length !== prevLen) {
+            await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, {
+              method: 'PATCH',
+              headers,
+              body: JSON.stringify({ notes: JSON.stringify(currentList), updated_at: new Date().toISOString() })
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('SYS-CATALOG-PRODUCTS cloud delete note:', e);
+    }
+
+    // 3. Register in SYS-TOMBSTONE-PRODUCTS
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      let tombList = [];
+      let recordExists = false;
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0) {
+          recordExists = true;
+          try {
+            const parsed = JSON.parse(list[0].notes || '{}');
+            if (Array.isArray(parsed)) tombList = parsed;
+            else if (parsed.products) tombList = parsed.products;
+          } catch (_) {}
+        }
+      }
+      tokens.forEach(tok => {
+        if (!tombList.some(x => String(x).toLowerCase().trim() === tok)) {
+          tombList.push(tok);
+        }
+      });
+      const payload = {
+        notes: JSON.stringify({ products: tombList, updated_at: new Date().toISOString() }),
+        updated_at: new Date().toISOString()
+      };
+      if (recordExists) {
+        await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify(payload)
+        });
+      } else {
+        await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            id: 'tombstone-products-global',
+            client_code: 'SYS-TOMBSTONE-PRODUCTS',
+            name: 'System Product Tombstones',
+            city: 'Bengaluru',
+            is_archived: false,
+            ...payload
+          })
+        });
+      }
+    } catch (e) {
+      console.warn('SYS-TOMBSTONE-PRODUCTS cloud write note:', e);
+    }
+  }
+
   // ── Delete Single Order with Inventory Restocking ──────────────────────────
   window.deleteOrderPrompt = async function (orderId, orderNumber) {
     if (!confirm(`Are you sure you want to delete order "${orderNumber}"?\n\nThis will permanently remove the order record from database and cloud, and restore any deducted frame quantities back into inventory stock.`)) {
@@ -1300,9 +1626,6 @@
           if (o.id && !del.includes(o.id)) del.push(o.id);
         });
         localStorage.setItem('noor_deleted_orders', JSON.stringify(del));
-        if (channel === 'ALL') {
-          localStorage.setItem('noor_orders_purged_at', Date.now().toString());
-        }
       } catch (e) {}
 
       // Optimistically clear UI
@@ -1597,71 +1920,182 @@
   // ═══════════════════════════════════════════════════════════════════════════
   // 3. SECTION: TOTAL INVENTORY — COMPLETE FRAME MANAGEMENT
   // ═══════════════════════════════════════════════════════════════════════════
+  // ── Helper: Product Tombstone Registry ──────────────────────────────────────
+  function getDeletedProductTokens() {
+    let tokens = new Set();
+    try {
+      const raw = localStorage.getItem('noor_deleted_products');
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          arr.forEach(t => tokens.add(String(t).toLowerCase().trim()));
+        }
+      }
+    } catch (_) {}
+    return tokens;
+  }
+
+  function markProductDeleted(id, sku, name) {
+    try {
+      const tokens = getDeletedProductTokens();
+      if (id) tokens.add(String(id).toLowerCase().trim());
+      if (sku) tokens.add(String(sku).toLowerCase().trim());
+      if (name) tokens.add(String(name).toLowerCase().trim());
+      localStorage.setItem('noor_deleted_products', JSON.stringify(Array.from(tokens)));
+    } catch (_) {}
+  }
+
+  function unmarkProductDeleted(id, sku, name) {
+    try {
+      const tokens = getDeletedProductTokens();
+      if (id) tokens.delete(String(id).toLowerCase().trim());
+      if (sku) tokens.delete(String(sku).toLowerCase().trim());
+      if (name) tokens.delete(String(name).toLowerCase().trim());
+      localStorage.setItem('noor_deleted_products', JSON.stringify(Array.from(tokens)));
+    } catch (_) {}
+  }
+
+  async function directRemoveCloudProductTombstone(productId, sku, name) {
+    try {
+      const tokensToRemove = new Set();
+      if (productId) tokensToRemove.add(String(productId).toLowerCase().trim());
+      if (sku) tokensToRemove.add(String(sku).toLowerCase().trim());
+      if (name) tokensToRemove.add(String(name).toLowerCase().trim());
+
+      const res = await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+        headers: { 'apikey': CLOUD_SYNC_CFG.key, 'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}` }
+      });
+      if (!res.ok) return;
+      const list = await res.json();
+      if (!Array.isArray(list) || list.length === 0 || !list[0].notes) return;
+
+      const parsed = JSON.parse(list[0].notes);
+      let arr = Array.isArray(parsed) ? parsed : (parsed.products || []);
+      const prev = arr.length;
+      arr = arr.filter(t => !tokensToRemove.has(String(t).toLowerCase().trim()));
+      if (arr.length !== prev) {
+        await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': CLOUD_SYNC_CFG.key,
+            'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ notes: JSON.stringify({ products: arr, updated_at: new Date().toISOString() }) })
+        });
+      }
+    } catch (_) {}
+  }
+
   async function loadInventory() {
     try {
+      // 0. Synchronize cloud tombstones with local tombstones
+      const localTokens = getDeletedProductTokens();
+      let cloudTokens = new Set();
+      try {
+        cloudTokens = await directFetchCloudProductTombstones();
+      } catch (_) {}
+      const deletedTokens = new Set([...localTokens, ...cloudTokens]);
+      if (deletedTokens.size > 0) {
+        localStorage.setItem('noor_deleted_products', JSON.stringify(Array.from(deletedTokens)));
+      }
+
       const res = await apiFetch('/api/products').catch(() => []);
-      let list = Array.isArray(res) ? [...res] : [];
+      let list = Array.isArray(res) ? res.filter(p => {
+        if (!p) return false;
+        const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+        const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+        const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+        return !deletedTokens.has(pId) && !deletedTokens.has(pSku) && !deletedTokens.has(pName);
+      }) : [];
 
       // 1. Merge Supabase Cloud Catalog (Guarantees persistence across serverless cold starts)
+      let cloudProducts = [];
       if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
         try {
-          const cloudProducts = await window.NoorSupabase.fetchCatalog();
-          if (Array.isArray(cloudProducts) && cloudProducts.length > 0) {
-            cloudProducts.forEach(cp => {
-              if (!cp || !cp.name) return;
-              const cpSku = (cp.sku && cp.sku.trim() && cp.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? cp.sku.trim().toUpperCase() : null;
-              const idx = list.findIndex(p => p.id === cp.id || (p.sku && cpSku && p.sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === cpSku));
-              const assignedSku = cpSku || (idx >= 0 && list[idx].sku ? list[idx].sku : ('NOOR-' + cp.id.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(-8)));
-              const cpImg = cp.image || cp.imageUrl || cp.image_url || 'images/stockholm_noir.jpg';
+          cloudProducts = await window.NoorSupabase.fetchCatalog();
+        } catch (_) {}
+      }
+      if (!Array.isArray(cloudProducts) || cloudProducts.length === 0) {
+        try {
+          cloudProducts = await directFetchSupabaseCatalog(deletedTokens);
+        } catch (_) {}
+      }
 
-              const formattedItem = {
-                id: cp.id,
-                sku: assignedSku,
-                name: cp.name,
-                brand: cp.brand || cp.collection || 'Noor Optics',
-                category: cp.category || 'Frames',
-                shape: cp.shape || 'Rectangular',
-                material: cp.material || 'Acetate',
-                fit: cp.fit || 'Regular',
-                selling_price_inr: Number(cp.price) || (cp.selling_price_paise ? cp.selling_price_paise / 100 : 0),
-                purchase_cost_inr: Number(cp.purchaseCostINR || cp.cost) || 0,
-                total_stock: Number(cp.stock !== undefined ? cp.stock : (cp.initialStock !== undefined ? cp.initialStock : 10)),
-                reorder_threshold: Number(cp.reorder_threshold || cp.reorderThreshold || 2),
-                image_url: cpImg,
-                description: cp.description || '',
-                is_active: cp.is_active !== false ? 1 : 0,
-                created_at: cp.created_at || new Date().toISOString(),
-                updated_at: cp.updated_at || new Date().toISOString()
-              };
-              if (idx >= 0) {
-                const cloudStock = Number(formattedItem.total_stock);
-                const prevStock = Number(list[idx].total_stock);
-                const finalStock = (!isNaN(cloudStock) && cloudStock > 0)
-                  ? cloudStock
-                  : (!isNaN(prevStock) && prevStock > 0 ? prevStock : (cloudStock || 0));
+      if (Array.isArray(cloudProducts) && cloudProducts.length > 0) {
+        cloudProducts.forEach(cp => {
+          if (!cp || !cp.name) return;
+          const cpId = cp.id ? String(cp.id).toLowerCase().trim() : '';
+          const cpSku = (cp.sku && cp.sku.trim() && cp.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? cp.sku.trim().toUpperCase() : null;
+          const cpSkuLower = cpSku ? cpSku.toLowerCase() : '';
+          const cpNameLower = cp.name ? cp.name.toLowerCase().trim() : '';
 
-                list[idx] = {
-                  ...list[idx],
-                  ...formattedItem,
-                  total_stock: finalStock,
-                  image_url: (formattedItem.image_url && !formattedItem.image_url.includes('stockholm_noir.jpg'))
-                    ? formattedItem.image_url
-                    : (list[idx].image_url || formattedItem.image_url)
-                };
-              } else {
-                list.unshift(formattedItem);
-              }
-            });
+          // Skip any deleted / tombstoned products
+          if (deletedTokens.has(cpId) || deletedTokens.has(cpSkuLower) || deletedTokens.has(cpNameLower)) {
+            return;
           }
-        } catch (cloudErr) {
-          console.warn('Supabase inventory merge note:', cloudErr);
-        }
+
+          const idx = list.findIndex(p => p.id === cp.id || (p.sku && cpSku && p.sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === cpSku));
+          const assignedSku = cpSku || (idx >= 0 && list[idx].sku ? list[idx].sku : ('NOOR-' + cp.id.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(-8)));
+          const cpImg = cp.image || cp.imageUrl || cp.image_url || 'images/stockholm_noir.jpg';
+
+          const formattedItem = {
+            id: cp.id,
+            sku: assignedSku,
+            name: cp.name,
+            brand: cp.brand || cp.collection || 'Noor Optics',
+            category: cp.category || 'Frames',
+            shape: cp.shape || 'Rectangular',
+            material: cp.material || 'Acetate',
+            fit: cp.fit || 'Regular',
+            selling_price_inr: Number(cp.price) || (cp.selling_price_paise ? cp.selling_price_paise / 100 : 0),
+            purchase_cost_inr: Number(cp.purchaseCostINR || cp.cost) || 0,
+            total_stock: Number(cp.stock !== undefined ? cp.stock : (cp.initialStock !== undefined ? cp.initialStock : 10)),
+            reorder_threshold: Number(cp.reorder_threshold || cp.reorderThreshold || 2),
+            image_url: cpImg,
+            description: cp.description || '',
+            is_active: cp.is_active !== false ? 1 : 0,
+            created_at: cp.created_at || new Date().toISOString(),
+            updated_at: cp.updated_at || new Date().toISOString()
+          };
+          if (idx >= 0) {
+            const cloudStock = Number(formattedItem.total_stock);
+            const prevStock = Number(list[idx].total_stock);
+            const finalStock = (!isNaN(cloudStock) && cloudStock > 0)
+              ? cloudStock
+              : (!isNaN(prevStock) && prevStock > 0 ? prevStock : (cloudStock || 0));
+
+            list[idx] = {
+              ...list[idx],
+              ...formattedItem,
+              total_stock: finalStock,
+              image_url: (formattedItem.image_url && !formattedItem.image_url.includes('stockholm_noir.jpg'))
+                ? formattedItem.image_url
+                : (list[idx].image_url || formattedItem.image_url)
+            };
+          } else {
+            list.unshift(formattedItem);
+          }
+        });
       }
 
       // 2. Merge LocalStorage Cache (Guarantees zero-second immediate retention on client)
       try {
-        const localCached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
+        let localCached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
         if (Array.isArray(localCached)) {
+          // Permanently purge any tombstoned items from localStorage
+          const cleanCached = localCached.filter(p => {
+            if (!p) return false;
+            const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+            const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+            const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+            return !deletedTokens.has(pId) && !deletedTokens.has(pSku) && !deletedTokens.has(pName);
+          });
+          if (cleanCached.length !== localCached.length) {
+            localStorage.setItem('noor_custom_frames', JSON.stringify(cleanCached));
+            localCached = cleanCached;
+          }
+
           localCached.forEach(localItem => {
             if (!localItem || !localItem.name) return;
             const lSku = (localItem.sku && localItem.sku.trim() && localItem.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? localItem.sku.trim().toUpperCase() : null;
@@ -1692,7 +2126,16 @@
       if (Array.isArray(state.inventoryList) && state.inventoryList.length > 0) {
         state.inventoryList.forEach(existingItem => {
           if (!existingItem || !existingItem.sku) return;
+          const eId = existingItem.id ? String(existingItem.id).toLowerCase().trim() : '';
           const eSku = (existingItem.sku && existingItem.sku.trim() && existingItem.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? existingItem.sku.trim().toUpperCase() : null;
+          const eSkuLower = eSku ? eSku.toLowerCase() : '';
+          const eNameLower = existingItem.name ? existingItem.name.toLowerCase().trim() : '';
+
+          // Never re-insert deleted / tombstoned frames
+          if (deletedTokens.has(eId) || deletedTokens.has(eSkuLower) || deletedTokens.has(eNameLower)) {
+            return;
+          }
+
           const foundIdx = list.findIndex(p => p.id === existingItem.id || (p.sku && eSku && p.sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === eSku));
           if (foundIdx === -1) {
             list.unshift(existingItem);
@@ -1714,6 +2157,15 @@
           }
         });
       }
+
+      // Filter out any deleted tokens from the final list
+      list = list.filter(p => {
+        if (!p) return false;
+        const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+        const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+        const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+        return !deletedTokens.has(pId) && !deletedTokens.has(pSku) && !deletedTokens.has(pName);
+      });
 
       // 4. Authoritative Sorting: Newest frames ALWAYS stay at the very top of the inventory ledger!
       list.sort((a, b) => {
@@ -1817,7 +2269,7 @@
                 <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; margin-top:2px;">
                   <button type="button" class="btn-table-action" style="padding:4px 10px; font-size:0.75rem; background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE; font-weight:700;" onclick="openEditFrameModal('${p.id}')">✏️ Edit</button>
                   <button type="button" class="btn-table-action" style="padding:4px 10px; font-size:0.75rem; background:#FEF3C7; color:#B45309; border:1px solid #FDE68A; font-weight:700;" onclick="openSingleStickerModal('${p.id}')">🏷️ QR</button>
-                  <button type="button" class="btn-table-action btn-table-danger" style="padding:4px 10px; font-size:0.75rem; background:#FEE2E2; color:#DC2626; border:1px solid #FECACA; font-weight:700;" onclick="deleteFramePrompt('${p.id}', '${escapeHtml(p.name)}', '${escapeHtml(p.sku)}')">🗑️ Del</button>
+                  <button type="button" class="btn-table-action btn-table-danger" style="padding:4px 10px; font-size:0.75rem; background:#FEE2E2; color:#DC2626; border:1px solid #FECACA; font-weight:700;" onclick="deleteFramePrompt('${p.id}')">🗑️ Del</button>
                 </div>
               </div>
             </div>
@@ -1866,7 +2318,7 @@
               <div style="display:flex; gap:6px; justify-content:center;">
                 <button class="btn-table-action" style="background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE; font-weight:700;" onclick="openEditFrameModal('${p.id}')" title="Edit Frame Specs & Price">✏️ Edit</button>
                 <button class="btn-table-action" style="background:#FEF3C7; color:#B45309; border:1px solid #FDE68A; font-weight:700;" onclick="openSingleStickerModal('${p.id}')" title="Generate Yellow QR Sticker">🏷️ QR Sticker</button>
-                <button class="btn-table-action btn-table-danger" onclick="deleteFramePrompt('${p.id}', '${escapeHtml(p.name)}', '${escapeHtml(p.sku)}')" title="Delete Optical Frame">🗑️ Delete</button>
+                <button class="btn-table-action btn-table-danger" onclick="deleteFramePrompt('${p.id}')" title="Delete Optical Frame">🗑️ Delete</button>
               </div>
             </td>
           </tr>
@@ -1924,32 +2376,117 @@
   }
 
   // ── Delete Single Frame ───────────────────────────────────────────────────
-  window.deleteFramePrompt = async function (productId, name, sku) {
-    if (!confirm(`Are you sure you want to delete optical frame "${name}" (${sku}) from inventory?\n\nThis will remove the product and its QR codes.`)) {
+  window.deleteFramePrompt = async function (productId, nameParam, skuParam) {
+    const frame = (state.inventoryList || []).find(p => p.id === productId) || {};
+    const name = nameParam || frame.name || productId;
+    const sku = skuParam || frame.sku || '';
+
+    if (!confirm(`Are you sure you want to delete optical frame "${name}" (${sku || productId}) from inventory?\n\nThis will permanently remove the product from database and Supabase cloud.`)) {
       return;
     }
 
     try {
-      const res = await apiFetch(`/api/products/${productId}`, {
-        method: 'DELETE'
-      });
-      if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
-        window.NoorSupabase.deleteProduct(productId).catch(() => {});
-      }
+      // 1. Instantly register in tombstone
+      markProductDeleted(productId, sku, name);
+
+      // 2. Remove from localStorage cache
       try {
         let localList = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
-        localList = localList.filter(p => p.id !== productId && p.sku !== sku);
+        localList = localList.filter(p => {
+          if (!p) return false;
+          const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+          const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+          const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+          return pId !== String(productId).toLowerCase().trim() &&
+                 (!sku || pSku !== String(sku).toLowerCase().trim()) &&
+                 (!name || pName !== String(name).toLowerCase().trim());
+        });
         localStorage.setItem('noor_custom_frames', JSON.stringify(localList));
       } catch (_) {}
-      state.inventoryList = state.inventoryList.filter(p => p.id !== productId && p.sku !== sku);
-      renderInventoryTable();
-      showToast(res.message || `Frame "${name}" deleted successfully.`, 'success');
+
+      // 3. Immediately update in-memory state & re-render (0ms perceived latency)
+      state.inventoryList = state.inventoryList.filter(p => {
+        if (!p) return false;
+        const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+        const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+        const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+        return pId !== String(productId).toLowerCase().trim() &&
+               (!sku || pSku !== String(sku).toLowerCase().trim()) &&
+               (!name || pName !== String(name).toLowerCase().trim());
+      });
       state.selectedFrameIds.delete(productId);
+      renderInventoryTable();
+      updateBatchStickersButton();
+
+      // 4. Guaranteed Direct Cloud Purge to Supabase (Zero external dependency)
+      await directDeleteSupabaseProduct(productId, sku, name);
+
+      // 5. Backend deletion (if API server is running)
+      try {
+        await apiFetch(`/api/products/${productId}`, { method: 'DELETE' });
+      } catch (apiErr) {
+        console.warn('Backend API delete note:', apiErr.message);
+      }
+
+      showToast(`Frame "${name}" permanently deleted.`, 'success');
       await loadInventory();
       if (typeof loadDashboard === 'function') loadDashboard();
       if (typeof loadPosCatalog === 'function') loadPosCatalog();
     } catch (err) {
-      showToast('Failed to delete frame: ' + err.message, 'error');
+      showToast('Error removing frame: ' + err.message, 'error');
+      await loadInventory();
+    }
+  };
+
+  // ── Clear / Delete All Optical Frame Inventory ─────────────────────────────
+  window.deleteAllInventoryPrompt = async function () {
+    const currentCount = (state.inventoryList || []).length;
+    const confirmMsg = `⚠️ DANGER: PERMANENTLY CLEAR TOTAL INVENTORY?\n\nAre you sure you want to delete ALL optical frames from inventory?\n\nThis will permanently wipe all frame records from:\n• Local SQLite Database\n• Supabase Cloud\n• Local Browser Storage\n\nAll historical order receipts will be preserved, but inventory balances will be cleared to 0.\n\nType YES to confirm complete inventory deletion:`;
+
+    const ans = prompt(confirmMsg);
+    if (!ans || ans.trim().toUpperCase() !== 'YES') {
+      showToast('Inventory clear cancelled.', 'info');
+      return;
+    }
+
+    try {
+      showToast('Clearing complete inventory from database and cloud...', 'info');
+
+      // 1. Collect all current tokens
+      const allTokens = [];
+      (state.inventoryList || []).forEach(p => {
+        if (p.id) allTokens.push(p.id);
+        if (p.sku) allTokens.push(p.sku);
+        if (p.name) allTokens.push(p.name);
+      });
+
+      // 2. Mark deleted in localStorage
+      allTokens.forEach(t => markProductDeleted(t));
+      localStorage.removeItem('noor_custom_frames');
+
+      // 3. Clear in-memory state and re-render immediately (0ms latency)
+      state.inventoryList = [];
+      state.selectedFrameIds.clear();
+      renderInventoryTable();
+      updateBatchStickersButton();
+
+      // 4. Wipe cloud catalog & tombstone in Supabase
+      await directClearAllSupabaseInventory(allTokens);
+
+      // 5. Backend deletion in SQLite
+      try {
+        await apiFetch('/api/products/clear-all', { method: 'DELETE' });
+      } catch (apiErr) {
+        console.warn('Backend clear all API note:', apiErr.message);
+      }
+
+      showToast('Total inventory cleared successfully! 0 frames remaining.', 'success');
+      await loadInventory();
+      if (typeof loadDashboard === 'function') loadDashboard();
+      if (typeof loadPosCatalog === 'function') loadPosCatalog();
+    } catch (err) {
+      console.error('Failed to clear inventory:', err);
+      showToast('Error clearing inventory: ' + err.message, 'error');
     }
   };
 
@@ -2156,6 +2693,10 @@
           updated_at: new Date().toISOString()
         };
 
+        // 0. Remove from deleted tombstones so newly created/re-added frame is never hidden
+        unmarkProductDeleted(savedItem.id, sku, name);
+        directRemoveCloudProductTombstone(savedItem.id, sku, name).catch(() => {});
+
         // 1. Immediately cache in localStorage (zero chance of disappearing)
         try {
           const cacheCopy = { ...savedItem };
@@ -2301,6 +2842,19 @@
     const form = document.getElementById('form-edit-frame');
     const modal = document.getElementById('modal-edit-frame');
     if (!form) return;
+
+    const btnDelete = document.getElementById('btn-edit-frame-delete');
+    if (btnDelete) {
+      btnDelete.addEventListener('click', () => {
+        const pId = document.getElementById('edit-frame-id')?.value;
+        if (!pId) return;
+        modal.classList.remove('open');
+        document.body.classList.remove('modal-open');
+        if (typeof deleteFramePrompt === 'function') {
+          deleteFramePrompt(pId);
+        }
+      });
+    }
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -2870,18 +3424,45 @@
           const txtDel = document.getElementById('btn-batch-delete-frames-text');
           if (txtDel) txtDel.textContent = 'Deleting...';
 
-          const res = await apiFetch('/api/products', {
-            method: 'DELETE',
-            body: JSON.stringify({ ids })
-          });
+          const selectedFrames = state.inventoryList.filter(p => state.selectedFrameIds.has(p.id));
 
-          showToast(res.message || `Successfully deleted ${res.deletedCount || ids.length} frames.`, 'success');
+          // 1. Mark in deleted tombstones immediately
+          selectedFrames.forEach(p => markProductDeleted(p.id, p.sku, p.name));
+          ids.forEach(id => markProductDeleted(id));
+
+          // 2. Remove from localStorage cache immediately
+          try {
+            let localList = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
+            localList = localList.filter(p => !state.selectedFrameIds.has(p.id));
+            localStorage.setItem('noor_custom_frames', JSON.stringify(localList));
+          } catch (_) {}
+
+          // 3. Immediately clean in-memory state & re-render UI
+          state.inventoryList = state.inventoryList.filter(p => !state.selectedFrameIds.has(p.id));
           state.selectedFrameIds.clear();
+          renderInventoryTable();
+          updateBatchStickersButton();
+
+          // 4. Direct native cloud purge to Supabase for all selected frames
+          await Promise.all(selectedFrames.map(p => directDeleteSupabaseProduct(p.id, p.sku, p.name)));
+
+          // 5. Backend batch delete (if API server is running)
+          try {
+            await apiFetch('/api/products', {
+              method: 'DELETE',
+              body: JSON.stringify({ ids })
+            });
+          } catch (apiErr) {
+            console.warn('Backend API batch delete note:', apiErr.message);
+          }
+
+          showToast(`Successfully deleted ${ids.length} frame(s) permanently.`, 'success');
           await loadInventory();
           if (typeof loadDashboard === 'function') loadDashboard();
           if (typeof loadPosCatalog === 'function') loadPosCatalog();
         } catch (err) {
           showToast('Failed to delete frames: ' + err.message, 'error');
+          await loadInventory();
         } finally {
           btnBatchDelete.disabled = false;
           updateBatchStickersButton();
@@ -3635,13 +4216,18 @@
 
     const shape = state.posSelectedShape;
     const query = state.posSearchQuery.toLowerCase().trim();
+    const deletedTokens = getDeletedProductTokens();
 
     const filtered = state.inventoryList.filter(p => {
+      if (!p) return false;
+      const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+      const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+      const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+      if (deletedTokens.has(pId) || deletedTokens.has(pSku) || deletedTokens.has(pName)) return false;
+
       if (shape !== 'all' && p.shape !== shape) return false;
       if (query) {
-        const name = (p.name || '').toLowerCase();
-        const sku = (p.sku || '').toLowerCase();
-        if (!name.includes(query) && !sku.includes(query)) return false;
+        if (!pName.includes(query) && !pSku.includes(query)) return false;
       }
       return true;
     });
@@ -5871,8 +6457,9 @@
     state.activeProfileClientId = clientId;
 
     try {
-      const client = await apiFetch(`/api/customers/${clientId}`);
-      if (!client) return;
+      const res = await apiFetch(`/api/customers/${clientId}`);
+      if (!res) return;
+      const client = res.client || res;
 
       // Header
       document.getElementById('cp-client-name').textContent = client.name || 'Client';
@@ -5890,7 +6477,7 @@
       document.getElementById('cp-edit-notes').value = client.notes || '';
 
       // Tab 2: Orders & Invoices
-      const orders = client.orders || [];
+      const orders = res.orders || client.orders || [];
       document.getElementById('cp-orders-count').textContent = orders.length;
       const ordersTbody = document.getElementById('cp-orders-tbody');
       if (ordersTbody) {
@@ -5914,7 +6501,7 @@
       }
 
       // Tab 3: Prescriptions
-      const rxList = client.prescriptions || [];
+      const rxList = res.prescriptions || client.prescriptions || [];
       document.getElementById('cp-rx-count').textContent = rxList.length;
       const rxContainer = document.getElementById('cp-rx-list-container');
       if (rxContainer) {
@@ -6241,21 +6828,47 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           order: order,
-          manualReprint: manualReprint
+          manualReprint: true // Always true for explicit cashier actions to guarantee immediate print
         })
       });
 
       if (daemonResp.ok) {
-        const result = await daemonResp.json();
-        if (result.skippedDuplicate) {
-          console.log(`[Print] Order #${order.order_number} already printed.`);
-        } else {
-          showToast(`🖨️ Customer Bill #${order.order_number} printed to POS thermal printer!`, 'success');
-        }
+        showToast(`🖨️ Customer Bill #${order.order_number} sent to POS thermal printer!`, 'success');
         return;
       }
     } catch (daemonErr) {
-      console.log('POS Daemon offline, using silent browser fallback...');
+      console.log('POS Daemon offline, queuing to cloud print queue & using browser fallback...');
+      try {
+        const SUPABASE_URL = CLOUD_SYNC_CFG.url;
+        const SUPABASE_ANON_KEY = CLOUD_SYNC_CFG.key;
+        const qRes = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        if (qRes.ok) {
+          const qList = await qRes.json();
+          let currentJobs = [];
+          if (qList[0]?.notes) {
+            try { currentJobs = JSON.parse(qList[0].notes).jobs || []; } catch(_) {}
+          }
+          currentJobs.push({
+            id: 'job-receipt-' + (order.order_number || order.id) + '-' + Date.now(),
+            type: 'receipt',
+            order: order,
+            created_at: new Date().toISOString()
+          });
+          await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({ notes: JSON.stringify({ jobs: currentJobs }) })
+          });
+          showToast(`🖨️ Order #${order.order_number} queued for auto-printing!`, 'info');
+        }
+      } catch (_) {}
     }
 
     // 2. Fallback: Trigger silent iframe browser print so cashier is never stranded

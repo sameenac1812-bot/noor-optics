@@ -199,6 +199,28 @@
     if (!supabaseClient) return null;
 
     try {
+      // 0. Fetch cloud product tombstones so deleted items are NEVER returned
+      const tombstonedTokens = new Set();
+      try {
+        const { data: tombData } = await supabaseClient
+          .from('customers')
+          .select('notes')
+          .eq('client_code', 'SYS-TOMBSTONE-PRODUCTS');
+        if (Array.isArray(tombData) && tombData.length > 0 && tombData[0].notes) {
+          const parsed = JSON.parse(tombData[0].notes);
+          const arr = Array.isArray(parsed) ? parsed : (parsed.products || []);
+          arr.forEach(t => tombstonedTokens.add(String(t).toLowerCase().trim()));
+        }
+      } catch (_) {}
+
+      // Also check local deleted cache
+      try {
+        const localDel = JSON.parse(localStorage.getItem('noor_deleted_products') || '[]');
+        if (Array.isArray(localDel)) {
+          localDel.forEach(t => tombstonedTokens.add(String(t).toLowerCase().trim()));
+        }
+      } catch (_) {}
+
       // 1. Fetch base catalog from products table
       let baseProducts = [];
       try {
@@ -210,30 +232,41 @@
 
         if (!error && Array.isArray(data)) {
           const staticList = (typeof window !== 'undefined' && window.EYEWEAR_CATALOG) ? window.EYEWEAR_CATALOG : [];
-          baseProducts = data.map(item => {
-            const staticMatch = staticList.find(sc => sc.id === item.id || sc.name.toLowerCase() === item.name.toLowerCase());
-            const canonicalSku = item.sku || (staticMatch ? staticMatch.sku : ('NOOR-' + item.id.replace('noor-', '').padStart(2, '0')));
-            return {
-              id: item.id,
-              sku: canonicalSku.toUpperCase(),
-              name: item.name,
-              brand: staticMatch?.brand || 'Noor Optics',
-              collection: item.collection,
-              price: Number(item.price),
-              originalPrice: item.original_price ? Number(item.original_price) : null,
-              badge: item.badge,
-              shape: item.shape,
-              material: item.material,
-              fit: item.fit,
-              category: item.category || 'Optical',
-              rating: Number(item.rating) || 4.9,
-              reviewsCount: item.reviews_count || 50,
-              image: item.image,
-              colors: item.colors || [],
-              dimensions: item.dimensions || {},
-              description: item.description
-            };
-          });
+          baseProducts = data
+            .map(item => {
+              const staticMatch = staticList.find(sc => sc.id === item.id || sc.name.toLowerCase() === item.name.toLowerCase());
+              const canonicalSku = (item.sku || (staticMatch ? staticMatch.sku : ('NOOR-' + item.id.replace('noor-', '').padStart(2, '0')))).toUpperCase();
+              return { ...item, canonicalSku, staticMatch };
+            })
+            .filter(item => {
+              if (!item) return false;
+              const pId = item.id ? String(item.id).toLowerCase().trim() : '';
+              const pSku = item.canonicalSku ? String(item.canonicalSku).toLowerCase().trim() : '';
+              const pName = item.name ? String(item.name).toLowerCase().trim() : '';
+              return !tombstonedTokens.has(pId) && !tombstonedTokens.has(pSku) && !tombstonedTokens.has(pName);
+            })
+            .map(item => {
+              return {
+                id: item.id,
+                sku: item.canonicalSku,
+                name: item.name,
+                brand: item.staticMatch?.brand || 'Noor Optics',
+                collection: item.collection,
+                price: Number(item.price),
+                originalPrice: item.original_price ? Number(item.original_price) : null,
+                badge: item.badge,
+                shape: item.shape,
+                material: item.material,
+                fit: item.fit,
+                category: item.category || 'Optical',
+                rating: Number(item.rating) || 4.9,
+                reviewsCount: item.reviews_count || 50,
+                image: item.image,
+                colors: item.colors || [],
+                dimensions: item.dimensions || {},
+                description: item.description
+              };
+            });
         }
       } catch (e) {
         console.warn('Base products fetch note:', e.message);
@@ -250,10 +283,18 @@
         if (!customErr && Array.isArray(customData) && customData.length > 0 && customData[0].notes) {
           const parsed = JSON.parse(customData[0].notes);
           if (Array.isArray(parsed)) {
-            customProducts = parsed.filter(p => p && p.is_active !== false).map(p => ({
-              ...p,
-              image: p.image || p.imageUrl || p.image_url || p.thumbnail || 'images/stockholm_noir.jpg'
-            }));
+            customProducts = parsed
+              .filter(p => {
+                if (!p || p.is_active === false) return false;
+                const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+                const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+                const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+                return !tombstonedTokens.has(pId) && !tombstonedTokens.has(pSku) && !tombstonedTokens.has(pName);
+              })
+              .map(p => ({
+                ...p,
+                image: p.image || p.imageUrl || p.image_url || p.thumbnail || 'images/stockholm_noir.jpg'
+              }));
           }
         }
       } catch (e) {
@@ -356,14 +397,28 @@
   }
 
   // ── 8. Delete Product from Supabase Cloud ───────────────────────────────────
-  async function deleteProductFromSupabase(productId) {
-    if (!supabaseClient || !productId) return { success: false };
+  async function deleteProductFromSupabase(productId, sku = null, name = null) {
+    if (!supabaseClient || (!productId && !sku)) return { success: false };
 
     try {
-      // 1. Try to delete from products table directly
-      await supabaseClient.from('products').delete().eq('id', productId).catch(() => {});
+      const tokens = new Set();
+      if (productId) tokens.add(String(productId).toLowerCase().trim());
+      if (sku) tokens.add(String(sku).toLowerCase().trim());
+      if (name) tokens.add(String(name).toLowerCase().trim());
 
-      // 2. Remove from SYS-CATALOG-PRODUCTS
+      // 1. Delete & deactivate from products table
+      try {
+        if (productId) {
+          await supabaseClient.from('products').update({ is_active: false }).eq('id', productId).catch(() => {});
+          await supabaseClient.from('products').delete().eq('id', productId).catch(() => {});
+        }
+        if (sku) {
+          await supabaseClient.from('products').update({ is_active: false }).eq('id', sku).catch(() => {});
+          await supabaseClient.from('products').delete().eq('id', sku).catch(() => {});
+        }
+      } catch (_) {}
+
+      // 2. Remove from SYS-CATALOG-PRODUCTS in customers table
       const { data: existingRows } = await supabaseClient
         .from('customers')
         .select('*')
@@ -372,14 +427,76 @@
       if (Array.isArray(existingRows) && existingRows.length > 0 && existingRows[0].notes) {
         let currentList = [];
         try { currentList = JSON.parse(existingRows[0].notes); } catch (_) { currentList = []; }
-        currentList = currentList.filter(p => p.id !== productId && p.sku !== productId);
-        await supabaseClient
-          .from('customers')
-          .update({ notes: JSON.stringify(currentList), updated_at: new Date().toISOString() })
-          .eq('client_code', 'SYS-CATALOG-PRODUCTS');
+        const prevLen = currentList.length;
+        currentList = currentList.filter(p => {
+          if (!p) return false;
+          const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+          const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+          if (tokens.has(pId)) return false;
+          if (tokens.has(pSku)) return false;
+          if (name && p.name && p.name.toLowerCase().trim() === name.toLowerCase().trim()) return false;
+          return true;
+        });
+
+        if (currentList.length !== prevLen) {
+          await supabaseClient
+            .from('customers')
+            .update({ notes: JSON.stringify(currentList), updated_at: new Date().toISOString() })
+            .eq('client_code', 'SYS-CATALOG-PRODUCTS');
+        }
       }
 
-      console.log(`✓ Product ${productId} removed from Supabase Cloud.`);
+      // 3. Push to SYS-TOMBSTONE-PRODUCTS
+      try {
+        const { data: tombRows } = await supabaseClient
+          .from('customers')
+          .select('*')
+          .eq('client_code', 'SYS-TOMBSTONE-PRODUCTS');
+
+        let tombProducts = [];
+        let tombExists = false;
+        if (Array.isArray(tombRows) && tombRows.length > 0) {
+          tombExists = true;
+          try {
+            const parsed = JSON.parse(tombRows[0].notes || '{}');
+            if (Array.isArray(parsed)) tombProducts = parsed;
+            else if (parsed.products) tombProducts = parsed.products;
+          } catch (_) {}
+        }
+
+        tokens.forEach(tok => {
+          if (!tombProducts.some(p => String(p).toLowerCase() === tok)) {
+            tombProducts.push(tok);
+          }
+        });
+
+        const tombPayload = {
+          notes: JSON.stringify({ products: tombProducts, updated_at: new Date().toISOString() }),
+          updated_at: new Date().toISOString()
+        };
+
+        if (tombExists) {
+          await supabaseClient
+            .from('customers')
+            .update(tombPayload)
+            .eq('client_code', 'SYS-TOMBSTONE-PRODUCTS');
+        } else {
+          await supabaseClient
+            .from('customers')
+            .insert([{
+              id: 'tombstone-products-global',
+              client_code: 'SYS-TOMBSTONE-PRODUCTS',
+              name: 'System Product Tombstones',
+              city: 'Bengaluru',
+              is_archived: false,
+              ...tombPayload
+            }]);
+        }
+      } catch (tombErr) {
+        console.warn('Product tombstone note:', tombErr.message);
+      }
+
+      console.log(`✓ Product ${productId || sku} permanently purged from Supabase Cloud.`);
       return { success: true };
     } catch (err) {
       console.warn('deleteProductFromSupabase error:', err.message);

@@ -7,9 +7,31 @@
 'use strict';
 
 (function() {
+  // ── Helper: Product Tombstones ───────────────────────────────────────────
+  function getDeletedProductTokens() {
+    let tokens = new Set();
+    try {
+      const raw = localStorage.getItem('noor_deleted_products');
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          arr.forEach(t => tokens.add(String(t).toLowerCase().trim()));
+        }
+      }
+    } catch (_) {}
+    return tokens;
+  }
+
   // ── Global Storefront State ────────────────────────────────────────────────
   const state = {
-    catalog: window.EYEWEAR_CATALOG || [],
+    catalog: (window.EYEWEAR_CATALOG || []).filter(p => {
+      const del = getDeletedProductTokens();
+      if (!p) return false;
+      const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+      const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+      const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+      return !del.has(pId) && !del.has(pSku) && !del.has(pName);
+    }),
     cart: window.getSavedCart ? window.getSavedCart() : [],
     wishlist: new Set(window.getSavedWishlist ? window.getSavedWishlist() : []),
     currentSort: 'featured',
@@ -1034,6 +1056,40 @@
       await window.NoorSupabase.submitOrder(orderData).catch(e => console.warn('Supabase sync note:', e));
     }
 
+    // 3. Fast-Path: Dispatch instant print signal if local POS Print Daemon is reachable on Port 5001
+    try {
+      fetch('http://127.0.0.1:5001/api/print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order: {
+            order_number: authoritativeOrderId,
+            customer_name: name,
+            customer_phone: phone,
+            customer_email: email,
+            delivery_address: address,
+            city: city,
+            items: state.cart.map(item => ({
+              product_name: item.name || 'Noor Frame',
+              name: item.name || 'Noor Frame',
+              quantity: item.quantity || 1,
+              unit_price_inr: item.price || 3499,
+              color: item.selectedColor || 'Standard',
+              lens: rxChoice === 'call-optometrist' ? 'Optometrist Call' : 'Zero-Power Blue-Cut'
+            })),
+            subtotal_inr: subtotal,
+            grand_total_inr: grandTotal,
+            total_payable_inr: grandTotal,
+            amount_paid_inr: grandTotal,
+            payment_method: payChoice === 'upi' ? 'UPI' : (payChoice === 'card' ? 'CARD' : 'COD'),
+            prescription: prescriptionData,
+            channel: 'WEBSITE'
+          },
+          manualReprint: true
+        })
+      }).catch(() => {});
+    } catch (_) {}
+
     // Render clean, luxury customer-facing receipt (no internal DB/debug badges)
     if (DOM.orderReceiptBox) {
       DOM.orderReceiptBox.innerHTML = `
@@ -1548,13 +1604,37 @@
       let cloudProducts = [];
       if (resp.ok) {
         const data = await resp.json();
-        if (Array.isArray(data)) cloudProducts = data;
+        if (Array.isArray(data)) {
+          cloudProducts = data;
+          // Synchronize local deleted tokens: live products from server database are active
+          try {
+            let tokens = getDeletedProductTokens();
+            let changed = false;
+            data.forEach(p => {
+              if (p.id && tokens.delete(String(p.id).toLowerCase().trim())) changed = true;
+              if (p.sku && tokens.delete(String(p.sku).toLowerCase().trim())) changed = true;
+              if (p.name && tokens.delete(String(p.name).toLowerCase().trim())) changed = true;
+            });
+            if (changed) {
+              localStorage.setItem('noor_deleted_products', JSON.stringify(Array.from(tokens)));
+            }
+          } catch (_) {}
+        }
       }
+
+      const delTokens = getDeletedProductTokens();
 
       // Merge local cached custom frames so newly created frames never disappear on refresh
       try {
-        const localCached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
+        let localCached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
         if (Array.isArray(localCached)) {
+          localCached = localCached.filter(lc => {
+            if (!lc) return false;
+            const lId = lc.id ? String(lc.id).toLowerCase().trim() : '';
+            const lSku = lc.sku ? String(lc.sku).toLowerCase().trim() : '';
+            const lName = lc.name ? String(lc.name).toLowerCase().trim() : '';
+            return !delTokens.has(lId) && !delTokens.has(lSku) && !delTokens.has(lName);
+          });
           localCached.forEach(lc => {
             if (!lc || !lc.name) return;
             const lSku = (lc.sku && lc.sku.trim() && lc.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? lc.sku.trim().toUpperCase() : null;
@@ -1585,60 +1665,74 @@
         }
       } catch (_) {}
 
-      if (!Array.isArray(cloudProducts) || cloudProducts.length === 0) return;
+      if (!Array.isArray(cloudProducts) || cloudProducts.length === 0) {
+        state.catalog = [];
+        renderProductGrid();
+        return;
+      }
 
       const staticList = window.EYEWEAR_CATALOG || [];
 
-      state.catalog = cloudProducts.map(p => {
-        const staticMatch = staticList.find(sc => sc.id === p.id || (sc.sku && p.sku && sc.sku.toUpperCase() === p.sku.toUpperCase()) || sc.name.toLowerCase() === p.name.toLowerCase());
+      state.catalog = cloudProducts
+        .filter(p => {
+          if (!p) return false;
+          // If product came directly from live /api/products, it is active in database
+          if (p.selling_price_paise !== undefined || p.variants !== undefined) return true;
+          const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+          const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+          const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+          return !delTokens.has(pId) && !delTokens.has(pSku) && !delTokens.has(pName);
+        })
+        .map(p => {
+          const staticMatch = staticList.find(sc => sc.id === p.id || (sc.sku && p.sku && sc.sku.toUpperCase() === p.sku.toUpperCase()) || sc.name.toLowerCase() === p.name.toLowerCase());
 
-        let colors = [];
-        if (Array.isArray(p.variants) && p.variants.length > 0) {
-          colors = p.variants.map(v => ({
-            name: v.color_name || 'Standard',
-            hex: v.color_hex || '#111111'
-          }));
-        } else if (staticMatch && staticMatch.colors) {
-          colors = staticMatch.colors;
-        } else {
-          colors = [{ name: 'Standard', hex: '#111111' }];
-        }
+          let colors = [];
+          if (Array.isArray(p.variants) && p.variants.length > 0) {
+            colors = p.variants.map(v => ({
+              name: v.color_name || 'Standard',
+              hex: v.color_hex || '#111111'
+            }));
+          } else if (staticMatch && staticMatch.colors) {
+            colors = staticMatch.colors;
+          } else {
+            colors = [{ name: 'Standard', hex: '#111111' }];
+          }
 
-        let dimensions = { lens: '52mm', bridge: '18mm', temple: '145mm', weight: '15g' };
-        if (staticMatch && staticMatch.dimensions) {
-          dimensions = staticMatch.dimensions;
-        } else if (p.variants && p.variants[0] && p.variants[0].dimensions_json) {
-          try { dimensions = JSON.parse(p.variants[0].dimensions_json); } catch (_) {}
-        }
+          let dimensions = { lens: '52mm', bridge: '18mm', temple: '145mm', weight: '15g' };
+          if (staticMatch && staticMatch.dimensions) {
+            dimensions = staticMatch.dimensions;
+          } else if (p.variants && p.variants[0] && p.variants[0].dimensions_json) {
+            try { dimensions = JSON.parse(p.variants[0].dimensions_json); } catch (_) {}
+          }
 
-        const price = p.selling_price_inr !== undefined ? p.selling_price_inr : (p.selling_price_paise ? p.selling_price_paise / 100 : (staticMatch ? staticMatch.price : 2999));
-        const originalPrice = p.original_price_inr !== undefined ? p.original_price_inr : (p.original_price_paise ? p.original_price_paise / 100 : (staticMatch ? staticMatch.originalPrice : null));
-        const stock = Number(p.total_stock !== undefined ? p.total_stock : (p.stock || 10));
+          const price = p.selling_price_inr !== undefined ? p.selling_price_inr : (p.selling_price_paise ? p.selling_price_paise / 100 : (staticMatch ? staticMatch.price : 2999));
+          const originalPrice = p.original_price_inr !== undefined ? p.original_price_inr : (p.original_price_paise ? p.original_price_paise / 100 : (staticMatch ? staticMatch.originalPrice : null));
+          const stock = Number(p.total_stock !== undefined ? p.total_stock : (p.stock || 10));
 
-        let badge = staticMatch ? staticMatch.badge : '';
-        if (stock <= 0) badge = 'Out of Stock';
-        else if (!badge && !staticMatch) badge = 'New Arrival';
+          let badge = staticMatch ? staticMatch.badge : '';
+          if (stock <= 0) badge = 'Out of Stock';
+          else if (!badge && !staticMatch) badge = 'New Arrival';
 
-        return {
-          id: p.id,
-          sku: p.sku,
-          name: p.name,
-          collection: staticMatch ? staticMatch.collection : (p.brand || 'Nordic Collection'),
-          price: price,
-          originalPrice: originalPrice,
-          badge: badge,
-          shape: p.shape || (staticMatch ? staticMatch.shape : 'Rectangular'),
-          material: p.material || (staticMatch ? staticMatch.material : 'Italian Bio-Acetate'),
-          fit: p.fit || (staticMatch ? staticMatch.fit : 'Regular'),
-          category: p.category || (staticMatch ? staticMatch.category : 'Optical'),
-          rating: staticMatch ? staticMatch.rating : 4.9,
-          reviewsCount: staticMatch ? staticMatch.reviewsCount : 24,
-          image: p.image_url || p.image || p.imageUrl || (staticMatch ? staticMatch.image : 'images/stockholm_noir.jpg'),
-          colors: colors,
-          dimensions: dimensions,
-          description: p.description || (staticMatch ? staticMatch.description : 'Bespoke Scandinavian eyewear engineered with optical precision.')
-        };
-      });
+          return {
+            id: p.id,
+            sku: p.sku,
+            name: p.name,
+            collection: staticMatch ? staticMatch.collection : (p.brand || 'Nordic Collection'),
+            price: price,
+            originalPrice: originalPrice,
+            badge: badge,
+            shape: p.shape || (staticMatch ? staticMatch.shape : 'Rectangular'),
+            material: p.material || (staticMatch ? staticMatch.material : 'Italian Bio-Acetate'),
+            fit: p.fit || (staticMatch ? staticMatch.fit : 'Regular'),
+            category: p.category || (staticMatch ? staticMatch.category : 'Optical'),
+            rating: staticMatch ? staticMatch.rating : 4.9,
+            reviewsCount: staticMatch ? staticMatch.reviewsCount : 24,
+            image: p.image_url || p.image || p.imageUrl || (staticMatch ? staticMatch.image : 'images/stockholm_noir.jpg'),
+            colors: colors,
+            dimensions: dimensions,
+            description: p.description || (staticMatch ? staticMatch.description : 'Bespoke Scandinavian eyewear engineered with optical precision.')
+          };
+        });
 
       renderProductGrid();
       console.log(`✓ Live catalog synced from /api/products: ${state.catalog.length} frames active.`);
@@ -1666,8 +1760,14 @@
     if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
       window.NoorSupabase.fetchCatalog().then(cloudProducts => {
         if (Array.isArray(cloudProducts) && cloudProducts.length > 0) {
+          const delTokens = getDeletedProductTokens();
           cloudProducts.forEach(cp => {
             if (!cp || !cp.name) return;
+            const cpId = cp.id ? String(cp.id).toLowerCase().trim() : '';
+            const cpSku = cp.sku ? String(cp.sku).toLowerCase().trim() : '';
+            const cpName = cp.name ? String(cp.name).toLowerCase().trim() : '';
+            if (delTokens.has(cpId) || delTokens.has(cpSku) || delTokens.has(cpName)) return;
+
             const idx = state.catalog.findIndex(p => p.id === cp.id || (p.sku && cp.sku && p.sku.toUpperCase() === cp.sku.toUpperCase()));
             const normalizedCp = {
               ...cp,
@@ -1679,18 +1779,32 @@
               state.catalog.unshift(normalizedCp);
             }
           });
+          // Ensure no deleted frames in state.catalog
+          state.catalog = state.catalog.filter(p => {
+            if (!p) return false;
+            const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+            const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+            const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+            return !delTokens.has(pId) && !delTokens.has(pSku) && !delTokens.has(pName);
+          });
           renderProductGrid();
-          console.log(`✓ Merged and synchronized ${cloudProducts.length} products from Supabase cloud.`);
+          console.log(`✓ Merged and synchronized ${state.catalog.length} products from Supabase cloud.`);
         }
       });
     }
 
     // Client-side cache merge (ensures zero latency retention for newly added items)
     try {
+      const delTokens = getDeletedProductTokens();
       const localCached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
       if (Array.isArray(localCached) && localCached.length > 0) {
         localCached.forEach(lc => {
           if (!lc || !lc.name) return;
+          const lId = lc.id ? String(lc.id).toLowerCase().trim() : '';
+          const lSku = lc.sku ? String(lc.sku).toLowerCase().trim() : '';
+          const lName = lc.name ? String(lc.name).toLowerCase().trim() : '';
+          if (delTokens.has(lId) || delTokens.has(lSku) || delTokens.has(lName)) return;
+
           const idx = state.catalog.findIndex(p => p.id === lc.id || (p.sku && lc.sku && p.sku.toUpperCase() === lc.sku.toUpperCase()));
           const formatted = {
             id: lc.id,
@@ -1720,6 +1834,9 @@
         renderProductGrid();
       }
     } catch (_) {}
+    // Auto-refresh catalog on tab focus and periodic background sync (every 5 seconds)
+    window.addEventListener('focus', loadLiveCatalog);
+    setInterval(loadLiveCatalog, 5000);
   }
 
   // Run on DOM Ready

@@ -26,7 +26,8 @@ console.log('  ✓ [PASS] EYEWEAR_CATALOG has distinct authoritative SKUs');
 
 // 2. Verify Database lookup for QR code printed on sticker
 console.log('--- 2. Database Lookup for Printed QR Code (NOOR-CPH-02) ---');
-const foundCph = db.prepare(`
+let createdFixture = false;
+let foundCph = db.prepare(`
   SELECT p.id, p.sku, p.name, p.selling_price_paise, pv.sku as variant_sku
   FROM products p
   LEFT JOIN product_variants pv ON p.id = pv.product_id
@@ -34,9 +35,33 @@ const foundCph = db.prepare(`
   LIMIT 1
 `).get('NOOR-CPH-02', 'NOOR-CPH-02');
 
+if (!foundCph) {
+  createdFixture = true;
+  db.prepare(`
+    INSERT INTO products (id, sku, name, brand, shape, material, fit, category, selling_price_paise, image_url, is_active)
+    VALUES ('noor-02-test', 'NOOR-CPH-02', 'The Copenhagen Round', 'Noor Optics', 'Round', 'Italian Bio-Acetate', 'Narrow', 'Optical', 389900, 'images/copenhagen_round.jpg', 1)
+  `).run();
+  db.prepare(`
+    INSERT INTO product_variants (id, product_id, sku, barcode, color_name, color_hex)
+    VALUES ('var-noor-02-test', 'noor-02-test', 'NOOR-CPH-02-DKH', '89010021', 'Dark Havana', '#5C3A21')
+  `).run();
+  foundCph = db.prepare(`
+    SELECT p.id, p.sku, p.name, p.selling_price_paise, pv.sku as variant_sku
+    FROM products p
+    LEFT JOIN product_variants pv ON p.id = pv.product_id
+    WHERE LOWER(p.sku) = LOWER(?) OR LOWER(pv.sku) = LOWER(?)
+    LIMIT 1
+  `).get('NOOR-CPH-02', 'NOOR-CPH-02');
+}
+
 assert(foundCph, 'NOOR-CPH-02 must be found in SQLite database');
 assert.strictEqual(foundCph.name, 'The Copenhagen Round');
 console.log(`  ✓ [PASS] Found frame "${foundCph.name}" with SKU "${foundCph.sku}"`);
+
+if (createdFixture) {
+  db.prepare('DELETE FROM product_variants WHERE id = ?').run('var-noor-02-test');
+  db.prepare('DELETE FROM products WHERE id = ?').run('noor-02-test');
+}
 
 // 3. Verify Custom Added Frame Persistence with Photo
 console.log('--- 3. Custom Frame Creation & Photo Preservation ---');

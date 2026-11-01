@@ -33,6 +33,8 @@ const {
   pushPrescriptionToSupabase,
   pushProductToCloud,
   deleteProductFromCloud,
+  clearAllProductsFromCloud,
+  removeProductFromCloudTombstone,
   deleteOrderFromSupabase,
   deleteAllOrdersFromSupabase,
   deleteCustomerFromSupabase,
@@ -266,7 +268,8 @@ router.get('/products', async (req, res) => {
   } catch (_) {}
 
   const includeInactive = req.query.includeInactive === 'true';
-  const filterClause = includeInactive ? '' : 'WHERE p.is_active = 1 OR p.is_active IS NULL';
+  const baseFilter = includeInactive ? '1=1' : '(p.is_active = 1 OR p.is_active IS NULL)';
+  const filterClause = `WHERE ${baseFilter} AND p.id NOT IN (SELECT product_id FROM deleted_products)`;
 
   const products = db.prepare(`
     SELECT p.*, s.name as supplier_name,
@@ -324,6 +327,13 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
     if (existing) {
       // Upsert: Update existing product details & inventory
       const productId = existing.id;
+      db.prepare(`
+        DELETE FROM deleted_products 
+        WHERE product_id = ? 
+           OR (sku IS NOT NULL AND LOWER(sku) = LOWER(?)) 
+           OR (name IS NOT NULL AND LOWER(name) = LOWER(?))
+      `).run(productId, cleanSku, name);
+
       db.prepare(`
         UPDATE products SET
           name = ?,
@@ -404,6 +414,13 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
 
     // 2. Insert new product
     const productId = (req.body.id && String(req.body.id).trim()) || ('prod-' + Date.now());
+    db.prepare(`
+      DELETE FROM deleted_products 
+      WHERE product_id = ? 
+         OR (sku IS NOT NULL AND LOWER(sku) = LOWER(?)) 
+         OR (name IS NOT NULL AND LOWER(name) = LOWER(?))
+    `).run(productId, cleanSku, name);
+
     const createTx = db.transaction(() => {
       db.prepare(`
         INSERT INTO products (
@@ -543,8 +560,69 @@ router.put('/products/:id', authenticateToken, requirePermission('products:manag
   res.json({ success: true, message: 'Frame updated successfully.' });
 });
 
+// ── DELETE /api/products/clear-all (Clear Complete Optical Frame Inventory) ────
+router.delete('/products/clear-all', authenticateToken, async (req, res) => {
+  if (!req.user.permissions.includes('products:manage') && !req.user.permissions.includes('inventory:adjust') && req.user.roleId !== 'role-owner') {
+    return res.status(403).json({ error: 'Forbidden: Insufficient privileges to clear optical frame inventory.' });
+  }
+
+  try {
+    const allProducts = db.prepare('SELECT id, sku, name FROM products').all();
+    const allVariants = db.prepare('SELECT id FROM product_variants').all();
+    const varIds = allVariants.map(v => v.id);
+
+    const clearTx = db.transaction(() => {
+      // 1. Nullify variant references in order items & POs to preserve transaction history
+      if (varIds.length > 0) {
+        db.prepare('UPDATE order_items SET variant_id = NULL').run();
+        db.prepare('UPDATE purchase_order_items SET variant_id = NULL').run();
+      }
+
+      // 2. Clear stock movements, balances, variants, images, products
+      db.prepare('DELETE FROM stock_movements').run();
+      db.prepare('DELETE FROM inventory_balances').run();
+      db.prepare('DELETE FROM product_variants').run();
+      db.prepare('DELETE FROM product_images').run();
+      db.prepare('DELETE FROM products').run();
+
+      // 3. Insert tombstones for all cleared products
+      const insertTomb = db.prepare(`
+        INSERT OR REPLACE INTO deleted_products (product_id, sku, name, deleted_at)
+        VALUES (?, ?, ?, datetime('now'))
+      `);
+      for (const p of allProducts) {
+        try {
+          insertTomb.run(p.id, p.sku || null, p.name || null);
+        } catch (_) {}
+      }
+
+      logAudit(req.user.id, req.user.email, 'ALL_PRODUCTS_CLEARED', 'PRODUCT', 'ALL', { count: allProducts.length }, req);
+    });
+
+    clearTx();
+
+    // 4. Collect all tokens and wipe cloud Supabase catalog
+    const allTokens = [];
+    allProducts.forEach(p => {
+      if (p.id) allTokens.push(p.id);
+      if (p.sku) allTokens.push(p.sku);
+      if (p.name) allTokens.push(p.name);
+    });
+    await clearAllProductsFromCloud(allTokens);
+
+    res.json({
+      success: true,
+      deletedCount: allProducts.length,
+      message: `Complete inventory cleared. Successfully removed ${allProducts.length} frames permanently.`
+    });
+  } catch (err) {
+    console.error('Failed to clear inventory:', err);
+    res.status(500).json({ error: 'Failed to clear inventory: ' + err.message });
+  }
+});
+
 // ── DELETE /api/products/:id (Delete Single Frame & Cleanup Variants/Balances) ─
-router.delete('/products/:id', authenticateToken, (req, res) => {
+router.delete('/products/:id', authenticateToken, async (req, res) => {
   if (!req.user.permissions.includes('products:manage') && !req.user.permissions.includes('inventory:adjust') && req.user.roleId !== 'role-owner') {
     return res.status(403).json({ error: 'Forbidden: Insufficient privileges to delete optical frames.' });
   }
@@ -552,7 +630,9 @@ router.delete('/products/:id', authenticateToken, (req, res) => {
   const productId = req.params.id;
   const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
   if (!product) {
-    return res.status(404).json({ error: 'Product not found.' });
+    // Even if not in SQLite, make sure it is completely removed from cloud
+    await deleteProductFromCloud(productId).catch(() => {});
+    return res.status(404).json({ error: 'Product not found in local database (cloud purge attempted).' });
   }
 
   const deleteTx = db.transaction(() => {
@@ -573,13 +653,20 @@ router.delete('/products/:id', authenticateToken, (req, res) => {
 
     db.prepare('DELETE FROM product_images WHERE product_id = ?').run(productId);
     db.prepare('DELETE FROM products WHERE id = ?').run(productId);
+    try {
+      db.prepare(`
+        INSERT OR REPLACE INTO deleted_products (product_id, sku, name, deleted_at)
+        VALUES (?, ?, ?, datetime('now'))
+      `).run(productId, product.sku || null, product.name || null);
+    } catch (_) {}
 
     logAudit(req.user.id, req.user.email, 'PRODUCT_DELETED', 'PRODUCT', productId, { name: product.name, sku: product.sku }, req);
   });
 
   try {
     deleteTx();
-    deleteProductFromCloud(productId).catch(() => {});
+    // Await complete cloud deletion from Supabase so subsequent GET requests never see or restore it
+    await deleteProductFromCloud(productId, product.sku, product.name);
     res.json({ success: true, message: `Optical frame "${product.name}" deleted successfully.` });
   } catch (err) {
     console.error('Failed to delete product:', err);
@@ -588,7 +675,7 @@ router.delete('/products/:id', authenticateToken, (req, res) => {
 });
 
 // ── DELETE /api/products (Batch Delete Selected Optical Frames) ──────────────
-router.delete('/products', authenticateToken, (req, res) => {
+router.delete('/products', authenticateToken, async (req, res) => {
   if (!req.user.permissions.includes('products:manage') && !req.user.permissions.includes('inventory:adjust') && req.user.roleId !== 'role-owner') {
     return res.status(403).json({ error: 'Forbidden: Insufficient privileges to delete optical frames.' });
   }
@@ -598,12 +685,16 @@ router.delete('/products', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Array of product IDs required for deletion.' });
   }
 
+  const productsToDelete = [];
+  for (const id of ids) {
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+    if (product) productsToDelete.push(product);
+  }
+
   const deleteBatchTx = db.transaction(() => {
     let deletedCount = 0;
-    for (const productId of ids) {
-      const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId);
-      if (!product) continue;
-
+    for (const product of productsToDelete) {
+      const productId = product.id;
       const variants = db.prepare('SELECT id FROM product_variants WHERE product_id = ?').all(productId);
       const varIds = variants.map(v => v.id);
 
@@ -618,6 +709,12 @@ router.delete('/products', authenticateToken, (req, res) => {
 
       db.prepare('DELETE FROM product_images WHERE product_id = ?').run(productId);
       db.prepare('DELETE FROM products WHERE id = ?').run(productId);
+      try {
+        db.prepare(`
+          INSERT OR REPLACE INTO deleted_products (product_id, sku, name, deleted_at)
+          VALUES (?, ?, ?, datetime('now'))
+        `).run(productId, product.sku || null, product.name || null);
+      } catch (_) {}
       deletedCount++;
     }
 
@@ -627,8 +724,22 @@ router.delete('/products', authenticateToken, (req, res) => {
 
   try {
     const count = deleteBatchTx();
-    ids.forEach(id => deleteProductFromCloud(id).catch(() => {}));
-    res.json({ success: true, deletedCount: count, message: `Successfully deleted ${count} frame(s).` });
+    // Await complete cloud purge from Supabase for all selected products
+    await Promise.all(productsToDelete.map(p => deleteProductFromCloud(p.id, p.sku, p.name).catch(() => {})));
+    const remainingIds = ids.filter(id => !productsToDelete.some(p => p.id === id));
+    if (remainingIds.length > 0) {
+      for (const remId of remainingIds) {
+        try {
+          db.prepare(`
+            INSERT OR REPLACE INTO deleted_products (product_id, deleted_at)
+            VALUES (?, datetime('now'))
+          `).run(remId);
+        } catch (_) {}
+      }
+      await Promise.all(remainingIds.map(id => deleteProductFromCloud(id).catch(() => {})));
+    }
+
+    res.json({ success: true, deletedCount: count || ids.length, message: `Successfully deleted ${count || ids.length} frame(s).` });
   } catch (err) {
     console.error('Failed to batch delete products:', err);
     res.status(500).json({ error: 'Failed to delete products: ' + err.message });
@@ -897,12 +1008,10 @@ router.get('/customers', authenticateToken, async (req, res) => {
       MAX(o.created_at) as last_order_date,
       (SELECT COUNT(*) FROM prescriptions p WHERE p.client_id = c.id AND p.is_archived = 0) as prescriptions_count
     FROM customers c
-    LEFT JOIN orders o ON c.id = o.customer_id AND o.status != 'CANCELLED'
+    LEFT JOIN orders o ON (c.id = o.customer_id OR (c.phone IS NOT NULL AND length(c.phone) >= 7 AND (o.customer_phone = c.phone OR o.customer_phone = REPLACE(c.phone, '+91', '') OR c.phone = REPLACE(o.customer_phone, '+91', '')))) AND o.status != 'CANCELLED'
     WHERE 1=1
       AND (c.client_code IS NULL OR c.client_code NOT LIKE 'SYS-%')
       AND c.id NOT IN (SELECT customer_id FROM deleted_customers WHERE customer_id IS NOT NULL)
-      AND (c.phone IS NULL OR c.phone NOT IN (SELECT phone FROM deleted_customers WHERE phone IS NOT NULL))
-      AND (c.name IS NULL OR LOWER(c.name) NOT IN (SELECT LOWER(name) FROM deleted_customers WHERE name IS NOT NULL))
   `;
   const params = [];
 
@@ -977,15 +1086,17 @@ router.get('/customers/:id', authenticateToken, (req, res) => {
     return res.status(404).json({ error: 'Client not found.' });
   }
 
-  // Linked Orders
+  // Linked Orders (Match by Customer ID OR normalized customer phone)
+  const clientPhone = client.phone ? client.phone.trim() : null;
   const orders = db.prepare(`
     SELECT o.*, u.name as staff_name, inv.invoice_number
     FROM orders o
     LEFT JOIN users u ON o.staff_user_id = u.id
     LEFT JOIN invoices inv ON o.id = inv.order_id
     WHERE o.customer_id = ?
-    ORDER BY o.created_at DESC
-  `).all(client.id);
+       OR (? IS NOT NULL AND length(?) >= 7 AND (o.customer_phone = ? OR o.customer_phone = REPLACE(?, '+91', '') OR ? = REPLACE(o.customer_phone, '+91', '')))
+    ORDER BY replace(o.created_at, ' ', 'T') DESC, o.rowid DESC
+  `).all(client.id, clientPhone, clientPhone, clientPhone, clientPhone, clientPhone);
 
   const getItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?');
   const enrichedOrders = orders.map(o => ({
@@ -1005,8 +1116,11 @@ router.get('/customers/:id', authenticateToken, (req, res) => {
     FROM prescriptions p
     LEFT JOIN users u ON p.created_by_user_id = u.id
     WHERE p.client_id = ?
+       OR (? IS NOT NULL AND length(?) >= 7 AND p.client_id IN (
+         SELECT id FROM customers WHERE phone = ? OR phone = REPLACE(?, '+91', '') OR ? = REPLACE(phone, '+91', '')
+       ))
     ORDER BY p.prescription_date DESC, p.created_at DESC
-  `).all(client.id);
+  `).all(client.id, clientPhone, clientPhone, clientPhone, clientPhone, clientPhone);
 
   // Linked Invoices
   const invoices = db.prepare(`
@@ -1014,8 +1128,9 @@ router.get('/customers/:id', authenticateToken, (req, res) => {
     FROM invoices inv
     JOIN orders o ON inv.order_id = o.id
     WHERE o.customer_id = ?
+       OR (? IS NOT NULL AND length(?) >= 7 AND (o.customer_phone = ? OR o.customer_phone = REPLACE(?, '+91', '') OR ? = REPLACE(o.customer_phone, '+91', '')))
     ORDER BY inv.created_at DESC
-  `).all(client.id).map(inv => ({
+  `).all(client.id, clientPhone, clientPhone, clientPhone, clientPhone, clientPhone).map(inv => ({
     ...inv,
     grand_total_inr: inv.grand_total_paise / 100
   }));
@@ -1031,13 +1146,16 @@ router.get('/customers/:id', authenticateToken, (req, res) => {
   const storeSettings = getStoreSettings();
   const storeName = storeSettings.store_name || 'Noor Optics Flagship Boutique';
 
+  const clientPayload = {
+    ...client,
+    total_spent_inr: (client.total_spent_paise || 0) / 100,
+    tel_link: client.phone ? `tel:${client.phone}` : null,
+    whatsapp_link: client.phone ? generateWhatsAppUrl(client.phone, client.name, storeName) : null
+  };
+
   res.json({
-    client: {
-      ...client,
-      total_spent_inr: (client.total_spent_paise || 0) / 100,
-      tel_link: client.phone ? `tel:${client.phone}` : null,
-      whatsapp_link: client.phone ? generateWhatsAppUrl(client.phone, client.name, storeName) : null
-    },
+    ...clientPayload,
+    client: clientPayload,
     orders: enrichedOrders,
     prescriptions,
     invoices,

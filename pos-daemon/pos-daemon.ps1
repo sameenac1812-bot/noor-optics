@@ -92,8 +92,12 @@ public class RawPrinterHelperDirect {
 }
 "@
 
+$dllPath = Join-Path $ScriptDir "RawPrinterHelper.dll"
+if (Test-Path $dllPath) {
+    try { Add-Type -Path $dllPath -ErrorAction SilentlyContinue } catch {}
+}
 if (-not ([System.Management.Automation.PSTypeName]'RawPrinterHelperDirect').Type) {
-    Add-Type -TypeDefinition $win32Code
+    try { Add-Type -TypeDefinition $win32Code -ErrorAction SilentlyContinue } catch {}
 }
 
 # Load Configuration

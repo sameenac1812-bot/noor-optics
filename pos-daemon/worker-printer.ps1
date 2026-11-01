@@ -25,8 +25,17 @@ if (-not (Test-Path $FilePath)) {
     exit 1
 }
 
-# Compile Win32 Spooler helper once
-$code = @"
+# Fast-path: Load precompiled Win32 Spooler helper assembly if available
+$dllPath = Join-Path $PSScriptRoot "RawPrinterHelper.dll"
+if (Test-Path $dllPath) {
+    try {
+        Add-Type -Path $dllPath -ErrorAction SilentlyContinue
+    } catch {}
+}
+
+# Fallback: Compile in-memory if DLL is not yet compiled
+if (-not ([System.Management.Automation.PSTypeName]'RawPrinterHelperDirect').Type) {
+    $code = @"
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -96,12 +105,24 @@ public class RawPrinterHelperDirect {
     }
 }
 "@
-
-if (-not ([System.Management.Automation.PSTypeName]'RawPrinterHelperDirect').Type) {
-    Add-Type -TypeDefinition $code
+    try {
+        Add-Type -TypeDefinition $code -ErrorAction SilentlyContinue
+    } catch {}
 }
 
-# Resolve Printer Name (Auto-fallback to any connected thermal / POS printer)
+# 1. High-Speed Direct Spool Attempt (Instant 0-delay execution)
+try {
+    $bytes = [System.IO.File]::ReadAllBytes($FilePath)
+    $cleanTarget = if ($PrinterName) { $PrinterName.Trim() } else { "POS-80" }
+    
+    $ok = [RawPrinterHelperDirect]::SendBytesToPrinter($cleanTarget, $bytes, $DocName)
+    if ($ok) {
+        Write-Output "SUCCESS: Printed $($bytes.Length) bytes to '$cleanTarget'"
+        exit 0
+    }
+} catch {}
+
+# 2. Fallback: Query installed printers only if direct attempt was rejected
 $installed = @()
 try { $installed += @(Get-Printer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name) } catch {}
 if ($installed.Count -eq 0) {

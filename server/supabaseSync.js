@@ -51,6 +51,118 @@ async function fetchCloudOrderTombstones() {
 }
 
 /**
+ * Fetch cloud product tombstones from dedicated system record in Supabase customers table
+ */
+async function fetchCloudProductTombstones() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return { products: new Set() };
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (!res.ok) return { products: new Set() };
+    const list = await res.json();
+    if (!Array.isArray(list) || list.length === 0) return { products: new Set() };
+
+    const raw = list[0].notes;
+    if (!raw) return { products: new Set() };
+
+    const parsed = JSON.parse(raw);
+    const prodSet = new Set();
+    if (Array.isArray(parsed)) {
+      parsed.forEach(item => prodSet.add(String(item).toLowerCase().trim()));
+    } else if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products)) {
+      parsed.products.forEach(item => prodSet.add(String(item).toLowerCase().trim()));
+    }
+    return { products: prodSet };
+  } catch (e) {
+    return { products: new Set() };
+  }
+}
+
+/**
+ * Record a deleted product reference (ID / SKU / Name) into the Supabase cloud tombstone
+ */
+async function pushDeletedProductToCloudTombstone(productId, sku = null, name = null) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || (!productId && !sku && !name)) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    let existingProducts = [];
+    let recordExists = false;
+
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list) && list.length > 0) {
+        recordExists = true;
+        try {
+          const parsed = JSON.parse(list[0].notes || '{}');
+          if (Array.isArray(parsed)) existingProducts = parsed;
+          else if (parsed.products) existingProducts = parsed.products;
+        } catch(e) {}
+      }
+    }
+
+    const tokensToAdd = [];
+    if (Array.isArray(productId)) {
+      productId.forEach(t => { if (t) tokensToAdd.push(String(t).trim()); });
+    } else {
+      if (productId) tokensToAdd.push(String(productId).trim());
+      if (sku) tokensToAdd.push(String(sku).trim());
+      if (name) tokensToAdd.push(String(name).trim());
+    }
+
+    tokensToAdd.forEach(token => {
+      if (!existingProducts.some(p => String(p).toLowerCase() === token.toLowerCase())) {
+        existingProducts.push(token);
+      }
+    });
+
+    const payload = {
+      notes: JSON.stringify({ products: existingProducts, updated_at: new Date().toISOString() }),
+      updated_at: new Date().toISOString()
+    };
+
+    if (recordExists) {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: 'tombstone-products-global',
+          client_code: 'SYS-TOMBSTONE-PRODUCTS',
+          name: 'System Product Tombstones',
+          city: 'Bengaluru',
+          is_archived: false,
+          ...payload
+        })
+      });
+    }
+  } catch (err) {
+    console.warn('[SupabaseSync] Error updating cloud product tombstone:', err.message);
+  }
+}
+
+/**
  * Record a deleted order reference into the Supabase cloud tombstone
  */
 async function pushDeletedOrderToCloudTombstone(orderRef) {
@@ -222,19 +334,6 @@ async function syncSupabaseOrders(db) {
       } catch(e) {}
     }
 
-    if (purgedBefore) {
-      try {
-        const purgedOrders = db.prepare('SELECT id, order_number FROM orders WHERE created_at <= ?').all(purgedBefore);
-        for (const po of purgedOrders) {
-          db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(po.order_number);
-          db.prepare('DELETE FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE order_id = ?)').run(po.id);
-          db.prepare('DELETE FROM invoices WHERE order_id = ?').run(po.id);
-          db.prepare('DELETE FROM order_items WHERE order_id = ?').run(po.id);
-          db.prepare('DELETE FROM orders WHERE id = ?').run(po.id);
-        }
-      } catch(e) {}
-    }
-
     // 2. Fetch orders from Supabase
     const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc`, {
       headers: {
@@ -254,13 +353,10 @@ async function syncSupabaseOrders(db) {
     for (const co of cloudOrders) {
       if (!co.order_ref) continue;
       // Filter out dummy/test ghost orders
-      if (/TEST/i.test(co.order_ref) || (co.customer_name && /Test/i.test(co.customer_name))) continue;
+      if (/TEST-REF|GHOST-TEST/i.test(co.order_ref)) continue;
 
-      // Filter out if in cloud tombstones or purged before
+      // Filter out if explicitly in cloud tombstones
       if (cloudTombstones.has(co.order_ref) || (co.id && cloudTombstones.has(co.id))) {
-        continue;
-      }
-      if (purgedBefore && co.created_at && co.created_at <= purgedBefore) {
         continue;
       }
 
@@ -295,21 +391,14 @@ async function syncSupabaseOrders(db) {
       const amountPaidPaise = isPaid ? grandTotalPaise : 0;
       const outstandingPaise = isPaid ? 0 : grandTotalPaise;
 
-      const existing = db.prepare('SELECT id FROM orders WHERE order_number = ?').get(co.order_ref);
-      if (existing) {
-        // Ensure channel and payment status are kept accurate
-        db.prepare(`
-          UPDATE orders
-          SET channel = ?, payment_status = ?, amount_paid_paise = ?, outstanding_paise = ?
-          WHERE id = ?
-        `).run(channel, paymentStatus, amountPaidPaise, outstandingPaise, existing.id);
-        continue;
-      }
-
       // Resolve or create customer record
       let customerId = null;
       if (phone) {
-        const cust = db.prepare('SELECT id FROM customers WHERE phone = ?').get(phone);
+        const cleanPhone = phone.replace('+91', '').trim();
+        const cust = db.prepare(`
+          SELECT id FROM customers 
+          WHERE phone = ? OR phone = ? OR phone = ('+91' || ?)
+        `).get(phone, cleanPhone, cleanPhone);
         if (cust) {
           customerId = cust.id;
           db.prepare("UPDATE customers SET total_spent_paise = total_spent_paise + ?, updated_at = datetime('now') WHERE id = ?")
@@ -328,6 +417,20 @@ async function syncSupabaseOrders(db) {
           co.delivery_address || null, co.city || 'Bengaluru', co.pin_code || null,
           grandTotalPaise, orderDate, orderDate
         );
+      }
+
+      const existing = db.prepare('SELECT id, customer_id FROM orders WHERE order_number = ?').get(co.order_ref);
+      if (existing) {
+        // Ensure channel and payment status are kept accurate, and link customer_id if missing
+        if (!existing.customer_id && customerId) {
+          db.prepare('UPDATE orders SET customer_id = ? WHERE id = ?').run(customerId, existing.id);
+        }
+        db.prepare(`
+          UPDATE orders
+          SET channel = ?, payment_status = ?, amount_paid_paise = ?, outstanding_paise = ?
+          WHERE id = ?
+        `).run(channel, paymentStatus, amountPaidPaise, outstandingPaise, existing.id);
+        continue;
       }
 
       // Generate order ID
@@ -730,20 +833,21 @@ async function syncSupabaseCustomers(db) {
     for (const c of cloudCusts) {
       if (!c.name || /Walk-in Client|Concierge Test/i.test(c.name)) continue;
 
-      // Check if client was deleted / tombstoned by admin
+      // Check if client was specifically deleted / tombstoned by admin by ID
       try {
-        const isTombstoned = db.prepare('SELECT customer_id FROM deleted_customers WHERE customer_id = ? OR (phone IS NOT NULL AND phone = ?) OR (name IS NOT NULL AND LOWER(name) = LOWER(?))').get(c.id, c.phone, c.name);
+        const isTombstoned = db.prepare('SELECT customer_id FROM deleted_customers WHERE customer_id = ?').get(c.id);
         if (isTombstoned) {
-          deleteCustomerFromSupabase(c.id, c.phone).catch(() => {});
           continue;
         }
       } catch (e) {}
 
-      const existing = db.prepare('SELECT id FROM customers WHERE id = ? OR (phone IS NOT NULL AND phone = ?)').get(c.id, c.phone);
+      const existing = db.prepare("SELECT id FROM customers WHERE id = ? OR (phone IS NOT NULL AND phone != '' AND phone = ?)").get(c.id, c.phone);
       if (existing) {
         db.prepare(`
           UPDATE customers
-          SET name = ?, client_code = ?, age = ?, dob = ?, phone = ?, email = ?, address = ?, city = ?, pin_code = ?, notes = ?, is_archived = ?, updated_at = ?
+          SET name = COALESCE(?, name), client_code = COALESCE(?, client_code), age = COALESCE(?, age), dob = COALESCE(?, dob),
+              phone = COALESCE(?, phone), email = COALESCE(?, email), address = COALESCE(?, address), city = COALESCE(?, city),
+              pin_code = COALESCE(?, pin_code), notes = COALESCE(?, notes), is_archived = ?, updated_at = ?
           WHERE id = ?
         `).run(
           c.name, c.client_code, c.age || null, c.dob || null, c.phone || null,
@@ -752,10 +856,12 @@ async function syncSupabaseCustomers(db) {
           existing.id
         );
       } else {
-        // Ensure client_code is not duplicate in SQLite
+        // Ensure client_code is unique in SQLite
         let code = c.client_code;
         const codeTaken = db.prepare('SELECT id FROM customers WHERE client_code = ?').get(code);
-        if (codeTaken) continue;
+        if (codeTaken) {
+          code = 'CLI-' + Math.floor(10000 + Math.random() * 90000);
+        }
 
         db.prepare(`
           INSERT INTO customers (
@@ -780,6 +886,9 @@ async function syncSupabaseCustomers(db) {
 async function syncSupabaseProducts(db) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
   try {
+    // 0. Fetch cloud product tombstones so deleted items are NEVER resurrected
+    const { products: tombstonedProducts } = await fetchCloudProductTombstones();
+
     // 1. Fetch custom added products from Supabase cloud (SYS-CATALOG-PRODUCTS)
     const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, {
       headers: {
@@ -797,73 +906,117 @@ async function syncSupabaseProducts(db) {
       cloudProducts = JSON.parse(list[0].notes);
     } catch (_) { cloudProducts = []; }
 
-    if (!Array.isArray(cloudProducts) || cloudProducts.length === 0) return;
+    if (Array.isArray(cloudProducts) && cloudProducts.length > 0) {
+      for (const cp of cloudProducts) {
+        if (!cp || !cp.name) continue;
+        const prodId = cp.id || ('prod-' + (cp.sku ? cp.sku.toLowerCase() : Date.now()));
+        const sku = (cp.sku && cp.sku.trim() && cp.sku.trim().toUpperCase() !== 'NOOR-FRAME')
+          ? cp.sku.trim().toUpperCase()
+          : ('NOOR-' + (cp.name || 'FRAME').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) + '-' + prodId.slice(-4));
 
-    for (const cp of cloudProducts) {
-      if (!cp || !cp.name) continue;
-      const prodId = cp.id || ('prod-' + (cp.sku ? cp.sku.toLowerCase() : Date.now()));
-      const sku = (cp.sku && cp.sku.trim() && cp.sku.trim().toUpperCase() !== 'NOOR-FRAME')
-        ? cp.sku.trim().toUpperCase()
-        : ('NOOR-' + (cp.name || 'FRAME').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) + '-' + prodId.slice(-4));
-      const sellingPaise = Math.round((Number(cp.price) || 3499) * 100);
-      const origPaise = cp.original_price ? Math.round(Number(cp.original_price) * 100) : null;
-      const costPaise = cp.purchaseCostINR ? Math.round(Number(cp.purchaseCostINR) * 100) : 145000;
-      const stockQty = Number(cp.stock !== undefined ? cp.stock : 10);
-      const img = cp.image || cp.imageUrl || cp.image_url || 'images/stockholm_noir.jpg';
+        // Never restore deleted / tombstoned products
+        if (tombstonedProducts.has(String(prodId).toLowerCase().trim()) ||
+            tombstonedProducts.has(String(sku).toLowerCase().trim()) ||
+            (cp.name && tombstonedProducts.has(String(cp.name).toLowerCase().trim()))) {
+          continue;
+        }
 
-      // Check if product exists in local SQLite (never collide on generic placeholder)
-      const existing = db.prepare("SELECT id FROM products WHERE id = ? OR (sku IS NOT NULL AND LOWER(sku) = LOWER(?) AND LOWER(sku) != 'noor-frame')").get(prodId, sku);
-      if (!existing) {
-        db.prepare(`
-          INSERT INTO products (
-            id, sku, name, brand, shape, material, fit, category,
-            selling_price_paise, original_price_paise, purchase_cost_paise,
-            supplier_id, reorder_threshold, image_url, description, is_active
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 5, ?, ?, 1)
-        `).run(
-          prodId, sku, cp.name, cp.brand || 'Noor Optics',
-          cp.shape || 'Rectangular', cp.material || 'Japanese Titanium',
-          cp.fit || 'Regular', cp.category || 'Optical',
-          sellingPaise, origPaise, costPaise,
-          img, cp.description || ''
-        );
+        try {
+          const isDeletedLocally = db.prepare(`
+            SELECT product_id FROM deleted_products
+            WHERE product_id = ? OR (sku IS NOT NULL AND LOWER(sku) = LOWER(?)) OR (name IS NOT NULL AND LOWER(name) = LOWER(?))
+          `).get(prodId, sku, cp.name || '');
+          if (isDeletedLocally) {
+            deleteProductFromCloud(prodId, sku, cp.name).catch(() => {});
+            continue;
+          }
+        } catch (_) {}
 
-        // Variant
-        const varId = `var-${prodId}-1`;
-        const varSku = `${sku}-STD`;
-        const barcode = `8901${Math.floor(100000 + Math.random() * 900000)}`;
+        const sellingPaise = Math.round((Number(cp.price) || 3499) * 100);
+        const origPaise = cp.original_price ? Math.round(Number(cp.original_price) * 100) : null;
+        const costPaise = cp.purchaseCostINR ? Math.round(Number(cp.purchaseCostINR) * 100) : 145000;
+        const stockQty = Number(cp.stock !== undefined ? cp.stock : 10);
+        const img = cp.image || cp.imageUrl || cp.image_url || 'images/stockholm_noir.jpg';
 
-        db.prepare(`
-          INSERT OR IGNORE INTO product_variants (id, product_id, sku, barcode, color_name, color_hex)
-          VALUES (?, ?, ?, ?, 'Standard', '#111111')
-        `).run(varId, prodId, varSku, barcode);
+        // Check if product exists in local SQLite (never collide on generic placeholder)
+        const existing = db.prepare("SELECT id FROM products WHERE id = ? OR (sku IS NOT NULL AND LOWER(sku) = LOWER(?) AND LOWER(sku) != 'noor-frame')").get(prodId, sku);
+        if (!existing) {
+          db.prepare(`
+            INSERT INTO products (
+              id, sku, name, brand, shape, material, fit, category,
+              selling_price_paise, original_price_paise, purchase_cost_paise,
+              supplier_id, reorder_threshold, image_url, description, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 5, ?, ?, 1)
+          `).run(
+            prodId, sku, cp.name, cp.brand || 'Noor Optics',
+            cp.shape || 'Rectangular', cp.material || 'Japanese Titanium',
+            cp.fit || 'Regular', cp.category || 'Optical',
+            sellingPaise, origPaise, costPaise,
+            img, cp.description || ''
+          );
 
-        db.prepare(`
-          INSERT OR IGNORE INTO inventory_balances (id, variant_id, location_id, available_qty, reserved_qty)
-          VALUES (?, ?, 'loc-main', ?, 0)
-        `).run(`bal-${varId}`, varId, stockQty);
+          // Variant
+          const varId = `var-${prodId}-1`;
+          const varSku = `${sku}-STD`;
+          const barcode = `8901${Math.floor(100000 + Math.random() * 900000)}`;
 
-        console.log(`[SupabaseSync] Restored cloud product "${cp.name}" (${sku}) into local inventory.`);
-      } else {
-        // Update existing product with latest cloud specifications & ensure active
-        db.prepare(`
-          UPDATE products SET
-            name = COALESCE(?, name),
-            brand = COALESCE(?, brand),
-            selling_price_paise = ?,
-            original_price_paise = ?,
-            purchase_cost_paise = ?,
-            image_url = CASE WHEN ? IS NOT NULL AND ? != '' AND ? != 'images/stockholm_noir.jpg' THEN ? ELSE image_url END,
-            description = COALESCE(?, description),
-            is_active = 1,
-            updated_at = datetime('now')
-          WHERE id = ?
-        `).run(cp.name, cp.brand || null, sellingPaise, origPaise, costPaise, img, img, img, img, cp.description || null, existing.id);
+          db.prepare(`
+            INSERT OR IGNORE INTO product_variants (id, product_id, sku, barcode, color_name, color_hex)
+            VALUES (?, ?, ?, ?, 'Standard', '#111111')
+          `).run(varId, prodId, varSku, barcode);
 
-        // Update balance if variant exists
-        const vRow = db.prepare('SELECT id FROM product_variants WHERE product_id = ? LIMIT 1').get(existing.id);
-        if (vRow) {
-          db.prepare('UPDATE inventory_balances SET available_qty = ? WHERE variant_id = ? AND location_id = ?').run(stockQty, vRow.id, 'loc-main');
+          db.prepare(`
+            INSERT OR IGNORE INTO inventory_balances (id, variant_id, location_id, available_qty, reserved_qty)
+            VALUES (?, ?, 'loc-main', ?, 0)
+          `).run(`bal-${varId}`, varId, stockQty);
+
+          console.log(`[SupabaseSync] Restored cloud product "${cp.name}" (${sku}) into local inventory.`);
+        } else {
+          // Update existing product with latest cloud specifications & ensure active
+          db.prepare(`
+            UPDATE products SET
+              name = COALESCE(?, name),
+              brand = COALESCE(?, brand),
+              selling_price_paise = ?,
+              original_price_paise = ?,
+              purchase_cost_paise = ?,
+              image_url = CASE WHEN ? IS NOT NULL AND ? != '' AND ? != 'images/stockholm_noir.jpg' THEN ? ELSE image_url END,
+              description = COALESCE(?, description),
+              is_active = 1,
+              updated_at = datetime('now')
+            WHERE id = ?
+          `).run(cp.name, cp.brand || null, sellingPaise, origPaise, costPaise, img, img, img, img, cp.description || null, existing.id);
+
+          // Update balance if variant exists
+          const vRow = db.prepare('SELECT id FROM product_variants WHERE product_id = ? LIMIT 1').get(existing.id);
+          if (vRow) {
+            db.prepare('UPDATE inventory_balances SET available_qty = ? WHERE variant_id = ? AND location_id = ?').run(stockQty, vRow.id, 'loc-main');
+          }
+        }
+      }
+    }
+
+    // 2. Clean up any tombstoned products currently lingering in local SQLite
+    for (const tombToken of tombstonedProducts) {
+      if (!tombToken) continue;
+      const existing = db.prepare("SELECT id, name, sku FROM products WHERE LOWER(id) = ? OR (sku IS NOT NULL AND LOWER(sku) = ?)").get(tombToken, tombToken);
+      if (existing) {
+        try {
+          const variants = db.prepare('SELECT id FROM product_variants WHERE product_id = ?').all(existing.id);
+          const varIds = variants.map(v => v.id);
+          if (varIds.length > 0) {
+            const placeholders = varIds.map(() => '?').join(',');
+            db.prepare(`UPDATE order_items SET variant_id = NULL WHERE variant_id IN (${placeholders})`).run(...varIds);
+            db.prepare(`UPDATE purchase_order_items SET variant_id = NULL WHERE variant_id IN (${placeholders})`).run(...varIds);
+            db.prepare(`DELETE FROM stock_movements WHERE variant_id IN (${placeholders})`).run(...varIds);
+            db.prepare(`DELETE FROM inventory_balances WHERE variant_id IN (${placeholders})`).run(...varIds);
+            db.prepare('DELETE FROM product_variants WHERE product_id = ?').run(existing.id);
+          }
+          db.prepare('DELETE FROM product_images WHERE product_id = ?').run(existing.id);
+          db.prepare('DELETE FROM products WHERE id = ?').run(existing.id);
+          console.log(`[SupabaseSync] Purged tombstoned product "${existing.name}" (${existing.sku}) from SQLite.`);
+        } catch (tombErr) {
+          console.warn('[SupabaseSync] Clean tombstone product note:', tombErr.message);
         }
       }
     }
@@ -958,6 +1111,10 @@ async function pushProductToCloud(product) {
     }
 
     console.log(`[SupabaseSync] Product "${product.name}" pushed to Supabase cloud successfully.`);
+
+    // 3. Ensure product is untombstoned so it is never hidden or skipped
+    await removeProductFromCloudTombstone(prodId, sku, product.name);
+
     return true;
   } catch (err) {
     console.warn('[SupabaseSync] pushProductToCloud error:', err.message);
@@ -966,35 +1123,190 @@ async function pushProductToCloud(product) {
 }
 
 /**
- * Delete product from Supabase cloud
+ * Remove product from SYS-TOMBSTONE-PRODUCTS when a frame is created or restored
  */
-async function deleteProductFromCloud(productId) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !productId) return false;
+async function removeProductFromCloudTombstone(productId, sku = null, name = null) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || (!productId && !sku && !name)) return;
   try {
+    const tokensToRemove = new Set();
+    if (productId) tokensToRemove.add(String(productId).toLowerCase().trim());
+    if (sku) tokensToRemove.add(String(sku).toLowerCase().trim());
+    if (name) tokensToRemove.add(String(name).toLowerCase().trim());
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if (!res.ok) return;
+    const list = await res.json();
+    if (!Array.isArray(list) || list.length === 0 || !list[0].notes) return;
+
+    let currentList = [];
+    try {
+      const parsed = JSON.parse(list[0].notes);
+      currentList = Array.isArray(parsed) ? parsed : (parsed.products || []);
+    } catch (_) { return; }
+
+    const filtered = currentList.filter(t => !tokensToRemove.has(String(t).toLowerCase().trim()));
+    if (filtered.length !== currentList.length) {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ notes: JSON.stringify({ products: filtered, updated_at: new Date().toISOString() }) })
+      });
+      console.log(`[SupabaseSync] Removed active product ${productId || sku || name} from cloud tombstones.`);
+    }
+  } catch (err) {
+    console.warn('[SupabaseSync] removeProductFromCloudTombstone note:', err.message);
+  }
+}
+
+/**
+ * Completely delete product from Supabase cloud:
+ * 1. Hard DELETE & deactivate in `products` table
+ * 2. Remove from `SYS-CATALOG-PRODUCTS` in `customers` table
+ * 3. Add to `SYS-TOMBSTONE-PRODUCTS` in `customers` table
+ */
+async function deleteProductFromCloud(productId, sku = null, name = null) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || (!productId && !sku)) return false;
+  try {
+    const tokens = new Set();
+    if (productId) tokens.add(String(productId).toLowerCase().trim());
+    if (sku) tokens.add(String(sku).toLowerCase().trim());
+
+    // 1. Delete and deactivate from Supabase `products` table
+    const filterParts = [];
+    if (productId) filterParts.push(`id.eq.${encodeURIComponent(productId)}`);
+    if (sku) filterParts.push(`id.eq.${encodeURIComponent(sku)}`);
+    const orFilter = filterParts.join(',');
+
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/products?or=(${orFilter})`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ is_active: false })
+      });
+    } catch (_) {}
+
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/products?or=(${orFilter})`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+    } catch (_) {}
+
+    // 2. Remove from SYS-CATALOG-PRODUCTS in customers table
     const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, {
       headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
     });
-    if (!res.ok) return false;
-    const list = await res.json();
-    if (!Array.isArray(list) || list.length === 0 || !list[0].notes) return false;
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list) && list.length > 0 && list[0].notes) {
+        let currentList = [];
+        try { currentList = JSON.parse(list[0].notes); } catch (_) { currentList = []; }
+        const prevLen = currentList.length;
+        currentList = currentList.filter(p => {
+          if (!p) return false;
+          const pId = p.id ? String(p.id).toLowerCase().trim() : '';
+          const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
+          if (tokens.has(pId)) return false;
+          if (tokens.has(pSku)) return false;
+          if (name && p.name && p.name.toLowerCase().trim() === name.toLowerCase().trim()) return false;
+          return true;
+        });
 
-    let currentList = [];
-    try { currentList = JSON.parse(list[0].notes); } catch (_) { currentList = []; }
-    currentList = currentList.filter(p => p.id !== productId && p.sku !== productId);
+        if (currentList.length !== prevLen) {
+          await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ notes: JSON.stringify(currentList), updated_at: new Date().toISOString() })
+          });
+        }
+      }
+    }
 
-    await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, {
-      method: 'PATCH',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ notes: JSON.stringify(currentList), updated_at: new Date().toISOString() })
-    });
-    console.log(`[SupabaseSync] Product ${productId} removed from Supabase cloud.`);
+    // 3. Push to SYS-TOMBSTONE-PRODUCTS
+    await pushDeletedProductToCloudTombstone(productId, sku, name);
+
+    console.log(`[SupabaseSync] Product ${productId || sku || name} completely purged from Supabase cloud.`);
     return true;
   } catch (err) {
     console.warn('[SupabaseSync] deleteProductFromCloud error:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Permanently purge all optical frame inventory from Supabase cloud
+ */
+async function clearAllProductsFromCloud(tokens = []) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
+  try {
+    // 1. Reset SYS-CATALOG-PRODUCTS to empty
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ notes: '[]', updated_at: new Date().toISOString() })
+      });
+    } catch (_) {}
+
+    // 2. Deactivate & attempt delete on products table
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/products?id=not.is.null`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ is_active: false })
+      });
+      await fetch(`${SUPABASE_URL}/rest/v1/products?id=not.is.null`, {
+        method: 'DELETE',
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+    } catch (_) {}
+
+    // 3. Push all tokens (base + custom) into SYS-TOMBSTONE-PRODUCTS
+    const allTokens = [
+      'noor-01', 'noor-02', 'noor-03', 'noor-04', 'noor-05', 'noor-06',
+      'noor-07', 'noor-08', 'noor-09', 'noor-10', 'noor-11', 'noor-12',
+      'noor-13', 'noor-14', 'noor-15', 'noor-16', 'noor-17', 'noor-18',
+      'NOOR-STK-01', 'NOOR-CPH-02', 'NOOR-OSL-03', 'NOOR-KYO-04', 'NOOR-MIL-05', 'NOOR-ZUR-06',
+      'NOOR-BER-07', 'NOOR-HEL-08', 'NOOR-REY-09', 'NOOR-VIE-10', 'NOOR-AMB-11', 'NOOR-TKY-12',
+      'NOOR-GOT-13', 'NOOR-MAL-14', 'NOOR-ARC-15', 'NOOR-NRD-16', 'NOOR-BER-17', 'NOOR-BOR-18',
+      'The Stockholm Noir', 'The Copenhagen Round', 'The Oslo Crystal', 'The Kyoto Havana',
+      'The Milan Aureum', 'The Zurich Titanium', 'The Berlin Hex', 'The Helsinki Quad',
+      'The Reykjavik Pilot', 'The Vienna Silhouette', 'The Amber Arch', 'The Tokyo Steel',
+      'The Gothenburg Wire', 'The Malmö Clear', 'The Arctic Sun-Optic', 'The Nord Fjord',
+      'The Bergen Dual', 'The Bordeaux Edge',
+      ...(Array.isArray(tokens) ? tokens : [])
+    ];
+    await pushDeletedProductToCloudTombstone(allTokens);
+
+    console.log('[SupabaseSync] All inventory successfully cleared from Supabase cloud.');
+    return true;
+  } catch (err) {
+    console.warn('[SupabaseSync] clearAllProductsFromCloud error:', err.message);
     return false;
   }
 }
@@ -1090,6 +1402,10 @@ module.exports = {
   syncSupabaseProducts,
   pushProductToCloud,
   deleteProductFromCloud,
+  clearAllProductsFromCloud,
+  removeProductFromCloudTombstone,
+  fetchCloudProductTombstones,
+  pushDeletedProductToCloudTombstone,
   pushOrderToSupabase,
   pushCustomerToSupabase,
   pushPrescriptionToSupabase,

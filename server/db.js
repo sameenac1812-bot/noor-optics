@@ -532,6 +532,12 @@ function initializeDatabase() {
         phone TEXT,
         deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
+      CREATE TABLE IF NOT EXISTS deleted_products (
+        product_id TEXT PRIMARY KEY,
+        sku TEXT,
+        name TEXT,
+        deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
     `);
     const delCustCols = db.pragma('table_info(deleted_customers)').map(c => c.name);
     if (!delCustCols.includes('name')) db.exec('ALTER TABLE deleted_customers ADD COLUMN name TEXT;');
