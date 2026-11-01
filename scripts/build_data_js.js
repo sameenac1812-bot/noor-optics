@@ -144,3 +144,4 @@ if (typeof module !== 'undefined' && module.exports) {
 
 fs.writeFileSync('data.js', fileContent, 'utf8');
 console.log('Successfully wrote data.js with', catalog.length, 'frames');
+

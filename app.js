@@ -966,6 +966,17 @@
     if (DOM.checkoutContentNormal) DOM.checkoutContentNormal.style.display = 'grid';
     if (DOM.checkoutContentSuccess) DOM.checkoutContentSuccess.style.display = 'none';
 
+    // Refresh payment choice & UPI QR display state
+    const payRadio = document.querySelector('input[name="checkout-pay"]:checked');
+    const upiPanel = document.getElementById('checkout-upi-qr-panel');
+    const submitBtn = document.getElementById('btn-submit-order');
+    if (upiPanel) {
+      upiPanel.style.display = payRadio && payRadio.value === 'upi' ? 'block' : 'none';
+    }
+    if (submitBtn) {
+      submitBtn.textContent = payRadio && payRadio.value === 'upi' ? 'Confirm Order & Pay via UPI' : 'Place Order';
+    }
+
     openModal(DOM.checkoutModal);
   }
 
@@ -1422,6 +1433,19 @@
           const rxPanel = document.getElementById('checkout-rx-structured-panel');
           if (rxPanel) {
             rxPanel.style.display = radio.value === 'enter-rx' ? 'block' : 'none';
+          }
+        });
+      });
+
+      DOM.checkoutForm.querySelectorAll('input[name="checkout-pay"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+          const upiPanel = document.getElementById('checkout-upi-qr-panel');
+          const submitBtn = document.getElementById('btn-submit-order');
+          if (upiPanel) {
+            upiPanel.style.display = radio.value === 'upi' ? 'block' : 'none';
+          }
+          if (submitBtn) {
+            submitBtn.textContent = radio.value === 'upi' ? 'Confirm Order & Pay via UPI' : 'Place Order';
           }
         });
       });
