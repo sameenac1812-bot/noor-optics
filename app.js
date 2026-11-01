@@ -16,7 +16,11 @@
         const cleaned = parsed.filter(item => {
           if (!item || !item.id) return false;
           const id = String(item.id).toLowerCase();
-          return !id.startsWith('noor-0') && !id.startsWith('noor-1');
+          const name = String(item.name || '').toLowerCase();
+          const isLegacy = id.startsWith('noor-0') || id.startsWith('noor-1') ||
+                           id.includes('mp4f2') || id.includes('5d89v') ||
+                           name.includes('meta') || name.includes('onko') || name.includes('stockholm');
+          return !isLegacy;
         });
         localStorage.setItem('noor_custom_frames', JSON.stringify(cleaned));
       }
@@ -64,7 +68,7 @@
 
   // Helper: Normalize product image URL safely supporting local paths, remote CDN, and base64 Data URLs
   function formatProductImage(img) {
-    if (!img) return '/images/stockholm_noir.jpg';
+    if (!img) return '/images/frames/frame_01.jpg';
     if (img.startsWith('data:') || img.startsWith('http://') || img.startsWith('https://') || img.startsWith('/')) {
       return img;
     }
@@ -346,7 +350,7 @@
                  alt="${product.name} - ${product.shape} Eyeglasses"
                  loading="lazy"
                  decoding="async"
-                 onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';"
+                 onerror="this.onerror=null; this.src='/images/frames/frame_01.jpg';"
                  id="img-${product.id}">
           </div>
           <div class="card-content">
@@ -583,7 +587,7 @@
       if (!product) return '';
       return `
         <div class="wishlist-item-card">
-          <img class="wishlist-item-img" src="${formatProductImage(product.image)}" alt="${product.name}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
+          <img class="wishlist-item-img" src="${formatProductImage(product.image)}" alt="${product.name}" onerror="this.onerror=null; this.src='/images/frames/frame_01.jpg';">
           <div class="wishlist-item-info">
             <h5 class="wishlist-item-name">${product.name}</h5>
             <div class="wishlist-item-price">${formatINR(product.price)}</div>
@@ -730,7 +734,7 @@
 
     const html = state.cart.map(item => `
       <div class="cart-item-card" data-cart-key="${item.cartKey}">
-        <img class="cart-item-img" src="${formatProductImage(item.image)}" alt="${item.name}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
+        <img class="cart-item-img" src="${formatProductImage(item.image)}" alt="${item.name}" onerror="this.onerror=null; this.src='/images/frames/frame_01.jpg';">
         <div class="cart-item-details">
           <h5 class="cart-item-title">${item.name}</h5>
           <span class="cart-item-variant">Color: ${item.color}</span>
@@ -842,7 +846,7 @@
     DOM.quickViewContainer.innerHTML = `
       <div class="quickview-grid">
         <div class="quickview-gallery">
-          <img class="quickview-img" src="${formatProductImage(product.image)}" alt="${product.name}" id="qv-main-img" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
+          <img class="quickview-img" src="${formatProductImage(product.image)}" alt="${product.name}" id="qv-main-img" onerror="this.onerror=null; this.src='/images/frames/frame_01.jpg';">
         </div>
         <div class="quickview-info">
           <div>
@@ -949,7 +953,7 @@
     if (DOM.checkoutItemsPreview) {
       DOM.checkoutItemsPreview.innerHTML = state.cart.map(item => `
         <div class="checkout-preview-item">
-          <img class="checkout-preview-img" src="${formatProductImage(item.image)}" alt="${item.name}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';">
+          <img class="checkout-preview-img" src="${formatProductImage(item.image)}" alt="${item.name}" onerror="this.onerror=null; this.src='/images/frames/frame_01.jpg';">
           <div>
             <div class="checkout-preview-title">${item.name}</div>
             <div class="checkout-preview-meta">Qty: ${item.quantity} · ${item.color}</div>
@@ -1669,7 +1673,7 @@
             const matchIdx = cloudProducts.findIndex(p => p.id === lc.id || (p.sku && lSku && p.sku.toUpperCase() === lSku) || (p.name && p.name.trim().toLowerCase() === lName));
             if (matchIdx >= 0) {
               const serverImg = cloudProducts[matchIdx].image_url;
-              if (serverImg && !serverImg.includes('stockholm_noir.jpg')) {
+              if (serverImg && !serverImg.includes('frames/frame_01.jpg')) {
                 lc.image_url = serverImg;
               }
               lc.name = cloudProducts[matchIdx].name;
@@ -1752,7 +1756,7 @@
             category: p.category || (staticMatch ? staticMatch.category : 'Optical'),
             rating: staticMatch ? staticMatch.rating : 4.9,
             reviewsCount: staticMatch ? staticMatch.reviewsCount : 24,
-            image: p.image_url || p.image || p.imageUrl || (staticMatch ? staticMatch.image : 'images/stockholm_noir.jpg'),
+            image: p.image_url || p.image || p.imageUrl || (staticMatch ? staticMatch.image : 'images/frames/frame_01.jpg'),
             colors: colors,
             dimensions: dimensions,
             description: p.description || (staticMatch ? staticMatch.description : 'Bespoke Scandinavian eyewear engineered with optical precision.')

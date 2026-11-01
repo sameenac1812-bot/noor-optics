@@ -982,12 +982,12 @@ async function syncSupabaseProducts(db) {
               original_price_paise = ?,
               purchase_cost_paise = ?,
               reorder_threshold = ?,
-              image_url = CASE WHEN ? IS NOT NULL AND ? != '' AND ? != 'images/stockholm_noir.jpg' THEN ? ELSE image_url END,
+              image_url = CASE WHEN ? IS NOT NULL AND ? != '' AND ? NOT LIKE '%stockholm%' THEN ? ELSE image_url END,
               description = COALESCE(?, description),
               is_active = 1,
               updated_at = datetime('now')
             WHERE id = ?
-          `).run(cp.name, cp.brand || null, sellingPaise, origPaise, costPaise, cleanThreshold, img, img, img, cp.description || null, existing.id);
+          `).run(cp.name, cp.brand || null, sellingPaise, origPaise, costPaise, cleanThreshold, img, img, img, img, cp.description || null, existing.id);
 
           // Update balance if variant exists
           const vRow = db.prepare('SELECT id FROM product_variants WHERE product_id = ? LIMIT 1').get(existing.id);

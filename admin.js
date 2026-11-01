@@ -15,7 +15,11 @@
         const cleaned = parsed.filter(item => {
           if (!item || !item.id) return false;
           const id = String(item.id).toLowerCase();
-          return !id.startsWith('noor-0') && !id.startsWith('noor-1');
+          const name = String(item.name || '').toLowerCase();
+          const isLegacy = id.startsWith('noor-0') || id.startsWith('noor-1') ||
+                           id.includes('mp4f2') || id.includes('5d89v') ||
+                           name.includes('meta') || name.includes('onko') || name.includes('stockholm');
+          return !isLegacy;
         });
         localStorage.setItem('noor_custom_frames', JSON.stringify(cleaned));
       }
@@ -154,7 +158,7 @@
 
   // Safe image URL formatter supporting local, remote, and base64 Data URLs
   function formatProductImage(img) {
-    if (!img) return '/images/stockholm_noir.jpg';
+    if (!img) return '/images/frames/frame_01.jpg';
     if (img.startsWith('data:') || img.startsWith('http://') || img.startsWith('https://') || img.startsWith('/')) {
       return img;
     }
@@ -1311,7 +1315,7 @@
                   purchase_cost_inr: Number(cp.purchaseCostINR || cp.purchase_cost_inr || 0),
                   total_stock: Number(cp.stock !== undefined ? cp.stock : (cp.initialStock !== undefined ? cp.initialStock : 10)),
                   reorder_threshold: Number(cp.reorder_threshold || 2),
-                  image_url: cp.image || cp.imageUrl || cp.image_url || 'images/stockholm_noir.jpg',
+                  image_url: cp.image || cp.imageUrl || cp.image_url || 'images/frames/frame_01.jpg',
                   description: cp.description || '',
                   is_active: 1,
                   created_at: cp.created_at || new Date().toISOString()
@@ -2012,7 +2016,7 @@
 
           const idx = list.findIndex(p => p.id === cp.id || (p.sku && cpSku && p.sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === cpSku));
           const assignedSku = cpSku || (idx >= 0 && list[idx].sku ? list[idx].sku : ('NOOR-' + cp.id.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(-8)));
-          const cpImg = cp.image || cp.imageUrl || cp.image_url || 'images/stockholm_noir.jpg';
+          const cpImg = cp.image || cp.imageUrl || cp.image_url || 'images/frames/frame_01.jpg';
 
           const formattedItem = {
             id: cp.id,
@@ -2042,7 +2046,7 @@
 
             // Server database record (list[idx]) is AUTHORITATIVE!
             const serverImg = list[idx].image_url;
-            const hasValidServerImg = serverImg && !serverImg.includes('stockholm_noir.jpg');
+            const hasValidServerImg = serverImg && !serverImg.includes('frames/frame_01.jpg');
 
             list[idx] = {
               ...formattedItem,
@@ -2078,7 +2082,7 @@
             if (idx >= 0) {
               // Product exists on server! Server record is AUTHORITATIVE.
               const serverImg = list[idx].image_url;
-              if (serverImg && !serverImg.includes('stockholm_noir.jpg')) {
+              if (serverImg && !serverImg.includes('frames/frame_01.jpg')) {
                 localItem.image_url = serverImg;
               }
               localItem.name = list[idx].name;
@@ -2116,7 +2120,7 @@
           if (foundIdx >= 0) {
             // Server product is authoritative! Update existingItem with server's real image_url
             const serverImg = list[foundIdx].image_url;
-            if (serverImg && !serverImg.includes('stockholm_noir.jpg')) {
+            if (serverImg && !serverImg.includes('frames/frame_01.jpg')) {
               existingItem.image_url = serverImg;
             }
           } else if (list.length === 0) {
@@ -2221,7 +2225,7 @@
           return `
             <div class="optic-inv-card">
               <div class="optic-inv-thumb">
-                ${p.image_url ? `<img src="${formatProductImage(p.image_url)}" alt="${escapeHtml(p.name)}" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />` : `
+                ${p.image_url ? `<img src="${formatProductImage(p.image_url)}" alt="${escapeHtml(p.name)}" onerror="this.onerror=null; this.src='/images/frames/frame_01.jpg';" />` : `
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="1.8">
                     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
                     <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
@@ -2273,7 +2277,7 @@
               <input type="checkbox" class="frame-row-checkbox" data-id="${p.id}" ${isChecked ? 'checked' : ''} />
             </td>
             <td>
-              <img src="${formatProductImage(p.image_url)}" alt="${escapeHtml(p.name)}" class="frame-thumbnail-img" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />
+              <img src="${formatProductImage(p.image_url)}" alt="${escapeHtml(p.name)}" class="frame-thumbnail-img" onerror="this.onerror=null; this.src='/images/frames/frame_01.jpg';" />
             </td>
             <td><strong>${escapeHtml(p.name)}</strong></td>
             <td><code style="font-weight:700; color:#111;">${escapeHtml(p.sku)}</code></td>
@@ -2615,7 +2619,7 @@
       const lowStock = Number(document.getElementById('frm-low-stock')?.value) || 2;
 
       const name = `${brand} ${model}`.trim();
-      const imageUrl = state.uploadedFrameImageUrl || 'images/stockholm_noir.jpg';
+      const imageUrl = state.uploadedFrameImageUrl || 'images/frames/frame_01.jpg';
 
       try {
         const prodId = 'prod-' + Date.now();
@@ -2808,7 +2812,7 @@
     state.editUploadedFrameImageUrl = null;
     if (fileInput) fileInput.value = '';
 
-    if (frame.image_url && !frame.image_url.includes('stockholm_noir.jpg')) {
+    if (frame.image_url && !frame.image_url.includes('frames/frame_01.jpg')) {
       if (prevImg) {
         prevImg.src = formatProductImage(frame.image_url);
         prevImg.style.display = 'block';
@@ -4277,7 +4281,7 @@
 
       return `
         <div class="pos-item-card" onclick="addFrameToPosCart('${p.id}')" title="Click to add to bill">
-          <img src="${escapeHtml(p.image_url ? (p.image_url.startsWith('/') ? p.image_url : '/' + p.image_url) : '/images/stockholm_noir.jpg')}" alt="${escapeHtml(p.name)}" class="pos-item-img" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />
+          <img src="${escapeHtml(p.image_url ? (p.image_url.startsWith('/') ? p.image_url : '/' + p.image_url) : '/images/frames/frame_01.jpg')}" alt="${escapeHtml(p.name)}" class="pos-item-img" onerror="this.onerror=null; this.src='/images/frames/frame_01.jpg';" />
           <div class="pos-item-name">${escapeHtml(p.name)}</div>
           <div class="pos-item-sku">${escapeHtml(p.sku)}</div>
           <div class="pos-item-bottom">
