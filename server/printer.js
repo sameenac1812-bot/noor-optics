@@ -512,18 +512,33 @@ async function generateEscPosQrLabel(opts = {}) {
 
       if (!isBlack) continue;
 
-      const botWhite = (rawY + 1 < 0 || rawY + 1 >= rawSize) ? true : !qr.modules.data[(rawY + 1) * rawSize + rawX];
-      const rightWhite = (rawX + 1 < 0 || rawX + 1 >= rawSize) ? true : !qr.modules.data[rawY * rawSize + (rawX + 1)];
+      const isFinder = (
+        (rawX < 7 && rawY < 7) ||
+        (rawX >= rawSize - 7 && rawY < 7) ||
+        (rawX < 7 && rawY >= rawSize - 7)
+      );
 
-      const endY = scale;
-      const endX = scale;
-
-      for (let dy = 0; dy < endY; dy++) {
-        for (let dx = 0; dx < endX; dx++) {
-          const py = qrOffsetY + my * scale + dy;
-          const px = qrOffsetX + mx * scale + dx;
-          if (py >= 0 && py < totalHeight && px >= 0 && px < labelWidth) {
-            grid[py][px] = 1;
+      if (isFinder) {
+        for (let dy = 0; dy < scale; dy++) {
+          for (let dx = 0; dx < scale; dx++) {
+            const py = qrOffsetY + my * scale + dy;
+            const px = qrOffsetX + mx * scale + dx;
+            if (py >= 0 && py < totalHeight && px >= 0 && px < labelWidth) {
+              grid[py][px] = 1;
+            }
+          }
+        }
+      } else {
+        // Dotted style for data modules (2x2 centered in 3x3/4x4 cell) to prevent thermal bleeding
+        const start = scale >= 4 ? 1 : 0;
+        const count = scale >= 4 ? 2 : scale;
+        for (let dy = start; dy < start + count; dy++) {
+          for (let dx = start; dx < start + count; dx++) {
+            const py = qrOffsetY + my * scale + dy;
+            const px = qrOffsetX + mx * scale + dx;
+            if (py >= 0 && py < totalHeight && px >= 0 && px < labelWidth) {
+              grid[py][px] = 1;
+            }
           }
         }
       }

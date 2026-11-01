@@ -315,8 +315,12 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
                                 ($ax -ge ($qrModCount - 7) -and $ay -lt 7) -or
                                 ($ax -lt 7 -and $ay -ge ($qrModCount - 7))
                             )
-                            # Solid, pitch-black module fill for high thermal contrast & instant camera recognition
-                            $gQr.FillRectangle($brushB, ($mx * $qrScale), ($my * $qrScale), $qrScale, $qrScale)
+                            if ($isFinder) {
+                                $gQr.FillRectangle($brushB, ($mx * $qrScale), ($my * $qrScale), $qrScale, $qrScale)
+                            } else {
+                                # Anti-blotting dotted style: centered 2x2 dot with 1-dot margin
+                                $gQr.FillRectangle($brushB, ($mx * $qrScale + 1), ($my * $qrScale + 1), 2, 2)
+                            }
                         }
                     }
                 }
