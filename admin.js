@@ -6,6 +6,22 @@
 (function () {
   'use strict';
 
+  // ── Auto-Purge Obsolete Demo Caches from Browser Storage ──────────────────
+  try {
+    const rawCustom = localStorage.getItem('noor_custom_frames');
+    if (rawCustom) {
+      const parsed = JSON.parse(rawCustom);
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed.filter(item => {
+          if (!item || !item.id) return false;
+          const id = String(item.id).toLowerCase();
+          return !id.startsWith('noor-0') && !id.startsWith('noor-1');
+        });
+        localStorage.setItem('noor_custom_frames', JSON.stringify(cleaned));
+      }
+    }
+  } catch (_) {}
+
   // ── Global Application State ───────────────────────────────────────────────
   const state = {
     token: localStorage.getItem('noor_admin_token') || null,

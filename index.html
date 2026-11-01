@@ -6,6 +6,22 @@
   <title>Noor Optics – Curated Scandinavian Eyewear & Precision Lenses</title>
   <meta name="description" content="Explore Noor Optics' Scandinavian-inspired luxury eyewear collection. Handcrafted Japanese titanium and Italian bio-acetate frames with custom precision lenses. Complimentary express delivery across India." />
   <meta name="theme-color" content="#FFFFFF" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <script>
+    (function() {
+      try {
+        window.EYEWEAR_CATALOG = [];
+        var ver = '9.9.8';
+        if (localStorage.getItem('noor_cache_v') !== ver) {
+          localStorage.removeItem('noor_custom_frames');
+          localStorage.removeItem('noor_clients_cache');
+          localStorage.setItem('noor_cache_v', ver);
+        }
+      } catch (_) {}
+    })();
+  </script>
 
   <!-- Preconnect to Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -719,8 +735,8 @@
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase.js?v=9.9.7"></script>
-  <script src="data.js?v=9.9.7"></script>
-  <script src="app.js?v=9.9.7"></script>
+  <script src="supabase.js?v=9.9.8"></script>
+  <script src="data.js?v=9.9.8"></script>
+  <script src="app.js?v=9.9.8"></script>
 </body>
 </html>
