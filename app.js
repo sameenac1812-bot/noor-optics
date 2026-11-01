@@ -24,14 +24,8 @@
 
   // ── Global Storefront State ────────────────────────────────────────────────
   const state = {
-    catalog: (window.EYEWEAR_CATALOG || []).filter(p => {
-      const del = getDeletedProductTokens();
-      if (!p) return false;
-      const pId = p.id ? String(p.id).toLowerCase().trim() : '';
-      const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
-      const pName = p.name ? String(p.name).toLowerCase().trim() : '';
-      return !del.has(pId) && !del.has(pSku) && !del.has(pName);
-    }),
+    catalog: [],
+    isLoading: true,
     cart: window.getSavedCart ? window.getSavedCart() : [],
     wishlist: new Set(window.getSavedWishlist ? window.getSavedWishlist() : []),
     currentSort: 'featured',
@@ -248,6 +242,22 @@
 
   // ── Render Product Grid ────────────────────────────────────────────────────
   function renderProductGrid() {
+    if (state.isLoading) {
+      if (DOM.catalogCount) {
+        DOM.catalogCount.innerHTML = `<span class="count-desktop">Loading curated collection...</span><span class="count-mobile">Loading...</span>`;
+      }
+      if (DOM.productGrid) {
+        DOM.productGrid.innerHTML = `
+          <div style="grid-column: 1 / -1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 5rem 1rem; color:#64748B;">
+            <div style="width:36px; height:36px; border:3px solid #E2E8F0; border-top-color:#0A2540; border-radius:50%; animation:opticSpin 0.8s linear infinite; margin-bottom:1rem;"></div>
+            <p style="font-size:0.95rem; font-weight:600; letter-spacing:0.02em;">Loading Noor Optics Collection...</p>
+          </div>
+          <style>@keyframes opticSpin { to { transform: rotate(360deg); } }</style>
+        `;
+      }
+      return;
+    }
+
     const items = getFilteredAndSortedCatalog();
 
     // Update Counter
@@ -1624,7 +1634,7 @@
 
       const delTokens = getDeletedProductTokens();
 
-      // Merge local cached custom frames so newly created frames never disappear on refresh
+      // Merge local cached custom frames (reconciling with server; server is authoritative)
       try {
         let localCached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
         if (Array.isArray(localCached)) {
@@ -1635,38 +1645,37 @@
             const lName = lc.name ? String(lc.name).toLowerCase().trim() : '';
             return !delTokens.has(lId) && !delTokens.has(lSku) && !delTokens.has(lName);
           });
+          const reconciledLocal = [];
           localCached.forEach(lc => {
             if (!lc || !lc.name) return;
             const lSku = (lc.sku && lc.sku.trim() && lc.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? lc.sku.trim().toUpperCase() : null;
-            const matchIdx = cloudProducts.findIndex(p => p.id === lc.id || (p.sku && lSku && p.sku.toUpperCase() === lSku));
-            const customItem = {
-              id: lc.id,
-              sku: lc.sku,
-              name: lc.name,
-              brand: lc.brand || 'Noor Optics',
-              selling_price_inr: Number(lc.selling_price_inr || lc.price || 3499),
-              selling_price_paise: Math.round(Number(lc.selling_price_inr || lc.price || 3499) * 100),
-              total_stock: Number(lc.total_stock !== undefined ? lc.total_stock : 10),
-              image_url: lc.image_url || lc.image || 'images/stockholm_noir.jpg',
-              description: lc.description || ''
-            };
+            const lName = lc.name.trim().toLowerCase();
+            const matchIdx = cloudProducts.findIndex(p => p.id === lc.id || (p.sku && lSku && p.sku.toUpperCase() === lSku) || (p.name && p.name.trim().toLowerCase() === lName));
             if (matchIdx >= 0) {
-              cloudProducts[matchIdx] = {
-                ...cloudProducts[matchIdx],
-                ...customItem,
-                image_url: (customItem.image_url && !customItem.image_url.includes('stockholm_noir.jpg'))
-                  ? customItem.image_url
-                  : (cloudProducts[matchIdx].image_url || customItem.image_url)
-              };
-            } else {
-              cloudProducts.unshift(customItem);
+              const serverImg = cloudProducts[matchIdx].image_url;
+              if (serverImg && !serverImg.includes('stockholm_noir.jpg')) {
+                lc.image_url = serverImg;
+              }
+              lc.name = cloudProducts[matchIdx].name;
+              lc.selling_price_inr = cloudProducts[matchIdx].selling_price_inr;
+              lc.total_stock = cloudProducts[matchIdx].total_stock;
+              reconciledLocal.push(lc);
+            } else if (cloudProducts.length === 0) {
+              // Server is offline; use local cached item
+              const ageMs = Date.now() - (lc.created_at ? new Date(lc.created_at).getTime() : 0);
+              if (ageMs < 10 * 60 * 1000) {
+                cloudProducts.unshift(lc);
+                reconciledLocal.push(lc);
+              }
             }
           });
+          localStorage.setItem('noor_custom_frames', JSON.stringify(reconciledLocal));
         }
       } catch (_) {}
 
       if (!Array.isArray(cloudProducts) || cloudProducts.length === 0) {
         state.catalog = [];
+        state.isLoading = false;
         renderProductGrid();
         return;
       }
@@ -1734,10 +1743,13 @@
           };
         });
 
+      state.isLoading = false;
       renderProductGrid();
       console.log(`✓ Live catalog synced from /api/products: ${state.catalog.length} frames active.`);
     } catch (err) {
       console.warn('Live catalog sync warning:', err);
+      state.isLoading = false;
+      renderProductGrid();
     }
   }
 
@@ -1748,6 +1760,7 @@
     initSmoothScrollEngine();
     updateBagBadge();
     updateWishlistBadge();
+    state.isLoading = true;
     renderProductGrid();
     renderCartDrawer();
     renderWishlistDrawer();
@@ -1756,84 +1769,6 @@
     // Fetch live inventory items so newly added frames appear immediately on the webpage
     loadLiveCatalog();
 
-    // Optional background sync from Supabase if connected (merges without dropping live catalog items)
-    if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
-      window.NoorSupabase.fetchCatalog().then(cloudProducts => {
-        if (Array.isArray(cloudProducts) && cloudProducts.length > 0) {
-          const delTokens = getDeletedProductTokens();
-          cloudProducts.forEach(cp => {
-            if (!cp || !cp.name) return;
-            const cpId = cp.id ? String(cp.id).toLowerCase().trim() : '';
-            const cpSku = cp.sku ? String(cp.sku).toLowerCase().trim() : '';
-            const cpName = cp.name ? String(cp.name).toLowerCase().trim() : '';
-            if (delTokens.has(cpId) || delTokens.has(cpSku) || delTokens.has(cpName)) return;
-
-            const idx = state.catalog.findIndex(p => p.id === cp.id || (p.sku && cp.sku && p.sku.toUpperCase() === cp.sku.toUpperCase()));
-            const normalizedCp = {
-              ...cp,
-              image: cp.image || cp.imageUrl || cp.image_url || cp.thumbnail || 'images/stockholm_noir.jpg'
-            };
-            if (idx >= 0) {
-              state.catalog[idx] = { ...state.catalog[idx], ...normalizedCp };
-            } else {
-              state.catalog.unshift(normalizedCp);
-            }
-          });
-          // Ensure no deleted frames in state.catalog
-          state.catalog = state.catalog.filter(p => {
-            if (!p) return false;
-            const pId = p.id ? String(p.id).toLowerCase().trim() : '';
-            const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
-            const pName = p.name ? String(p.name).toLowerCase().trim() : '';
-            return !delTokens.has(pId) && !delTokens.has(pSku) && !delTokens.has(pName);
-          });
-          renderProductGrid();
-          console.log(`✓ Merged and synchronized ${state.catalog.length} products from Supabase cloud.`);
-        }
-      });
-    }
-
-    // Client-side cache merge (ensures zero latency retention for newly added items)
-    try {
-      const delTokens = getDeletedProductTokens();
-      const localCached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
-      if (Array.isArray(localCached) && localCached.length > 0) {
-        localCached.forEach(lc => {
-          if (!lc || !lc.name) return;
-          const lId = lc.id ? String(lc.id).toLowerCase().trim() : '';
-          const lSku = lc.sku ? String(lc.sku).toLowerCase().trim() : '';
-          const lName = lc.name ? String(lc.name).toLowerCase().trim() : '';
-          if (delTokens.has(lId) || delTokens.has(lSku) || delTokens.has(lName)) return;
-
-          const idx = state.catalog.findIndex(p => p.id === lc.id || (p.sku && lc.sku && p.sku.toUpperCase() === lc.sku.toUpperCase()));
-          const formatted = {
-            id: lc.id,
-            sku: lc.sku,
-            name: lc.name,
-            collection: lc.brand || 'Noor Signature',
-            price: Number(lc.selling_price_inr || lc.price || 2999),
-            originalPrice: lc.original_price_inr ? Number(lc.original_price_inr) : null,
-            badge: 'New Arrival',
-            shape: lc.shape || 'Rectangular',
-            material: lc.material || 'Acetate',
-            fit: lc.fit || 'Regular',
-            category: lc.category || 'Optical',
-            rating: 5.0,
-            reviewsCount: 12,
-            image: lc.image_url || lc.image || 'images/stockholm_noir.jpg',
-            colors: [{ name: 'Standard', hex: '#111111' }],
-            dimensions: { lens: '52mm', bridge: '18mm', temple: '145mm', weight: '15g' },
-            description: lc.description || ''
-          };
-          if (idx >= 0) {
-            state.catalog[idx] = { ...state.catalog[idx], ...formatted };
-          } else {
-            state.catalog.unshift(formatted);
-          }
-        });
-        renderProductGrid();
-      }
-    } catch (_) {}
     // Auto-refresh catalog on tab focus and periodic background sync (every 5 seconds)
     window.addEventListener('focus', loadLiveCatalog);
     setInterval(loadLiveCatalog, 5000);

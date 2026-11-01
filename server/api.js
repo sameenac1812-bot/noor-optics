@@ -480,6 +480,8 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
 router.put('/products/:id', authenticateToken, requirePermission('products:manage'), (req, res) => {
   const pId = req.params.id;
   const { name, brand, shape, material, fit, sellingPriceINR, purchaseCostINR, reorderThreshold, isActive, description, stockQuantity } = req.body;
+  const imageUrl = req.body.imageUrl || req.body.image_url;
+  const cleanImageUrl = (imageUrl && typeof imageUrl === 'string') ? imageUrl.trim() : null;
 
   const sellingPaise = sellingPriceINR !== undefined ? Math.round(Number(sellingPriceINR) * 100) : null;
   const costPaise = purchaseCostINR !== undefined ? Math.round(Number(purchaseCostINR) * 100) : null;
@@ -496,9 +498,10 @@ router.put('/products/:id', authenticateToken, requirePermission('products:manag
       reorder_threshold = COALESCE(?, reorder_threshold),
       is_active = COALESCE(?, is_active),
       description = COALESCE(?, description),
+      image_url = CASE WHEN ? IS NOT NULL AND ? != '' AND ? != 'images/stockholm_noir.jpg' THEN ? ELSE image_url END,
       updated_at = datetime('now')
     WHERE id = ?
-  `).run(name, brand, shape, material, fit, sellingPaise, costPaise, reorderThreshold, isActive !== undefined ? (isActive ? 1 : 0) : null, description, pId);
+  `).run(name, brand, shape, material, fit, sellingPaise, costPaise, reorderThreshold, isActive !== undefined ? (isActive ? 1 : 0) : null, description, cleanImageUrl, cleanImageUrl, cleanImageUrl, cleanImageUrl, pId);
 
   // Update stock balance if provided
   if (stockQuantity !== undefined) {
@@ -552,7 +555,7 @@ router.put('/products/:id', authenticateToken, requirePermission('products:manag
     purchaseCostINR: purchaseCostINR !== undefined ? purchaseCostINR : (updatedProd.purchase_cost_paise ? updatedProd.purchase_cost_paise / 100 : 0),
     reorderThreshold: reorderThreshold !== undefined ? reorderThreshold : updatedProd.reorder_threshold,
     isActive: isActive !== undefined ? isActive : updatedProd.is_active,
-    imageUrl: updatedProd.image_url,
+    imageUrl: cleanImageUrl || updatedProd.image_url,
     description: description || updatedProd.description,
     stock: stockQuantity !== undefined ? Math.max(0, parseInt(stockQuantity, 10) || 0) : 10
   }).catch(() => {});

@@ -1792,6 +1792,23 @@
       </div>
       <form id="form-edit-frame">
         <input type="hidden" id="edit-frame-id" />
+        <!-- Photo Management -->
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-size:0.78rem; font-weight:700; color:#334155; margin-bottom:4px; display:block;">Frame Photo</label>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="width:54px; height:54px; border-radius:8px; border:1px solid #CBD5E1; overflow:hidden; background:#F8FAFC; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              <img id="edit-frame-preview-img" src="" alt="Frame preview" style="width:100%; height:100%; object-fit:cover; display:none;" onerror="this.onerror=null; this.src='/images/stockholm_noir.jpg';" />
+              <span id="edit-frame-preview-placeholder" style="font-size:1.4rem;">👓</span>
+            </div>
+            <div>
+              <label for="edit-frame-file-input" class="btn-table-action" style="cursor:pointer; display:inline-flex; align-items:center; gap:5px; padding:6px 12px; background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE; font-weight:700; border-radius:6px; font-size:0.78rem;">
+                📷 Upload / Change Photo
+              </label>
+              <input type="file" id="edit-frame-file-input" accept="image/*" style="display:none;" />
+              <div id="edit-frame-photo-status" style="font-size:0.72rem; color:#64748B; margin-top:3px;">Select photo to update frame thumbnail</div>
+            </div>
+          </div>
+        </div>
         <div class="form-group" style="margin-bottom:10px;">
           <label style="font-size:0.78rem; font-weight:700; color:#334155; margin-bottom:4px; display:block;">Frame Name</label>
           <input type="text" id="edit-frame-name" class="form-control" required />
@@ -1872,10 +1889,10 @@
   <script src="/vendor/xlsx.full.min.js?v=5.3.0"></script>
   <script src="/vendor/chart.umd.min.js?v=5.3.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="/supabase.js?v=9.8.3"></script>
-  <script src="/data.js?v=9.8.3"></script>
+  <script src="/supabase.js?v=9.9.7"></script>
+  <script src="/data.js?v=9.9.7"></script>
 
   <!-- ── 6. APPLICATION CONTROLLER ─────────────────────────────────────────── -->
-  <script src="/admin.js?v=9.8.3"></script>
+  <script src="/admin.js?v=9.9.7"></script>
 </body>
 </html>

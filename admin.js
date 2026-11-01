@@ -1265,45 +1265,7 @@
 
       const deletedTokens = tombstones || getDeletedProductTokens();
 
-      // 1. Base products
-      let baseList = [];
-      try {
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/products?is_active=eq.true&order=created_at.asc`, { headers });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data)) {
-            baseList = data
-              .filter(item => {
-                if (!item) return false;
-                const pId = item.id ? String(item.id).toLowerCase().trim() : '';
-                const pName = item.name ? String(item.name).toLowerCase().trim() : '';
-                const pSku = (item.sku || ('NOOR-' + (item.id || '').replace('noor-', '').padStart(2, '0'))).toLowerCase().trim();
-                return !deletedTokens.has(pId) && !deletedTokens.has(pName) && !deletedTokens.has(pSku);
-              })
-              .map(item => ({
-                id: item.id,
-                sku: item.sku || ('NOOR-' + item.id.replace('noor-', '').padStart(2, '0')).toUpperCase(),
-                name: item.name,
-                brand: item.collection || 'Noor Optics',
-                collection: item.collection,
-                category: item.category || 'Frames',
-                shape: item.shape || 'Rectangular',
-                material: item.material || 'Acetate',
-                fit: item.fit || 'Regular',
-                selling_price_inr: Number(item.price) || 0,
-                purchase_cost_inr: 0,
-                total_stock: 10,
-                reorder_threshold: 2,
-                image_url: item.image || 'images/stockholm_noir.jpg',
-                description: item.description || '',
-                is_active: 1,
-                created_at: item.created_at || new Date().toISOString()
-              }));
-          }
-        }
-      } catch (_) {}
-
-      // 2. Custom products
+      // Fetch custom catalog products stored in SYS-CATALOG-PRODUCTS
       let customList = [];
       try {
         const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, { headers });
@@ -1343,10 +1305,7 @@
         }
       } catch (_) {}
 
-      const productMap = new Map();
-      baseList.forEach(p => productMap.set(p.id, p));
-      customList.forEach(p => productMap.set(p.id, p));
-      return Array.from(productMap.values());
+      return customList;
     } catch (e) {
       return [];
     }
@@ -2065,13 +2024,15 @@
               ? cloudStock
               : (!isNaN(prevStock) && prevStock > 0 ? prevStock : (cloudStock || 0));
 
+            // Server database record (list[idx]) is AUTHORITATIVE!
+            const serverImg = list[idx].image_url;
+            const hasValidServerImg = serverImg && !serverImg.includes('stockholm_noir.jpg');
+
             list[idx] = {
-              ...list[idx],
               ...formattedItem,
+              ...list[idx],
               total_stock: finalStock,
-              image_url: (formattedItem.image_url && !formattedItem.image_url.includes('stockholm_noir.jpg'))
-                ? formattedItem.image_url
-                : (list[idx].image_url || formattedItem.image_url)
+              image_url: hasValidServerImg ? serverImg : (formattedItem.image_url || serverImg)
             };
           } else {
             list.unshift(formattedItem);
@@ -2079,50 +2040,49 @@
         });
       }
 
-      // 2. Merge LocalStorage Cache (Guarantees zero-second immediate retention on client)
+      // 2. Reconcile LocalStorage Cache (Server is authoritative; eliminate stale pre-clear-all ghost images)
       try {
         let localCached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
         if (Array.isArray(localCached)) {
           // Permanently purge any tombstoned items from localStorage
-          const cleanCached = localCached.filter(p => {
+          localCached = localCached.filter(p => {
             if (!p) return false;
             const pId = p.id ? String(p.id).toLowerCase().trim() : '';
             const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
             const pName = p.name ? String(p.name).toLowerCase().trim() : '';
             return !deletedTokens.has(pId) && !deletedTokens.has(pSku) && !deletedTokens.has(pName);
           });
-          if (cleanCached.length !== localCached.length) {
-            localStorage.setItem('noor_custom_frames', JSON.stringify(cleanCached));
-            localCached = cleanCached;
-          }
 
+          const reconciledLocal = [];
           localCached.forEach(localItem => {
             if (!localItem || !localItem.name) return;
             const lSku = (localItem.sku && localItem.sku.trim() && localItem.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? localItem.sku.trim().toUpperCase() : null;
-            const idx = list.findIndex(p => p.id === localItem.id || (p.sku && lSku && p.sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === lSku));
+            const lName = localItem.name.trim().toLowerCase();
+            const idx = list.findIndex(p => p.id === localItem.id || (p.sku && lSku && p.sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === lSku) || (p.name && p.name.trim().toLowerCase() === lName));
             if (idx >= 0) {
-              const localStock = Number(localItem.total_stock);
-              const listStock = Number(list[idx].total_stock);
-              const finalStock = (!isNaN(localStock) && localStock > 0)
-                ? localStock
-                : (!isNaN(listStock) && listStock > 0 ? listStock : (localStock || 0));
-
-              list[idx] = {
-                ...list[idx],
-                ...localItem,
-                total_stock: finalStock,
-                image_url: (localItem.image_url && !localItem.image_url.includes('stockholm_noir.jpg'))
-                  ? localItem.image_url
-                  : (list[idx].image_url || localItem.image_url)
-              };
-            } else {
-              list.unshift(localItem);
+              // Product exists on server! Server record is AUTHORITATIVE.
+              const serverImg = list[idx].image_url;
+              if (serverImg && !serverImg.includes('stockholm_noir.jpg')) {
+                localItem.image_url = serverImg;
+              }
+              localItem.name = list[idx].name;
+              localItem.selling_price_inr = list[idx].selling_price_inr;
+              localItem.total_stock = list[idx].total_stock;
+              reconciledLocal.push(localItem);
+            } else if (list.length === 0) {
+              // Only keep recently added offline items when server is offline
+              const ageMs = Date.now() - (localItem.created_at ? new Date(localItem.created_at).getTime() : 0);
+              if (ageMs < 10 * 60 * 1000) {
+                list.unshift(localItem);
+                reconciledLocal.push(localItem);
+              }
             }
           });
+          localStorage.setItem('noor_custom_frames', JSON.stringify(reconciledLocal));
         }
       } catch (_) {}
 
-      // 3. Guaranteed In-Memory Retention: Never drop newly added frames already in state.inventoryList
+      // 3. In-Memory Retention: Never let stale in-memory items overwrite server image_url
       if (Array.isArray(state.inventoryList) && state.inventoryList.length > 0) {
         state.inventoryList.forEach(existingItem => {
           if (!existingItem || !existingItem.sku) return;
@@ -2136,24 +2096,18 @@
             return;
           }
 
-          const foundIdx = list.findIndex(p => p.id === existingItem.id || (p.sku && eSku && p.sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === eSku));
-          if (foundIdx === -1) {
-            list.unshift(existingItem);
-          } else {
-            const memStock = Number(existingItem.total_stock);
-            const listStock = Number(list[foundIdx].total_stock);
-            const finalStock = (!isNaN(memStock) && memStock > 0)
-              ? memStock
-              : (!isNaN(listStock) && listStock > 0 ? listStock : (memStock || 0));
-
-            list[foundIdx] = {
-              ...list[foundIdx],
-              ...existingItem,
-              total_stock: finalStock,
-              image_url: (existingItem.image_url && !existingItem.image_url.includes('stockholm_noir.jpg'))
-                ? existingItem.image_url
-                : (list[foundIdx].image_url || existingItem.image_url)
-            };
+          const foundIdx = list.findIndex(p => p.id === existingItem.id || (p.sku && eSku && p.sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === eSku) || (p.name && p.name.toLowerCase().trim() === eNameLower));
+          if (foundIdx >= 0) {
+            // Server product is authoritative! Update existingItem with server's real image_url
+            const serverImg = list[foundIdx].image_url;
+            if (serverImg && !serverImg.includes('stockholm_noir.jpg')) {
+              existingItem.image_url = serverImg;
+            }
+          } else if (list.length === 0) {
+            const ageMs = Date.now() - (existingItem.created_at ? new Date(existingItem.created_at).getTime() : 0);
+            if (ageMs < 10 * 60 * 1000) {
+              list.unshift(existingItem);
+            }
           }
         });
       }
@@ -2749,6 +2703,12 @@
         showToast(`✓ Frame "${name}" added to stock successfully!`, 'success');
         modal.classList.remove('open');
         document.body.classList.remove('modal-open');
+        form?.reset();
+        const prevWrap = document.getElementById('frm-photo-preview-wrap');
+        const prevImg = document.getElementById('frm-photo-preview');
+        if (prevWrap) prevWrap.style.display = 'none';
+        if (prevImg) prevImg.src = '';
+        state.uploadedFrameImageUrl = null;
 
         // 6. Background server sync: never blocks UI or rolls back on transient network hiccups
         apiFetch('/api/products', {
@@ -2824,6 +2784,27 @@
     const thresholdInput = document.getElementById('edit-frame-threshold');
     const subEl = document.getElementById('edit-frame-sub');
 
+    // Photo Preview Setup
+    const prevImg = document.getElementById('edit-frame-preview-img');
+    const prevPlaceholder = document.getElementById('edit-frame-preview-placeholder');
+    const photoStatus = document.getElementById('edit-frame-photo-status');
+    const fileInput = document.getElementById('edit-frame-file-input');
+    state.editUploadedFrameImageUrl = null;
+    if (fileInput) fileInput.value = '';
+
+    if (frame.image_url && !frame.image_url.includes('stockholm_noir.jpg')) {
+      if (prevImg) {
+        prevImg.src = formatProductImage(frame.image_url);
+        prevImg.style.display = 'block';
+      }
+      if (prevPlaceholder) prevPlaceholder.style.display = 'none';
+      if (photoStatus) photoStatus.textContent = 'Current frame photo';
+    } else {
+      if (prevImg) prevImg.style.display = 'none';
+      if (prevPlaceholder) prevPlaceholder.style.display = 'block';
+      if (photoStatus) photoStatus.textContent = 'Default stock image (No custom photo)';
+    }
+
     if (idInput) idInput.value = frame.id;
     if (nameInput) nameInput.value = frame.name || '';
     if (brandInput) brandInput.value = frame.brand || '';
@@ -2842,6 +2823,36 @@
     const form = document.getElementById('form-edit-frame');
     const modal = document.getElementById('modal-edit-frame');
     if (!form) return;
+
+    // Handle photo picker in edit modal
+    const editFileInput = document.getElementById('edit-frame-file-input');
+    if (editFileInput) {
+      editFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        try {
+          showToast('Processing new frame photo...', 'info');
+          const compressed = await compressImageFile(file, 500, 500, 0.75);
+          state.editUploadedFrameImageUrl = compressed;
+
+          const prevImg = document.getElementById('edit-frame-preview-img');
+          const prevPlaceholder = document.getElementById('edit-frame-preview-placeholder');
+          const photoStatus = document.getElementById('edit-frame-photo-status');
+          if (prevImg) {
+            prevImg.src = compressed;
+            prevImg.style.display = 'block';
+          }
+          if (prevPlaceholder) prevPlaceholder.style.display = 'none';
+          if (photoStatus) {
+            photoStatus.textContent = '✓ New photo selected (Click "Save Changes" to apply)';
+            photoStatus.style.color = '#059669';
+          }
+          showToast('New photo ready!', 'success');
+        } catch (err) {
+          showToast('Failed to process image: ' + err.message, 'error');
+        }
+      });
+    }
 
     const btnDelete = document.getElementById('btn-edit-frame-delete');
     if (btnDelete) {
@@ -2868,6 +2879,7 @@
       const purchaseCostINR = Number(document.getElementById('edit-frame-wholesale')?.value) || 0;
       const stockQuantity = Number(document.getElementById('edit-frame-stock')?.value) || 0;
       const reorderThreshold = Number(document.getElementById('edit-frame-threshold')?.value) || 2;
+      const newImageUrl = state.editUploadedFrameImageUrl || null;
 
       // 1. Instantly update active in-memory state and UI (0ms latency, never reverts to 0)
       const existing = state.inventoryList.find(p => p.id === pId) || {};
@@ -2884,6 +2896,7 @@
         total_stock: stockQuantity,
         stock: stockQuantity,
         reorder_threshold: reorderThreshold,
+        image_url: newImageUrl || existing.image_url,
         updated_at: new Date().toISOString()
       };
 
@@ -2910,9 +2923,10 @@
       renderInventoryTable();
 
       try {
-        showToast(`Stock updated to ${stockQuantity} units!`, 'success');
+        showToast(`Frame "${name}" updated successfully!`, 'success');
         modal.classList.remove('open');
         document.body.classList.remove('modal-open');
+        state.editUploadedFrameImageUrl = null;
 
         // 3. Dual-write update to Supabase Cloud
         if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
@@ -2923,6 +2937,7 @@
             price: sellingPriceINR,
             stock: stockQuantity,
             initialStock: stockQuantity,
+            imageUrl: newImageUrl || existing.image_url,
             reorderThreshold
           }).catch(e => console.warn('Supabase product edit dual-write note:', e));
         }
@@ -2937,7 +2952,8 @@
             sellingPriceINR,
             purchaseCostINR,
             stockQuantity,
-            reorderThreshold
+            reorderThreshold,
+            imageUrl: newImageUrl || undefined
           })
         }).catch(e => console.warn('Server product update note:', e));
 

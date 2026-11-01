@@ -221,58 +221,7 @@
         }
       } catch (_) {}
 
-      // 1. Fetch base catalog from products table
-      let baseProducts = [];
-      try {
-        const { data, error } = await supabaseClient
-          .from('products')
-          .select('*')
-          .eq('is_active', true)
-          .order('created_at', { ascending: true });
-
-        if (!error && Array.isArray(data)) {
-          const staticList = (typeof window !== 'undefined' && window.EYEWEAR_CATALOG) ? window.EYEWEAR_CATALOG : [];
-          baseProducts = data
-            .map(item => {
-              const staticMatch = staticList.find(sc => sc.id === item.id || sc.name.toLowerCase() === item.name.toLowerCase());
-              const canonicalSku = (item.sku || (staticMatch ? staticMatch.sku : ('NOOR-' + item.id.replace('noor-', '').padStart(2, '0')))).toUpperCase();
-              return { ...item, canonicalSku, staticMatch };
-            })
-            .filter(item => {
-              if (!item) return false;
-              const pId = item.id ? String(item.id).toLowerCase().trim() : '';
-              const pSku = item.canonicalSku ? String(item.canonicalSku).toLowerCase().trim() : '';
-              const pName = item.name ? String(item.name).toLowerCase().trim() : '';
-              return !tombstonedTokens.has(pId) && !tombstonedTokens.has(pSku) && !tombstonedTokens.has(pName);
-            })
-            .map(item => {
-              return {
-                id: item.id,
-                sku: item.canonicalSku,
-                name: item.name,
-                brand: item.staticMatch?.brand || 'Noor Optics',
-                collection: item.collection,
-                price: Number(item.price),
-                originalPrice: item.original_price ? Number(item.original_price) : null,
-                badge: item.badge,
-                shape: item.shape,
-                material: item.material,
-                fit: item.fit,
-                category: item.category || 'Optical',
-                rating: Number(item.rating) || 4.9,
-                reviewsCount: item.reviews_count || 50,
-                image: item.image,
-                colors: item.colors || [],
-                dimensions: item.dimensions || {},
-                description: item.description
-              };
-            });
-        }
-      } catch (e) {
-        console.warn('Base products fetch note:', e.message);
-      }
-
-      // 2. Fetch custom added products stored in Supabase cloud storage (customers table metadata)
+      // 1. Fetch active custom products stored in Supabase cloud storage (customers table metadata SYS-CATALOG-PRODUCTS)
       let customProducts = [];
       try {
         const { data: customData, error: customErr } = await supabaseClient
@@ -301,13 +250,7 @@
         console.warn('Custom products cloud fetch note:', e.message);
       }
 
-      // Merge and deduplicate by ID and SKU
-      const productMap = new Map();
-      baseProducts.forEach(p => productMap.set(p.id, p));
-      customProducts.forEach(p => productMap.set(p.id, p));
-
-      const merged = Array.from(productMap.values());
-      return merged.length > 0 ? merged : null;
+      return customProducts;
     } catch (err) {
       console.warn('Could not fetch catalog from Supabase, using local catalog:', err.message);
       return null;
