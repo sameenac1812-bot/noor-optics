@@ -538,19 +538,19 @@
         const brandNewOrders = incoming.filter(o => !state.knownOrderIds.has(o.id));
         if (brandNewOrders.length > 0) {
           brandNewOrders.forEach(o => state.knownOrderIds.add(o.id));
+          const latest = brandNewOrders[0];
 
           // 1. Play audible boutique chime
           playOrderChime();
 
           // 2. Flash live notification toast only when not currently in an active sale completion modal
           const isSuccessModalOpen = document.getElementById('modal-order-success')?.classList.contains('open');
-          if (!isSuccessModalOpen) {
-            const latest = brandNewOrders[0];
+          if (!isSuccessModalOpen && latest) {
             showToast(`🔔 New Order Placed: #${latest.order_number} by ${latest.customer_name || 'Client'}`, 'success');
           }
 
           // 3. Automatic instant thermal bill printout with zero delay
-          if (typeof instantPrintReceipt === 'function') {
+          if (latest && typeof instantPrintReceipt === 'function') {
             instantPrintReceipt(latest.id);
           }
         }
@@ -2074,10 +2074,14 @@
             method: 'POST',
             body: JSON.stringify({ imageBase64: compressedBase64 })
           });
-          if (res && res.imageUrl) {
+          if (res && res.imageUrl && (res.imageUrl.startsWith('data:') || res.imageUrl.startsWith('http'))) {
             state.uploadedFrameImageUrl = res.imageUrl;
+          } else {
+            state.uploadedFrameImageUrl = compressedBase64;
           }
-        } catch (_) {}
+        } catch (_) {
+          state.uploadedFrameImageUrl = compressedBase64;
+        }
 
         showToast('Frame photo ready!', 'success');
       } catch (err) {

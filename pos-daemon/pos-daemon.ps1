@@ -854,6 +854,16 @@ function Poll-CloudOrders {
                 if (-not $o.channel) { $o | Add-Member -NotePropertyName "channel" -NotePropertyValue "WEBSITE" -Force }
 
                 # Extract Rx from items or query Supabase prescriptions table by phone
+                if (-not $o.prescription -and $o.items) {
+                    $rawIts = $o.items
+                    if ($rawIts -is [string]) { try { $rawIts = $rawIts | ConvertFrom-Json } catch {} }
+                    if ($rawIts -and $rawIts.Count -gt 0) {
+                        foreach ($it in $rawIts) {
+                            if ($it.prescription) { $o | Add-Member -NotePropertyName "prescription" -NotePropertyValue $it.prescription -Force; break }
+                            elseif ($it.rx) { $o | Add-Member -NotePropertyName "prescription" -NotePropertyValue $it.rx -Force; break }
+                        }
+                    }
+                }
                 if (-not $o.prescription -and $o.customer_phone) {
                     try {
                         $cPhoneClean = [string]$o.customer_phone

@@ -323,12 +323,12 @@
         try { currentList = JSON.parse(existingRows[0].notes); } catch (_) { currentList = []; }
       }
 
-      // Replace or append
+      // Replace or unshift (newest first)
       const idx = currentList.findIndex(p => p.id === prodId || (p.sku && p.sku !== 'NOOR-FRAME' && prodSku !== 'NOOR-FRAME' && p.sku.toUpperCase() === prodSku.toUpperCase()));
       if (idx >= 0) {
         currentList[idx] = formatted;
       } else {
-        currentList.push(formatted);
+        currentList.unshift(formatted);
       }
 
       if (Array.isArray(existingRows) && existingRows.length > 0) {

@@ -337,7 +337,7 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
           purchase_cost_paise = ?,
           supplier_id = COALESCE(?, supplier_id),
           reorder_threshold = ?,
-          image_url = ?,
+          image_url = CASE WHEN ? != '' AND ? != 'images/stockholm_noir.jpg' THEN ? ELSE image_url END,
           description = ?,
           is_active = 1,
           updated_at = datetime('now')
@@ -348,7 +348,7 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
         fit || 'Regular', category || 'Optical',
         sellingPaise, origPaise, costPaise,
         supplierId || null, cleanReorderThreshold,
-        cleanImageUrl, cleanDesc,
+        cleanImageUrl, cleanImageUrl, cleanImageUrl, cleanDesc,
         productId
       );
 
@@ -409,8 +409,9 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
         INSERT INTO products (
           id, sku, name, brand, shape, material, fit, category,
           selling_price_paise, original_price_paise, purchase_cost_paise,
-          supplier_id, reorder_threshold, image_url, description
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          supplier_id, reorder_threshold, image_url, description,
+          is_active, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))
       `).run(
         productId, cleanSku, name, brand || 'Noor Optics',
         shape || 'Rectangular', material || 'Japanese Titanium',
@@ -1393,27 +1394,22 @@ router.post('/prescriptions/upload-image', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Image data is required.' });
   }
 
+  // Always return self-contained Data URL so prescription photos persist across Vercel, cloud sync, and mobile
   try {
     const rxDir = path.join(__dirname, '..', 'images', 'prescriptions');
     if (!fs.existsSync(rxDir)) {
       fs.mkdirSync(rxDir, { recursive: true });
     }
-
     const extMatch = imageBase64.match(/^data:image\/([a-zA-Z0-9]+);base64,/);
     const ext = extMatch ? extMatch[1].replace('jpeg', 'jpg') : 'jpg';
     const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9]+;base64,/, '');
-
     const safeName = `rx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
     const filePath = path.join(rxDir, safeName);
-
     fs.writeFileSync(filePath, Buffer.from(cleanBase64, 'base64'));
-    const relativeUrl = `images/prescriptions/${safeName}`;
+  } catch (_) {}
 
-    res.json({ success: true, imageUrl: relativeUrl });
-  } catch (err) {
-    console.error('Image upload failed:', err);
-    res.status(500).json({ error: 'Failed to save prescription image: ' + err.message });
-  }
+  // Authoritative URL is the data URL for universal cross-environment portability
+  res.json({ success: true, imageUrl: imageBase64 });
 });
 
 // ── POST /api/products/upload-image (Save Uploaded Frame Photo) ──────────────
@@ -1423,32 +1419,22 @@ router.post('/products/upload-image', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Image data is required.' });
   }
 
-  // On Vercel serverless / read-only filesystem, return compressed Data URL directly
-  if (process.env.VERCEL) {
-    return res.json({ success: true, imageUrl: imageBase64 });
-  }
-
+  // Write optional local file for offline access if filesystem is writable
   try {
     const frameDir = path.join(__dirname, '..', 'images', 'frames');
     if (!fs.existsSync(frameDir)) {
       fs.mkdirSync(frameDir, { recursive: true });
     }
-
     const extMatch = imageBase64.match(/^data:image\/([a-zA-Z0-9]+);base64,/);
     const ext = extMatch ? extMatch[1].replace('jpeg', 'jpg') : 'jpg';
     const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9]+;base64,/, '');
-
     const safeName = `frame_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
     const filePath = path.join(frameDir, safeName);
-
     fs.writeFileSync(filePath, Buffer.from(cleanBase64, 'base64'));
-    const relativeUrl = `images/frames/${safeName}`;
+  } catch (_) {}
 
-    res.json({ success: true, imageUrl: relativeUrl });
-  } catch (err) {
-    console.warn('[Upload-Image] File save fallback to Data URL:', err.message);
-    res.json({ success: true, imageUrl: imageBase64 });
-  }
+  // Authoritative URL is the compressed data URL for universal cross-environment portability (never 404s on Vercel)
+  res.json({ success: true, imageUrl: imageBase64 });
 });
 
 // ==============================================================================
@@ -2161,7 +2147,10 @@ router.post('/orders/online', (req, res) => {
   try {
     const result = onlineTx();
 
-    // 1. Push order to Supabase Cloud
+    const rxRecord = createdPrescriptionId ? db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(createdPrescriptionId) : null;
+    const effectiveRx = rxRecord || prescription || null;
+
+    // 1. Push order to Supabase Cloud with embedded prescription metadata
     pushOrderToSupabase({
       orderNumber,
       customerName,
@@ -2170,7 +2159,7 @@ router.post('/orders/online', (req, res) => {
       deliveryAddress,
       city,
       pinCode,
-      items: preparedItems.map(pi => ({
+      items: preparedItems.map((pi, idx) => ({
         id: pi.id,
         name: pi.product_name,
         product_name: pi.product_name,
@@ -2192,8 +2181,20 @@ router.post('/orders/online', (req, res) => {
         subtotal: pi.subtotal_paise / 100,
         subtotal_inr: pi.subtotal_paise / 100,
         subtotal_paise: pi.subtotal_paise,
-        subtotalPaise: pi.subtotal_paise
+        subtotalPaise: pi.subtotal_paise,
+        prescription: idx === 0 ? effectiveRx : null,
+        rx: idx === 0 ? effectiveRx : null
       })),
+      prescriptionId: createdPrescriptionId,
+      prescription: effectiveRx,
+      od_sph: effectiveRx?.od_sph || effectiveRx?.odSph || null,
+      od_cyl: effectiveRx?.od_cyl || effectiveRx?.odCyl || null,
+      od_axis: effectiveRx?.od_axis !== undefined ? effectiveRx?.od_axis : effectiveRx?.odAxis,
+      os_sph: effectiveRx?.os_sph || effectiveRx?.osSph || null,
+      os_cyl: effectiveRx?.os_cyl || effectiveRx?.osCyl || null,
+      os_axis: effectiveRx?.os_axis !== undefined ? effectiveRx?.os_axis : effectiveRx?.osAxis,
+      addition: effectiveRx?.addition || effectiveRx?.add || null,
+      ipd_distance: effectiveRx?.ipd_distance || effectiveRx?.pd || null,
       prescriptionPref: prescriptionPref || (createdPrescriptionId ? 'RX Attached' : 'Standard'),
       paymentMethod,
       subtotalINR: result.subtotalINR,
@@ -2209,15 +2210,13 @@ router.post('/orders/online', (req, res) => {
     }
 
     // 3. Push prescription to Supabase Cloud
-    if (createdPrescriptionId) {
-      const rxRecord = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(createdPrescriptionId);
-      if (rxRecord) {
-        pushPrescriptionToSupabase({
-          ...rxRecord,
-          client_name: customerName,
-          client_phone: customerPhone
-        }).catch(err => console.warn('[SupabaseSync] Push rx note:', err.message));
-      }
+    if (rxRecord) {
+      pushPrescriptionToSupabase({
+        ...rxRecord,
+        client_name: customerName,
+        client_phone: customerPhone,
+        pd: rxRecord.ipd_distance || rxRecord.pd || null
+      }).catch(err => console.warn('[SupabaseSync] Push rx note:', err.message));
     }
 
     res.json({ success: true, ...result, customerId: createdCustomerId, prescriptionId: createdPrescriptionId });
@@ -3057,8 +3056,65 @@ router.post('/printer/orders/:orderId/daemon-dispatch', (req, res) => {
   });
 });
 
+function getOrderForPrint(orderIdOrRef) {
+  const order = db.prepare(`
+    SELECT
+      o.*,
+      pr.prescription_number,
+      pr.od_sph, pr.od_cyl, pr.od_axis,
+      pr.os_sph, pr.os_cyl, pr.os_axis,
+      pr.addition,
+      pr.ipd_distance, pr.ipd_near,
+      pr.checked_by as rx_checked_by,
+      pr.notes as rx_notes
+    FROM orders o
+    LEFT JOIN prescriptions pr ON o.prescription_id = pr.id
+    WHERE o.id = ? OR o.order_number = ?
+  `).get(orderIdOrRef, orderIdOrRef);
+
+  if (!order) return null;
+
+  // Fallback to customer's latest prescription if order has none linked
+  if (!order.prescription_number && order.customer_id) {
+    const rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(order.customer_id);
+    if (rx) {
+      order.prescription_number = rx.prescription_number;
+      order.od_sph = rx.od_sph;
+      order.od_cyl = rx.od_cyl;
+      order.od_axis = rx.od_axis;
+      order.os_sph = rx.os_sph;
+      order.os_cyl = rx.os_cyl;
+      order.os_axis = rx.os_axis;
+      order.addition = rx.addition;
+      order.ipd_distance = rx.ipd_distance;
+      order.rx_checked_by = rx.checked_by;
+      order.rx_notes = rx.notes;
+    }
+  } else if (!order.prescription_number && order.customer_phone) {
+    const cust = db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0 LIMIT 1').get(order.customer_phone.trim());
+    if (cust) {
+      const rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(cust.id);
+      if (rx) {
+        order.prescription_number = rx.prescription_number;
+        order.od_sph = rx.od_sph;
+        order.od_cyl = rx.od_cyl;
+        order.od_axis = rx.od_axis;
+        order.os_sph = rx.os_sph;
+        order.os_cyl = rx.os_cyl;
+        order.os_axis = rx.os_axis;
+        order.addition = rx.addition;
+        order.ipd_distance = rx.ipd_distance;
+        order.rx_checked_by = rx.checked_by;
+        order.rx_notes = rx.notes;
+      }
+    }
+  }
+
+  return order;
+}
+
 router.get('/printer/preview/:orderId', (req, res) => {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.orderId);
+  const order = getOrderForPrint(req.params.orderId);
   if (!order) return res.status(404).send('Order not found');
 
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
@@ -3070,7 +3126,7 @@ router.get('/printer/preview/:orderId', (req, res) => {
 });
 
 router.get('/printer/orders/:orderId/preview-html', (req, res) => {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.orderId);
+  const order = getOrderForPrint(req.params.orderId);
   if (!order) return res.status(404).send('Order not found');
 
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);

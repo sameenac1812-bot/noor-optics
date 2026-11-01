@@ -111,6 +111,20 @@ function format58mmTextReceipt(order, items, settings = {}) {
   if (order.outstanding_paise > 0) {
     text += row('Balance Due:', formatINR(order.outstanding_paise)) + '\n';
   }
+
+  // Prescription (Rx) Section
+  if ((order.od_sph !== undefined && order.od_sph !== null && order.od_sph !== '') || order.prescription_number) {
+    text += divider + '\n';
+    text += center('--- CLIENT PRESCRIPTION (RX) ---') + '\n';
+    if (order.prescription_number) text += center(order.prescription_number) + '\n';
+    text += 'Eye   SPH    CYL   AXIS   ADD   \n';
+    const fmt = v => (v === undefined || v === null || v === '' || v === '---') ? ' --- ' : String(v).padEnd(6);
+    const fmtAx = a => (a === undefined || a === null || a === '' || a === '---') ? '---' : String(a).padEnd(3);
+    text += `OD  ${fmt(order.od_sph)} ${fmt(order.od_cyl)} ${fmtAx(order.od_axis)}  ${fmt(order.addition)}\n`;
+    text += `OS  ${fmt(order.os_sph)} ${fmt(order.os_cyl)} ${fmtAx(order.os_axis)}  ${fmt(order.addition)}\n`;
+    if (order.ipd_distance) text += `Distance PD: ${order.ipd_distance} mm\n`;
+    if (order.rx_checked_by) text += `Optometrist: ${order.rx_checked_by}\n`;
+  }
   text += divider + '\n';
   text += center('2-Year Frame Warranty') + '\n';
   text += center('14-Day Free Glazing Adjustment') + '\n';
@@ -338,8 +352,39 @@ async function processPrintJob(jobId) {
   const job = db.prepare('SELECT * FROM print_jobs WHERE id = ?').get(jobId);
   if (!job) throw new Error('Print job not found');
 
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(job.order_id);
+  const order = db.prepare(`
+    SELECT
+      o.*,
+      pr.prescription_number,
+      pr.od_sph, pr.od_cyl, pr.od_axis,
+      pr.os_sph, pr.os_cyl, pr.os_axis,
+      pr.addition,
+      pr.ipd_distance, pr.ipd_near,
+      pr.checked_by as rx_checked_by,
+      pr.notes as rx_notes
+    FROM orders o
+    LEFT JOIN prescriptions pr ON o.prescription_id = pr.id
+    WHERE o.id = ?
+  `).get(job.order_id);
   if (!order) throw new Error('Order not found for print job');
+
+  // Customer fallback if order has no direct prescription link
+  if (!order.prescription_number && order.customer_id) {
+    const rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(order.customer_id);
+    if (rx) {
+      order.prescription_number = rx.prescription_number;
+      order.od_sph = rx.od_sph;
+      order.od_cyl = rx.od_cyl;
+      order.od_axis = rx.od_axis;
+      order.os_sph = rx.os_sph;
+      order.os_cyl = rx.os_cyl;
+      order.os_axis = rx.os_axis;
+      order.addition = rx.addition;
+      order.ipd_distance = rx.ipd_distance;
+      order.rx_checked_by = rx.checked_by;
+      order.rx_notes = rx.notes;
+    }
+  }
 
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(job.order_id);
   const settings = getStoreSettings();

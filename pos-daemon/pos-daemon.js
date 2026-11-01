@@ -1,8 +1,8 @@
 /**
- * pos-daemon/pos-daemon.js – Portable Windows POS Print Daemon
- * High-speed automatic 2.5-inch thermal receipt printing for Noor Optics.
- * Listens for local in-store POS checkouts and cloud website orders.
- */
+* pos-daemon/pos-daemon.js – Portable Windows POS Print Daemon
+* High-speed automatic 2.5-inch thermal receipt printing for Noor Optics.
+* Listens for local in-store POS checkouts and cloud website orders.
+*/
 
 'use strict';
 
@@ -93,7 +93,7 @@ async function refreshCatalogCache() {
               }
             });
           }
-        } catch (_) {}
+        } catch (_) { }
       }
     }
 
@@ -111,7 +111,7 @@ async function refreshCatalogCache() {
         });
       }
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 refreshCatalogCache();
 
@@ -130,12 +130,12 @@ function resolveItemDetails(item, order) {
   const itemSku = String(item.sku || '').toUpperCase();
   const unitPrice = (item.unit_price_inr != null) ? Number(item.unit_price_inr)
     : (item.unitPricePaise != null) ? Number(item.unitPricePaise) / 100
-    : (item.unit_price_paise != null) ? Number(item.unit_price_paise) / 100
-    : (item.priceINR != null) ? Number(item.priceINR)
-    : (item.pricePaise != null) ? Number(item.pricePaise) / 100
-    : (item.unitPrice != null) ? Number(item.unitPrice)
-    : (item.unit_price != null) ? Number(item.unit_price)
-    : 0;
+      : (item.unit_price_paise != null) ? Number(item.unit_price_paise) / 100
+        : (item.priceINR != null) ? Number(item.priceINR)
+          : (item.pricePaise != null) ? Number(item.pricePaise) / 100
+            : (item.unitPrice != null) ? Number(item.unitPrice)
+              : (item.unit_price != null) ? Number(item.unit_price)
+                : 0;
 
   // 1. Authoritative check for custom inventory frames
   if (vId.includes('1793298868419') || vId.includes('1793380443146') || itemSku.includes('BATMAN') || (unitPrice >= 50000 && unitPrice <= 60000)) {
@@ -243,10 +243,10 @@ function autoDetectPrinter() {
       config.printerName = posMatch;
       try {
         fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
-      } catch (e) {}
+      } catch (e) { }
       return posMatch;
     }
-  } catch (e) {}
+  } catch (e) { }
   return config.printerName;
 }
 autoDetectPrinter();
@@ -310,7 +310,7 @@ function log(msg, level = 'INFO') {
     const today = ts.slice(0, 10);
     const logFile = path.join(LOGS_DIR, `daemon_${today}.log`);
     fs.appendFileSync(logFile, line, 'utf8');
-  } catch (e) {}
+  } catch (e) { }
 }
 
 // ── Spool Raw Bytes via worker-printer.ps1 ────────────────────────────────────
@@ -321,7 +321,7 @@ function spoolBytesToPrinter(buffer, docName = 'Customer Bill') {
 
     const cmd = `powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${WORKER_SCRIPT}" -FilePath "${tempFile}" -PrinterName "${config.printerName}" -DocName "${docName}"`;
     exec(cmd, { timeout: 15000 }, (error, stdout, stderr) => {
-      try { fs.unlinkSync(tempFile); } catch (e) {}
+      try { fs.unlinkSync(tempFile); } catch (e) { }
       if (error) {
         state.failedJobs++;
         state.lastError = stderr || error.message;
@@ -442,19 +442,19 @@ function format25InchEscPosReceipt(rawOrder) {
       const qty = parseInt(item.quantity || 1, 10);
       const unitPrice = (item.unit_price_inr != null) ? Number(item.unit_price_inr)
         : (item.unit_price_paise != null) ? Number(item.unit_price_paise) / 100
-        : (item.unitPricePaise != null) ? Number(item.unitPricePaise) / 100
-        : (item.pricePaise != null) ? Number(item.pricePaise) / 100
-        : (item.priceINR != null) ? Number(item.priceINR)
-        : (item.unitPrice != null) ? Number(item.unitPrice)
-        : (item.unit_price != null) ? Number(item.unit_price)
-        : 0;
+          : (item.unitPricePaise != null) ? Number(item.unitPricePaise) / 100
+            : (item.pricePaise != null) ? Number(item.pricePaise) / 100
+              : (item.priceINR != null) ? Number(item.priceINR)
+                : (item.unitPrice != null) ? Number(item.unitPrice)
+                  : (item.unit_price != null) ? Number(item.unit_price)
+                    : 0;
 
       let lineTotal = (item.subtotal_inr != null) ? Number(item.subtotal_inr)
         : (item.subtotal_paise != null) ? Number(item.subtotal_paise) / 100
-        : (item.subtotalPaise != null) ? Number(item.subtotalPaise) / 100
-        : (item.subtotal != null && Number(item.subtotal) > 0) ? Number(item.subtotal)
-        : (item.lineTotalINR != null) ? Number(item.lineTotalINR)
-        : (unitPrice * qty);
+          : (item.subtotalPaise != null) ? Number(item.subtotalPaise) / 100
+            : (item.subtotal != null && Number(item.subtotal) > 0) ? Number(item.subtotal)
+              : (item.lineTotalINR != null) ? Number(item.lineTotalINR)
+                : (unitPrice * qty);
 
       if (lineTotal === 0 && grandTotal > 0 && items.length === 1) {
         lineTotal = grandTotal;
@@ -523,11 +523,11 @@ function format25InchEscPosReceipt(rawOrder) {
   const docVal = getRxField(['checked_by', 'checkedBy', 'rx_checked_by']);
 
   const hasAnyRxValue = odSphVal !== null || odCylVal !== null || odAxisVal !== null ||
-                        osSphVal !== null || osCylVal !== null || osAxisVal !== null ||
-                        addVal !== null || pdVal !== null;
+    osSphVal !== null || osCylVal !== null || osAxisVal !== null ||
+    addVal !== null || pdVal !== null;
 
   const rxExplicitlyMentioned = Boolean(order.prescription_id || order.prescription_number || (rx && rx.prescription_number) ||
-                                        (order.prescription_pref && /rx/i.test(order.prescription_pref)));
+    (order.prescription_pref && /rx/i.test(order.prescription_pref)));
 
   if (hasAnyRxValue) {
     writeBytes([0x1B, 0x61, 0x01]); // Center
@@ -713,7 +713,7 @@ async function format25InchEscPosQrSticker(item) {
   // Thin-line anti-blotting engine: Solid finder patterns + 3x3 active dots inside 4x4 cells
   // Perfectly reproduces crisp, thin-line reference sticker layout (Top QR -> SKU -> Model -> Price)
   let QRCode;
-  try { QRCode = require(path.join(__dirname, 'assets', 'qrcode-bundle.js')); } catch (_) {}
+  try { QRCode = require(path.join(__dirname, 'assets', 'qrcode-bundle.js')); } catch (_) { }
   if (!QRCode) {
     try { QRCode = require('qrcode'); } catch (_) { QRCode = null; }
   }
@@ -891,7 +891,7 @@ async function pollCloudOrders() {
     const orders = await res.json();
     if (!Array.isArray(orders)) return;
 
-    await refreshCatalogCache().catch(() => {});
+    await refreshCatalogCache().catch(() => { });
 
     const now = Date.now();
     const freshnessMs = (config.orderFreshnessMinutes || 30) * 60 * 1000;
@@ -912,23 +912,31 @@ async function pollCloudOrders() {
       log(`[Cloud Event] Detected newly confirmed website order #${ref}! Triggering automatic print...`);
 
       if (typeof o.items === 'string') {
-        try { o.items = JSON.parse(o.items); } catch (_) {}
+        try { o.items = JSON.parse(o.items); } catch (_) { }
       }
 
       // Extract prescription from items or query Supabase prescriptions table by phone
-      if (!o.prescription && Array.isArray(o.items) && o.items[0]?.prescription) {
-        o.prescription = o.items[0].prescription;
+      if (!o.prescription && Array.isArray(o.items)) {
+        for (const it of o.items) {
+          if (it && (it.prescription || it.rx)) {
+            o.prescription = it.prescription || it.rx;
+            break;
+          }
+        }
       }
       if (!o.prescription && o.customer_phone) {
         try {
-          const rxRes = await fetch(`${config.supabaseUrl}/rest/v1/prescriptions?client_phone=eq.${encodeURIComponent(String(o.customer_phone).trim())}&order=created_at.desc&limit=1`, {
+          const rawPhone = String(o.customer_phone).trim();
+          const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+          const phoneQuery = cleanPhone.length >= 10 ? `client_phone=ilike.*${cleanPhone.slice(-10)}*` : `client_phone=eq.${encodeURIComponent(rawPhone)}`;
+          const rxRes = await fetch(`${config.supabaseUrl}/rest/v1/prescriptions?${phoneQuery}&order=created_at.desc&limit=1`, {
             headers: { 'apikey': config.supabaseAnonKey, 'Authorization': `Bearer ${config.supabaseAnonKey}` }
           });
           if (rxRes.ok) {
             const rxData = await rxRes.json();
             if (Array.isArray(rxData) && rxData.length > 0) o.prescription = rxData[0];
           }
-        } catch (_) {}
+        } catch (_) { }
       }
 
       await processPrintOrder(o);
@@ -954,7 +962,7 @@ async function pollCloudPrintQueue() {
     if (!Array.isArray(recs) || recs.length === 0 || !recs[0].notes) return;
 
     let notesObj = null;
-    try { notesObj = JSON.parse(recs[0].notes); } catch (_) {}
+    try { notesObj = JSON.parse(recs[0].notes); } catch (_) { }
     if (!notesObj || !Array.isArray(notesObj.jobs) || notesObj.jobs.length === 0) return;
 
     const remainingJobs = [];
@@ -1002,9 +1010,9 @@ async function pollCloudPrintQueue() {
           'Prefer': 'return=minimal'
         },
         body: JSON.stringify({ notes: JSON.stringify({ jobs: remainingJobs }) })
-      }).catch(() => {});
+      }).catch(() => { });
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 
 // ── Local HTTP Server (Port 5001) ─────────────────────────────────────────────
@@ -1046,7 +1054,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/printers') {
     exec('powershell.exe -Command "Get-Printer | Select-Object -Property Name, DriverName, PortName, PrinterStatus | ConvertTo-Json"', (err, stdout) => {
       let printers = [];
-      try { printers = JSON.parse(stdout); } catch (e) {}
+      try { printers = JSON.parse(stdout); } catch (e) { }
       if (!Array.isArray(printers)) printers = printers ? [printers] : [];
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ success: true, printers }));

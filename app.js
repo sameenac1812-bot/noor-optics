@@ -1676,7 +1676,7 @@
             if (idx >= 0) {
               state.catalog[idx] = { ...state.catalog[idx], ...normalizedCp };
             } else {
-              state.catalog.push(normalizedCp);
+              state.catalog.unshift(normalizedCp);
             }
           });
           renderProductGrid();

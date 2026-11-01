@@ -526,6 +526,22 @@ async function pushOrderToSupabase(orderPayload) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
 
   try {
+    let itemsToPush = Array.isArray(orderPayload.items) ? [...orderPayload.items] : [];
+    const rxPayload = orderPayload.prescription || (orderPayload.od_sph ? {
+      od_sph: orderPayload.od_sph,
+      od_cyl: orderPayload.od_cyl,
+      od_axis: orderPayload.od_axis,
+      os_sph: orderPayload.os_sph,
+      os_cyl: orderPayload.os_cyl,
+      os_axis: orderPayload.os_axis,
+      addition: orderPayload.addition,
+      ipd_distance: orderPayload.ipd_distance
+    } : null);
+
+    if (rxPayload && itemsToPush.length > 0 && !itemsToPush[0].prescription) {
+      itemsToPush[0] = { ...itemsToPush[0], prescription: rxPayload, rx: rxPayload };
+    }
+
     const res = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
       method: 'POST',
       headers: {
@@ -542,7 +558,7 @@ async function pushOrderToSupabase(orderPayload) {
         delivery_address: orderPayload.deliveryAddress || orderPayload.delivery_address || 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028',
         city: orderPayload.city || 'Hyderabad',
         pin_code: orderPayload.pinCode || orderPayload.pin_code || '500028',
-        items: orderPayload.items || [],
+        items: itemsToPush,
         prescription_pref: orderPayload.prescriptionPref || ((orderPayload.prescriptionId || orderPayload.od_sph || orderPayload.prescription?.od_sph) ? 'RX Attached' : 'Standard'),
         payment_method: orderPayload.paymentMethod || orderPayload.payment_method || 'CASH',
         subtotal: orderPayload.subtotalINR || (orderPayload.subtotalPaise ? orderPayload.subtotalPaise / 100 : orderPayload.totalPayableINR || orderPayload.grandTotalINR || orderPayload.grand_total || 0),
@@ -632,8 +648,9 @@ async function pushPrescriptionToSupabase(rx) {
         os_cyl: rx.os_cyl !== undefined && rx.os_cyl !== null && rx.os_cyl !== '' ? (isNaN(parseFloat(rx.os_cyl)) ? null : parseFloat(rx.os_cyl)) : null,
         os_axis: rx.os_axis !== undefined && rx.os_axis !== null && rx.os_axis !== '' ? parseInt(rx.os_axis, 10) : null,
         os_va: rx.os_va || null,
-        addition: rx.addition || null,
-        pd: rx.pd || null,
+        addition: rx.addition || rx.add || null,
+        pd: rx.pd || rx.ipd_distance || rx.ipdDistance || null,
+        image_url: rx.image_url || rx.imageUrl || null,
         lens_type: rx.lens_type || null,
         lens_material: rx.lens_material || null,
         coatings: rx.coatings || null,
@@ -910,7 +927,7 @@ async function pushProductToCloud(product) {
     if (idx >= 0) {
       currentList[idx] = formatted;
     } else {
-      currentList.push(formatted);
+      currentList.unshift(formatted);
     }
 
     if (recordExists) {
