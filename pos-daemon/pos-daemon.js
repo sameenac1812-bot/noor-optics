@@ -34,7 +34,7 @@ let config = {
   storeAddress: 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028',
   storePhone: '+91 98765 43210',
   storeGstin: '29AAAAA0000A1Z5',
-  orderFreshnessMinutes: 30,
+  orderFreshnessMinutes: 1440,
   supabaseUrl: 'https://czajxtgwsxbrrymrhauz.supabase.co',
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk',
   backendUrl: 'https://noor-optics-five.vercel.app',
@@ -974,7 +974,7 @@ async function processPrintOrder(order, forcePrint = false) {
   if (!orderRef) return { success: false, error: 'Missing order reference' };
 
   // Skip duplicate ONLY for background pollers if already physically printed
-  if (!forcePrint && printedHistory[orderRef] && printedHistory[orderRef] !== 'SKIPPED_STALE') {
+  if (!forcePrint && printedHistory[orderRef] && printedHistory[orderRef] !== 'SKIPPED_STALE' && printedHistory[orderRef] !== 'PRINTING') {
     log(`Duplicate print skipped for order ${orderRef} (Already printed at ${printedHistory[orderRef]})`);
     return { success: true, skippedDuplicate: true, orderNumber: orderRef, printedAt: printedHistory[orderRef] };
   }
@@ -995,14 +995,17 @@ async function processPrintOrder(order, forcePrint = false) {
 }
 
 // ── Cloud Order Listener (Real-Time Website Order Ingestion) ──────────────────
+let isPollingCloud = false;
 async function pollCloudOrders() {
-  if (!config.supabaseUrl || !config.supabaseAnonKey) return;
+  if (isPollingCloud || !config.supabaseUrl || !config.supabaseAnonKey) return;
+  isPollingCloud = true;
   try {
     const res = await fetch(`${config.supabaseUrl}/rest/v1/orders?select=*&order=created_at.desc&limit=25`, {
       headers: {
         'apikey': config.supabaseAnonKey,
         'Authorization': `Bearer ${config.supabaseAnonKey}`
-      }
+      },
+      signal: AbortSignal.timeout(6000)
     });
 
     if (!res.ok) {
@@ -1018,12 +1021,18 @@ async function pollCloudOrders() {
 
     const now = Date.now();
     // 24 hour window ensures orders placed overnight or while PC is off are never missed
-    const freshnessMs = 24 * 60 * 60 * 1000;
+    const freshnessMs = (config.orderFreshnessMinutes || 1440) * 60 * 1000;
+
+    // Periodic heartbeat log every 30 seconds so the console shows active polling
+    if (!state.lastHeartbeatTime || (now - state.lastHeartbeatTime > 30000)) {
+      state.lastHeartbeatTime = now;
+      log(`[Cloud Poller] Watching Noor Cloud (Connected: ✓ | Orders in history: ${Object.keys(printedHistory).length})`);
+    }
 
     for (const o of orders) {
-      const ref = o.order_ref;
+      const ref = o.order_ref || o.order_number || (o.id ? String(o.id) : null);
       if (!ref || /TEST-REF|GHOST-TEST/i.test(ref)) continue;
-      // Skip if already successfully printed
+      // Skip if already successfully printed or currently printing
       if (printedHistory[ref] && printedHistory[ref] !== 'SKIPPED_STALE') continue;
 
       const orderTime = o.created_at ? new Date(o.created_at).getTime() : 0;
@@ -1031,7 +1040,12 @@ async function pollCloudOrders() {
         continue;
       }
 
-      log(`[Cloud Event] Detected confirmed order #${ref}! Triggering automatic print...`);
+      // Mark as printing immediately to prevent concurrency duplicates
+      printedHistory[ref] = 'PRINTING';
+
+      const clientName = o.customer_name || 'Online Client';
+      const grandTotal = o.grand_total || o.total_payable_inr || (o.total_payable_paise ? o.total_payable_paise / 100 : 0);
+      log(`[Cloud Event] Detected order #${ref} for ${clientName} (Total: Rs.${grandTotal})! Auto-printing bill...`);
 
       if (typeof o.items === 'string') {
         try { o.items = JSON.parse(o.items); } catch (_) { }
@@ -1052,7 +1066,8 @@ async function pollCloudOrders() {
           const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
           const phoneQuery = cleanPhone.length >= 10 ? `client_phone=ilike.*${cleanPhone.slice(-10)}*` : `client_phone=eq.${encodeURIComponent(rawPhone)}`;
           const rxRes = await fetch(`${config.supabaseUrl}/rest/v1/prescriptions?${phoneQuery}&order=created_at.desc&limit=1`, {
-            headers: { 'apikey': config.supabaseAnonKey, 'Authorization': `Bearer ${config.supabaseAnonKey}` }
+            headers: { 'apikey': config.supabaseAnonKey, 'Authorization': `Bearer ${config.supabaseAnonKey}` },
+            signal: AbortSignal.timeout(3000)
           });
           if (rxRes.ok) {
             const rxData = await rxRes.json();
@@ -1061,11 +1076,18 @@ async function pollCloudOrders() {
         } catch (_) { }
       }
 
-      await processPrintOrder(o);
+      const printResult = await processPrintOrder(o);
+      if (printResult.success) {
+        printedHistory[ref] = new Date().toISOString();
+        savePrintedHistory();
+      } else {
+        delete printedHistory[ref];
+      }
     }
-    savePrintedHistory();
   } catch (err) {
     state.cloudConnected = false;
+  } finally {
+    isPollingCloud = false;
   }
 }
 

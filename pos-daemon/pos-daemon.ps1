@@ -111,7 +111,7 @@ $Config = @{
     storeAddress = "Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028"
     storePhone = "+91 98765 43210"
     storeGstin = "29AAAAA0000A1Z5"
-    orderFreshnessMinutes = 45
+    orderFreshnessMinutes = 1440
     supabaseUrl = "https://czajxtgwsxbrrymrhauz.supabase.co"
     supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk"
 }
@@ -878,7 +878,7 @@ function Poll-CloudOrders {
             foreach ($o in $orders) {
                 $ref = if ($o.order_ref) { [string]$o.order_ref } elseif ($o.order_number) { [string]$o.order_number } else { [string]$o.id }
                 if (-not $ref -or $ref -match "TEST") { continue }
-                if ($History.ContainsKey($ref)) { continue }
+                if ($History.ContainsKey($ref) -and $History[$ref] -ne "SKIPPED_STALE") { continue }
 
                 # Stale historical check: don't print old orders on reboot
                 if ($o.created_at) {
