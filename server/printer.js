@@ -512,19 +512,86 @@ async function generateEscPosQrLabel(opts = {}) {
 
       if (!isBlack) continue;
 
-      const isFinder = (
-        (rawX < 7 && rawY < 7) ||
-        (rawX >= rawSize - 7 && rawY < 7) ||
-        (rawX < 7 && rawY >= rawSize - 7)
-      );
+      function getFinderOrigin(ax, ay) {
+        if (ax >= 0 && ax < 7 && ay >= 0 && ay < 7) return { ox: 0, oy: 0 };
+        if (ax >= rawSize - 7 && ax < rawSize && ay >= 0 && ay < 7) return { ox: rawSize - 7, oy: 0 };
+        if (ax >= 0 && ax < 7 && ay >= rawSize - 7 && ay < rawSize) return { ox: 0, oy: rawSize - 7 };
+        return null;
+      }
 
-      if (isFinder) {
+      const finder = getFinderOrigin(rawX, rawY);
+
+      if (finder) {
+        // Rounded square corners for finder patterns
+        const finderDim = 7 * scale;
+        const rOuter = Math.max(3, Math.floor(finderDim * 0.18));
+        const rInner = Math.max(2, Math.floor(finderDim * 0.12));
+
         for (let dy = 0; dy < scale; dy++) {
           for (let dx = 0; dx < scale; dx++) {
-            const py = qrOffsetY + my * scale + dy;
-            const px = qrOffsetX + mx * scale + dx;
-            if (py >= 0 && py < totalHeight && px >= 0 && px < labelWidth) {
-              grid[py][px] = 1;
+            const rx = (rawX - finder.ox) * scale + dx;
+            const ry = (rawY - finder.oy) * scale + dy;
+
+            let drawPixel = false;
+            const inOuterBox = rx >= 0 && rx < finderDim && ry >= 0 && ry < finderDim;
+            const inHole = rx >= scale && rx < (finderDim - scale) && ry >= scale && ry < (finderDim - scale);
+
+            if (inOuterBox && !inHole) {
+              let cornerDistSq = 0;
+              let inCorner = false;
+              if (rx < rOuter && ry < rOuter) {
+                cornerDistSq = Math.pow(rx - rOuter, 2) + Math.pow(ry - rOuter, 2);
+                inCorner = true;
+              } else if (rx >= finderDim - rOuter && ry < rOuter) {
+                cornerDistSq = Math.pow(rx - (finderDim - 1 - rOuter), 2) + Math.pow(ry - rOuter, 2);
+                inCorner = true;
+              } else if (rx < rOuter && ry >= finderDim - rOuter) {
+                cornerDistSq = Math.pow(rx - rOuter, 2) + Math.pow(ry - (finderDim - 1 - rOuter), 2);
+                inCorner = true;
+              } else if (rx >= finderDim - rOuter && ry >= finderDim - rOuter) {
+                cornerDistSq = Math.pow(rx - (finderDim - 1 - rOuter), 2) + Math.pow(ry - (finderDim - 1 - rOuter), 2);
+                inCorner = true;
+              }
+
+              if (!inCorner || cornerDistSq <= rOuter * rOuter) {
+                drawPixel = true;
+              }
+            }
+
+            // Inner center dot
+            const centerStart = 2 * scale;
+            const centerEnd = 5 * scale;
+            if (rx >= centerStart && rx < centerEnd && ry >= centerStart && ry < centerEnd) {
+              const cx = rx - centerStart;
+              const cy = ry - centerStart;
+              const centerDim = 3 * scale;
+              let inCenterCorner = false;
+              let centerDistSq = 0;
+              if (cx < rInner && cy < rInner) {
+                centerDistSq = Math.pow(cx - rInner, 2) + Math.pow(cy - rInner, 2);
+                inCenterCorner = true;
+              } else if (cx >= centerDim - rInner && cy < rInner) {
+                centerDistSq = Math.pow(cx - (centerDim - 1 - rInner), 2) + Math.pow(cy - rInner, 2);
+                inCenterCorner = true;
+              } else if (cx < rInner && cy >= centerDim - rInner) {
+                centerDistSq = Math.pow(cx - rInner, 2) + Math.pow(cy - (centerDim - 1 - rInner), 2);
+                inCenterCorner = true;
+              } else if (cx >= centerDim - rInner && cy >= centerDim - rInner) {
+                centerDistSq = Math.pow(cx - (centerDim - 1 - rInner), 2) + Math.pow(cy - (centerDim - 1 - rInner), 2);
+                inCenterCorner = true;
+              }
+
+              if (!inCenterCorner || centerDistSq <= rInner * rInner) {
+                drawPixel = true;
+              }
+            }
+
+            if (drawPixel) {
+              const py = qrOffsetY + my * scale + dy;
+              const px = qrOffsetX + mx * scale + dx;
+              if (py >= 0 && py < totalHeight && px >= 0 && px < labelWidth) {
+                grid[py][px] = 1;
+              }
             }
           }
         }

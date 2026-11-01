@@ -824,43 +824,101 @@ async function format25InchEscPosQrSticker(item) {
   const qrStartX = Math.floor((widthDots - qrPix) / 2);
   const qrStartY = 4;
 
+  const R_outer = 5;
+  const R_inner = 3;
+
+  function getFinderOrigin(ax, ay) {
+    if (ax >= 0 && ax < 7 && ay >= 0 && ay < 7) return { ox: 0, oy: 0 };
+    if (ax >= qrSize - 7 && ax < qrSize && ay >= 0 && ay < 7) return { ox: qrSize - 7, oy: 0 };
+    if (ax >= 0 && ax < 7 && ay >= qrSize - 7 && ay < qrSize) return { ox: 0, oy: qrSize - 7 };
+    return null;
+  }
+
   if (qrMatrix) {
     for (let my = 0; my < qrModules; my++) {
       const actualY = my - qrQuiet;
       for (let mx = 0; mx < qrModules; mx++) {
         const actualX = mx - qrQuiet;
-        const isBlack = (actualX >= 0 && actualX < qrSize && actualY >= 0 && actualY < qrSize)
-          ? Boolean(qrMatrix.modules.data[actualY * qrSize + actualX])
-          : false;
-        if (isBlack) {
-          // Keep the 3 corner finder patterns (7x7 modules) solid so camera locks on instantly
-          const isFinder = (
-            (actualX < 7 && actualY < 7) ||
-            (actualX >= qrSize - 7 && actualY < 7) ||
-            (actualX < 7 && actualY >= qrSize - 7)
-          );
+        const isInside = (actualX >= 0 && actualX < qrSize && actualY >= 0 && actualY < qrSize);
+        const isBlack = isInside ? Boolean(qrMatrix.modules.data[actualY * qrSize + actualX]) : false;
+        const finder = isInside ? getFinderOrigin(actualX, actualY) : null;
 
-          if (isFinder) {
-            // Solid 4x4 module fill for finder patterns
-            for (let dy = 0; dy < qrScale; dy++) {
-              for (let dx = 0; dx < qrScale; dx++) {
+        if (finder) {
+          // Precision rounded square finder pattern (7x7 modules = 28x28 dots)
+          for (let dy = 0; dy < qrScale; dy++) {
+            for (let dx = 0; dx < qrScale; dx++) {
+              const rx = (actualX - finder.ox) * qrScale + dx; // 0..27
+              const ry = (actualY - finder.oy) * qrScale + dy; // 0..27
+
+              let drawPixel = false;
+              const inOuterBox = rx >= 0 && rx < 28 && ry >= 0 && ry < 28;
+              const inHole = rx >= 4 && rx < 24 && ry >= 4 && ry < 24;
+
+              if (inOuterBox && !inHole) {
+                // Outer 7x7 frame with radius 5 rounded corners
+                let cornerDistSq = 0;
+                let inCorner = false;
+                if (rx < R_outer && ry < R_outer) {
+                  cornerDistSq = Math.pow(rx - R_outer, 2) + Math.pow(ry - R_outer, 2);
+                  inCorner = true;
+                } else if (rx >= 28 - R_outer && ry < R_outer) {
+                  cornerDistSq = Math.pow(rx - (27 - R_outer), 2) + Math.pow(ry - R_outer, 2);
+                  inCorner = true;
+                } else if (rx < R_outer && ry >= 28 - R_outer) {
+                  cornerDistSq = Math.pow(rx - R_outer, 2) + Math.pow(ry - (27 - R_outer), 2);
+                  inCorner = true;
+                } else if (rx >= 28 - R_outer && ry >= 28 - R_outer) {
+                  cornerDistSq = Math.pow(rx - (27 - R_outer), 2) + Math.pow(ry - (27 - R_outer), 2);
+                  inCorner = true;
+                }
+
+                if (!inCorner || cornerDistSq <= R_outer * R_outer) {
+                  drawPixel = true;
+                }
+              }
+
+              // Inner 3x3 solid center dot (rx: 8..19, ry: 8..19, 12x12 dots) with radius 3 rounded corners
+              if (rx >= 8 && rx < 20 && ry >= 8 && ry < 20) {
+                const cx = rx - 8;
+                const cy = ry - 8;
+                let inCenterCorner = false;
+                let centerDistSq = 0;
+                if (cx < R_inner && cy < R_inner) {
+                  centerDistSq = Math.pow(cx - R_inner, 2) + Math.pow(cy - R_inner, 2);
+                  inCenterCorner = true;
+                } else if (cx >= 12 - R_inner && cy < R_inner) {
+                  centerDistSq = Math.pow(cx - (11 - R_inner), 2) + Math.pow(cy - R_inner, 2);
+                  inCenterCorner = true;
+                } else if (cx < R_inner && cy >= 12 - R_inner) {
+                  centerDistSq = Math.pow(cx - R_inner, 2) + Math.pow(cy - (11 - R_inner), 2);
+                  inCenterCorner = true;
+                } else if (cx >= 12 - R_inner && cy >= 12 - R_inner) {
+                  centerDistSq = Math.pow(cx - (11 - R_inner), 2) + Math.pow(cy - (11 - R_inner), 2);
+                  inCenterCorner = true;
+                }
+
+                if (!inCenterCorner || centerDistSq <= R_inner * R_inner) {
+                  drawPixel = true;
+                }
+              }
+
+              if (drawPixel) {
                 const px = qrStartX + mx * qrScale + dx;
                 const py = qrStartY + my * qrScale + dy;
                 const bIdx = py * widthBytes + Math.floor(px / 8);
                 raster[bIdx] |= (0x80 >> (px % 8));
               }
             }
-          } else {
-            // DOTTED STYLE for data modules: discrete 2x2 centered dot inside 4x4 cell
-            // Leaves 1-dot white padding on all sides (2-dot pure white gap between adjacent modules)
-            // Completely eliminates thermal heat bleeding / blotting!
-            for (let dy = 1; dy <= 2; dy++) {
-              for (let dx = 1; dx <= 2; dx++) {
-                const px = qrStartX + mx * qrScale + dx;
-                const py = qrStartY + my * qrScale + dy;
-                const bIdx = py * widthBytes + Math.floor(px / 8);
-                raster[bIdx] |= (0x80 >> (px % 8));
-              }
+          }
+        } else if (isBlack) {
+          // Anti-blotting DOTTED data modules (centered 2x2 dot inside 4x4 cell)
+          // 1-dot white padding on all sides guarantees zero thermal bleeding / blotting on thermal paper!
+          for (let dy = 1; dy <= 2; dy++) {
+            for (let dx = 1; dx <= 2; dx++) {
+              const px = qrStartX + mx * qrScale + dx;
+              const py = qrStartY + my * qrScale + dy;
+              const bIdx = py * widthBytes + Math.floor(px / 8);
+              raster[bIdx] |= (0x80 >> (px % 8));
             }
           }
         }

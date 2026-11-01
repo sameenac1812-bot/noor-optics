@@ -308,19 +308,58 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
                     $ay = $my - $qrQuiet
                     for ($mx = 0; $mx -lt $totalMods; $mx++) {
                         $ax = $mx - $qrQuiet
-                        $isBlack = ($ax -ge 0 -and $ax -lt $qrModCount -and $ay -ge 0 -and $ay -lt $qrModCount) -and $matrix[$ay][$ax]
-                        if ($isBlack) {
-                            $isFinder = (
-                                ($ax -lt 7 -and $ay -lt 7) -or
-                                ($ax -ge ($qrModCount - 7) -and $ay -lt 7) -or
-                                ($ax -lt 7 -and $ay -ge ($qrModCount - 7))
-                            )
-                            if ($isFinder) {
-                                $gQr.FillRectangle($brushB, ($mx * $qrScale), ($my * $qrScale), $qrScale, $qrScale)
-                            } else {
-                                # Anti-blotting dotted style: centered 2x2 dot with 1-dot margin
-                                $gQr.FillRectangle($brushB, ($mx * $qrScale + 1), ($my * $qrScale + 1), 2, 2)
+                        $isInside = ($ax -ge 0 -and $ax -lt $qrModCount -and $ay -ge 0 -and $ay -lt $qrModCount)
+                        $isBlack = $isInside -and $matrix[$ay][$ax]
+
+                        $finderOx = -1
+                        $finderOy = -1
+                        if ($ax -ge 0 -and $ax -lt 7 -and $ay -ge 0 -and $ay -lt 7) { $finderOx = 0; $finderOy = 0 }
+                        elseif ($ax -ge ($qrModCount - 7) -and $ax -lt $qrModCount -and $ay -ge 0 -and $ay -lt 7) { $finderOx = ($qrModCount - 7); $finderOy = 0 }
+                        elseif ($ax -ge 0 -and $ax -lt 7 -and $ay -ge ($qrModCount - 7) -and $ay -lt $qrModCount) { $finderOx = 0; $finderOy = ($qrModCount - 7) }
+
+                        if ($finderOx -ge 0) {
+                            # Finder pattern: outer rounded square (radius 5) + inner rounded dot (radius 3)
+                            for ($dy = 0; $dy -lt $qrScale; $dy++) {
+                                for ($dx = 0; $dx -lt $qrScale; $dx++) {
+                                    $rx = ($ax - $finderOx) * $qrScale + $dx # 0..27
+                                    $ry = ($ay - $finderOy) * $qrScale + $dy # 0..27
+                                    $drawPix = $false
+
+                                    $inOuter = ($rx -ge 0 -and $rx -lt 28 -and $ry -ge 0 -and $ry -lt 28)
+                                    $inHole = ($rx -ge 4 -and $rx -lt 24 -and $ry -ge 4 -and $ry -lt 24)
+                                    if ($inOuter -and -not $inHole) {
+                                        $inCorner = $false
+                                        $cdSq = 0
+                                        if ($rx -lt 5 -and $ry -lt 5) { $cdSq = [Math]::Pow($rx - 5, 2) + [Math]::Pow($ry - 5, 2); $inCorner = $true }
+                                        elseif ($rx -ge 23 -and $ry -lt 5) { $cdSq = [Math]::Pow($rx - 22, 2) + [Math]::Pow($ry - 5, 2); $inCorner = $true }
+                                        elseif ($rx -lt 5 -and $ry -ge 23) { $cdSq = [Math]::Pow($rx - 5, 2) + [Math]::Pow($ry - 22, 2); $inCorner = $true }
+                                        elseif ($rx -ge 23 -and $ry -ge 23) { $cdSq = [Math]::Pow($rx - 22, 2) + [Math]::Pow($ry - 22, 2); $inCorner = $true }
+
+                                        if (-not $inCorner -or $cdSq -le 25) { $drawPix = $true }
+                                    }
+
+                                    # Inner 12x12 dot (radius 3)
+                                    if ($rx -ge 8 -and $rx -lt 20 -and $ry -ge 8 -and $ry -lt 20) {
+                                        $cx = $rx - 8
+                                        $cy = $ry - 8
+                                        $inCCorner = $false
+                                        $ccdSq = 0
+                                        if ($cx -lt 3 -and $cy -lt 3) { $ccdSq = [Math]::Pow($cx - 3, 2) + [Math]::Pow($cy - 3, 2); $inCCorner = $true }
+                                        elseif ($cx -ge 9 -and $cy -lt 3) { $ccdSq = [Math]::Pow($cx - 8, 2) + [Math]::Pow($cy - 3, 2); $inCCorner = $true }
+                                        elseif ($cx -lt 3 -and $cy -ge 9) { $ccdSq = [Math]::Pow($cx - 3, 2) + [Math]::Pow($cy - 8, 2); $inCCorner = $true }
+                                        elseif ($cx -ge 9 -and $cy -ge 9) { $ccdSq = [Math]::Pow($cx - 8, 2) + [Math]::Pow($cy - 8, 2); $inCCorner = $true }
+
+                                        if (-not $inCCorner -or $ccdSq -le 9) { $drawPix = $true }
+                                    }
+
+                                    if ($drawPix) {
+                                        $customQrBmp.SetPixel(($mx * $qrScale + $dx), ($my * $qrScale + $dy), [System.Drawing.Color]::Black)
+                                    }
+                                }
                             }
+                        } elseif ($isBlack) {
+                            # Anti-blotting dotted style: centered 2x2 dot with 1-dot margin
+                            $gQr.FillRectangle($brushB, ($mx * $qrScale + 1), ($my * $qrScale + 1), 2, 2)
                         }
                     }
                 }
