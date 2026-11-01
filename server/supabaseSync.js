@@ -386,7 +386,12 @@ async function syncSupabaseOrders(db) {
       const channel = isPos ? 'POS' : 'WEBSITE';
 
       // Detect payment status and amount paid
-      const isPaid = isPos || co.status === 'confirmed' || (co.payment_method && co.payment_method.toUpperCase() === 'CASH') || co.payment_status === 'VERIFIED';
+      // In-store POS cash orders are paid at counter immediately.
+      // Website orders (UPI / NetBanking / COD) require staff verification before being marked PAID.
+      const isExplicitlyVerified = (co.payment_status && String(co.payment_status).toUpperCase() === 'VERIFIED') ||
+                                   (co.paymentStatus && String(co.paymentStatus).toUpperCase() === 'VERIFIED');
+      const isPosCash = isPos && (co.payment_method && co.payment_method.toUpperCase() === 'CASH');
+      const isPaid = isPosCash || isExplicitlyVerified;
       const paymentStatus = isPaid ? 'VERIFIED' : 'AWAITING_VERIFICATION';
       const amountPaidPaise = isPaid ? grandTotalPaise : 0;
       const outstandingPaise = isPaid ? 0 : grandTotalPaise;
@@ -419,17 +424,29 @@ async function syncSupabaseOrders(db) {
         );
       }
 
-      const existing = db.prepare('SELECT id, customer_id FROM orders WHERE order_number = ?').get(co.order_ref);
+      const existing = db.prepare('SELECT id, customer_id, payment_status, amount_paid_paise, outstanding_paise FROM orders WHERE order_number = ?').get(co.order_ref);
       if (existing) {
-        // Ensure channel and payment status are kept accurate, and link customer_id if missing
+        // Ensure channel and customer_id are kept accurate
         if (!existing.customer_id && customerId) {
           db.prepare('UPDATE orders SET customer_id = ? WHERE id = ?').run(customerId, existing.id);
         }
+        // Local SQLite is the master authority for staff payment verification:
+        // NEVER overwrite local AWAITING_VERIFICATION or REJECTED unless Supabase has an explicit VERIFIED flag.
+        let finalPaymentStatus = existing.payment_status || paymentStatus;
+        let finalAmountPaid = existing.amount_paid_paise !== undefined ? existing.amount_paid_paise : amountPaidPaise;
+        let finalOutstanding = existing.outstanding_paise !== undefined ? existing.outstanding_paise : outstandingPaise;
+
+        if (isExplicitlyVerified) {
+          finalPaymentStatus = 'VERIFIED';
+          finalAmountPaid = grandTotalPaise;
+          finalOutstanding = 0;
+        }
+
         db.prepare(`
           UPDATE orders
           SET channel = ?, payment_status = ?, amount_paid_paise = ?, outstanding_paise = ?
           WHERE id = ?
-        `).run(channel, paymentStatus, amountPaidPaise, outstandingPaise, existing.id);
+        `).run(channel, finalPaymentStatus, finalAmountPaid, finalOutstanding, existing.id);
         continue;
       }
 
@@ -664,6 +681,7 @@ async function pushOrderToSupabase(orderPayload) {
         items: itemsToPush,
         prescription_pref: orderPayload.prescriptionPref || ((orderPayload.prescriptionId || orderPayload.od_sph || orderPayload.prescription?.od_sph) ? 'RX Attached' : 'Standard'),
         payment_method: orderPayload.paymentMethod || orderPayload.payment_method || 'CASH',
+        payment_status: orderPayload.paymentStatus || orderPayload.payment_status || (orderPayload.paymentMethod === 'CASH' ? 'VERIFIED' : 'AWAITING_VERIFICATION'),
         subtotal: orderPayload.subtotalINR || (orderPayload.subtotalPaise ? orderPayload.subtotalPaise / 100 : orderPayload.totalPayableINR || orderPayload.grandTotalINR || orderPayload.grand_total || 0),
         shipping_fee: 0,
         grand_total: orderPayload.grandTotalINR || (orderPayload.totalPayablePaise ? orderPayload.totalPayablePaise / 100 : orderPayload.grand_total || 0),

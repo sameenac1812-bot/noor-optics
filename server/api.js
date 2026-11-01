@@ -2073,15 +2073,16 @@ router.post('/orders/online', (req, res) => {
         const baseProdId = testId.replace(/^var-/, '').replace(/-\d+$/, '');
         const directProd = db.prepare('SELECT * FROM products WHERE id = ? OR sku = ? OR name = ?').get(baseProdId, testId, item.name || item.product_name);
         if (directProd) {
+          const actualVariant = db.prepare('SELECT * FROM product_variants WHERE product_id = ? LIMIT 1').get(directProd.id);
           variant = {
-            id: testId,
+            id: actualVariant ? actualVariant.id : null,
             product_id: directProd.id,
             prod_name: directProd.name,
             brand: directProd.brand || 'Noor Optics',
             shape: 'Classic',
             fit: 'Regular',
             sku: directProd.sku,
-            color_name: item.color || 'Standard',
+            color_name: item.color || (actualVariant ? actualVariant.color_name : 'Standard'),
             selling_price_paise: directProd.selling_price_paise,
             purchase_cost_paise: directProd.purchase_cost_paise || 145000
           };
@@ -2093,7 +2094,14 @@ router.post('/orders/online', (req, res) => {
       const lineSubtotal = unitPrice * qty;
       subtotalPaise += lineSubtotal;
 
-      const varId = variant ? variant.id : 'var-noor-01-1';
+      const fallbackVariant = db.prepare('SELECT id FROM product_variants LIMIT 1').get();
+      let varId = null;
+      if (variant && variant.id) {
+        const checkVar = db.prepare('SELECT id FROM product_variants WHERE id = ?').get(variant.id);
+        varId = checkVar ? checkVar.id : (fallbackVariant ? fallbackVariant.id : null);
+      } else {
+        varId = fallbackVariant ? fallbackVariant.id : null;
+      }
       const prodName = item.name || (variant ? variant.prod_name : 'Noor Optical Frame');
       const varName = item.color || (variant ? variant.color_name : 'Matte Black');
       const sku = variant ? variant.sku : 'NOOR-ONLINE-FRAME';
@@ -2324,6 +2332,7 @@ router.post('/orders/online', (req, res) => {
       ipd_distance: effectiveRx?.ipd_distance || effectiveRx?.pd || null,
       prescriptionPref: prescriptionPref || (createdPrescriptionId ? 'RX Attached' : 'Standard'),
       paymentMethod,
+      paymentStatus: 'AWAITING_VERIFICATION',
       subtotalINR: result.subtotalINR,
       grandTotalINR: result.grandTotalINR
     }).catch(err => console.warn('[SupabaseSync] Push online order note:', err.message));
@@ -2585,6 +2594,26 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
     } else {
       db.prepare("UPDATE orders SET payment_status = ?, updated_at = datetime('now') WHERE id = ?").run(paymentStatus, orderId);
     }
+
+    // Sync updated payment status to cloud Supabase if connected
+    try {
+      const supUrl = process.env.SUPABASE_URL;
+      const supKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (supUrl && supKey) {
+        const ord = db.prepare('SELECT order_number FROM orders WHERE id = ?').get(orderId);
+        if (ord && ord.order_number) {
+          fetch(`${supUrl}/rest/v1/orders?order_ref=eq.${encodeURIComponent(ord.order_number)}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': supKey,
+              'Authorization': `Bearer ${supKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ payment_status: paymentStatus })
+          }).catch(() => {});
+        }
+      }
+    } catch (_) {}
   }
 
   if (status) {

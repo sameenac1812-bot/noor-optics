@@ -493,7 +493,7 @@
       
       <!-- Checkout Form Panel -->
       <div id="checkout-content-normal" class="checkout-grid">
-        <form class="checkout-form-panel" id="checkout-form">
+        <form class="checkout-form-panel" id="checkout-form" novalidate>
           <h3 class="checkout-heading">Noor Optics Concierge Checkout</h3>
           <p class="checkout-subtext">Complimentary doorstep delivery & 14-day in-home trial. (Demonstration Checkout)</p>
 
@@ -620,17 +620,13 @@
           <h4 class="checkout-section-title">3. Payment Preference</h4>
           <div class="checkout-prescription-choice">
             <label class="prescription-radio">
-              <input type="radio" name="checkout-pay" value="cod" checked />
-              <span>Cash on Delivery / Pay on Arrival</span>
-            </label>
-            <label class="prescription-radio">
-              <input type="radio" name="checkout-pay" value="upi" />
-              <span>Instant UPI / Google Pay / NetBanking</span>
+              <input type="radio" name="checkout-pay" value="upi" checked />
+              <span>Instant UPI / Google Pay / PhonePe / NetBanking (Scan QR)</span>
             </label>
           </div>
 
           <!-- Dynamic UPI QR Scanner Panel -->
-          <div id="checkout-upi-qr-panel" style="display:none; margin: 1rem 0; padding: 1.25rem; background: #F8FAFC; border: 1.5px dashed #0A2540; border-radius: 12px; text-align: center;">
+          <div id="checkout-upi-qr-panel" style="display:block; margin: 1rem 0; padding: 1.25rem; background: #F8FAFC; border: 1.5px dashed #0A2540; border-radius: 12px; text-align: center;">
             <div style="font-weight: 700; color: #0A2540; font-size: 1rem; margin-bottom: 0.25rem;">
               Pay Using UPI
             </div>
@@ -687,7 +683,7 @@
             </div>
           </div>
 
-          <button type="submit" id="btn-submit-order" class="btn-place-demo-order">Place Order</button>
+          <button type="submit" id="btn-submit-order" class="btn-place-demo-order">Confirm Order & Pay via UPI</button>
         </form>
 
         <!-- Checkout Summary Sidebar -->

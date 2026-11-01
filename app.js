@@ -6,7 +6,7 @@
 
 'use strict';
 
-(function() {
+(function () {
   // ── Auto-Purge Obsolete Demo Caches from Browser Storage ──────────────────
   try {
     const rawCustom = localStorage.getItem('noor_custom_frames');
@@ -18,14 +18,14 @@
           const id = String(item.id).toLowerCase();
           const name = String(item.name || '').toLowerCase();
           const isLegacy = id.startsWith('noor-0') || id.startsWith('noor-1') ||
-                           id.includes('mp4f2') || id.includes('5d89v') ||
-                           name.includes('meta') || name.includes('onko') || name.includes('stockholm');
+            id.includes('mp4f2') || id.includes('5d89v') ||
+            name.includes('meta') || name.includes('onko') || name.includes('stockholm');
           return !isLegacy;
         });
         localStorage.setItem('noor_custom_frames', JSON.stringify(cleaned));
       }
     }
-  } catch (_) {}
+  } catch (_) { }
 
   // ── Helper: Product Tombstones ───────────────────────────────────────────
   function getDeletedProductTokens() {
@@ -38,7 +38,7 @@
           arr.forEach(t => tokens.add(String(t).toLowerCase().trim()));
         }
       }
-    } catch (_) {}
+    } catch (_) { }
     return tokens;
   }
 
@@ -154,6 +154,17 @@
   // ── Currency Formatter ─────────────────────────────────────────────────────
   function formatINR(amount) {
     return '₹' + Number(amount).toLocaleString('en-IN');
+  }
+
+  // ── HTML Sanitizer Helper ─────────────────────────────────────────────────
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   // ── Toast Notification System ──────────────────────────────────────────────
@@ -967,16 +978,14 @@
     if (DOM.checkoutContentSuccess) DOM.checkoutContentSuccess.style.display = 'none';
 
     // Refresh payment choice & dynamic locked UPI QR display
-    const payRadio = document.querySelector('input[name="checkout-pay"]:checked');
     const upiPanel = document.getElementById('checkout-upi-qr-panel');
     const submitBtn = document.getElementById('btn-submit-order');
     if (upiPanel) {
-      const isUpi = payRadio && payRadio.value === 'upi';
-      upiPanel.style.display = isUpi ? 'block' : 'none';
-      if (isUpi) renderCheckoutUpiPanel();
+      upiPanel.style.display = 'block';
+      renderCheckoutUpiPanel();
     }
     if (submitBtn) {
-      submitBtn.textContent = payRadio && payRadio.value === 'upi' ? 'Confirm Order & Pay via UPI' : 'Place Order';
+      submitBtn.textContent = 'Confirm Order & Pay via UPI';
     }
 
     openModal(DOM.checkoutModal);
@@ -1025,15 +1034,76 @@
   async function handleDemoOrderSubmit(e) {
     e.preventDefault();
 
-    const name = (document.getElementById('checkout-name')?.value || '').trim() || 'Valued Client';
+    const nameInput = document.getElementById('checkout-name');
+    const phoneInput = document.getElementById('checkout-phone');
+    const addressInput = document.getElementById('checkout-address');
+    const cityInput = document.getElementById('checkout-city');
+    const pinInput = document.getElementById('checkout-pin');
+
+    const name = (nameInput?.value || '').trim();
     const age = parseInt(document.getElementById('checkout-age')?.value || '', 10) || null;
     const email = (document.getElementById('checkout-email')?.value || '').trim() || 'client@example.com';
-    const phone = (document.getElementById('checkout-phone')?.value || '').trim() || '+91 98765 43210';
-    const address = (document.getElementById('checkout-address')?.value || '').trim() || 'Standard Delivery';
-    const city = (document.getElementById('checkout-city')?.value || '').trim() || 'Bengaluru';
-    const pin = (document.getElementById('checkout-pin')?.value || '').trim() || '560038';
+    const phone = (phoneInput?.value || '').trim();
+    const address = (addressInput?.value || '').trim();
+    const city = (cityInput?.value || '').trim();
+    const pin = (pinInput?.value || '').trim();
     const rxChoice = document.querySelector('input[name="checkout-rx"]:checked')?.value || 'call-optometrist';
-    const payChoice = document.querySelector('input[name="checkout-pay"]:checked')?.value || 'cod';
+    const payChoice = document.querySelector('input[name="checkout-pay"]:checked')?.value || 'upi';
+
+    if (!name) {
+      if (nameInput) {
+        nameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        nameInput.focus();
+        nameInput.style.borderColor = '#DC2626';
+        nameInput.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.2)';
+      }
+      showToast('Please enter your full name.', 'warning');
+      return;
+    }
+
+    if (!phone || phone.replace(/\D/g, '').length < 10) {
+      if (phoneInput) {
+        phoneInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        phoneInput.focus();
+        phoneInput.style.borderColor = '#DC2626';
+        phoneInput.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.2)';
+      }
+      showToast('Please enter a valid 10-digit phone number.', 'warning');
+      return;
+    }
+
+    if (!address) {
+      if (addressInput) {
+        addressInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        addressInput.focus();
+        addressInput.style.borderColor = '#DC2626';
+        addressInput.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.2)';
+      }
+      showToast('Please enter your delivery address.', 'warning');
+      return;
+    }
+
+    if (!city) {
+      if (cityInput) {
+        cityInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        cityInput.focus();
+        cityInput.style.borderColor = '#DC2626';
+        cityInput.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.2)';
+      }
+      showToast('Please enter your delivery city.', 'warning');
+      return;
+    }
+
+    if (!pin) {
+      if (pinInput) {
+        pinInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        pinInput.focus();
+        pinInput.style.borderColor = '#DC2626';
+        pinInput.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.2)';
+      }
+      showToast('Please enter your postal PIN code.', 'warning');
+      return;
+    }
 
     let utrVal = '';
     if (payChoice === 'upi') {
@@ -1041,6 +1111,7 @@
       utrVal = (utrInput?.value || '').trim();
       if (!utrVal || utrVal.length < 8) {
         if (utrInput) {
+          utrInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
           utrInput.focus();
           utrInput.style.borderColor = '#DC2626';
           utrInput.style.boxShadow = '0 0 0 3px rgba(220,38,38,0.2)';
@@ -1050,201 +1121,216 @@
       }
     }
 
-    let prescriptionData = null;
-    if (rxChoice === 'enter-rx') {
-      prescriptionData = {
-        od_sph: document.getElementById('checkout-rx-od-sph')?.value.trim() || '0.00',
-        od_cyl: document.getElementById('checkout-rx-od-cyl')?.value.trim() || '0.00',
-        od_axis: document.getElementById('checkout-rx-od-axis')?.value.trim() || null,
-        os_sph: document.getElementById('checkout-rx-os-sph')?.value.trim() || '0.00',
-        os_cyl: document.getElementById('checkout-rx-os-cyl')?.value.trim() || '0.00',
-        os_axis: document.getElementById('checkout-rx-os-axis')?.value.trim() || null,
-        addition: document.getElementById('checkout-rx-add')?.value.trim() || null,
-        ipd_distance: document.getElementById('checkout-rx-pd')?.value.trim() || null,
-        ipd_near: document.getElementById('checkout-rx-near-pd')?.value.trim() || null,
-        prescriber_details: document.getElementById('checkout-rx-prescriber')?.value.trim() || null,
-        notes: document.getElementById('checkout-rx-notes')?.value.trim() || null
+    const submitBtn = document.getElementById('btn-submit-order');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Processing Order...';
+    }
+
+    try {
+      let prescriptionData = null;
+      if (rxChoice === 'enter-rx') {
+        prescriptionData = {
+          od_sph: document.getElementById('checkout-rx-od-sph')?.value.trim() || '0.00',
+          od_cyl: document.getElementById('checkout-rx-od-cyl')?.value.trim() || '0.00',
+          od_axis: document.getElementById('checkout-rx-od-axis')?.value.trim() || null,
+          os_sph: document.getElementById('checkout-rx-os-sph')?.value.trim() || '0.00',
+          os_cyl: document.getElementById('checkout-rx-os-cyl')?.value.trim() || '0.00',
+          os_axis: document.getElementById('checkout-rx-os-axis')?.value.trim() || null,
+          addition: document.getElementById('checkout-rx-add')?.value.trim() || null,
+          ipd_distance: document.getElementById('checkout-rx-pd')?.value.trim() || null,
+          ipd_near: document.getElementById('checkout-rx-near-pd')?.value.trim() || null,
+          prescriber_details: document.getElementById('checkout-rx-prescriber')?.value.trim() || null,
+          notes: document.getElementById('checkout-rx-notes')?.value.trim() || null
+        };
+      }
+
+      const subtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+      const threshold = (window.NOOR_BRAND && window.NOOR_BRAND.freeShippingThreshold) || 1999;
+      const shipping = subtotal >= threshold ? 0 : 199;
+      const grandTotal = subtotal + shipping;
+      const orderId = 'NOOR-' + Math.floor(100000 + Math.random() * 900000);
+      const dateStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+      const orderData = {
+        order_ref: orderId,
+        customer_name: name,
+        customer_age: age,
+        customer_email: email,
+        customer_phone: phone,
+        delivery_address: address,
+        city: city,
+        pin_code: pin,
+        items: state.cart.map(item => ({
+          id: item.id,
+          name: item.name,
+          brand: item.brand || 'Noor Optics',
+          model: item.model || item.name,
+          shape: item.shape || 'Optical',
+          color: item.color,
+          size: item.fit || 'Regular',
+          lens: item.lensName,
+          quantity: item.quantity,
+          unit_price: item.unitPrice,
+          subtotal: item.unitPrice * item.quantity
+        })),
+        prescription_pref: rxChoice,
+        prescription: prescriptionData,
+        payment_method: payChoice,
+        subtotal: subtotal,
+        shipping_fee: shipping,
+        grand_total: grandTotal
       };
-    }
 
-    const subtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-    const threshold = (window.NOOR_BRAND && window.NOOR_BRAND.freeShippingThreshold) || 1999;
-    const shipping = subtotal >= threshold ? 0 : 199;
-    const grandTotal = subtotal + shipping;
-    const orderId = 'NOOR-' + Math.floor(100000 + Math.random() * 900000);
-    const dateStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      let authoritativeOrderId = orderId;
+      let authoritativeTokenNum = null;
 
-    const orderData = {
-      order_ref: orderId,
-      customer_name: name,
-      customer_age: age,
-      customer_email: email,
-      customer_phone: phone,
-      delivery_address: address,
-      city: city,
-      pin_code: pin,
-      items: state.cart.map(item => ({
-        id: item.id,
-        name: item.name,
-        brand: item.brand || 'Noor Optics',
-        model: item.model || item.name,
-        shape: item.shape || 'Optical',
-        color: item.color,
-        size: item.fit || 'Regular',
-        lens: item.lensName,
-        quantity: item.quantity,
-        unit_price: item.unitPrice,
-        subtotal: item.unitPrice * item.quantity
-      })),
-      prescription_pref: rxChoice,
-      prescription: prescriptionData,
-      payment_method: payChoice,
-      subtotal: subtotal,
-      shipping_fee: shipping,
-      grand_total: grandTotal
-    };
-
-    let retailDbBadge = '';
-    let authoritativeOrderId = orderId;
-    let authoritativeTokenNum = null;
-
-    // 1. Submit to Unified Local Authoritative Retail Backend
-    try {
-      const backendResp = await fetch('/api/orders/online', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerName: name,
-          customerAge: age,
-          customerEmail: email,
-          customerPhone: phone,
-          deliveryAddress: address,
-          city: city,
-          pinCode: pin,
-          prescriptionPref: rxChoice,
-          prescription: prescriptionData,
-          paymentMethod: payChoice === 'upi' ? 'UPI_GPAY' : (payChoice === 'card' ? 'CARD' : 'CASH'),
-          claimedUpiRef: utrVal || null,
-          upiScreenshot: state.uploadedUpiScreenshot || null,
-          items: state.cart.map(item => ({
-            id: item.id,
-            name: item.name,
-            brand: item.brand || 'Noor Optics',
-            model: item.model || item.name,
-            shape: item.shape || 'Optical',
-            color: item.color,
-            size: item.fit || 'Regular',
-            lensName: item.lensName,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice
-          }))
-        })
-      });
-
-      if (backendResp.ok) {
-        const localRes = await backendResp.json();
-        if (localRes.orderNumber) authoritativeOrderId = localRes.orderNumber;
-        if (localRes.tokenNumber) authoritativeTokenNum = localRes.tokenNumber;
-      }
-    } catch (localErr) {
-      console.warn('Note: Local Express backend not reached:', localErr);
-    }
-
-    // 2. Submit to Cloud Supabase (in background if configured)
-    if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
-      orderData.order_ref = authoritativeOrderId;
-      await window.NoorSupabase.submitOrder(orderData).catch(e => console.warn('Supabase sync note:', e));
-    }
-
-    // 3. Fast-Path: Dispatch instant print signal if local POS Print Daemon is reachable on Port 5001
-    try {
-      fetch('http://127.0.0.1:5001/api/print', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order: {
-            order_number: authoritativeOrderId,
-            customer_name: name,
-            customer_phone: phone,
-            customer_email: email,
-            delivery_address: address,
+      // 1. Submit to Unified Local Authoritative Retail Backend
+      try {
+        const backendResp = await fetch('/api/orders/online', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerName: name,
+            customerAge: age,
+            customerEmail: email,
+            customerPhone: phone,
+            deliveryAddress: address,
             city: city,
-            items: state.cart.map(item => ({
-              product_name: item.name || 'Noor Frame',
-              name: item.name || 'Noor Frame',
-              quantity: item.quantity || 1,
-              unit_price_inr: item.price || 3499,
-              color: item.selectedColor || 'Standard',
-              lens: rxChoice === 'call-optometrist' ? 'Optometrist Call' : 'Zero-Power Blue-Cut'
-            })),
-            subtotal_inr: subtotal,
-            grand_total_inr: grandTotal,
-            total_payable_inr: grandTotal,
-            amount_paid_inr: grandTotal,
-            payment_method: payChoice === 'upi' ? 'UPI' : (payChoice === 'card' ? 'CARD' : 'COD'),
+            pinCode: pin,
+            prescriptionPref: rxChoice,
             prescription: prescriptionData,
-            channel: 'WEBSITE'
-          },
-          manualReprint: true
-        })
-      }).catch(() => {});
-    } catch (_) {}
+            paymentMethod: payChoice === 'upi' ? 'UPI_GPAY' : (payChoice === 'card' ? 'CARD' : 'CASH'),
+            claimedUpiRef: utrVal || null,
+            upiScreenshot: state.uploadedUpiScreenshot || null,
+            items: state.cart.map(item => ({
+              id: item.id,
+              name: item.name,
+              brand: item.brand || 'Noor Optics',
+              model: item.model || item.name,
+              shape: item.shape || 'Optical',
+              color: item.color,
+              size: item.fit || 'Regular',
+              lensName: item.lensName,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice
+            }))
+          })
+        });
 
-    // Render clean, luxury customer-facing receipt (no internal DB/debug badges)
-    if (DOM.orderReceiptBox) {
-      DOM.orderReceiptBox.innerHTML = `
-        <div class="receipt-header-row">
-          <div class="receipt-ref-group">
-            <span class="receipt-ref-label">Order Reference</span>
-            <span class="receipt-ref-code">${authoritativeOrderId}</span>
-          </div>
-          <span class="receipt-date-pill">${dateStr}</span>
-        </div>
-        <div class="receipt-details-list">
-          <div class="receipt-detail-item">
-            <span class="receipt-item-label">Billed To</span>
-            <span class="receipt-item-val">${name} <span class="receipt-item-sub">(${email})</span></span>
-          </div>
-          <div class="receipt-detail-item">
-            <span class="receipt-item-label">Destination</span>
-            <span class="receipt-item-val">${city}, India · Express Tracked</span>
-          </div>
-          <div class="receipt-detail-item">
-            <span class="receipt-item-label">Prescription</span>
-            <span class="receipt-item-val">${rxChoice === 'call-optometrist' ? 'Optometrist Verification Call' : 'Zero-Power Blue-Cut'}</span>
-          </div>
-          <div class="receipt-detail-item">
-            <span class="receipt-item-label">Payment</span>
-            <span class="receipt-item-val" style="${payChoice === 'upi' ? 'color:#B45309; font-weight:700;' : ''}">${payChoice === 'upi' ? `⏳ Awaiting UPI Verification (UTR: ${escapeHtml(utrVal)})` : (payChoice === 'card' ? 'Card Payment' : 'Cash on Delivery')}</span>
-          </div>
-        </div>
-        <div class="receipt-total-row">
-          <span>Total Payable</span>
-          <span>${formatINR(grandTotal)}</span>
-        </div>
-      `;
-    }
+        if (backendResp.ok) {
+          const localRes = await backendResp.json();
+          if (localRes.orderNumber) authoritativeOrderId = localRes.orderNumber;
+          if (localRes.tokenNumber) authoritativeTokenNum = localRes.tokenNumber;
+        }
+      } catch (localErr) {
+        console.warn('Note: Local Express backend not reached:', localErr);
+      }
 
-    // Switch Views inside Modal and customize heading
-    if (DOM.checkoutContentNormal) DOM.checkoutContentNormal.style.display = 'none';
-    if (DOM.checkoutContentSuccess) {
-      DOM.checkoutContentSuccess.style.display = 'block';
-      const successH3 = DOM.checkoutContentSuccess.querySelector('h3');
-      const successP = DOM.checkoutContentSuccess.querySelector('p');
-      if (payChoice === 'upi') {
-        if (successH3) successH3.textContent = 'Order Placed – Payment Verification in Progress';
-        if (successP) successP.textContent = `Thank you for your order! We have registered your 12-digit UPI Reference (${utrVal}). Our optical team is verifying the transaction credit with our bank account. Spectacle crafting will begin immediately once approved.`;
-      } else {
-        if (successH3) successH3.textContent = 'Order Placed Successfully';
-        if (successP) successP.textContent = 'Thank you for choosing Noor Optics. Your bespoke Scandinavian eyewear order has been confirmed. Our master optometrist will verify your prescription details before precision glazing.';
+      // 2. Submit to Cloud Supabase (in background if configured)
+      if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
+        orderData.order_ref = authoritativeOrderId;
+        await window.NoorSupabase.submitOrder(orderData).catch(e => console.warn('Supabase sync note:', e));
+      }
+
+      // 3. Fast-Path: Dispatch instant print signal if local POS Print Daemon is reachable on Port 5001
+      try {
+        fetch('http://127.0.0.1:5001/api/print', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            order: {
+              order_number: authoritativeOrderId,
+              customer_name: name,
+              customer_phone: phone,
+              customer_email: email,
+              delivery_address: address,
+              city: city,
+              items: state.cart.map(item => ({
+                product_name: item.name || 'Noor Frame',
+                name: item.name || 'Noor Frame',
+                quantity: item.quantity || 1,
+                unit_price_inr: item.price || 3499,
+                color: item.selectedColor || 'Standard',
+                lens: rxChoice === 'call-optometrist' ? 'Optometrist Call' : 'Zero-Power Blue-Cut'
+              })),
+              subtotal_inr: subtotal,
+              grand_total_inr: grandTotal,
+              total_payable_inr: grandTotal,
+              amount_paid_inr: grandTotal,
+              payment_method: payChoice === 'card' ? 'CARD' : 'UPI',
+              prescription: prescriptionData,
+              channel: 'WEBSITE'
+            },
+            manualReprint: true
+          })
+        }).catch(() => { });
+      } catch (_) { }
+
+      // Render clean, luxury customer-facing receipt
+      if (DOM.orderReceiptBox) {
+        DOM.orderReceiptBox.innerHTML = `
+          <div class="receipt-header-row">
+            <div class="receipt-ref-group">
+              <span class="receipt-ref-label">Order Reference</span>
+              <span class="receipt-ref-code">${authoritativeOrderId}</span>
+            </div>
+            <span class="receipt-date-pill">${dateStr}</span>
+          </div>
+          <div class="receipt-details-list">
+            <div class="receipt-detail-item">
+              <span class="receipt-item-label">Billed To</span>
+              <span class="receipt-item-val">${escapeHtml(name)} <span class="receipt-item-sub">(${escapeHtml(email)})</span></span>
+            </div>
+            <div class="receipt-detail-item">
+              <span class="receipt-item-label">Destination</span>
+              <span class="receipt-item-val">${escapeHtml(city)}, India · Express Tracked</span>
+            </div>
+            <div class="receipt-detail-item">
+              <span class="receipt-item-label">Prescription</span>
+              <span class="receipt-item-val">${rxChoice === 'call-optometrist' ? 'Optometrist Verification Call' : 'Zero-Power Blue-Cut'}</span>
+            </div>
+            <div class="receipt-detail-item">
+              <span class="receipt-item-label">Payment</span>
+              <span class="receipt-item-val" style="${payChoice === 'upi' ? 'color:#B45309; font-weight:700;' : ''}">${payChoice === 'upi' ? `⏳ Awaiting UPI Verification (UTR: ${escapeHtml(utrVal)})` : (payChoice === 'card' ? 'Card Payment' : 'Cash on Delivery')}</span>
+            </div>
+          </div>
+          <div class="receipt-total-row">
+            <span>Total Payable</span>
+            <span>${formatINR(grandTotal)}</span>
+          </div>
+        `;
+      }
+
+      // Switch Views inside Modal and customize heading
+      if (DOM.checkoutContentNormal) DOM.checkoutContentNormal.style.display = 'none';
+      if (DOM.checkoutContentSuccess) {
+        DOM.checkoutContentSuccess.style.display = 'block';
+        const successH3 = DOM.checkoutContentSuccess.querySelector('h3');
+        const successP = DOM.checkoutContentSuccess.querySelector('p');
+        if (payChoice === 'upi') {
+          if (successH3) successH3.textContent = 'Order Placed – Payment Verification in Progress';
+          if (successP) successP.textContent = `Thank you for your order! We have registered your 12-digit UPI Reference (${utrVal}). Our optical team is verifying the transaction credit with our bank account. Spectacle crafting will begin immediately once approved.`;
+        } else {
+          if (successH3) successH3.textContent = 'Order Placed Successfully';
+          if (successP) successP.textContent = 'Thank you for choosing Noor Optics. Your bespoke Scandinavian eyewear order has been confirmed. Our master optometrist will verify your prescription details before precision glazing.';
+        }
+      }
+
+      // Clear Cart after successful checkout
+      state.cart = [];
+      if (window.saveCart) window.saveCart([]);
+      updateBagBadge();
+      renderCartDrawer();
+    } catch (err) {
+      console.error('Failed to submit order:', err);
+      showToast('An unexpected error occurred while placing order. Please try again.', 'error');
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = payChoice === 'upi' ? 'Confirm Order & Pay via UPI' : 'Place Order';
       }
     }
-
-    // Clear Cart after successful checkout
-    state.cart = [];
-    if (window.saveCart) window.saveCart([]);
-    updateBagBadge();
-    renderCartDrawer();
   }
 
   // ── Global Event Delegation ────────────────────────────────────────────────
@@ -1550,6 +1636,17 @@
           }
         });
       }
+
+      // Auto-clear error borders on user input
+      ['checkout-name', 'checkout-phone', 'checkout-address', 'checkout-city', 'checkout-pin', 'checkout-upi-utr'].forEach(id => {
+        const inputEl = document.getElementById(id);
+        if (inputEl) {
+          inputEl.addEventListener('input', () => {
+            inputEl.style.borderColor = '';
+            inputEl.style.boxShadow = '';
+          });
+        }
+      });
     }
 
     const btnCloseSuccess = document.getElementById('btn-close-success-order');
@@ -1773,7 +1870,7 @@
             if (changed) {
               localStorage.setItem('noor_deleted_products', JSON.stringify(Array.from(tokens)));
             }
-          } catch (_) {}
+          } catch (_) { }
         }
       }
 
@@ -1816,7 +1913,7 @@
           });
           localStorage.setItem('noor_custom_frames', JSON.stringify(reconciledLocal));
         }
-      } catch (_) {}
+      } catch (_) { }
 
       if (!Array.isArray(cloudProducts) || cloudProducts.length === 0) {
         state.catalog = [];
@@ -1856,7 +1953,7 @@
           if (staticMatch && staticMatch.dimensions) {
             dimensions = staticMatch.dimensions;
           } else if (p.variants && p.variants[0] && p.variants[0].dimensions_json) {
-            try { dimensions = JSON.parse(p.variants[0].dimensions_json); } catch (_) {}
+            try { dimensions = JSON.parse(p.variants[0].dimensions_json); } catch (_) { }
           }
 
           const price = p.selling_price_inr !== undefined ? p.selling_price_inr : (p.selling_price_paise ? p.selling_price_paise / 100 : (staticMatch ? staticMatch.price : 2999));
