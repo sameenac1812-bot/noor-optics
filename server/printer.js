@@ -515,8 +515,8 @@ async function generateEscPosQrLabel(opts = {}) {
       const botWhite = (rawY + 1 < 0 || rawY + 1 >= rawSize) ? true : !qr.modules.data[(rawY + 1) * rawSize + rawX];
       const rightWhite = (rawX + 1 < 0 || rawX + 1 >= rawSize) ? true : !qr.modules.data[rawY * rawSize + (rawX + 1)];
 
-      const endY = (botWhite && scale >= 4) ? scale - 1 : scale;
-      const endX = (rightWhite && scale >= 4) ? scale - 1 : scale;
+      const endY = scale;
+      const endX = scale;
 
       for (let dy = 0; dy < endY; dy++) {
         for (let dx = 0; dx < endX; dx++) {

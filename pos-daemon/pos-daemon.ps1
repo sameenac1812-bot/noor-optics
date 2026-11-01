@@ -15,7 +15,7 @@ try {
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 } catch {}
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } elseif ($MyInvocation.MyCommand.Definition) { Split-Path -Parent $MyInvocation.MyCommand.Definition } else { (Get-Location).Path }
 $ConfigFile = Join-Path $ScriptDir "config.json"
 $HistoryFile = Join-Path $ScriptDir ".printed_orders.json"
 $LogsDir = Join-Path $ScriptDir "logs"
@@ -315,12 +315,8 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
                                 ($ax -ge ($qrModCount - 7) -and $ay -lt 7) -or
                                 ($ax -lt 7 -and $ay -ge ($qrModCount - 7))
                             )
-                            if ($isFinder) {
-                                $gQr.FillRectangle($brushB, ($mx * $qrScale), ($my * $qrScale), $qrScale, $qrScale)
-                            } else {
-                                # Anti-blotting dotted style: centered 2x2 dot with 1-dot margin
-                                $gQr.FillRectangle($brushB, ($mx * $qrScale + 1), ($my * $qrScale + 1), 2, 2)
-                            }
+                            # Solid, pitch-black module fill for high thermal contrast & instant camera recognition
+                            $gQr.FillRectangle($brushB, ($mx * $qrScale), ($my * $qrScale), $qrScale, $qrScale)
                         }
                     }
                 }

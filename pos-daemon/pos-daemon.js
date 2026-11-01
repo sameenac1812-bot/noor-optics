@@ -781,7 +781,7 @@ async function format25InchEscPosQrSticker(item) {
     try { QRCode = require('qrcode'); } catch (_) { QRCode = null; }
   }
 
-  const sku = (item.sku || 'NOOR-FRAME').toUpperCase();
+  const sku = (item.sku || item.product_sku || item.variant_sku || item.id || 'NOOR-FRAME').toUpperCase();
   const name = (item.name || '').slice(0, 24);
   let price = item.price ? String(item.price).trim() : '';
   if (price.startsWith('₹')) price = 'Rs. ' + price.substring(1).trim();
@@ -840,27 +840,13 @@ async function format25InchEscPosQrSticker(item) {
             (actualX < 7 && actualY >= qrSize - 7)
           );
 
-          if (isFinder) {
-            // Solid 4x4 module fill for finder patterns
-            for (let dy = 0; dy < qrScale; dy++) {
-              for (let dx = 0; dx < qrScale; dx++) {
-                const px = qrStartX + mx * qrScale + dx;
-                const py = qrStartY + my * qrScale + dy;
-                const bIdx = py * widthBytes + Math.floor(px / 8);
-                raster[bIdx] |= (0x80 >> (px % 8));
-              }
-            }
-          } else {
-            // DOTTED STYLE for data modules: discrete 2x2 centered dot inside 4x4 cell
-            // Leaves 1-dot white padding on all sides (2-dot pure white gap between adjacent modules)
-            // Completely eliminates thermal heat bleeding / blotting!
-            for (let dy = 1; dy <= 2; dy++) {
-              for (let dx = 1; dx <= 2; dx++) {
-                const px = qrStartX + mx * qrScale + dx;
-                const py = qrStartY + my * qrScale + dy;
-                const bIdx = py * widthBytes + Math.floor(px / 8);
-                raster[bIdx] |= (0x80 >> (px % 8));
-              }
+          // Solid, rich, dark module fill for high thermal contrast and instant camera recognition
+          for (let dy = 0; dy < qrScale; dy++) {
+            for (let dx = 0; dx < qrScale; dx++) {
+              const px = qrStartX + mx * qrScale + dx;
+              const py = qrStartY + my * qrScale + dy;
+              const bIdx = py * widthBytes + Math.floor(px / 8);
+              raster[bIdx] |= (0x80 >> (px % 8));
             }
           }
         }

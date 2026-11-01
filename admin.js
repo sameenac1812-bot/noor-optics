@@ -253,20 +253,26 @@
     return data;
   }
 
-  // ── Audio Beep for POS Scanner ────────────────────────────────────────────
+  // ── Audio Beep for POS Scanner (Zero-Latency Singleton) ─────────────────
+  let _posAudioCtx = null;
   function playScannerBeep() {
     try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
+      if (!_posAudioCtx) {
+        _posAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (_posAudioCtx.state === 'suspended') {
+        _posAudioCtx.resume();
+      }
+      const osc = _posAudioCtx.createOscillator();
+      const gain = _posAudioCtx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
-      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+      osc.frequency.setValueAtTime(1400, _posAudioCtx.currentTime);
+      gain.gain.setValueAtTime(0.18, _posAudioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, _posAudioCtx.currentTime + 0.08);
       osc.connect(gain);
-      gain.connect(audioCtx.destination);
+      gain.connect(_posAudioCtx.destination);
       osc.start();
-      osc.stop(audioCtx.currentTime + 0.1);
+      osc.stop(_posAudioCtx.currentTime + 0.08);
     } catch (e) {
       // AudioContext unavailable or blocked by autoplay policy
     }
@@ -3681,22 +3687,29 @@
       paperWidthMm: paperWidth
     };
 
-    // 1. Try local daemon direct hardware print on port 5001
-    try {
-      const localResp = await fetch('http://127.0.0.1:5001/api/printer/print-qr-sticker', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(1200)
-      });
-      if (localResp.ok) {
-        const res = await localResp.json();
-        if (res && res.success) {
-          return { success: true, method: 'local_daemon' };
+    // 1. Try local daemon direct hardware print on port 5001 (127.0.0.1 & localhost)
+    const daemonUrls = [
+      'http://127.0.0.1:5001/api/printer/print-qr-sticker',
+      'http://localhost:5001/api/printer/print-qr-sticker'
+    ];
+
+    for (const url of daemonUrls) {
+      try {
+        const localResp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(8000)
+        });
+        if (localResp.ok) {
+          const res = await localResp.json();
+          if (res && res.success) {
+            return { success: true, method: 'local_daemon' };
+          }
         }
+      } catch (_) {
+        // Continue to next URL or cloud fallback
       }
-    } catch (_) {
-      // Local daemon direct port may be blocked by HTTPS mixed content or daemon on shop PC
     }
 
     // 2. Queue in Supabase cloud print queue (picked up by daemon in 2-3s)
@@ -4447,9 +4460,9 @@
     if (!rawCode || !rawCode.trim()) return;
     const cleanCode = rawCode.trim();
 
-    // Prevent repeated immediate duplicate scans of the same frame within 2.5 seconds
+    // Prevent repeated immediate duplicate scans of the same frame within 1.2 seconds
     const now = Date.now();
-    if (state.lastScannedCode === cleanCode && (now - state.lastScanTime) < 2500) {
+    if (state.lastScannedCode === cleanCode && (now - state.lastScanTime) < 1200) {
       return;
     }
     state.lastScannedCode = cleanCode;
@@ -4892,8 +4905,14 @@
     async function startCameraScanner(preferredCameraId = null) {
       try {
         const formats = window.Html5QrcodeSupportedFormats
-          ? [window.Html5QrcodeSupportedFormats.QR_CODE]
-          : [11];
+          ? [
+              window.Html5QrcodeSupportedFormats.QR_CODE,
+              window.Html5QrcodeSupportedFormats.CODE_128,
+              window.Html5QrcodeSupportedFormats.CODE_39,
+              window.Html5QrcodeSupportedFormats.EAN_13,
+              window.Html5QrcodeSupportedFormats.UPC_A
+            ]
+          : undefined;
 
         state.html5QrScanner = new window.Html5Qrcode('html5-qr-reader', {
           formatsToSupport: formats,
@@ -4945,14 +4964,18 @@
         await state.html5QrScanner.start(
           activeCameraId,
           {
-            fps: 15,
+            fps: 30,
             qrbox: (viewfinderWidth, viewfinderHeight) => {
               const edge = Math.min(viewfinderWidth, viewfinderHeight);
-              const qrboxSize = Math.max(160, Math.floor(edge * 0.72));
+              const qrboxSize = Math.max(200, Math.floor(edge * 0.88));
               return { width: qrboxSize, height: qrboxSize };
             },
+            aspectRatio: 1.0,
             videoConstraints: {
-              facingMode: { ideal: 'environment' }
+              facingMode: { ideal: 'environment' },
+              width: { min: 640, ideal: 1280 },
+              height: { min: 480, ideal: 720 },
+              frameRate: { ideal: 30 }
             }
           },
           (decodedText) => {

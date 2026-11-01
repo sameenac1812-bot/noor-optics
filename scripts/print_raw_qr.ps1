@@ -44,7 +44,13 @@ public class RawPrinterHelperQR {
         di.pDataType = "RAW";
 
         if (!OpenPrinter(szPrinterName.Normalize(), out hPrinter, IntPtr.Zero)) return false;
-        if (!StartDocPrinter(hPrinter, 1, di)) { ClosePrinter(hPrinter); return false; }
+        if (!StartDocPrinter(hPrinter, 1, di)) {
+            di.pDataType = null;
+            if (!StartDocPrinter(hPrinter, 1, di)) {
+                ClosePrinter(hPrinter);
+                return false;
+            }
+        }
         if (!StartPagePrinter(hPrinter)) { EndDocPrinter(hPrinter); ClosePrinter(hPrinter); return false; }
 
         IntPtr pUnmanagedBytes = Marshal.AllocCoTaskMem(bytes.Length);
