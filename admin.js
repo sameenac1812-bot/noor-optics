@@ -2169,9 +2169,9 @@
       const stock = Number(p.total_stock) || 0;
       const price = Number(p.selling_price_inr) || 0;
       totalStockValue += (stock * price);
-      const threshold = p.reorder_threshold || 2;
+      const threshold = (p.reorder_threshold !== null && p.reorder_threshold !== undefined) ? Number(p.reorder_threshold) : 0;
       if (stock > 0) totalInStock++;
-      if (stock > 0 && stock <= threshold) totalLowStock++;
+      if (stock > 0 && threshold > 0 && stock <= threshold) totalLowStock++;
     });
 
     const valEl = document.getElementById('optic-inv-stock-val');
@@ -2257,11 +2257,11 @@
 
       tbody.innerHTML = filtered.map(p => {
         const stock = Number(p.total_stock) || 0;
-        const threshold = p.reorder_threshold || 5;
+        const threshold = (p.reorder_threshold !== null && p.reorder_threshold !== undefined) ? Number(p.reorder_threshold) : 0;
         let stockBadge = `<span class="badge-stock in-stock">${stock} Units</span>`;
         if (stock === 0) {
           stockBadge = `<span class="badge-stock out-of-stock">Out of Stock (0)</span>`;
-        } else if (stock <= threshold) {
+        } else if (threshold > 0 && stock <= threshold) {
           stockBadge = `<span class="badge-stock low-stock">Low Stock (${stock})</span>`;
         }
 

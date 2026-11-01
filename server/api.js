@@ -782,7 +782,7 @@ router.get('/inventory/balances', authenticateToken, requirePermission('inventor
     ...r,
     selling_price_inr: r.selling_price_paise / 100,
     purchase_cost_inr: r.purchase_cost_paise / 100,
-    is_low_stock: r.available_qty <= r.reorder_threshold
+    is_low_stock: r.reorder_threshold > 0 && r.available_qty <= r.reorder_threshold
   }));
 
   res.json(formatted);
@@ -3625,7 +3625,7 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
       LEFT JOIN inventory_balances ib ON pv.id = ib.variant_id
       WHERE p.is_active = 1
       GROUP BY p.id
-      HAVING units > 0 AND units <= p.reorder_threshold
+      HAVING units > 0 AND p.reorder_threshold > 0 AND units <= p.reorder_threshold
     )
   `).get();
   const lowStockCount = lowStockRow ? lowStockRow.low_count : 0;

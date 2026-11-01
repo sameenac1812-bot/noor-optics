@@ -935,7 +935,8 @@ async function syncSupabaseProducts(db) {
         const sellingPaise = Math.round((Number(cp.price) || 3499) * 100);
         const origPaise = cp.original_price ? Math.round(Number(cp.original_price) * 100) : null;
         const costPaise = cp.purchaseCostINR ? Math.round(Number(cp.purchaseCostINR) * 100) : 145000;
-        const stockQty = Number(cp.stock !== undefined ? cp.stock : 10);
+        const stockQty = Number(cp.total_stock !== undefined ? cp.total_stock : (cp.stock !== undefined ? cp.stock : (cp.initialStock !== undefined ? cp.initialStock : 1)));
+        const cleanThreshold = Number(cp.reorder_threshold !== undefined ? cp.reorder_threshold : 0);
         const img = cp.image || cp.imageUrl || cp.image_url || 'images/stockholm_noir.jpg';
 
         // Check if product exists in local SQLite (never collide on generic placeholder)
@@ -946,13 +947,13 @@ async function syncSupabaseProducts(db) {
               id, sku, name, brand, shape, material, fit, category,
               selling_price_paise, original_price_paise, purchase_cost_paise,
               supplier_id, reorder_threshold, image_url, description, is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 5, ?, ?, 1)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 1)
           `).run(
             prodId, sku, cp.name, cp.brand || 'Noor Optics',
             cp.shape || 'Rectangular', cp.material || 'Japanese Titanium',
             cp.fit || 'Regular', cp.category || 'Optical',
             sellingPaise, origPaise, costPaise,
-            img, cp.description || ''
+            cleanThreshold, img, cp.description || ''
           );
 
           // Variant
@@ -980,12 +981,13 @@ async function syncSupabaseProducts(db) {
               selling_price_paise = ?,
               original_price_paise = ?,
               purchase_cost_paise = ?,
+              reorder_threshold = ?,
               image_url = CASE WHEN ? IS NOT NULL AND ? != '' AND ? != 'images/stockholm_noir.jpg' THEN ? ELSE image_url END,
               description = COALESCE(?, description),
               is_active = 1,
               updated_at = datetime('now')
             WHERE id = ?
-          `).run(cp.name, cp.brand || null, sellingPaise, origPaise, costPaise, img, img, img, img, cp.description || null, existing.id);
+          `).run(cp.name, cp.brand || null, sellingPaise, origPaise, costPaise, cleanThreshold, img, img, img, cp.description || null, existing.id);
 
           // Update balance if variant exists
           const vRow = db.prepare('SELECT id FROM product_variants WHERE product_id = ? LIMIT 1').get(existing.id);
