@@ -114,6 +114,7 @@ async function refreshCatalogCache() {
   } catch (_) { }
 }
 refreshCatalogCache();
+setInterval(refreshCatalogCache, 300000); // Refresh catalog cache every 5 minutes (prevents API throttling)
 
 function resolveItemDetails(item, order) {
   let name = item.product_name || item.name || item.model || item.frame_name || '';
@@ -1015,8 +1016,6 @@ async function pollCloudOrders() {
     const orders = await res.json();
     if (!Array.isArray(orders)) return;
 
-    await refreshCatalogCache().catch(() => { });
-
     const now = Date.now();
     // Freshness window (120 minutes) ensures recent active orders are auto-printed
     const freshnessMs = (config.orderFreshnessMinutes || 120) * 60 * 1000;
@@ -1041,9 +1040,6 @@ async function pollCloudOrders() {
         refs.forEach(r => { printedHistory[r] = 'SKIPPED_STALE'; });
         continue;
       }
-
-      // Mark as printing immediately to prevent concurrency duplicates
-      refs.forEach(r => { printedHistory[r] = 'PRINTING'; });
 
       const clientName = o.customer_name || 'Online Client';
       const grandTotal = o.grand_total || o.total_payable_inr || (o.total_payable_paise ? o.total_payable_paise / 100 : 0);

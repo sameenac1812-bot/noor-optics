@@ -1184,87 +1184,48 @@
       let authoritativeOrderId = orderId;
       let authoritativeTokenNum = null;
 
-      // 1. Submit to Unified Local Authoritative Retail Backend
-      try {
-        const backendResp = await fetch('/api/orders/online', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            customerName: name,
-            customerAge: age,
-            customerEmail: email,
-            customerPhone: phone,
-            deliveryAddress: address,
-            city: city,
-            pinCode: pin,
-            prescriptionPref: rxChoice,
-            prescription: prescriptionData,
-            paymentMethod: payChoice === 'upi' ? 'UPI_GPAY' : (payChoice === 'card' ? 'CARD' : 'CASH'),
-            claimedUpiRef: utrVal || null,
-            upiScreenshot: state.uploadedUpiScreenshot || null,
-            items: state.cart.map(item => ({
-              id: item.id,
-              name: item.name,
-              brand: item.brand || 'Noor Optics',
-              model: item.model || item.name,
-              shape: item.shape || 'Optical',
-              color: item.color,
-              size: item.fit || 'Regular',
-              lensName: item.lensName,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice
-            }))
-          })
-        });
+      // 1. Submit to Unified Backend and Cloud Supabase in parallel for lightning-fast checkout
+      const onlinePayload = {
+        customerName: name,
+        customerAge: age,
+        customerEmail: email,
+        customerPhone: phone,
+        deliveryAddress: address,
+        city: city,
+        pinCode: pin,
+        prescriptionPref: rxChoice,
+        prescription: prescriptionData,
+        paymentMethod: payChoice === 'upi' ? 'UPI_GPAY' : (payChoice === 'card' ? 'CARD' : 'CASH'),
+        claimedUpiRef: utrVal || null,
+        upiScreenshot: state.uploadedUpiScreenshot || null,
+        items: state.cart.map(item => ({
+          id: item.id,
+          name: item.name,
+          brand: item.brand || 'Noor Optics',
+          model: item.model || item.name,
+          shape: item.shape || 'Optical',
+          color: item.color,
+          size: item.fit || 'Regular',
+          lensName: item.lensName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice
+        }))
+      };
 
-        if (backendResp.ok) {
-          const localRes = await backendResp.json();
-          if (localRes.orderNumber) authoritativeOrderId = localRes.orderNumber;
-          if (localRes.tokenNumber) authoritativeTokenNum = localRes.tokenNumber;
-        }
-      } catch (localErr) {
-        console.warn('Note: Local Express backend not reached:', localErr);
+      const backendReq = fetch('/api/orders/online', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(onlinePayload)
+      }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+      const supabaseReq = (window.NoorSupabase && window.NoorSupabase.isConfigured())
+        ? window.NoorSupabase.submitOrder(orderData).catch(() => null)
+        : Promise.resolve(null);
+
+      const [backendRes] = await Promise.all([backendReq, supabaseReq]);
+      if (backendRes && backendRes.orderNumber) {
+        authoritativeOrderId = backendRes.orderNumber;
       }
-
-      // 2. Submit to Cloud Supabase (in background if configured)
-      if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
-        orderData.order_ref = authoritativeOrderId;
-        await window.NoorSupabase.submitOrder(orderData).catch(e => console.warn('Supabase sync note:', e));
-      }
-
-      // 3. Fast-Path: Dispatch instant print signal if local POS Print Daemon is reachable on Port 5001
-      try {
-        fetch('http://127.0.0.1:5001/api/print', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            order: {
-              order_number: authoritativeOrderId,
-              customer_name: name,
-              customer_phone: phone,
-              customer_email: email,
-              delivery_address: address,
-              city: city,
-              items: state.cart.map(item => ({
-                product_name: item.name || 'Noor Frame',
-                name: item.name || 'Noor Frame',
-                quantity: item.quantity || 1,
-                unit_price_inr: item.price || 3499,
-                color: item.selectedColor || 'Standard',
-                lens: rxChoice === 'call-optometrist' ? 'Optometrist Call' : 'Zero-Power Blue-Cut'
-              })),
-              subtotal_inr: subtotal,
-              grand_total_inr: grandTotal,
-              total_payable_inr: grandTotal,
-              amount_paid_inr: grandTotal,
-              payment_method: payChoice === 'card' ? 'CARD' : 'UPI',
-              prescription: prescriptionData,
-              channel: 'WEBSITE'
-            },
-            manualReprint: false
-          })
-        }).catch(() => { });
-      } catch (_) { }
 
       // Render clean, luxury customer-facing receipt
       if (DOM.orderReceiptBox) {

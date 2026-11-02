@@ -5693,11 +5693,13 @@
           }
           updatePosCartUI();
 
-          // Refresh live datasets across system
+          // Refresh live datasets across system (immediate POS inventory update, non-blocking background refreshes)
           loadInventory();
-          loadDashboard();
-          loadOrders();
-          if (typeof loadClients === 'function') loadClients();
+          setTimeout(() => {
+            loadOrders();
+            loadDashboard();
+            if (typeof loadClients === 'function') loadClients();
+          }, 350);
 
           // Show Order Done modal
           const successModal = document.getElementById('modal-order-success');
