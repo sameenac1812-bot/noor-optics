@@ -472,6 +472,7 @@ function format25InchEscPosReceipt(rawOrder) {
     order.channel === 'POS' ||
     order.channel === 'IN-STORE' ||
     (order.delivery_address && /pos|boutique|flagship|store|counter|rethibowli|walk-in/i.test(order.delivery_address));
+  const channel = isPos ? 'POS' : 'ONLINE';
   const channelLabel = isPos ? '[IN-STORE POS]' : '[WEBSITE ORDER]';
   const channelBanner = isPos ? '*** IN-STORE BOUTIQUE SALE ***' : '*** ONLINE STOREFRONT ORDER ***';
 
