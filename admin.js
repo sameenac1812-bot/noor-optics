@@ -7258,7 +7258,7 @@
           order: order,
           manualReprint: Boolean(manualReprint)
         }),
-        signal: AbortSignal.timeout(2000)
+        signal: AbortSignal.timeout(6000)
       });
 
       if (daemonResp.ok) {

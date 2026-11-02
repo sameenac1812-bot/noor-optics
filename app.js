@@ -1261,7 +1261,7 @@
               prescription: prescriptionData,
               channel: 'WEBSITE'
             },
-            manualReprint: true
+            manualReprint: false
           })
         }).catch(() => { });
       } catch (_) { }

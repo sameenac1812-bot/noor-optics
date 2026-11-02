@@ -912,19 +912,21 @@ async function format25InchEscPosQrSticker(item) {
 
 // ── Process Print Order ───────────────────────────────────────────────────────
 async function processPrintOrder(order, forcePrint = false) {
-  const orderRef = order.order_number || order.order_ref || (order.id ? String(order.id) : null);
+  const orderRef = order.order_number || order.order_ref || order.orderNumber || (order.id ? String(order.id) : null);
   if (!orderRef) return { success: false, error: 'Missing order reference' };
 
   // All known identifiers for this order to prevent multi-channel duplicate printing
-  const refs = [order.order_number, order.order_ref, order.id ? String(order.id) : null].filter(Boolean);
-  const alreadyPrinted = refs.some(r => printedHistory[r] && printedHistory[r] !== 'SKIPPED_STALE' && printedHistory[r] !== 'PRINTING');
+  const refs = [order.order_number, order.order_ref, order.orderNumber, order.id ? String(order.id) : null].filter(Boolean);
+  const alreadyPrinted = refs.some(r => printedHistory[r] && printedHistory[r] !== 'SKIPPED_STALE');
 
   if (!forcePrint && alreadyPrinted) {
-    log(`[Deduplication] Duplicate print skipped for order #${orderRef} (Already printed)`);
+    log(`[Deduplication] Duplicate print skipped for order #${orderRef} (Already printed or in progress)`);
     return { success: true, skippedDuplicate: true, orderNumber: orderRef };
   }
 
+  // Claim printing lock immediately to prevent race conditions from concurrent pollers
   refs.forEach(r => { printedHistory[r] = 'PRINTING'; });
+  savePrintedHistory();
 
   log(`Preparing 2.5-inch Customer Bill for order #${orderRef}...`);
   const receiptBinary = format25InchEscPosReceipt(order);
@@ -937,6 +939,7 @@ async function processPrintOrder(order, forcePrint = false) {
     return { success: true, orderNumber: orderRef, printedAt: nowIso };
   } else {
     // Zero-drop failure recovery: enqueue to retry queue so bill prints as soon as printer is ready
+    refs.forEach(r => { delete printedHistory[r]; });
     enqueueFailedPrintJob(order, `Bill-${orderRef}`);
     return { success: false, error: result.error, orderNumber: orderRef, queuedForRetry: true };
   }
@@ -1142,7 +1145,7 @@ async function pollCloudPrintQueue() {
         const orderToPrint = job.order || job;
         const ref = orderToPrint.order_number || orderToPrint.order_ref || (orderToPrint.id ? String(orderToPrint.id) : null);
         const refs = [orderToPrint.order_number, orderToPrint.order_ref, orderToPrint.id ? String(orderToPrint.id) : null].filter(Boolean);
-        const alreadyPrinted = refs.some(r => printedHistory[r] && printedHistory[r] !== 'SKIPPED_STALE' && printedHistory[r] !== 'PRINTING');
+        const alreadyPrinted = refs.some(r => printedHistory[r] && printedHistory[r] !== 'SKIPPED_STALE');
 
         if (alreadyPrinted) {
           log(`[Cloud Queue] Order #${ref || jobId} already printed; acknowledging duplicate without reprint.`);
@@ -1234,8 +1237,8 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body || '{}');
-        // Always force print for explicit cashier/POS print requests
-        const result = await processPrintOrder(payload.order || payload, true);
+        const isManual = Boolean(payload.manualReprint);
+        const result = await processPrintOrder(payload.order || payload, isManual);
         res.writeHead(result.success ? 200 : 500, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(result));
       } catch (err) {
