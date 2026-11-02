@@ -62,16 +62,17 @@ function getNextDailyTokenNumber() {
 // ── Helper: Generate Human-Readable Order Number ────────────────────────────
 function generateOrderNumber() {
   const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const timePart = Date.now().toString().slice(-4);
   const randomPart = Math.floor(1000 + Math.random() * 9000);
-  return `NOOR-${datePart}-${randomPart}`;
+  return `NOOR-${datePart}-${timePart}-${randomPart}`;
 }
 
-// ── Helper: Generate Invoice Number ─────────────────────────────────────────
+// ── Helper: Generate Invoice Number (Unique timestamp suffix prevents collision on rapid billing) ──
 function generateInvoiceNumber(prefix = 'NOOR-INV') {
   const year = new Date().getFullYear();
-  const countRow = db.prepare('SELECT count(*) as c FROM invoices').get();
-  const nextSeq = String((countRow ? countRow.c : 0) + 1).padStart(4, '0');
-  return `${prefix}-${year}-${nextSeq}`;
+  const timePart = Date.now().toString().slice(-4);
+  const randPart = Math.floor(1000 + Math.random() * 9000);
+  return `${prefix}-${year}-${timePart}-${randPart}`;
 }
 
 // ── Helper: Format Client Code (e.g. CLT-1001) ────────────────────────────────

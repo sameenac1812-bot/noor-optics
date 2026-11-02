@@ -43,6 +43,7 @@ try {
 }
 db.pragma('foreign_keys = ON');
 db.pragma('synchronous = NORMAL');
+db.pragma('busy_timeout = 10000'); // 10s wait during concurrent transactions to eliminate 'database is locked'
 
 /**
  * Initialize all 27 business tables

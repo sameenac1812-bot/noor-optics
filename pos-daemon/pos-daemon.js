@@ -377,14 +377,23 @@ function log(msg, level = 'INFO') {
   } catch (e) { }
 }
 
-// ── Spool Raw Bytes via worker-printer.ps1 ────────────────────────────────────
+// ── Spool Raw Bytes via Serial Worker Queue (Eliminates Spool Collisions) ──
+let printerMutex = Promise.resolve();
+
 function spoolBytesToPrinter(buffer, docName = 'Customer Bill') {
-  return new Promise((resolve, reject) => {
+  // Chain each job onto the mutex so prints are processed sequentially without collision or skip
+  const job = printerMutex.then(() => _rawSpoolBytesToPrinter(buffer, docName));
+  printerMutex = job.catch(() => {});
+  return job;
+}
+
+function _rawSpoolBytesToPrinter(buffer, docName) {
+  return new Promise((resolve) => {
     const tempFile = path.join(LOGS_DIR, `spool_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.bin`);
     fs.writeFileSync(tempFile, buffer);
 
     const cmd = `powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${WORKER_SCRIPT}" -FilePath "${tempFile}" -PrinterName "${config.printerName}" -DocName "${docName}"`;
-    exec(cmd, { timeout: 15000 }, (error, stdout, stderr) => {
+    exec(cmd, { timeout: 20000 }, (error, stdout, stderr) => {
       try { fs.unlinkSync(tempFile); } catch (e) { }
       if (error) {
         state.failedJobs++;
@@ -1226,17 +1235,25 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 3. POST /api/print (In-Store Checkout or Manual Reprint - Guaranteed Print)
+  // 3. POST /api/print (In-Store Checkout or Manual Reprint - Instant Response + Queued Hardware Spool)
   if (req.method === 'POST' && url.pathname === '/api/print') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body || '{}');
+        const orderData = payload.order || payload;
         const isManual = Boolean(payload.manualReprint);
-        const result = await processPrintOrder(payload.order || payload, isManual);
-        res.writeHead(result.success ? 200 : 500, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify(result));
+        const orderRef = orderData.order_number || orderData.order_ref || orderData.orderNumber || orderData.id || 'ORDER';
+
+        // Acknowledge immediately in 5ms so the cashier POS UI never hangs
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, queued: true, orderNumber: orderRef }));
+
+        // Process print in the background serial queue
+        processPrintOrder(orderData, isManual).catch(err => {
+          log(`Background print error for #${orderRef}: ${err.message}`, 'ERROR');
+        });
       } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ success: false, error: err.message }));
