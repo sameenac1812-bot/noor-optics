@@ -34,7 +34,7 @@ let config = {
   storeAddress: 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028',
   storePhone: '+91 98765 43210',
   storeGstin: '29AAAAA0000A1Z5',
-  orderFreshnessMinutes: 10,
+  orderFreshnessMinutes: 120,
   supabaseUrl: 'https://czajxtgwsxbrrymrhauz.supabase.co',
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk',
   backendUrl: 'https://noor-optics-five.vercel.app',
@@ -942,13 +942,13 @@ async function processPrintOrder(order, forcePrint = false) {
   }
 }
 
-// ── Startup Historical Orders Seeder (Prevents Replaying Old Orders on Boot) ──
+// ── Startup Historical Orders Seeder (Prevents Replaying Ancient Orders on Boot) ──
 let startupSeeded = false;
 async function seedStartupOrders() {
   if (startupSeeded || !config.supabaseUrl || !config.supabaseAnonKey) return;
   startupSeeded = true;
   try {
-    const res = await fetch(`${config.supabaseUrl}/rest/v1/orders?select=id,order_number,order_ref&limit=100`, {
+    const res = await fetch(`${config.supabaseUrl}/rest/v1/orders?select=id,order_number,order_ref,created_at&order=created_at.desc&limit=100`, {
       headers: {
         'apikey': config.supabaseAnonKey,
         'Authorization': `Bearer ${config.supabaseAnonKey}`
@@ -959,17 +959,24 @@ async function seedStartupOrders() {
       const existing = await res.json();
       if (Array.isArray(existing)) {
         let changed = false;
+        const now = Date.now();
+        const freshnessMs = (config.orderFreshnessMinutes || 120) * 60 * 1000;
         existing.forEach(o => {
           const refs = [o.order_number, o.order_ref, o.id ? String(o.id) : null].filter(Boolean);
-          refs.forEach(r => {
-            if (!printedHistory[r]) {
-              printedHistory[r] = 'EXISTING_AT_STARTUP';
-              changed = true;
-            }
-          });
+          const orderTime = o.created_at ? new Date(o.created_at).getTime() : 0;
+          // Only mark orders older than freshness window as stale on boot.
+          // Any active order created in the last 120 minutes is left eligible to auto-print!
+          if (!orderTime || (now - orderTime > freshnessMs)) {
+            refs.forEach(r => {
+              if (!printedHistory[r]) {
+                printedHistory[r] = 'SKIPPED_STALE';
+                changed = true;
+              }
+            });
+          }
         });
         if (changed) savePrintedHistory();
-        log(`[Startup] Order history initialized (${Object.keys(printedHistory).length} historical orders cached; only NEW orders will auto-print).`);
+        log(`[Startup] Order history initialized (${Object.keys(printedHistory).length} historical orders cached; active orders from last ${config.orderFreshnessMinutes || 120} min will auto-print).`);
       }
     }
   } catch (e) {
@@ -1008,8 +1015,8 @@ async function pollCloudOrders() {
     await refreshCatalogCache().catch(() => { });
 
     const now = Date.now();
-    // Freshness window (10 minutes) ensures only recently placed active orders are auto-printed
-    const freshnessMs = (config.orderFreshnessMinutes || 10) * 60 * 1000;
+    // Freshness window (120 minutes) ensures recent active orders are auto-printed
+    const freshnessMs = (config.orderFreshnessMinutes || 120) * 60 * 1000;
 
     // Periodic heartbeat log every 30 seconds so the console shows active polling
     if (!state.lastHeartbeatTime || (now - state.lastHeartbeatTime > 30000)) {

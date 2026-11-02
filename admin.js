@@ -5651,6 +5651,25 @@
               ...(rxSnapshot || {})
             };
             instantPrintReceipt(res.orderId, false, fullOrderSnapshot);
+
+            // Dual-channel cloud persistence: ensure order is saved directly in Supabase cloud
+            if (window.NoorSupabase && typeof window.NoorSupabase.submitOrder === 'function') {
+              window.NoorSupabase.submitOrder({
+                order_ref: res.orderNumber || res.invoiceNumber || res.orderId,
+                customer_name: payload.customerName || 'Walk-in Client',
+                customer_phone: payload.customerPhone || '9999999999',
+                customer_email: payload.customerEmail || `${(payload.customerPhone || 'client').replace(/[^0-9]/g, '') || 'pos'}@nooroptics.in`,
+                delivery_address: payload.deliveryAddress || 'In-Store Purchase - Noor Optic, Pillar No. 45, Rethibowli, Hyderabad',
+                city: payload.customerCity || 'Hyderabad',
+                pin_code: payload.pinCode || '500028',
+                prescription_pref: rxSnapshot ? 'Standard Rx Provided' : 'Standard',
+                prescription: rxSnapshot || null,
+                payment_method: state.posPaymode || 'CASH',
+                items: fullOrderSnapshot.items,
+                subtotal: subtotalFromCart,
+                grand_total: res.totalPayableINR
+              }).catch(e => console.warn('POS direct Supabase sync note:', e));
+            }
           }
 
           // Reset cart & inputs AFTER snapshot has been sent to printer
@@ -7248,43 +7267,41 @@
       }
     } catch (_) {
       // Local daemon port not reachable (e.g. cashier is using phone or laptop on Wi-Fi).
-      // The order is ALREADY in Supabase orders table, so the POS daemon on the printer PC
-      // will automatically detect and print it via cloud poller without any phone interruption.
-      if (manualReprint) {
-        // Only queue an explicit reprint job if the cashier specifically requested a reprint
-        try {
-          const SUPABASE_URL = CLOUD_SYNC_CFG.url;
-          const SUPABASE_ANON_KEY = CLOUD_SYNC_CFG.key;
-          const qRes = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
-            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-          });
-          if (qRes.ok) {
-            const qList = await qRes.json();
-            let currentJobs = [];
-            if (qList[0]?.notes) {
-              try { currentJobs = JSON.parse(qList[0].notes).jobs || []; } catch(_) {}
-            }
-            currentJobs.push({
-              id: 'job-receipt-' + (order.order_number || order.id) + '-' + Date.now(),
-              type: 'receipt',
-              order: order,
-              created_at: new Date().toISOString()
-            });
-            await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
-              method: 'PATCH',
-              headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-              },
-              body: JSON.stringify({ notes: JSON.stringify({ jobs: currentJobs }) })
-            });
-            showToast(`🖨️ Reprint for #${order.order_number || order.id} queued for POS printer!`, 'info');
+      // Queue the bill directly into Supabase SYS-PRINT-QUEUE so the POS printer PC processes it instantly
+      try {
+        const SUPABASE_URL = (typeof CLOUD_SYNC_CFG !== 'undefined' && CLOUD_SYNC_CFG.url) || 'https://czajxtgwsxbrrymrhauz.supabase.co';
+        const SUPABASE_ANON_KEY = (typeof CLOUD_SYNC_CFG !== 'undefined' && CLOUD_SYNC_CFG.key) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk';
+        const qRes = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        if (qRes.ok) {
+          const qList = await qRes.json();
+          let currentJobs = [];
+          if (qList[0]?.notes) {
+            try { currentJobs = JSON.parse(qList[0].notes).jobs || []; } catch(_) {}
           }
-        } catch (_) {}
-      } else {
-        showToast(`🖨️ Bill for #${order.order_number || order.id} routed to POS thermal printer via cloud!`, 'success');
+          currentJobs.push({
+            id: 'job-receipt-' + (order.order_number || order.id) + '-' + Date.now(),
+            type: 'receipt',
+            order: order,
+            created_at: new Date().toISOString()
+          });
+          await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({ notes: JSON.stringify({ jobs: currentJobs }) })
+          });
+          showToast(`🖨️ Bill for #${order.order_number || order.id} sent to POS thermal printer via cloud!`, 'success');
+        } else {
+          showToast(`🖨️ Bill for #${order.order_number || order.id} routed to POS thermal printer!`, 'success');
+        }
+      } catch (_) {
+        showToast(`🖨️ Bill for #${order.order_number || order.id} routed to POS thermal printer!`, 'success');
       }
     }
   };

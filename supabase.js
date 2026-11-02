@@ -93,23 +93,37 @@
         });
       }
 
-      // 2. Insert order into Supabase orders table
+      // 2. Insert order into Supabase orders table with guaranteed NOT-NULL fallbacks
+      const orderRef = String(orderData.order_ref || ('NOOR-' + Date.now())).trim();
+      const custName = String(orderData.customer_name || 'Walk-in Client').trim();
+      const rawPhone = orderData.customer_phone || '';
+      const cleanPhone = String(rawPhone).trim() || '9999999999';
+      const custEmail = String(orderData.customer_email || `${cleanPhone.replace(/[^0-9]/g, '') || 'client'}@nooroptics.in`).trim();
+      const address = String(orderData.delivery_address || 'In-Store Purchase - Noor Optic, Pillar No. 45, Rethibowli, Hyderabad').trim();
+      const city = String(orderData.city || 'Hyderabad').trim();
+      const pin = String(orderData.pin_code || '500028').trim();
+      const rxPref = String(orderData.prescription_pref || (rxData ? 'Standard Rx Provided' : 'Standard')).trim();
+      const payMethod = String(orderData.payment_method || 'CASH').toUpperCase();
+      const subtotal = Number(orderData.subtotal || orderData.grand_total || 0);
+      const shipping = Number(orderData.shipping_fee || 0);
+      const grandTotal = Number(orderData.grand_total || subtotal);
+
       const { data, error } = await supabaseClient
         .from('orders')
         .insert([{
-          order_ref: orderData.order_ref,
-          customer_name: orderData.customer_name,
-          customer_email: orderData.customer_email || (orderData.customer_phone ? `${String(orderData.customer_phone).replace(/[^0-9]/g, '')}@nooroptics.in` : 'client@nooroptics.in'),
-          customer_phone: orderData.customer_phone,
-          delivery_address: orderData.delivery_address,
-          city: orderData.city,
-          pin_code: orderData.pin_code,
+          order_ref: orderRef,
+          customer_name: custName,
+          customer_email: custEmail,
+          customer_phone: cleanPhone,
+          delivery_address: address,
+          city: city,
+          pin_code: pin,
           items: enrichedItems,
-          prescription_pref: orderData.prescription_pref || (rxData ? 'Standard Rx Provided' : 'Standard'),
-          payment_method: orderData.payment_method,
-          subtotal: orderData.subtotal,
-          shipping_fee: orderData.shipping_fee,
-          grand_total: orderData.grand_total,
+          prescription_pref: rxPref,
+          payment_method: payMethod,
+          subtotal: subtotal,
+          shipping_fee: shipping,
+          grand_total: grandTotal,
           status: 'confirmed'
         }])
         .select();

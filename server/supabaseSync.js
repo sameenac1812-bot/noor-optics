@@ -830,6 +830,20 @@ async function pushOrderToSupabase(orderPayload) {
       itemsToPush[0] = { ...itemsToPush[0], prescription: rxPayload, rx: rxPayload };
     }
 
+    const orderRef = String(orderPayload.orderNumber || orderPayload.order_ref || ('NOOR-' + Date.now())).trim();
+    const custName = String(orderPayload.customerName || orderPayload.customer_name || 'Walk-in Client').trim();
+    const rawPhone = orderPayload.customerPhone || orderPayload.customer_phone || '';
+    const cleanPhone = String(rawPhone).trim() || '9999999999';
+    const custEmail = String(orderPayload.customerEmail || orderPayload.customer_email || `${cleanPhone.replace(/[^0-9]/g, '') || 'client'}@nooroptics.in`).trim();
+    const address = String(orderPayload.deliveryAddress || orderPayload.delivery_address || 'In-Store Purchase - Noor Optic, Pillar No. 45, Rethibowli, Hyderabad').trim();
+    const city = String(orderPayload.city || 'Hyderabad').trim();
+    const pin = String(orderPayload.pinCode || orderPayload.pin_code || '500028').trim();
+    const rxPref = String(orderPayload.prescriptionPref || orderPayload.prescription_pref || ((orderPayload.prescriptionId || orderPayload.od_sph || orderPayload.prescription?.od_sph) ? 'RX Attached' : 'Standard')).trim();
+    const payMethod = String(orderPayload.paymentMethod || orderPayload.payment_method || 'CASH').toUpperCase();
+    const payStatus = String(orderPayload.paymentStatus || orderPayload.payment_status || (payMethod === 'CASH' ? 'VERIFIED' : 'AWAITING_VERIFICATION'));
+    const subtotal = Number(orderPayload.subtotalINR || (orderPayload.subtotalPaise ? orderPayload.subtotalPaise / 100 : orderPayload.totalPayableINR || orderPayload.grandTotalINR || orderPayload.grand_total || 0));
+    const grandTotal = Number(orderPayload.grandTotalINR || (orderPayload.totalPayablePaise ? orderPayload.totalPayablePaise / 100 : orderPayload.grand_total || subtotal));
+
     const res = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
       method: 'POST',
       headers: {
@@ -839,26 +853,25 @@ async function pushOrderToSupabase(orderPayload) {
         'Prefer': 'return=minimal'
       },
       body: JSON.stringify({
-        order_ref: orderPayload.orderNumber || orderPayload.order_ref,
-        customer_name: orderPayload.customerName || orderPayload.customer_name || 'Walk-in Client',
-        customer_email: orderPayload.customerEmail || orderPayload.customer_email || (orderPayload.customerPhone ? `${String(orderPayload.customerPhone).replace(/[^0-9]/g, '')}@nooroptics.in` : 'client@nooroptics.in'),
-        customer_phone: orderPayload.customerPhone || orderPayload.customer_phone || null,
-        delivery_address: orderPayload.deliveryAddress || orderPayload.delivery_address || 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028',
-        city: orderPayload.city || 'Hyderabad',
-        pin_code: orderPayload.pinCode || orderPayload.pin_code || '500028',
+        order_ref: orderRef,
+        customer_name: custName,
+        customer_email: custEmail,
+        customer_phone: cleanPhone,
+        delivery_address: address,
+        city: city,
+        pin_code: pin,
         items: itemsToPush,
-        prescription_pref: orderPayload.prescriptionPref || ((orderPayload.prescriptionId || orderPayload.od_sph || orderPayload.prescription?.od_sph) ? 'RX Attached' : 'Standard'),
-        payment_method: orderPayload.paymentMethod || orderPayload.payment_method || 'CASH',
-        payment_status: orderPayload.paymentStatus || orderPayload.payment_status || (orderPayload.paymentMethod === 'CASH' ? 'VERIFIED' : 'AWAITING_VERIFICATION'),
-        subtotal: orderPayload.subtotalINR || (orderPayload.subtotalPaise ? orderPayload.subtotalPaise / 100 : orderPayload.totalPayableINR || orderPayload.grandTotalINR || orderPayload.grand_total || 0),
+        prescription_pref: rxPref,
+        payment_method: payMethod,
+        subtotal: subtotal,
         shipping_fee: 0,
-        grand_total: orderPayload.grandTotalINR || (orderPayload.totalPayablePaise ? orderPayload.totalPayablePaise / 100 : orderPayload.grand_total || 0),
+        grand_total: grandTotal,
         status: 'confirmed'
       })
     });
 
     if (res.ok) {
-      console.log(`[SupabaseSync] Order ${orderPayload.orderNumber} successfully pushed to Supabase cloud.`);
+      console.log(`[SupabaseSync] Order ${orderRef} successfully pushed to Supabase cloud.`);
     } else {
       const errText = await res.text();
       console.warn(`[SupabaseSync] Push order failed (${res.status}):`, errText);
