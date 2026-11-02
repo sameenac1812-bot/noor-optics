@@ -28,6 +28,8 @@ const { generateInvoicePDF } = require('./pdfInvoice');
 const {
   syncSupabaseOrders,
   syncSupabaseProducts,
+  invalidateProductSyncCache,
+  pushOrderPaymentStatusToCloud,
   pushOrderToSupabase,
   pushCustomerToSupabase,
   pushPrescriptionToSupabase,
@@ -409,6 +411,7 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
         sellingPriceINR, originalPriceINR, purchaseCostINR, imageUrl: cleanImageUrl, description: cleanDesc, variants
       }).catch(e => console.warn('[SupabaseSync] pushProductToCloud update note:', e.message));
 
+      invalidateProductSyncCache();
       return res.json({ success: true, id: productId, updated: true, message: `Frame with SKU "${cleanSku}" updated successfully.` });
     }
 
@@ -470,6 +473,7 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
       sellingPriceINR, originalPriceINR, purchaseCostINR, imageUrl: cleanImageUrl, description: cleanDesc, variants
     }).catch(e => console.warn('[SupabaseSync] pushProductToCloud create note:', e.message));
 
+    invalidateProductSyncCache();
     return res.json({ success: true, id: productId });
   } catch (err) {
     console.error('[API /products] Error creating/updating product:', err);
@@ -670,6 +674,7 @@ router.delete('/products/:id', authenticateToken, async (req, res) => {
     deleteTx();
     // Await complete cloud deletion from Supabase so subsequent GET requests never see or restore it
     await deleteProductFromCloud(productId, product.sku, product.name);
+    invalidateProductSyncCache();
     res.json({ success: true, message: `Optical frame "${product.name}" deleted successfully.` });
   } catch (err) {
     console.error('Failed to delete product:', err);
@@ -2595,23 +2600,11 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
       db.prepare("UPDATE orders SET payment_status = ?, updated_at = datetime('now') WHERE id = ?").run(paymentStatus, orderId);
     }
 
-    // Sync updated payment status to cloud Supabase if connected
+    // Sync updated payment status to cloud Supabase SYS-ORDER-PAYMENTS (guaranteed cloud persistence)
     try {
-      const supUrl = process.env.SUPABASE_URL;
-      const supKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (supUrl && supKey) {
-        const ord = db.prepare('SELECT order_number FROM orders WHERE id = ?').get(orderId);
-        if (ord && ord.order_number) {
-          fetch(`${supUrl}/rest/v1/orders?order_ref=eq.${encodeURIComponent(ord.order_number)}`, {
-            method: 'PATCH',
-            headers: {
-              'apikey': supKey,
-              'Authorization': `Bearer ${supKey}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ payment_status: paymentStatus })
-          }).catch(() => {});
-        }
+      const ord = db.prepare('SELECT order_number FROM orders WHERE id = ?').get(orderId);
+      if (ord && ord.order_number) {
+        pushOrderPaymentStatusToCloud(ord.order_number, paymentStatus, reasonOrNotes).catch(() => {});
       }
     } catch (_) {}
   }

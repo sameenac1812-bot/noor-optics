@@ -331,6 +331,30 @@
           }]);
       }
 
+      // 3. Remove product from SYS-TOMBSTONE-PRODUCTS so newly added frames are NEVER hidden
+      try {
+        const { data: tombRows } = await supabaseClient
+          .from('customers')
+          .select('*')
+          .eq('client_code', 'SYS-TOMBSTONE-PRODUCTS');
+        if (Array.isArray(tombRows) && tombRows.length > 0 && tombRows[0].notes) {
+          const parsed = JSON.parse(tombRows[0].notes);
+          let tombList = Array.isArray(parsed) ? parsed : (parsed.products || []);
+          const tokensToRemove = new Set([
+            String(prodId).toLowerCase().trim(),
+            String(prodSku).toLowerCase().trim(),
+            String(product.name || '').toLowerCase().trim()
+          ]);
+          const filteredTomb = tombList.filter(t => !tokensToRemove.has(String(t).toLowerCase().trim()));
+          if (filteredTomb.length !== tombList.length) {
+            await supabaseClient
+              .from('customers')
+              .update({ notes: JSON.stringify({ products: filteredTomb, updated_at: new Date().toISOString() }) })
+              .eq('client_code', 'SYS-TOMBSTONE-PRODUCTS');
+          }
+        }
+      } catch (_) {}
+
       console.log(`✓ Product "${formatted.name}" saved to Supabase Cloud permanently!`);
       return { success: true, product: formatted };
     } catch (err) {
@@ -356,8 +380,8 @@
           await supabaseClient.from('products').delete().eq('id', productId).catch(() => {});
         }
         if (sku) {
-          await supabaseClient.from('products').update({ is_active: false }).eq('id', sku).catch(() => {});
-          await supabaseClient.from('products').delete().eq('id', sku).catch(() => {});
+          await supabaseClient.from('products').update({ is_active: false }).eq('sku', sku).catch(() => {});
+          await supabaseClient.from('products').delete().eq('sku', sku).catch(() => {});
         }
       } catch (_) {}
 

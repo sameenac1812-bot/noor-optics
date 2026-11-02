@@ -10,6 +10,12 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://czajxtgwsxbrrymrhauz.s
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk';
 
 let isSyncing = false;
+let lastProductSyncTime = 0;
+const PRODUCT_SYNC_CACHE_MS = 15000;
+
+function invalidateProductSyncCache() {
+  lastProductSyncTime = 0;
+}
 
 /**
  * Fetch cloud tombstones from dedicated system record in Supabase customers table
@@ -47,6 +53,118 @@ async function fetchCloudOrderTombstones() {
     return { orders: orderSet, purgedBefore };
   } catch (e) {
     return { orders: new Set(), purgedBefore: null };
+  }
+}
+
+/**
+ * Fetch cloud payment verification records from Supabase SYS-ORDER-PAYMENTS
+ */
+async function fetchCloudOrderPayments() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return { verified: new Set(), rejected: new Set(), details: {} };
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-ORDER-PAYMENTS`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      }
+    });
+    if (!res.ok) return { verified: new Set(), rejected: new Set(), details: {} };
+    const list = await res.json();
+    if (!Array.isArray(list) || list.length === 0 || !list[0].notes) return { verified: new Set(), rejected: new Set(), details: {} };
+
+    const parsed = JSON.parse(list[0].notes);
+    const verified = new Set();
+    const rejected = new Set();
+    const details = (parsed && typeof parsed === 'object' && parsed.details) ? parsed.details : {};
+
+    if (Array.isArray(parsed.verified_orders)) {
+      parsed.verified_orders.forEach(ref => verified.add(String(ref).trim()));
+    }
+    if (Array.isArray(parsed.rejected_orders)) {
+      parsed.rejected_orders.forEach(ref => rejected.add(String(ref).trim()));
+    }
+    return { verified, rejected, details };
+  } catch (e) {
+    return { verified: new Set(), rejected: new Set(), details: {} };
+  }
+}
+
+/**
+ * Persist an order payment verification (VERIFIED / REJECTED) into Supabase SYS-ORDER-PAYMENTS
+ */
+async function pushOrderPaymentStatusToCloud(orderRef, paymentStatus, reasonOrNotes = null) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !orderRef) return false;
+  try {
+    const cleanRef = String(orderRef).trim();
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-ORDER-PAYMENTS`, {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    let verified = [];
+    let rejected = [];
+    let details = {};
+    let recordExists = false;
+
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list) && list.length > 0) {
+        recordExists = true;
+        try {
+          const parsed = JSON.parse(list[0].notes || '{}');
+          if (Array.isArray(parsed.verified_orders)) verified = parsed.verified_orders;
+          if (Array.isArray(parsed.rejected_orders)) rejected = parsed.rejected_orders;
+          if (parsed.details) details = parsed.details;
+        } catch (_) {}
+      }
+    }
+
+    if (paymentStatus === 'VERIFIED') {
+      if (!verified.includes(cleanRef)) verified.push(cleanRef);
+      rejected = rejected.filter(r => r !== cleanRef);
+      details[cleanRef] = { status: 'VERIFIED', verified_at: new Date().toISOString(), notes: reasonOrNotes || 'Verified by Staff' };
+    } else if (paymentStatus === 'REJECTED') {
+      if (!rejected.includes(cleanRef)) rejected.push(cleanRef);
+      verified = verified.filter(r => r !== cleanRef);
+      details[cleanRef] = { status: 'REJECTED', rejected_at: new Date().toISOString(), notes: reasonOrNotes || 'Payment rejected' };
+    }
+
+    const payloadNotes = JSON.stringify({
+      verified_orders: verified,
+      rejected_orders: rejected,
+      details,
+      updated_at: new Date().toISOString()
+    });
+
+    if (recordExists) {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-ORDER-PAYMENTS`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ notes: payloadNotes, updated_at: new Date().toISOString() })
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: 'sys-order-payments-global',
+          client_code: 'SYS-ORDER-PAYMENTS',
+          name: 'System Order Payment Verifications',
+          notes: payloadNotes
+        })
+      });
+    }
+    console.log(`[SupabaseSync] Order ${cleanRef} payment recorded as ${paymentStatus} in Supabase cloud.`);
+    return true;
+  } catch (err) {
+    console.warn('[SupabaseSync] pushOrderPaymentStatusToCloud error:', err.message);
+    return false;
   }
 }
 
@@ -318,6 +436,9 @@ async function syncSupabaseOrders(db) {
   isSyncing = true;
 
   try {
+    // 0. Fetch cloud payment verifications (guarantees payment approval sticks across all lambdas & clients)
+    const { verified: cloudVerifiedOrders, rejected: cloudRejectedOrders } = await fetchCloudOrderPayments();
+
     // 1. Fetch cloud tombstones and sync into local deleted_orders table
     const { orders: cloudTombstones, purgedBefore } = await fetchCloudOrderTombstones();
     for (const deadRef of cloudTombstones) {
@@ -388,13 +509,23 @@ async function syncSupabaseOrders(db) {
       // Detect payment status and amount paid
       // In-store POS cash orders are paid at counter immediately.
       // Website orders (UPI / NetBanking / COD) require staff verification before being marked PAID.
-      const isExplicitlyVerified = (co.payment_status && String(co.payment_status).toUpperCase() === 'VERIFIED') ||
+      const isCloudVerified = cloudVerifiedOrders.has(co.order_ref) || (co.id && cloudVerifiedOrders.has(co.id));
+      const isCloudRejected = cloudRejectedOrders.has(co.order_ref) || (co.id && cloudRejectedOrders.has(co.id));
+
+      const isExplicitlyVerified = isCloudVerified ||
+                                   (co.payment_status && String(co.payment_status).toUpperCase() === 'VERIFIED') ||
                                    (co.paymentStatus && String(co.paymentStatus).toUpperCase() === 'VERIFIED');
       const isPosCash = isPos && (co.payment_method && co.payment_method.toUpperCase() === 'CASH');
       const isPaid = isPosCash || isExplicitlyVerified;
-      const paymentStatus = isPaid ? 'VERIFIED' : 'AWAITING_VERIFICATION';
+      const paymentStatus = isCloudRejected ? 'REJECTED' : (isPaid ? 'VERIFIED' : 'AWAITING_VERIFICATION');
       const amountPaidPaise = isPaid ? grandTotalPaise : 0;
       const outstandingPaise = isPaid ? 0 : grandTotalPaise;
+
+      // Extract UTR if present in notes or co
+      let resolvedUtr = co.claimed_upi_ref || co.claimedUpiRef || co.utr || null;
+      if (!resolvedUtr && co.notes && co.notes.includes('UPI Ref:')) {
+        resolvedUtr = co.notes.split('UPI Ref:')[1].replace(')', '').trim();
+      }
 
       // Resolve or create customer record
       let customerId = null;
@@ -436,10 +567,13 @@ async function syncSupabaseOrders(db) {
         let finalAmountPaid = existing.amount_paid_paise !== undefined ? existing.amount_paid_paise : amountPaidPaise;
         let finalOutstanding = existing.outstanding_paise !== undefined ? existing.outstanding_paise : outstandingPaise;
 
-        if (isExplicitlyVerified) {
+        if (isCloudVerified || isExplicitlyVerified) {
           finalPaymentStatus = 'VERIFIED';
           finalAmountPaid = grandTotalPaise;
           finalOutstanding = 0;
+        } else if (isCloudRejected) {
+          finalPaymentStatus = 'REJECTED';
+          finalOutstanding = grandTotalPaise;
         }
 
         db.prepare(`
@@ -447,6 +581,25 @@ async function syncSupabaseOrders(db) {
           SET channel = ?, payment_status = ?, amount_paid_paise = ?, outstanding_paise = ?
           WHERE id = ?
         `).run(channel, finalPaymentStatus, finalAmountPaid, finalOutstanding, existing.id);
+
+        // Ensure payments record exists and is synced
+        try {
+          const payRecordStatus = finalPaymentStatus === 'VERIFIED' ? 'VERIFIED' : (finalPaymentStatus === 'REJECTED' ? 'REJECTED' : 'PENDING_VERIFICATION');
+          const existingPay = db.prepare('SELECT id FROM payments WHERE order_id = ?').get(existing.id);
+          if (!existingPay) {
+            db.prepare(`
+              INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run('pay-' + existing.id, existing.id, co.payment_method || (isPos ? 'CASH' : 'UPI_GPAY'), grandTotalPaise, payRecordStatus, resolvedUtr, `Synced Payment (${finalPaymentStatus})`);
+          } else {
+            db.prepare(`
+              UPDATE payments
+              SET status = ?, amount_paise = ?, claimed_upi_ref = COALESCE(?, claimed_upi_ref)
+              WHERE id = ?
+            `).run(payRecordStatus, finalPaymentStatus === 'VERIFIED' ? grandTotalPaise : 0, resolvedUtr, existingPay.id);
+          }
+        } catch (_) {}
+
         continue;
       }
 
@@ -566,6 +719,21 @@ async function syncSupabaseOrders(db) {
         db.prepare('UPDATE orders SET prescription_id = ? WHERE id = ?').run(localRxId, orderId);
         console.log(`[SupabaseSync] Linked prescription ${rxNum} to order ${co.order_ref}`);
       }
+
+      // Record payment
+      try {
+        const payRecordStatus = paymentStatus === 'VERIFIED' ? 'VERIFIED' : (paymentStatus === 'REJECTED' ? 'REJECTED' : 'PENDING_VERIFICATION');
+        const payExists = db.prepare('SELECT id FROM payments WHERE order_id = ?').get(orderId);
+        if (!payExists) {
+          db.prepare(`
+            INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            'pay-' + orderId, orderId, co.payment_method || (isPos ? 'CASH' : 'UPI_GPAY'),
+            grandTotalPaise, payRecordStatus, resolvedUtr, `Online Storefront Payment (${paymentStatus})`
+          );
+        }
+      } catch (_) {}
 
       // Record invoice
       const invoiceNum = 'INV-' + co.order_ref;
@@ -901,8 +1069,10 @@ async function syncSupabaseCustomers(db) {
 /**
  * Synchronize custom products & inventory between SQLite and Supabase cloud
  */
-async function syncSupabaseProducts(db) {
+async function syncSupabaseProducts(db, force = false) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  if (!force && (Date.now() - lastProductSyncTime < PRODUCT_SYNC_CACHE_MS)) return;
+  lastProductSyncTime = Date.now();
   try {
     // 0. Fetch cloud product tombstones so deleted items are NEVER resurrected
     const { products: tombstonedProducts } = await fetchCloudProductTombstones();
@@ -1000,12 +1170,12 @@ async function syncSupabaseProducts(db) {
               original_price_paise = ?,
               purchase_cost_paise = ?,
               reorder_threshold = ?,
-              image_url = CASE WHEN ? IS NOT NULL AND ? != '' AND ? NOT LIKE '%stockholm%' THEN ? ELSE image_url END,
+              image_url = CASE WHEN ? IS NOT NULL AND ? != '' THEN ? ELSE image_url END,
               description = COALESCE(?, description),
               is_active = 1,
               updated_at = datetime('now')
             WHERE id = ?
-          `).run(cp.name, cp.brand || null, sellingPaise, origPaise, costPaise, cleanThreshold, img, img, img, img, cp.description || null, existing.id);
+          `).run(cp.name, cp.brand || null, sellingPaise, origPaise, costPaise, cleanThreshold, img, img, img, cp.description || null, existing.id);
 
           // Update balance if variant exists
           const vRow = db.prepare('SELECT id FROM product_variants WHERE product_id = ? LIMIT 1').get(existing.id);
@@ -1135,6 +1305,9 @@ async function pushProductToCloud(product) {
     // 3. Ensure product is untombstoned so it is never hidden or skipped
     await removeProductFromCloudTombstone(prodId, sku, product.name);
 
+    // Invalidate cache so storefront shows it immediately
+    invalidateProductSyncCache();
+
     return true;
   } catch (err) {
     console.warn('[SupabaseSync] pushProductToCloud error:', err.message);
@@ -1191,16 +1364,17 @@ async function removeProductFromCloudTombstone(productId, sku = null, name = nul
  * 3. Add to `SYS-TOMBSTONE-PRODUCTS` in `customers` table
  */
 async function deleteProductFromCloud(productId, sku = null, name = null) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || (!productId && !sku)) return false;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || (!productId && !sku && !name)) return false;
   try {
     const tokens = new Set();
     if (productId) tokens.add(String(productId).toLowerCase().trim());
     if (sku) tokens.add(String(sku).toLowerCase().trim());
+    if (name) tokens.add(String(name).toLowerCase().trim());
 
     // 1. Delete and deactivate from Supabase `products` table
     const filterParts = [];
     if (productId) filterParts.push(`id.eq.${encodeURIComponent(productId)}`);
-    if (sku) filterParts.push(`id.eq.${encodeURIComponent(sku)}`);
+    if (sku) filterParts.push(`sku.eq.${encodeURIComponent(sku)}`);
     const orFilter = filterParts.join(',');
 
     try {
@@ -1239,9 +1413,8 @@ async function deleteProductFromCloud(productId, sku = null, name = null) {
           if (!p) return false;
           const pId = p.id ? String(p.id).toLowerCase().trim() : '';
           const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
-          if (tokens.has(pId)) return false;
-          if (tokens.has(pSku)) return false;
-          if (name && p.name && p.name.toLowerCase().trim() === name.toLowerCase().trim()) return false;
+          const pName = p.name ? String(p.name).toLowerCase().trim() : '';
+          if (tokens.has(pId) || tokens.has(pSku) || tokens.has(pName)) return false;
           return true;
         });
 
@@ -1261,6 +1434,9 @@ async function deleteProductFromCloud(productId, sku = null, name = null) {
 
     // 3. Push to SYS-TOMBSTONE-PRODUCTS
     await pushDeletedProductToCloudTombstone(productId, sku, name);
+
+    // Invalidate product sync cache so deleted items disappear immediately
+    invalidateProductSyncCache();
 
     console.log(`[SupabaseSync] Product ${productId || sku || name} completely purged from Supabase cloud.`);
     return true;
@@ -1420,6 +1596,9 @@ module.exports = {
   syncSupabaseOrders,
   syncSupabaseCustomers,
   syncSupabaseProducts,
+  invalidateProductSyncCache,
+  fetchCloudOrderPayments,
+  pushOrderPaymentStatusToCloud,
   pushProductToCloud,
   deleteProductFromCloud,
   clearAllProductsFromCloud,

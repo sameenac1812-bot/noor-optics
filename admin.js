@@ -935,9 +935,96 @@
   };
 
   // ── UPI Payment Verification Handlers ─────────────────────────────────────
+  async function directPushOrderPaymentToCloud(orderRef, paymentStatus, reasonOrNotes = null) {
+    if (!orderRef) return;
+    try {
+      const SUPABASE_URL = CLOUD_SYNC_CFG.url;
+      const SUPABASE_ANON_KEY = CLOUD_SYNC_CFG.key;
+      const headers = {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json'
+      };
+
+      const cleanRef = String(orderRef).trim();
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-ORDER-PAYMENTS`, { headers });
+      let verified = [];
+      let rejected = [];
+      let details = {};
+      let recordExists = false;
+
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0) {
+          recordExists = true;
+          try {
+            const parsed = JSON.parse(list[0].notes || '{}');
+            if (Array.isArray(parsed.verified_orders)) verified = parsed.verified_orders;
+            if (Array.isArray(parsed.rejected_orders)) rejected = parsed.rejected_orders;
+            if (parsed.details) details = parsed.details;
+          } catch (_) {}
+        }
+      }
+
+      if (paymentStatus === 'VERIFIED') {
+        if (!verified.includes(cleanRef)) verified.push(cleanRef);
+        rejected = rejected.filter(r => r !== cleanRef);
+        details[cleanRef] = { status: 'VERIFIED', verified_at: new Date().toISOString(), notes: reasonOrNotes || 'Verified by Staff' };
+      } else if (paymentStatus === 'REJECTED') {
+        if (!rejected.includes(cleanRef)) rejected.push(cleanRef);
+        verified = verified.filter(r => r !== cleanRef);
+        details[cleanRef] = { status: 'REJECTED', rejected_at: new Date().toISOString(), notes: reasonOrNotes || 'Payment rejected' };
+      }
+
+      const payloadNotes = JSON.stringify({
+        verified_orders: verified,
+        rejected_orders: rejected,
+        details,
+        updated_at: new Date().toISOString()
+      });
+
+      if (recordExists) {
+        await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-ORDER-PAYMENTS`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ notes: payloadNotes, updated_at: new Date().toISOString() })
+        });
+      } else {
+        await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            id: 'sys-order-payments-global',
+            client_code: 'SYS-ORDER-PAYMENTS',
+            name: 'System Order Payment Verifications',
+            notes: payloadNotes
+          })
+        });
+      }
+    } catch (e) {
+      console.warn('directPushOrderPaymentToCloud note:', e.message);
+    }
+  }
+
   window.confirmUpiPayment = async function (orderId, paymentId) {
     if (!confirm('Confirm receipt of UPI payment for this order?')) return;
     try {
+      const order = (state.ordersCache || []).find(o => o.id === orderId || o.order_number === orderId);
+      const orderRef = order?.order_number || orderId;
+
+      // 1. Direct dual-write to Supabase cloud SYS-ORDER-PAYMENTS (guaranteed persistence across all lambdas)
+      directPushOrderPaymentToCloud(orderRef, 'VERIFIED').catch(() => {});
+
+      // 2. Immediate zero-latency UI update
+      if (order) {
+        order.payment_status = 'VERIFIED';
+        order.amount_paid_paise = order.total_payable_paise || Math.round((order.total_payable_inr || order.grand_total || 0) * 100);
+        order.amount_paid_inr = order.amount_paid_paise / 100;
+        order.outstanding_paise = 0;
+      }
+      renderOrdersTable();
+
+      // 3. Call backend endpoint
       await apiFetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ paymentStatus: 'VERIFIED' })
@@ -958,6 +1045,19 @@
     const reason = prompt('Enter reason for rejecting payment (e.g. "Credit not received in bank", "Underpaid"):', 'Credit not received in bank account');
     if (!reason) return;
     try {
+      const order = (state.ordersCache || []).find(o => o.id === orderId || o.order_number === orderId);
+      const orderRef = order?.order_number || orderId;
+
+      // 1. Direct dual-write to Supabase cloud SYS-ORDER-PAYMENTS
+      directPushOrderPaymentToCloud(orderRef, 'REJECTED', reason).catch(() => {});
+
+      // 2. Immediate zero-latency UI update
+      if (order) {
+        order.payment_status = 'REJECTED';
+      }
+      renderOrdersTable();
+
+      // 3. Call backend endpoint
       await apiFetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ paymentStatus: 'REJECTED', reasonOrNotes: reason })
@@ -1535,7 +1635,7 @@
     try {
       const orParts = [];
       if (productId) orParts.push(`id.eq.${encodeURIComponent(productId)}`);
-      if (sku) orParts.push(`id.eq.${encodeURIComponent(sku)}`);
+      if (sku) orParts.push(`sku.eq.${encodeURIComponent(sku)}`);
       if (orParts.length > 0) {
         const orQuery = orParts.join(',');
         await fetch(`${SUPABASE_URL}/rest/v1/products?or=(${orQuery})`, {
@@ -2440,11 +2540,12 @@
 
   // ── Delete Single Frame ───────────────────────────────────────────────────
   window.deleteFramePrompt = async function (productId, nameParam, skuParam) {
-    const frame = (state.inventoryList || []).find(p => p.id === productId) || {};
-    const name = nameParam || frame.name || productId;
-    const sku = skuParam || frame.sku || '';
+    const frame = (state.inventoryList || []).find(p => p.id === productId || (p.sku && p.sku === productId)) || {};
+    const name = nameParam || frame.name || '';
+    const sku = skuParam || frame.sku || (String(productId).toUpperCase().startsWith('NOOR-') ? productId : '');
+    const displayName = name || sku || productId;
 
-    if (!confirm(`Are you sure you want to delete optical frame "${name}" (${sku || productId}) from inventory?\n\nThis will permanently remove the product from database and Supabase cloud.`)) {
+    if (!confirm(`Are you sure you want to delete optical frame "${displayName}" (${sku || productId}) from inventory?\n\nThis will permanently remove the product from database and Supabase cloud.`)) {
       return;
     }
 
