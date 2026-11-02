@@ -652,129 +652,8 @@ function format25InchEscPosReceipt(rawOrder) {
   return Buffer.concat(chunks);
 }
 
-// ── 5x7 Font Table for Crisp Monochrome Raster Text ────────────────────────
-const FONT_5X7 = {
-  ' ': [0x00, 0x00, 0x00, 0x00, 0x00],
-  '!': [0x00, 0x00, 0x5F, 0x00, 0x00],
-  '"': [0x00, 0x07, 0x00, 0x07, 0x00],
-  '#': [0x14, 0x7F, 0x14, 0x7F, 0x14],
-  '$': [0x24, 0x2A, 0x7F, 0x2A, 0x12],
-  '%': [0x23, 0x13, 0x08, 0x64, 0x62],
-  '&': [0x36, 0x49, 0x55, 0x22, 0x50],
-  "'": [0x00, 0x05, 0x03, 0x00, 0x00],
-  '(': [0x00, 0x1C, 0x22, 0x41, 0x00],
-  ')': [0x00, 0x41, 0x22, 0x1C, 0x00],
-  '*': [0x14, 0x08, 0x3E, 0x08, 0x14],
-  '+': [0x08, 0x08, 0x3E, 0x08, 0x08],
-  ',': [0x00, 0x50, 0x30, 0x00, 0x00],
-  '-': [0x08, 0x08, 0x08, 0x08, 0x08],
-  '.': [0x00, 0x60, 0x60, 0x00, 0x00],
-  '/': [0x20, 0x10, 0x08, 0x04, 0x02],
-  '0': [0x3E, 0x51, 0x49, 0x45, 0x3E],
-  '1': [0x00, 0x42, 0x7F, 0x40, 0x00],
-  '2': [0x42, 0x61, 0x51, 0x49, 0x46],
-  '3': [0x21, 0x41, 0x45, 0x4B, 0x31],
-  '4': [0x18, 0x14, 0x12, 0x7F, 0x10],
-  '5': [0x27, 0x45, 0x45, 0x45, 0x39],
-  '6': [0x3C, 0x4A, 0x49, 0x49, 0x30],
-  '7': [0x01, 0x71, 0x09, 0x05, 0x03],
-  '8': [0x36, 0x49, 0x49, 0x49, 0x36],
-  '9': [0x06, 0x49, 0x49, 0x29, 0x1E],
-  ':': [0x00, 0x36, 0x36, 0x00, 0x00],
-  ';': [0x00, 0x56, 0x36, 0x00, 0x00],
-  '<': [0x08, 0x14, 0x22, 0x41, 0x00],
-  '=': [0x14, 0x14, 0x14, 0x14, 0x14],
-  '>': [0x00, 0x41, 0x22, 0x14, 0x08],
-  '?': [0x02, 0x01, 0x51, 0x09, 0x06],
-  '@': [0x32, 0x49, 0x79, 0x41, 0x3E],
-  'A': [0x7E, 0x11, 0x11, 0x11, 0x7E],
-  'B': [0x7F, 0x49, 0x49, 0x49, 0x36],
-  'C': [0x3E, 0x41, 0x41, 0x41, 0x22],
-  'D': [0x7F, 0x41, 0x41, 0x22, 0x1C],
-  'E': [0x7F, 0x49, 0x49, 0x49, 0x41],
-  'F': [0x7F, 0x09, 0x09, 0x09, 0x01],
-  'G': [0x3E, 0x41, 0x49, 0x49, 0x7A],
-  'H': [0x7F, 0x08, 0x08, 0x08, 0x7F],
-  'I': [0x00, 0x41, 0x7F, 0x41, 0x00],
-  'J': [0x20, 0x40, 0x41, 0x3F, 0x01],
-  'K': [0x7F, 0x08, 0x14, 0x22, 0x41],
-  'L': [0x7F, 0x40, 0x40, 0x40, 0x40],
-  'M': [0x7F, 0x02, 0x0C, 0x02, 0x7F],
-  'N': [0x7F, 0x04, 0x08, 0x10, 0x7F],
-  'O': [0x3E, 0x41, 0x41, 0x41, 0x3E],
-  'P': [0x7F, 0x09, 0x09, 0x09, 0x06],
-  'Q': [0x3E, 0x41, 0x51, 0x21, 0x5E],
-  'R': [0x7F, 0x09, 0x19, 0x29, 0x46],
-  'S': [0x46, 0x49, 0x49, 0x49, 0x31],
-  'T': [0x01, 0x01, 0x7F, 0x01, 0x01],
-  'U': [0x3F, 0x40, 0x40, 0x40, 0x3F],
-  'V': [0x1F, 0x20, 0x40, 0x20, 0x1F],
-  'W': [0x7F, 0x20, 0x18, 0x20, 0x7F],
-  'X': [0x63, 0x14, 0x08, 0x14, 0x63],
-  'Y': [0x07, 0x08, 0x70, 0x08, 0x07],
-  'Z': [0x61, 0x51, 0x49, 0x45, 0x43],
-  'a': [0x20, 0x54, 0x54, 0x54, 0x78],
-  'b': [0x7F, 0x48, 0x44, 0x44, 0x38],
-  'c': [0x38, 0x44, 0x44, 0x44, 0x20],
-  'd': [0x38, 0x44, 0x44, 0x48, 0x7F],
-  'e': [0x38, 0x54, 0x54, 0x54, 0x18],
-  'f': [0x08, 0x7E, 0x09, 0x01, 0x02],
-  'g': [0x0C, 0x52, 0x52, 0x52, 0x3E],
-  'h': [0x7F, 0x08, 0x04, 0x04, 0x78],
-  'i': [0x00, 0x44, 0x7D, 0x40, 0x00],
-  'j': [0x20, 0x40, 0x44, 0x3D, 0x00],
-  'k': [0x7F, 0x10, 0x28, 0x44, 0x00],
-  'l': [0x00, 0x41, 0x7F, 0x40, 0x00],
-  'm': [0x7C, 0x04, 0x18, 0x04, 0x78],
-  'n': [0x7C, 0x08, 0x04, 0x04, 0x78],
-  'o': [0x38, 0x44, 0x44, 0x44, 0x38],
-  'p': [0x7C, 0x14, 0x14, 0x14, 0x08],
-  'q': [0x08, 0x14, 0x14, 0x18, 0x7C],
-  'r': [0x7C, 0x08, 0x04, 0x04, 0x08],
-  's': [0x48, 0x54, 0x54, 0x54, 0x20],
-  't': [0x04, 0x3F, 0x44, 0x40, 0x20],
-  'u': [0x3C, 0x40, 0x40, 0x20, 0x7C],
-  'v': [0x1C, 0x20, 0x40, 0x20, 0x1C],
-  'w': [0x3C, 0x40, 0x30, 0x40, 0x3C],
-  'x': [0x44, 0x28, 0x10, 0x28, 0x44],
-  'y': [0x0C, 0x50, 0x50, 0x50, 0x3C],
-  'z': [0x44, 0x64, 0x54, 0x4C, 0x44]
-};
-
-function drawBitmapText(raster, widthBytes, text, startX, startY, scale = 1) {
-  const str = String(text || '');
-  let curX = startX;
-  for (let i = 0; i < str.length; i++) {
-    const ch = str[i];
-    const glyph = FONT_5X7[ch] || FONT_5X7[' '];
-    for (let col = 0; col < 5; col++) {
-      const colByte = glyph[col];
-      for (let row = 0; row < 7; row++) {
-        if ((colByte & (1 << row)) !== 0) {
-          for (let dy = 0; dy < scale; dy++) {
-            for (let dx = 0; dx < scale; dx++) {
-              const px = curX + col * scale + dx;
-              const py = startY + row * scale + dy;
-              if (px >= 0 && px < widthBytes * 8 && py >= 0) {
-                const bIdx = py * widthBytes + Math.floor(px / 8);
-                if (bIdx < raster.length) {
-                  raster[bIdx] |= (0x80 >> (px % 8));
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    curX += (5 + 1) * scale;
-  }
-}
-
-// ── Format Optical Frame QR Sticker (Unified 384-Dot Raster Image) ───────────
+// ── Format 2.5-Inch (20-25mm Optical Dumbbell Tag) ESC/POS QR Sticker ───────────
 async function format25InchEscPosQrSticker(item) {
-  // Authoritative Unified 384-Dot Monochrome ESC/POS Raster (GS v 0)
-  // Thin-line anti-blotting engine: Solid finder patterns + 3x3 active dots inside 4x4 cells
-  // Perfectly reproduces crisp, thin-line reference sticker layout (Top QR -> SKU -> Model -> Price)
   let QRCode;
   try { QRCode = require(path.join(__dirname, 'assets', 'qrcode-bundle.js')); } catch (_) { }
   if (!QRCode) {
@@ -788,184 +667,75 @@ async function format25InchEscPosQrSticker(item) {
   if (price && !price.toUpperCase().startsWith('RS') && !price.toUpperCase().startsWith('M.R.P')) {
     price = 'Rs. ' + price;
   }
+  const qrUrl = (item.qrPayload || `HTTPS://NOOROPTICS.VERCEL.APP/Q/${encodeURIComponent(sku)}`).trim();
 
-  // 1. Ultra-clean minimal payload: pure SKU (Version 1, 21x21 modules, maximum scanner recognition, zero thermal blotting)
-  const qrPayload = (item.qrPayload || sku).trim().toUpperCase();
+  const chunks = [];
+  function writeBytes(arr) { chunks.push(Buffer.from(arr)); }
+  function writeText(str) { chunks.push(Buffer.from(str, 'ascii')); }
 
-  const widthDots = 384;
-  const widthBytes = 48; // 384 / 8 = 48 bytes per line
-  let qrSize = 0;
-  let qrMatrix = null;
+  writeBytes([0x1B, 0x40]); // Reset
+  writeBytes([0x1B, 0x61, 0x01]); // Center
+  writeBytes([0x1B, 0x33, 0x10]); // Ultra-tight line spacing (16 dots ~ 2mm)
 
   if (QRCode) {
     try {
-      // EC Level M gives 15% recovery with lowest practical version (Version 1 for SKU)
-      const qr = QRCode.create(qrPayload, { errorCorrectionLevel: 'M' });
-      qrMatrix = qr;
-      qrSize = qr.modules.size;
-    } catch (e) {
-      log(`QRCode generation note: ${e.message}`, 'WARN');
-    }
-  }
+      const qr = QRCode.create(qrUrl, { errorCorrectionLevel: 'L' });
+      const rawSize = qr.modules.size; // 25 (Version 2)
+      const quiet = 1; // Small quiet zone
+      const scale = 3; // 27 * 3 = 81 dots (~10.1mm small crisp QR matching Image 2!)
+      const totalModules = rawSize + quiet * 2;
+      const imgWidth = totalModules * scale;
+      const imgHeight = totalModules * scale;
+      const widthBytes = Math.ceil(imgWidth / 8);
 
-  // Thin-line anti-blotting configuration:
-  // Scale 4 = 4 dots per module cell (~14.5mm size, easy for cameras to see)
-  // Quiet zone 4 = 16 dots pure white margin -> ensures scanner camera locks on instantly
-  const qrScale = 4;
-  const qrQuiet = 4;
-  const qrModules = (qrSize > 0) ? (qrSize + qrQuiet * 2) : 29;
-  const qrPix = qrModules * qrScale; // 29 * 4 = 116 dots (~14.5mm)
-
-  // Total compact height: QR (116) + SKU (12) + Name (11) + Price (12) + margins = ~164 dots (~20.5mm)
-  const totalHeight = qrPix + 65;
-  const raster = Buffer.alloc(widthBytes * totalHeight, 0);
-
-  // Center QR horizontally
-  const qrStartX = Math.floor((widthDots - qrPix) / 2);
-  const qrStartY = 4;
-
-  const R_outer = 5;
-  const R_inner = 3;
-
-  function getFinderOrigin(ax, ay) {
-    if (ax >= 0 && ax < 7 && ay >= 0 && ay < 7) return { ox: 0, oy: 0 };
-    if (ax >= qrSize - 7 && ax < qrSize && ay >= 0 && ay < 7) return { ox: qrSize - 7, oy: 0 };
-    if (ax >= 0 && ax < 7 && ay >= qrSize - 7 && ay < qrSize) return { ox: 0, oy: qrSize - 7 };
-    return null;
-  }
-
-  if (qrMatrix) {
-    for (let my = 0; my < qrModules; my++) {
-      const actualY = my - qrQuiet;
-      for (let mx = 0; mx < qrModules; mx++) {
-        const actualX = mx - qrQuiet;
-        const isInside = (actualX >= 0 && actualX < qrSize && actualY >= 0 && actualY < qrSize);
-        const isBlack = isInside ? Boolean(qrMatrix.modules.data[actualY * qrSize + actualX]) : false;
-        const finder = isInside ? getFinderOrigin(actualX, actualY) : null;
-
-        if (finder) {
-          // Precision rounded square finder pattern (7x7 modules = 28x28 dots)
-          for (let dy = 0; dy < qrScale; dy++) {
-            for (let dx = 0; dx < qrScale; dx++) {
-              const rx = (actualX - finder.ox) * qrScale + dx; // 0..27
-              const ry = (actualY - finder.oy) * qrScale + dy; // 0..27
-
-              let drawPixel = false;
-              const inOuterBox = rx >= 0 && rx < 28 && ry >= 0 && ry < 28;
-              const inHole = rx >= 4 && rx < 24 && ry >= 4 && ry < 24;
-
-              if (inOuterBox && !inHole) {
-                // Outer 7x7 frame with radius 5 rounded corners
-                let cornerDistSq = 0;
-                let inCorner = false;
-                if (rx < R_outer && ry < R_outer) {
-                  cornerDistSq = Math.pow(rx - R_outer, 2) + Math.pow(ry - R_outer, 2);
-                  inCorner = true;
-                } else if (rx >= 28 - R_outer && ry < R_outer) {
-                  cornerDistSq = Math.pow(rx - (27 - R_outer), 2) + Math.pow(ry - R_outer, 2);
-                  inCorner = true;
-                } else if (rx < R_outer && ry >= 28 - R_outer) {
-                  cornerDistSq = Math.pow(rx - R_outer, 2) + Math.pow(ry - (27 - R_outer), 2);
-                  inCorner = true;
-                } else if (rx >= 28 - R_outer && ry >= 28 - R_outer) {
-                  cornerDistSq = Math.pow(rx - (27 - R_outer), 2) + Math.pow(ry - (27 - R_outer), 2);
-                  inCorner = true;
-                }
-
-                if (!inCorner || cornerDistSq <= R_outer * R_outer) {
-                  drawPixel = true;
-                }
+      const raster = Buffer.alloc(widthBytes * imgHeight, 0);
+      for (let y = 0; y < totalModules; y++) {
+        const my = y - quiet;
+        for (let x = 0; x < totalModules; x++) {
+          const mx = x - quiet;
+          const isBlack = (mx >= 0 && mx < rawSize && my >= 0 && my < rawSize)
+            ? Boolean(qr.modules.data[my * rawSize + mx])
+            : false;
+          if (isBlack) {
+            for (let dy = 0; dy < scale; dy++) {
+              for (let dx = 0; dx < scale; dx++) {
+                const py = y * scale + dy;
+                const px = x * scale + dx;
+                const byteIdx = py * widthBytes + Math.floor(px / 8);
+                const bitMask = 0x80 >> (px % 8);
+                raster[byteIdx] |= bitMask;
               }
-
-              // Inner 3x3 solid center dot (rx: 8..19, ry: 8..19, 12x12 dots) with radius 3 rounded corners
-              if (rx >= 8 && rx < 20 && ry >= 8 && ry < 20) {
-                const cx = rx - 8;
-                const cy = ry - 8;
-                let inCenterCorner = false;
-                let centerDistSq = 0;
-                if (cx < R_inner && cy < R_inner) {
-                  centerDistSq = Math.pow(cx - R_inner, 2) + Math.pow(cy - R_inner, 2);
-                  inCenterCorner = true;
-                } else if (cx >= 12 - R_inner && cy < R_inner) {
-                  centerDistSq = Math.pow(cx - (11 - R_inner), 2) + Math.pow(cy - R_inner, 2);
-                  inCenterCorner = true;
-                } else if (cx < R_inner && cy >= 12 - R_inner) {
-                  centerDistSq = Math.pow(cx - R_inner, 2) + Math.pow(cy - (11 - R_inner), 2);
-                  inCenterCorner = true;
-                } else if (cx >= 12 - R_inner && cy >= 12 - R_inner) {
-                  centerDistSq = Math.pow(cx - (11 - R_inner), 2) + Math.pow(cy - (11 - R_inner), 2);
-                  inCenterCorner = true;
-                }
-
-                if (!inCenterCorner || centerDistSq <= R_inner * R_inner) {
-                  drawPixel = true;
-                }
-              }
-
-              if (drawPixel) {
-                const px = qrStartX + mx * qrScale + dx;
-                const py = qrStartY + my * qrScale + dy;
-                const bIdx = py * widthBytes + Math.floor(px / 8);
-                raster[bIdx] |= (0x80 >> (px % 8));
-              }
-            }
-          }
-        } else if (isBlack) {
-          // Anti-blotting DOTTED data modules (centered 2x2 dot inside 4x4 cell)
-          // 1-dot white padding on all sides guarantees zero thermal bleeding / blotting on thermal paper!
-          for (let dy = 1; dy <= 2; dy++) {
-            for (let dx = 1; dx <= 2; dx++) {
-              const px = qrStartX + mx * qrScale + dx;
-              const py = qrStartY + my * qrScale + dy;
-              const bIdx = py * widthBytes + Math.floor(px / 8);
-              raster[bIdx] |= (0x80 >> (px % 8));
             }
           }
         }
       }
+
+      // GS v 0 (Print raster bit image)
+      writeBytes([
+        0x1D, 0x76, 0x30, 0x00,
+        widthBytes & 0xFF, (widthBytes >> 8) & 0xFF,
+        imgHeight & 0xFF, (imgHeight >> 8) & 0xFF
+      ]);
+      chunks.push(raster);
+    } catch (e) {
+      log(`Raster QR failed: ${e.message}`, 'WARN');
     }
   }
 
-  // Draw SKU Centered under QR (Scale 1: 5x7 dots, compact & crisp)
-  let curY = qrStartY + qrPix + 5;
-  const skuWidth = sku.length * 6 * 1;
-  const skuX = Math.max(0, Math.floor((widthDots - skuWidth) / 2));
-  drawBitmapText(raster, widthBytes, sku, skuX, curY, 1);
-  curY += 12;
+  // Label Text strictly inside QR flag area (Exact Image 2 Typography):
+  writeBytes([0x1B, 0x4D, 0x01]); // Font B (9x17 dots, crystal sharp & dark)
+  writeBytes([0x1B, 0x45, 0x01]); // Bold ON
+  writeText(`${sku}\n`);
+  writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
+  if (name) writeText(`${name}\n`);
+  if (price) writeText(`${price}\n`);
+  writeBytes([0x1B, 0x4D, 0x00]); // Font A (normal)
+  writeBytes([0x1B, 0x32]); // Reset line spacing
 
-  // Draw Frame Name Centered (Scale 1: 5x7 dots)
-  if (name) {
-    const nameWidth = name.length * 6 * 1;
-    const nameX = Math.max(0, Math.floor((widthDots - nameWidth) / 2));
-    drawBitmapText(raster, widthBytes, name, nameX, curY, 1);
-    curY += 11;
-  }
+  writeBytes([0x1B, 0x64, 0x02]); // Feed 2 lines
+  writeBytes([0x1D, 0x56, 0x42, 0x00]); // Partial cut
 
-  // Draw Price Centered (Scale 1: 5x7 dots)
-  if (price) {
-    const priceWidth = price.length * 6 * 1;
-    const priceX = Math.max(0, Math.floor((widthDots - priceWidth) / 2));
-    drawBitmapText(raster, widthBytes, price, priceX, curY, 1);
-    curY += 12;
-  }
-
-  // Build ESC/POS GS v 0 1-bit raster binary (Compact ~16mm height)
-  const finalHeight = curY + 4;
-  const slicedRaster = raster.slice(0, widthBytes * finalHeight);
-
-  const header = Buffer.from([
-    0x1B, 0x40, // ESC @ (Initialize)
-    0x1D, 0x76, 0x30, 0x00, // GS v 0
-    widthBytes & 0xFF, (widthBytes >> 8) & 0xFF,
-    finalHeight & 0xFF, (finalHeight >> 8) & 0xFF
-  ]);
-
-  const footer = Buffer.from([
-    0x1B, 0x64, 0x02, // Feed 2 lines
-    0x1D, 0x56, 0x42, 0x00 // Partial cut
-  ]);
-
-  return Buffer.concat([header, slicedRaster, footer]);
+  return Buffer.concat(chunks);
 }
 
 // ── Process Print Order ───────────────────────────────────────────────────────

@@ -281,9 +281,8 @@ if (Test-Path $qrCoderDll) {
     } catch {}
 }
 
-function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$price) {
+function Generate-CrispImage2QrRaster([string]$text) {
     try {
-        # 1. Generate 2D QR Code Bitmap
         $qrBmp = $null
         $dll = Join-Path $ScriptDir "assets\QRCoder.dll"
         if (Test-Path $dll) {
@@ -292,74 +291,26 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
                 Add-Type -Path $dll -ErrorAction SilentlyContinue
                 Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
                 $gen = New-Object QRCoder.QRCodeGenerator
-                $data = $gen.CreateQrCode($sku, [QRCoder.QRCodeGenerator+ECCLevel]::M)
+                $data = $gen.CreateQrCode($text, [QRCoder.QRCodeGenerator+ECCLevel]::L)
                 $matrix = $data.ModuleMatrix
-                $qrModCount = $matrix.Count
-                $qrQuiet = 4
-                $qrScale = 4
-                $totalMods = $qrModCount + ($qrQuiet * 2)
-                $qrBmpW = $totalMods * $qrScale
-                $customQrBmp = New-Object System.Drawing.Bitmap($qrBmpW, $qrBmpW)
+                $rawSize = $matrix.Count
+                $quiet = 1
+                $scale = 3 # 27 * 3 = 81 dots (~10.1mm crisp QR matching Image 2)
+                $totalMods = $rawSize + ($quiet * 2)
+                $qrWidth = $totalMods * $scale
+
+                $customQrBmp = New-Object System.Drawing.Bitmap($qrWidth, $qrWidth)
                 $gQr = [System.Drawing.Graphics]::FromImage($customQrBmp)
                 $gQr.Clear([System.Drawing.Color]::White)
                 $brushB = [System.Drawing.Brushes]::Black
 
                 for ($my = 0; $my -lt $totalMods; $my++) {
-                    $ay = $my - $qrQuiet
+                    $ay = $my - $quiet
                     for ($mx = 0; $mx -lt $totalMods; $mx++) {
-                        $ax = $mx - $qrQuiet
-                        $isInside = ($ax -ge 0 -and $ax -lt $qrModCount -and $ay -ge 0 -and $ay -lt $qrModCount)
-                        $isBlack = $isInside -and $matrix[$ay][$ax]
-
-                        $finderOx = -1
-                        $finderOy = -1
-                        if ($ax -ge 0 -and $ax -lt 7 -and $ay -ge 0 -and $ay -lt 7) { $finderOx = 0; $finderOy = 0 }
-                        elseif ($ax -ge ($qrModCount - 7) -and $ax -lt $qrModCount -and $ay -ge 0 -and $ay -lt 7) { $finderOx = ($qrModCount - 7); $finderOy = 0 }
-                        elseif ($ax -ge 0 -and $ax -lt 7 -and $ay -ge ($qrModCount - 7) -and $ay -lt $qrModCount) { $finderOx = 0; $finderOy = ($qrModCount - 7) }
-
-                        if ($finderOx -ge 0) {
-                            # Finder pattern: outer rounded square (radius 5) + inner rounded dot (radius 3)
-                            for ($dy = 0; $dy -lt $qrScale; $dy++) {
-                                for ($dx = 0; $dx -lt $qrScale; $dx++) {
-                                    $rx = ($ax - $finderOx) * $qrScale + $dx # 0..27
-                                    $ry = ($ay - $finderOy) * $qrScale + $dy # 0..27
-                                    $drawPix = $false
-
-                                    $inOuter = ($rx -ge 0 -and $rx -lt 28 -and $ry -ge 0 -and $ry -lt 28)
-                                    $inHole = ($rx -ge 4 -and $rx -lt 24 -and $ry -ge 4 -and $ry -lt 24)
-                                    if ($inOuter -and -not $inHole) {
-                                        $inCorner = $false
-                                        $cdSq = 0
-                                        if ($rx -lt 5 -and $ry -lt 5) { $cdSq = [Math]::Pow($rx - 5, 2) + [Math]::Pow($ry - 5, 2); $inCorner = $true }
-                                        elseif ($rx -ge 23 -and $ry -lt 5) { $cdSq = [Math]::Pow($rx - 22, 2) + [Math]::Pow($ry - 5, 2); $inCorner = $true }
-                                        elseif ($rx -lt 5 -and $ry -ge 23) { $cdSq = [Math]::Pow($rx - 5, 2) + [Math]::Pow($ry - 22, 2); $inCorner = $true }
-                                        elseif ($rx -ge 23 -and $ry -ge 23) { $cdSq = [Math]::Pow($rx - 22, 2) + [Math]::Pow($ry - 22, 2); $inCorner = $true }
-
-                                        if (-not $inCorner -or $cdSq -le 25) { $drawPix = $true }
-                                    }
-
-                                    # Inner 12x12 dot (radius 3)
-                                    if ($rx -ge 8 -and $rx -lt 20 -and $ry -ge 8 -and $ry -lt 20) {
-                                        $cx = $rx - 8
-                                        $cy = $ry - 8
-                                        $inCCorner = $false
-                                        $ccdSq = 0
-                                        if ($cx -lt 3 -and $cy -lt 3) { $ccdSq = [Math]::Pow($cx - 3, 2) + [Math]::Pow($cy - 3, 2); $inCCorner = $true }
-                                        elseif ($cx -ge 9 -and $cy -lt 3) { $ccdSq = [Math]::Pow($cx - 8, 2) + [Math]::Pow($cy - 3, 2); $inCCorner = $true }
-                                        elseif ($cx -lt 3 -and $cy -ge 9) { $ccdSq = [Math]::Pow($cx - 3, 2) + [Math]::Pow($cy - 8, 2); $inCCorner = $true }
-                                        elseif ($cx -ge 9 -and $cy -ge 9) { $ccdSq = [Math]::Pow($cx - 8, 2) + [Math]::Pow($cy - 8, 2); $inCCorner = $true }
-
-                                        if (-not $inCCorner -or $ccdSq -le 9) { $drawPix = $true }
-                                    }
-
-                                    if ($drawPix) {
-                                        $customQrBmp.SetPixel(($mx * $qrScale + $dx), ($my * $qrScale + $dy), [System.Drawing.Color]::Black)
-                                    }
-                                }
-                            }
-                        } elseif ($isBlack) {
-                            # Anti-blotting dotted style: centered 2x2 dot with 1-dot margin
-                            $gQr.FillRectangle($brushB, ($mx * $qrScale + 1), ($my * $qrScale + 1), 2, 2)
+                        $ax = $mx - $quiet
+                        $isInside = ($ax -ge 0 -and $ax -lt $rawSize -and $ay -ge 0 -and $ay -lt $rawSize)
+                        if ($isInside -and $matrix[$ay][$ax]) {
+                            $gQr.FillRectangle($brushB, ($mx * $scale), ($my * $scale), $scale, $scale)
                         }
                     }
                 }
@@ -372,7 +323,7 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
         # Fallback to online API if QRCoder is unavailable
         if (-not $qrBmp) {
             try {
-                $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=87x87&margin=4&data=$([System.Uri]::EscapeDataString($sku))"
+                $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=81x81&margin=1&data=" + [System.Uri]::EscapeDataString($text)
                 $wc = New-Object System.Net.WebClient
                 $imgData = $wc.DownloadData($qrApiUrl)
                 $msImg = New-Object System.IO.MemoryStream($imgData, 0, $imgData.Length)
@@ -383,69 +334,15 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
 
         if (-not $qrBmp) { return @() }
 
-        # 2. Draw unified 384-dot wide label (100% aligned with POS-80 thermal printhead)
-        $width = 384
-        $height = 240
-        $bmp = New-Object System.Drawing.Bitmap($width, $height)
-        $g = [System.Drawing.Graphics]::FromImage($bmp)
-        $g.Clear([System.Drawing.Color]::White)
-        $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
-        $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
-        $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::SingleBitPerPixelGridFit
-
-        # Center QR code
-        $qrX = [Math]::Floor(($width - $qrBmp.Width) / 2)
-        $qrY = 2
-        $g.DrawImage($qrBmp, $qrX, $qrY, $qrBmp.Width, $qrBmp.Height)
-
-        # Draw tiny, crisp optical tag typography (strictly centered under QR)
-        $fontSku = New-Object System.Drawing.Font("Arial", 7.5, [System.Drawing.FontStyle]::Bold)
-        $fontName = New-Object System.Drawing.Font("Arial", 6.5, [System.Drawing.FontStyle]::Regular)
-        $fontPrice = New-Object System.Drawing.Font("Arial", 7.0, [System.Drawing.FontStyle]::Bold)
-        $brush = [System.Drawing.Brushes]::Black
-
-        $curY = $qrY + $qrBmp.Height + 2
-
-        # SKU
-        $sizeSku = $g.MeasureString($sku, $fontSku)
-        $xSku = [Math]::Max(0, [Math]::Floor(($width - $sizeSku.Width) / 2))
-        $g.DrawString($sku, $fontSku, $brush, $xSku, $curY)
-        $curY += [Math]::Floor($sizeSku.Height) - 1
-
-        # Frame Name
-        if ($name) {
-            $sizeName = $g.MeasureString($name, $fontName)
-            $xName = [Math]::Max(0, [Math]::Floor(($width - $sizeName.Width) / 2))
-            $g.DrawString($name, $fontName, $brush, $xName, $curY)
-            $curY += [Math]::Floor($sizeName.Height) - 1
-        }
-
-        # Retail Price
-        if ($price) {
-            $sizePrice = $g.MeasureString($price, $fontPrice)
-            $xPrice = [Math]::Max(0, [Math]::Floor(($width - $sizePrice.Width) / 2))
-            $g.DrawString($price, $fontPrice, $brush, $xPrice, $curY)
-            $curY += [Math]::Floor($sizePrice.Height) + 2
-        }
-
-        $g.Dispose()
+        $raster = Convert-BitmapToEscPosRaster $qrBmp
         $qrBmp.Dispose()
-
-        # Crop to actual content height
-        $finalHeight = [Math]::Min($height, [Math]::Max(100, $curY))
-        $cropRect = New-Object System.Drawing.Rectangle(0, 0, $width, $finalHeight)
-        $croppedBmp = $bmp.Clone($cropRect, $bmp.PixelFormat)
-        $bmp.Dispose()
-
-        $raster = Convert-BitmapToEscPosRaster $croppedBmp
-        $croppedBmp.Dispose()
         return $raster
     } catch {
         return @()
     }
 }
 
-# Format Optical Temple QR Sticker ESC/POS Bytes (Universal GS v 0 2D Bit Image)
+# Format Optical Temple QR Sticker ESC/POS Bytes (Exact Image 2 Reference)
 function Format-StickerBytes($rawItems) {
     $allBuffers = New-Object System.IO.MemoryStream
     $allBw = New-Object System.IO.BinaryWriter($allBuffers)
@@ -453,11 +350,13 @@ function Format-StickerBytes($rawItems) {
     foreach ($item in $rawItems) {
         $sku = "NOOR-FRAME"
         if ($item.sku) { $sku = [string]$item.sku }
+        elseif ($item.product_sku) { $sku = [string]$item.product_sku }
+        elseif ($item.id) { $sku = [string]$item.id }
         $sku = $sku.ToUpper()
 
         $name = ""
         if ($item.name) { $name = [string]$item.name }
-        if ($name.Length -gt 22) { $name = $name.Substring(0, 22) }
+        if ($name.Length -gt 24) { $name = $name.Substring(0, 24) }
 
         $price = ""
         if ($item.price) { $price = [string]$item.price }
@@ -474,29 +373,29 @@ function Format-StickerBytes($rawItems) {
             $copies = [int]$item.quantity
         }
 
+        $qrPayload = if ($item.qrPayload) { [string]$item.qrPayload } else { "HTTPS://NOOROPTICS.VERCEL.APP/Q/" + [System.Uri]::EscapeDataString($sku) }
+
         for ($c = 0; $c -lt $copies; $c++) {
             $allBw.Write([byte[]]@(0x1B, 0x40)) # Reset
+            $allBw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
+            $allBw.Write([byte[]]@(0x1B, 0x33, 0x10)) # Ultra-tight line spacing (16 dots)
 
-            # 1. Check if client sent pre-computed 384-dot unified raster
-            $rasterBytes = $null
-            if ($item.stickerRasterBase64) {
-                try {
-                    $r = [Convert]::FromBase64String([string]$item.stickerRasterBase64)
-                    if ($r -and $r.Length -gt 100) { $rasterBytes = $r }
-                } catch {}
+            # Generate 81x81 dot crisp QR Raster (GS v 0) matching Image 2
+            $qrRaster = Generate-CrispImage2QrRaster $qrPayload
+            if ($qrRaster -and $qrRaster.Length -gt 0) {
+                $allBw.Write([byte[]]$qrRaster)
             }
 
-            # 2. Generate unified 384-dot sticker bitmap in PowerShell (.NET System.Drawing)
-            if (-not $rasterBytes -or $rasterBytes.Length -eq 0) {
-                $rasterBytes = Generate-UnifiedStickerRaster $sku $name $price
-            }
+            # Exact Image 2 typography: Native Font B
+            $allBw.Write([byte[]]@(0x1B, 0x4D, 0x01)) # Font B
+            $allBw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold ON
+            $allBw.Write([System.Text.Encoding]::ASCII.GetBytes($sku + "`n"))
+            $allBw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold OFF
+            if ($name) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes($name + "`n")) }
+            if ($price) { $allBw.Write([System.Text.Encoding]::ASCII.GetBytes($price + "`n")) }
+            $allBw.Write([byte[]]@(0x1B, 0x4D, 0x00)) # Font A
+            $allBw.Write([byte[]]@(0x1B, 0x32)) # Reset line spacing
 
-            # Write unified 2D QR Bit Image (GS v 0) - NEVER prints big plain text!
-            if ($rasterBytes -and $rasterBytes.Length -gt 0) {
-                $allBw.Write([byte[]]$rasterBytes)
-            }
-
-            # Minimal line feed and partial cut
             $allBw.Write([byte[]]@(0x1B, 0x64, 0x02)) # Feed 2 lines
             $allBw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00)) # Partial cut
         }
