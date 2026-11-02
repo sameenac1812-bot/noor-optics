@@ -1148,7 +1148,10 @@
       const threshold = (window.NOOR_BRAND && window.NOOR_BRAND.freeShippingThreshold) || 1999;
       const shipping = subtotal >= threshold ? 0 : 199;
       const grandTotal = subtotal + shipping;
-      const orderId = 'NOOR-' + Math.floor(100000 + Math.random() * 900000);
+      const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const timePart = Date.now().toString().slice(-4);
+      const randPart = Math.floor(1000 + Math.random() * 9000);
+      const orderId = `NOOR-WEB-${datePart}-${timePart}-${randPart}`;
       const dateStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
       const orderData = {
@@ -1175,6 +1178,7 @@
         })),
         prescription_pref: rxChoice,
         prescription: prescriptionData,
+        channel: 'WEBSITE',
         payment_method: payChoice,
         subtotal: subtotal,
         shipping_fee: shipping,
@@ -1186,6 +1190,7 @@
 
       // 1. Submit to Unified Backend and Cloud Supabase in parallel for lightning-fast checkout
       const onlinePayload = {
+        channel: 'WEBSITE',
         customerName: name,
         customerAge: age,
         customerEmail: email,

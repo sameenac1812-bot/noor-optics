@@ -466,11 +466,24 @@ function format25InchEscPosReceipt(rawOrder) {
   writeText(`Ph: ${config.storePhone || '+91 98765 43210'}\n`);
   writeText(doubleDivider);
 
+  // Prominent In-Store vs Website Order Channel Banner
+  const orderRefStr = String(order.order_number || order.order_ref || order.id || '');
+  const isPos = orderRefStr.includes('-POS-') ||
+    order.channel === 'POS' ||
+    order.channel === 'IN-STORE' ||
+    (order.delivery_address && /pos|boutique|flagship|store|counter|rethibowli|walk-in/i.test(order.delivery_address));
+  const channelLabel = isPos ? '[IN-STORE POS]' : '[WEBSITE ORDER]';
+  const channelBanner = isPos ? '*** IN-STORE BOUTIQUE SALE ***' : '*** ONLINE STOREFRONT ORDER ***';
+
+  writeBytes([0x1B, 0x61, 0x01]); // Center
+  writeBytes([0x1B, 0x45, 0x01]); // Bold ON
+  writeText(`${channelBanner}\n`);
+  writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
+  writeText(doubleDivider);
+
   // 3. Invoice & Token Header
   writeBytes([0x1B, 0x61, 0x00]); // Left align
   const token = order.token_number || order.token || 1;
-  const channel = (order.channel || (order.delivery_address && /pos|boutique|flagship|store|rethibowli/i.test(order.delivery_address) ? 'IN-STORE' : 'ONLINE')).toUpperCase();
-  const channelLabel = (channel === 'POS' || channel === 'IN-STORE') ? '[IN-STORE]' : '[WEBSITE]';
   writeText(row(`TOKEN #${token}`, channelLabel));
   writeText(row('Invoice:', order.order_number || order.order_ref || 'NOOR-INV'));
   const dateStr = order.created_at ? new Date(order.created_at).toLocaleString('en-IN', {
@@ -905,22 +918,39 @@ async function format25InchEscPosQrSticker(item) {
 }
 
 // ── Process Print Order ───────────────────────────────────────────────────────
-async function processPrintOrder(order, forcePrint = true) {
+async function processPrintOrder(order, isManualReprint = false) {
   const orderRef = order.order_number || order.order_ref || order.orderNumber || (order.id ? String(order.id) : null);
   if (!orderRef) return { success: false, error: 'Missing order reference' };
 
   const refs = [order.order_number, order.order_ref, order.orderNumber, order.id ? String(order.id) : null].filter(Boolean);
 
-  log(`Preparing 2.5-inch Customer Bill for order #${orderRef}...`);
+  // Deduplication guard:
+  // If this is an automatic print (not manual reprint clicked by staff),
+  // suppress if any alias of this order was already printed.
+  if (!isManualReprint) {
+    const alreadyPrinted = refs.some(r => printedHistory[r] && printedHistory[r] !== 'SKIPPED_STALE');
+    if (alreadyPrinted) {
+      log(`[Daemon] Order #${orderRef} was already printed at ${printedHistory[orderRef] || 'earlier'}. Duplicate print suppressed.`);
+      return { success: true, skippedDuplicate: true, orderNumber: orderRef };
+    }
+  }
+
+  // Pre-emptively record all aliases in printedHistory to block race conditions immediately
+  const nowIso = new Date().toISOString();
+  refs.forEach(r => { printedHistory[r] = nowIso; });
+  savePrintedHistory();
+
+  log(`[Daemon] Preparing 2.5-inch Customer Bill for order #${orderRef} (manualReprint: ${isManualReprint})...`);
   const receiptBinary = format25InchEscPosReceipt(order);
   const result = await spoolBytesToPrinter(receiptBinary, `Bill-${orderRef}`);
 
   if (result.success) {
-    const nowIso = new Date().toISOString();
-    refs.forEach(r => { printedHistory[r] = nowIso; });
-    savePrintedHistory();
+    log(`[Daemon] SUCCESS: Customer Bill #${orderRef} printed to ${config.printerName}!`);
     return { success: true, orderNumber: orderRef, printedAt: nowIso };
   } else {
+    // Spool failed - revert history so it can be retried
+    refs.forEach(r => { delete printedHistory[r]; });
+    savePrintedHistory();
     enqueueFailedPrintJob(order, `Bill-${orderRef}`);
     return { success: false, error: result.error, orderNumber: orderRef, queuedForRetry: true };
   }
@@ -1054,12 +1084,12 @@ async function pollCloudOrders() {
         } catch (_) { }
       }
 
-      const printResult = await processPrintOrder(o);
+      const printResult = await processPrintOrder(o, false);
       if (printResult.success) {
-        printedHistory[ref] = new Date().toISOString();
+        refs.forEach(r => { printedHistory[r] = new Date().toISOString(); });
         savePrintedHistory();
       } else {
-        delete printedHistory[ref];
+        refs.forEach(r => { delete printedHistory[r]; });
       }
     }
   } catch (err) {
@@ -1210,8 +1240,8 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, queued: true, orderNumber: orderRef }));
 
-        // Process print in the background serial queue - ALWAYS PRINTS
-        processPrintOrder(orderData, true).catch(err => {
+        // Process print in the background serial queue (manual reprint bypasses deduplication)
+        processPrintOrder(orderData, isManual).catch(err => {
           log(`Background print error for #${orderRef}: ${err.message}`, 'ERROR');
         });
       } catch (err) {

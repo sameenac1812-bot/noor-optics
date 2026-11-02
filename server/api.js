@@ -59,12 +59,14 @@ function getNextDailyTokenNumber() {
   return (row && row.maxToken) ? (row.maxToken + 1) : 1;
 }
 
-// ── Helper: Generate Human-Readable Order Number ────────────────────────────
-function generateOrderNumber() {
+// ── Helper: Generate Human-Readable Order Number (Categorized by Channel) ──
+function generateOrderNumber(channel = 'POS') {
+  const isOnline = channel === 'ONLINE' || channel === 'WEBSITE' || channel === 'WEB';
+  const prefix = isOnline ? 'NOOR-WEB' : 'NOOR-POS';
   const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const timePart = Date.now().toString().slice(-4);
   const randomPart = Math.floor(1000 + Math.random() * 9000);
-  return `NOOR-${datePart}-${timePart}-${randomPart}`;
+  return `${prefix}-${datePart}-${timePart}-${randomPart}`;
 }
 
 // ── Helper: Generate Invoice Number (Unique timestamp suffix prevents collision on rapid billing) ──
@@ -1590,7 +1592,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
   }
 
   const orderId = 'ord-pos-' + Date.now();
-  const orderNumber = generateOrderNumber();
+  const orderNumber = generateOrderNumber('POS');
   const tokenNumber = getNextDailyTokenNumber();
   const invoiceNumber = generateInvoiceNumber();
 
@@ -1958,6 +1960,10 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
 
     pushOrderToSupabase({
       orderNumber,
+      channel: 'POS',
+      deliveryAddress: 'In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad',
+      city: 'Hyderabad',
+      pinCode: '500028',
       customerName: result.customerName,
       customerPhone: req.body.customerPhone || (req.body.clientDetails && req.body.clientDetails.phone),
       customerEmail: req.body.customerEmail || (req.body.clientDetails && req.body.clientDetails.email),
@@ -2043,7 +2049,7 @@ router.post('/orders/online', (req, res) => {
 
   const finalAge = customerAge !== undefined ? (customerAge ? parseInt(customerAge, 10) : null) : (age ? parseInt(age, 10) : null);
   const orderId = 'ord-onl-' + Date.now();
-  const orderNumber = generateOrderNumber();
+  const orderNumber = generateOrderNumber('ONLINE');
   const tokenNumber = getNextDailyTokenNumber();
   const invoiceNumber = generateInvoiceNumber();
 
@@ -2294,6 +2300,7 @@ router.post('/orders/online', (req, res) => {
     // 1. Push order to Supabase Cloud with embedded prescription metadata
     pushOrderToSupabase({
       orderNumber,
+      channel: 'WEBSITE',
       customerName,
       customerPhone,
       customerEmail,

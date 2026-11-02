@@ -499,11 +499,20 @@ async function syncSupabaseOrders(db) {
         orderDate = orderDate + 'Z';
       }
 
-      // Detect whether order is In-Store POS or Website
-      const isPos = Boolean(
-        (co.delivery_address && (co.delivery_address.toLowerCase().includes('pos') || co.delivery_address.toLowerCase().includes('boutique'))) ||
-        (co.payment_method && co.payment_method.toUpperCase() === 'CASH')
-      );
+      // Detect whether order is In-Store POS or Website (100% Authoritative Segregation)
+      const ref = String(co.order_ref || '');
+      let isPos = false;
+      if (ref.includes('-POS-')) {
+        isPos = true;
+      } else if (ref.includes('-WEB-') || ref.includes('-ONL-')) {
+        isPos = false;
+      } else if (Array.isArray(co.items) && co.items[0]?.channel) {
+        isPos = (co.items[0].channel === 'POS' || co.items[0].channel === 'IN-STORE');
+      } else if (co.delivery_address && /pos|boutique|flagship|store|rethibowli|counter|in-store/i.test(co.delivery_address)) {
+        isPos = true;
+      } else if (co.channel && (co.channel === 'POS' || co.channel === 'IN-STORE')) {
+        isPos = true;
+      }
       const channel = isPos ? 'POS' : 'WEBSITE';
 
       // Detect payment status and amount paid
@@ -831,6 +840,10 @@ async function pushOrderToSupabase(orderPayload) {
     }
 
     const orderRef = String(orderPayload.orderNumber || orderPayload.order_ref || ('NOOR-' + Date.now())).trim();
+    const isPosOrder = orderPayload.channel === 'POS' || orderRef.includes('-POS-') || (orderPayload.deliveryAddress && /pos|boutique|flagship|store|rethibowli|counter|in-store/i.test(orderPayload.deliveryAddress));
+    const resolvedChannel = isPosOrder ? 'POS' : 'WEBSITE';
+
+    itemsToPush = itemsToPush.map(it => ({ ...it, channel: resolvedChannel }));
     const custName = String(orderPayload.customerName || orderPayload.customer_name || 'Walk-in Client').trim();
     const rawPhone = orderPayload.customerPhone || orderPayload.customer_phone || '';
     const cleanPhone = String(rawPhone).trim() || '9999999999';

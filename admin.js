@@ -455,6 +455,21 @@
     });
   }
 
+  // ── Authoritative Channel Resolver (100% Guaranteed In-Store vs Website Segregation) ──
+  function getOrderChannel(o) {
+    if (!o) return 'POS';
+    const ref = String(o.order_number || o.order_ref || o.orderNumber || o.invoiceNumber || o.id || '').toUpperCase();
+    if (ref.includes('-POS-')) return 'POS';
+    if (ref.includes('-WEB-') || ref.includes('-ONL-')) return 'WEBSITE';
+    if (o.channel === 'POS' || o.channel === 'IN-STORE') return 'POS';
+    if (o.channel === 'ONLINE' || o.channel === 'WEBSITE') return 'WEBSITE';
+    if (Array.isArray(o.items) && o.items[0]?.channel) {
+      return (o.items[0].channel === 'POS' || o.items[0].channel === 'IN-STORE') ? 'POS' : 'WEBSITE';
+    }
+    if (o.delivery_address && /pos|boutique|flagship|store|rethibowli|counter|in-store/i.test(o.delivery_address)) return 'POS';
+    return 'WEBSITE';
+  }
+
   function renderDashboardRecentOrders(orders) {
     const tbody = document.getElementById('dash-recent-orders-body');
     if (!tbody) return;
@@ -465,7 +480,7 @@
     }
 
     tbody.innerHTML = orders.map(o => {
-      const isPOS = o.channel === 'IN-STORE';
+      const isPOS = getOrderChannel(o) === 'POS';
       const channelBadge = isPOS
         ? `<span class="badge-status channel-pos">🏪 In-store</span>`
         : `<span class="badge-status channel-online">🌐 Website</span>`;
@@ -572,11 +587,8 @@
           if (!isSuccessModalOpen && latest) {
             showToast(`🔔 New Order Placed: #${latest.order_number} by ${latest.customer_name || 'Client'}`, 'success');
           }
-
-          // 3. Automatic instant thermal bill printout with zero delay
-          if (latest && typeof instantPrintReceipt === 'function') {
-            instantPrintReceipt(latest.id);
-          }
+          // Note: Automatic bill printing is handled directly by the POS Daemon listening to Supabase Cloud
+          // (Calling instantPrintReceipt here causes double prints).
         }
       }
 
@@ -629,10 +641,10 @@
     // Ensure newest orders are always at the top
     cleanOrders.sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a));
 
-    // Count badges
+    // Count badges (100% Authoritative Segregation)
     const allCount = cleanOrders.length;
-    const instoreCount = cleanOrders.filter(o => o.channel === 'POS').length;
-    const websiteCount = cleanOrders.filter(o => o.channel === 'ONLINE' || o.channel === 'WEBSITE').length;
+    const instoreCount = cleanOrders.filter(o => getOrderChannel(o) === 'POS').length;
+    const websiteCount = cleanOrders.filter(o => getOrderChannel(o) === 'WEBSITE').length;
     const upiPendingCount = cleanOrders.filter(o => o.payment_status === 'AWAITING_VERIFICATION').length;
     const badgeAll = document.getElementById('count-all-orders');
     const badgeInstore = document.getElementById('count-instore-orders');
@@ -646,8 +658,9 @@
     // Filter list
     const filtered = cleanOrders.filter(o => {
       // Channel match
-      if (channel === 'POS' && o.channel !== 'POS') return false;
-      if (channel === 'WEBSITE' && o.channel !== 'ONLINE' && o.channel !== 'WEBSITE') return false;
+      const orderChan = getOrderChannel(o);
+      if (channel === 'POS' && orderChan !== 'POS') return false;
+      if (channel === 'WEBSITE' && orderChan !== 'WEBSITE') return false;
       if (channel === 'UPI_PENDING' && o.payment_status !== 'AWAITING_VERIFICATION') return false;
 
       // Status
@@ -680,7 +693,8 @@
         billsList.innerHTML = filtered.map(o => {
           const invoiceNo = o.order_number || ('INV-NOOR-' + o.id.slice(-4));
           const formattedDate = formatDateTime(o.created_at);
-          const custName = o.customer_name || (o.channel === 'POS' ? 'Walk-in Client' : 'Online Client');
+          const orderChan = getOrderChannel(o);
+          const custName = o.customer_name || (orderChan === 'POS' ? 'Walk-in Client' : 'Online Client');
           const custPhone = o.customer_phone || '-';
           const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
           const isDue = (o.payment_status !== 'VERIFIED');
@@ -688,7 +702,7 @@
           const itemsSummary = (o.items && o.items.length)
             ? o.items.map(i => escapeHtml(i.product_name) + (i.quantity > 1 ? ` ×${i.quantity}` : '')).join(', ')
             : 'Frame Order';
-          const channelBadge = o.channel === 'POS'
+          const channelBadge = orderChan === 'POS'
             ? `<span class="badge-channel-pos">🏪 In-Store</span>`
             : `<span class="badge-channel-web">🌐 Website</span>`;
 
@@ -772,7 +786,7 @@
             </td>
             <td>${formatDateTime(o.created_at)}</td>
             <td>
-              <strong>${escapeHtml(o.customer_name || (channel === 'POS' ? 'Walk-in Client' : 'Online Client'))}</strong>
+              <strong>${escapeHtml(o.customer_name || (getOrderChannel(o) === 'POS' ? 'Walk-in Client' : 'Online Client'))}</strong>
               ${o.client_code ? `<span style="font-size:0.68rem; font-weight:700; color:#1D4ED8; background:#EFF6FF; border:1px solid #BFDBFE; padding:1px 5px; border-radius:4px; margin-left:4px;">${escapeHtml(o.client_code)}</span>` : ''}
               ${o.customer_phone ? `<div style="font-size:0.72rem; color:#6B7280;">${escapeHtml(o.customer_phone)}</div>` : ''}
               ${o.city ? `<div style="font-size:0.7rem; color:#9CA3AF;">${escapeHtml(o.city)}</div>` : ''}
@@ -801,7 +815,7 @@
               <div style="display:flex; flex-direction:column; gap:4px;">
                 <div style="display:flex; gap:4px; flex-wrap:wrap;">
                   <button class="btn-table-action" onclick="viewOrderDetails('${o.id}')" title="View Full Details">View</button>
-                  <button class="btn-table-action" onclick="instantPrintReceipt('${o.id}')" title="Instant Print Receipt">🖨️ Receipt</button>
+                  <button class="btn-table-action" onclick="instantPrintReceipt('${o.id}', true)" title="Instant Print Receipt">🖨️ Receipt</button>
                   ${o.prescription_id ? `<button class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="openEditPrescriptionModal('${o.prescription_id}')" title="Doctor: Edit Lens Values">✏️ Edit RX</button>` : ''}
                   <button class="btn-table-action btn-table-danger" onclick="deleteOrderPrompt('${o.id}', '${escapeHtml(o.order_number)}')" title="Delete Order">Delete</button>
                 </div>
@@ -1090,7 +1104,7 @@
     const actionsEl = document.getElementById('od-actions');
 
     titleEl.textContent = `Invoice / Order: ${order.order_number}`;
-    subEl.textContent = `Channel: ${order.channel === 'POS' ? 'In-Store POS' : 'Website Online'} • ${formatDateTime(order.created_at)}`;
+    subEl.textContent = `Channel: ${getOrderChannel(order) === 'POS' ? 'In-Store POS' : 'Website Online'} • ${formatDateTime(order.created_at)}`;
 
     // Items list with complete frame specifications
     const items = order.items || [];
@@ -1174,7 +1188,7 @@
         </div>
         <div>
           <h4 style="font-size:0.78rem; text-transform:uppercase; color:#6B7280; margin-bottom:6px;">Payment & Status</h4>
-          <div><strong>Order Source:</strong> <span class="badge-status status-completed">${order.channel === 'POS' ? 'IN-STORE POS' : 'WEBSITE'}</span></div>
+          <div><strong>Order Source:</strong> <span class="badge-status status-completed">${getOrderChannel(order) === 'POS' ? 'IN-STORE POS' : 'WEBSITE'}</span></div>
           <div style="margin-top:4px;"><strong>Payment Method:</strong> ${escapeHtml(order.payment_method || 'CASH')}</div>
           <div style="margin-top:2px;"><strong>Payment Status:</strong> <span class="badge-status status-${order.payment_status?.toLowerCase()}">${escapeHtml(order.payment_status)}</span></div>
           <div style="margin-top:2px;"><strong>Order Status:</strong> <span class="badge-status status-${order.status?.toLowerCase()}">${escapeHtml(order.status)}</span></div>

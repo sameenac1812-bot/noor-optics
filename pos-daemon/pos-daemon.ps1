@@ -498,11 +498,22 @@ function Format-ReceiptBytes($order) {
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Ph: $($Config.storePhone)`n"))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($doubleDivider))
 
+    # Prominent In-Store vs Website Order Channel Banner
+    $orderRefStr = [string]$(if ($order.order_number) { $order.order_number } elseif ($order.order_ref) { $order.order_ref } else { $order.id })
+    $isPos = $orderRefStr -match "-POS-" -or $order.channel -eq "POS" -or $order.channel -eq "IN-STORE" -or ($order.delivery_address -and $order.delivery_address -match "pos|boutique|flagship|store|counter|rethibowli|walk-in")
+    $channelLabel = if ($isPos) { "[IN-STORE POS]" } else { "[WEBSITE ORDER]" }
+    $channelBanner = if ($isPos) { "*** IN-STORE BOUTIQUE SALE ***" } else { "*** ONLINE STOREFRONT ORDER ***" }
+
+    $bw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
+    $bw.Write([byte[]]@(0x1B, 0x45, 0x01)) # Bold on
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("$channelBanner`n"))
+    $bw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes($doubleDivider))
+
     # 3. Invoice & Token
     $bw.Write([byte[]]@(0x1B, 0x61, 0x00)) # Left
     $tok = if ($order.token_number) { $order.token_number } elseif ($order.token) { $order.token } else { 1 }
-    $chn = if ($order.channel) { $order.channel.ToUpper() } elseif ($order.delivery_address -and $order.delivery_address -match "pos|boutique|flagship|store|rethibowli") { "IN-STORE" } else { "IN-STORE" }
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "TOKEN #$tok" "[$chn]")))
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "TOKEN #$tok" $channelLabel)))
     $ref = if ($order.order_number) { $order.order_number } elseif ($order.order_ref) { $order.order_ref } else { "NOOR-INV" }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Invoice:" $ref)))
     $dateStr = (Get-Date).ToString("dd MMM yyyy, hh:mm tt")
@@ -821,7 +832,16 @@ function Poll-CloudOrders {
             foreach ($o in $orders) {
                 $ref = if ($o.order_ref) { [string]$o.order_ref } elseif ($o.order_number) { [string]$o.order_number } else { [string]$o.id }
                 if (-not $ref -or $ref -match "TEST") { continue }
-                if ($History.ContainsKey($ref) -and $History[$ref] -ne "SKIPPED_STALE") { continue }
+
+                $refs = @($o.order_ref, $o.order_number, [string]$o.id) | Where-Object { $_ -ne $null -and $_ -ne "" }
+                $alreadyPrinted = $false
+                foreach ($r in $refs) {
+                    if ($History.ContainsKey($r) -and $History[$r] -ne "SKIPPED_STALE") {
+                        $alreadyPrinted = $true
+                        break
+                    }
+                }
+                if ($alreadyPrinted) { continue }
 
                 # Stale historical check: don't print old orders on reboot
                 if ($o.created_at) {
@@ -829,15 +849,18 @@ function Poll-CloudOrders {
                         $orderTime = [DateTime]::Parse($o.created_at).ToUniversalTime()
                         $ageMinutes = ($nowUtc - $orderTime).TotalMinutes
                         if ($ageMinutes -gt $freshnessMinutes) {
-                            $History[$ref] = "SKIPPED_STALE"
+                            foreach ($r in $refs) { $History[$r] = "SKIPPED_STALE" }
                             $changed = $true
                             continue
                         }
                     } catch {}
                 }
 
-                Write-DaemonLog "[Cloud Sync] Detected newly confirmed website order #$ref! Auto-printing..."
-                if (-not $o.channel) { $o | Add-Member -NotePropertyName "channel" -NotePropertyValue "WEBSITE" -Force }
+                Write-DaemonLog "[Cloud Sync] Detected newly confirmed cloud order #$ref! Auto-printing..."
+                if (-not $o.channel) {
+                    $detectedChan = if ($ref -match "-POS-") { "POS" } else { "WEBSITE" }
+                    $o | Add-Member -NotePropertyName "channel" -NotePropertyValue $detectedChan -Force
+                }
 
                 # Extract Rx from items or query Supabase prescriptions table by phone
                 if (-not $o.prescription -and $o.items) {
@@ -862,14 +885,15 @@ function Poll-CloudOrders {
                 }
 
                 $bytes = Format-ReceiptBytes $o
-                $ok = Spool-Bytes $bytes "Website-Bill-$ref"
+                $ok = Spool-Bytes $bytes "Bill-$ref"
 
                 if ($ok) {
-                    $History[$ref] = (Get-Date).ToString("o")
+                    $nowIso = (Get-Date).ToString("o")
+                    foreach ($r in $refs) { $History[$r] = $nowIso }
                     $changed = $true
-                    Write-DaemonLog "[Cloud Sync] SUCCESS: Printed website order #$ref to $($Config.printerName)!" "INFO"
+                    Write-DaemonLog "[Cloud Sync] SUCCESS: Printed order #$ref to $($Config.printerName)!" "INFO"
                 } else {
-                    Write-DaemonLog "[Cloud Sync] FAILED: Could not spool website order #$ref" "ERROR"
+                    Write-DaemonLog "[Cloud Sync] FAILED: Could not spool order #$ref" "ERROR"
                 }
             }
 
@@ -1017,16 +1041,36 @@ while ($running) {
                 $payload = $body | ConvertFrom-Json
                 $order = if ($payload.order) { $payload.order } else { $payload }
                 $orderRef = if ($order.order_number) { $order.order_number } elseif ($order.order_ref) { $order.order_ref } else { $order.id }
+                $isManual = if ($payload.manualReprint) { [bool]$payload.manualReprint } else { $false }
 
-                Write-DaemonLog "Printing 2.5-inch receipt for order #$orderRef..."
-                $bytes = Format-ReceiptBytes $order
-                $ok = Spool-Bytes $bytes "Bill-$orderRef"
-                if ($ok) {
-                    $History[$orderRef] = (Get-Date).ToString("o")
-                    Save-History
-                    $resObj = @{ success = $true; orderNumber = $orderRef }
+                $refs = @($order.order_number, $order.order_ref, $order.orderNumber, [string]$order.id) | Where-Object { $_ -ne $null -and $_ -ne "" }
+
+                # Check duplicate suppression if automatic print
+                $alreadyPrinted = $false
+                if (-not $isManual) {
+                    foreach ($r in $refs) {
+                        if ($History.ContainsKey($r) -and $History[$r] -ne "SKIPPED_STALE") {
+                            $alreadyPrinted = $true
+                            break
+                        }
+                    }
+                }
+
+                if ($alreadyPrinted) {
+                    Write-DaemonLog "[Daemon] Order #$orderRef was already printed. Suppressing duplicate."
+                    $resObj = @{ success = $true; skippedDuplicate = $true; orderNumber = $orderRef }
                 } else {
-                    $resObj = @{ success = $false; error = "Spooler failure" }
+                    Write-DaemonLog "Printing 2.5-inch receipt for order #$orderRef (manualReprint: $isManual)..."
+                    $bytes = Format-ReceiptBytes $order
+                    $ok = Spool-Bytes $bytes "Bill-$orderRef"
+                    if ($ok) {
+                        $nowIso = (Get-Date).ToString("o")
+                        foreach ($r in $refs) { $History[$r] = $nowIso }
+                        Save-History
+                        $resObj = @{ success = $true; orderNumber = $orderRef }
+                    } else {
+                        $resObj = @{ success = $false; error = "Spooler failure" }
+                    }
                 }
 
                 $buf = [System.Text.Encoding]::UTF8.GetBytes(($resObj | ConvertTo-Json))
