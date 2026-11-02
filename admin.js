@@ -5651,25 +5651,6 @@
               ...(rxSnapshot || {})
             };
             instantPrintReceipt(res.orderId, false, fullOrderSnapshot);
-
-            // Dual-channel cloud persistence: ensure order is saved directly in Supabase cloud
-            if (window.NoorSupabase && typeof window.NoorSupabase.submitOrder === 'function') {
-              window.NoorSupabase.submitOrder({
-                order_ref: res.orderNumber || res.invoiceNumber || res.orderId,
-                customer_name: payload.customerName || 'Walk-in Client',
-                customer_phone: payload.customerPhone || '9999999999',
-                customer_email: payload.customerEmail || `${(payload.customerPhone || 'client').replace(/[^0-9]/g, '') || 'pos'}@nooroptics.in`,
-                delivery_address: payload.deliveryAddress || 'In-Store Purchase - Noor Optic, Pillar No. 45, Rethibowli, Hyderabad',
-                city: payload.customerCity || 'Hyderabad',
-                pin_code: payload.pinCode || '500028',
-                prescription_pref: rxSnapshot ? 'Standard Rx Provided' : 'Standard',
-                prescription: rxSnapshot || null,
-                payment_method: state.posPaymode || 'CASH',
-                items: fullOrderSnapshot.items,
-                subtotal: subtotalFromCart,
-                grand_total: res.totalPayableINR
-              }).catch(e => console.warn('POS direct Supabase sync note:', e));
-            }
           }
 
           // Reset cart & inputs AFTER snapshot has been sent to printer

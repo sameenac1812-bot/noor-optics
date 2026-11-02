@@ -1212,19 +1212,29 @@
         }))
       };
 
-      const backendReq = fetch('/api/orders/online', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(onlinePayload)
-      }).then(r => r.ok ? r.json() : null).catch(() => null);
+      // 1. Submit to Unified Backend (persists authoritatively to Database and Supabase Cloud)
+      let orderCreated = false;
+      try {
+        const backendResp = await fetch('/api/orders/online', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(onlinePayload)
+        });
+        if (backendResp.ok) {
+          const localRes = await backendResp.json();
+          if (localRes.orderNumber) {
+            authoritativeOrderId = localRes.orderNumber;
+            orderCreated = true;
+          }
+        }
+      } catch (backendErr) {
+        console.warn('Backend unavailable, falling back to direct cloud submission:', backendErr);
+      }
 
-      const supabaseReq = (window.NoorSupabase && window.NoorSupabase.isConfigured())
-        ? window.NoorSupabase.submitOrder(orderData).catch(() => null)
-        : Promise.resolve(null);
-
-      const [backendRes] = await Promise.all([backendReq, supabaseReq]);
-      if (backendRes && backendRes.orderNumber) {
-        authoritativeOrderId = backendRes.orderNumber;
+      // 2. Fallback ONLY if backend was unreachable (prevents duplicate orders in database)
+      if (!orderCreated && window.NoorSupabase && window.NoorSupabase.isConfigured()) {
+        orderData.order_ref = authoritativeOrderId;
+        await window.NoorSupabase.submitOrder(orderData).catch(e => console.warn('Supabase fallback note:', e));
       }
 
       // Render clean, luxury customer-facing receipt

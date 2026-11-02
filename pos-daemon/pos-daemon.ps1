@@ -310,18 +310,8 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
                         $ax = $mx - $qrQuiet
                         $isBlack = ($ax -ge 0 -and $ax -lt $qrModCount -and $ay -ge 0 -and $ay -lt $qrModCount) -and $matrix[$ay][$ax]
                         if ($isBlack) {
-                            $isFinder = (
-                                ($ax -lt 7 -and $ay -lt 7) -or
-                                ($ax -ge ($qrModCount - 7) -and $ay -lt 7) -or
-                                ($ax -lt 7 -and $ay -ge ($qrModCount - 7))
-                            )
-                            if ($isFinder) {
-                                # Solid 4x4 fill for corner finders (matching Image 2)
-                                $gQr.FillRectangle($brushB, ($mx * $qrScale), ($my * $qrScale), $qrScale, $qrScale)
-                            } else {
-                                # Dotted inside modules: discrete 2x2 centered dot inside 4x4 cell
-                                $gQr.FillRectangle($brushB, ($mx * $qrScale + 1), ($my * $qrScale + 1), 2, 2)
-                            }
+                            # Solid 4x4 module fill matching Image 2
+                            $gQr.FillRectangle($brushB, ($mx * $qrScale), ($my * $qrScale), $qrScale, $qrScale)
                         }
                     }
                 }
