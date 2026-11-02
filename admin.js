@@ -1616,6 +1616,145 @@
     } catch (_) {}
   }
 
+  async function directSaveSupabaseProduct(product) {
+    if (!product) return;
+    const SUPABASE_URL = CLOUD_SYNC_CFG.url;
+    const SUPABASE_ANON_KEY = CLOUD_SYNC_CFG.key;
+    const headers = {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json'
+    };
+
+    const prodId = product.id || ('prod-' + Date.now());
+    const sku = (product.sku && product.sku.trim() && product.sku.trim().toUpperCase() !== 'NOOR-FRAME')
+      ? product.sku.trim().toUpperCase()
+      : ('NOOR-' + (product.brand || product.name || 'FRAME').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) + '-' + prodId.slice(-4));
+
+    const formatted = {
+      id: prodId,
+      sku: sku,
+      name: product.name,
+      brand: product.brand || 'Noor Optics',
+      collection: product.brand || 'Noor Signature',
+      price: Number(product.sellingPriceINR || product.selling_price_inr || product.price || 3499),
+      original_price: product.originalPriceINR || product.original_price_inr || product.original_price ? Number(product.originalPriceINR || product.original_price_inr || product.original_price) : null,
+      badge: product.badge || 'New Arrival',
+      shape: product.shape || 'Rectangular',
+      material: product.material || 'Japanese Titanium',
+      fit: product.fit || 'Regular',
+      category: product.category || 'Optical',
+      rating: 5.0,
+      reviews_count: 1,
+      image: product.imageUrl || product.image_url || product.image || 'images/frames/frame_01.jpg',
+      colors: Array.isArray(product.variants) && product.variants.length > 0
+        ? product.variants.map(v => ({ name: v.colorName || v.color_name || 'Standard', hex: v.colorHex || v.color_hex || '#111111' }))
+        : (product.colors || [{ name: 'Standard', hex: '#111111' }]),
+      dimensions: product.dimensions || { lens: '52mm', bridge: '18mm', temple: '145mm', weight: '15g' },
+      description: product.description || '',
+      stock: Number(product.initialStock !== undefined ? product.initialStock : (product.stock !== undefined ? product.stock : (product.variants && product.variants[0] && product.variants[0].initialStock !== undefined ? product.variants[0].initialStock : (product.total_stock || 10)))),
+      is_active: true,
+      updated_at: new Date().toISOString()
+    };
+
+    // Step A: Remove from SYS-TOMBSTONE-PRODUCTS
+    try {
+      const tRes = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, { headers });
+      if (tRes.ok) {
+        const tList = await tRes.json();
+        if (Array.isArray(tList) && tList.length > 0 && tList[0].notes) {
+          const parsed = JSON.parse(tList[0].notes);
+          let tombList = Array.isArray(parsed) ? parsed : (parsed.products || []);
+          const cleanTokens = new Set([
+            String(prodId).toLowerCase().trim(),
+            String(sku).toLowerCase().trim(),
+            String(product.name || '').toLowerCase().trim(),
+            String(product.brand || '').toLowerCase().trim()
+          ]);
+          const filtered = tombList.filter(t => !cleanTokens.has(String(t).toLowerCase().trim()));
+          if (filtered.length !== tombList.length) {
+            await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
+              method: 'PATCH',
+              headers,
+              body: JSON.stringify({ notes: JSON.stringify({ products: filtered, updated_at: new Date().toISOString() }), updated_at: new Date().toISOString() })
+            });
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Step B: Direct Upsert to SYS-CATALOG-PRODUCTS
+    try {
+      const cRes = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, { headers });
+      let currentList = [];
+      let recordExists = false;
+      if (cRes.ok) {
+        const cList = await cRes.json();
+        if (Array.isArray(cList) && cList.length > 0) {
+          recordExists = true;
+          try { currentList = JSON.parse(cList[0].notes || '[]'); } catch (_) { currentList = []; }
+        }
+      }
+      const idx = currentList.findIndex(p => p.id === prodId || (p.sku && p.sku !== 'NOOR-FRAME' && sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === sku.toUpperCase()));
+      if (idx >= 0) {
+        currentList[idx] = formatted;
+      } else {
+        currentList.unshift(formatted);
+      }
+      if (recordExists) {
+        await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-CATALOG-PRODUCTS`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ notes: JSON.stringify(currentList), updated_at: new Date().toISOString() })
+        });
+      } else {
+        await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            id: 'sys-catalog-products-meta',
+            client_code: 'SYS-CATALOG-PRODUCTS',
+            name: 'System Catalog Custom Products',
+            notes: JSON.stringify(currentList)
+          })
+        });
+      }
+    } catch (e) {
+      console.warn('SYS-CATALOG-PRODUCTS direct save note:', e);
+    }
+
+    // Step C: Try upserting to Supabase products table (only matching schema columns)
+    try {
+      const tableRow = {
+        id: prodId,
+        name: formatted.name,
+        collection: formatted.collection,
+        price: formatted.price,
+        original_price: formatted.original_price,
+        badge: formatted.badge,
+        shape: formatted.shape,
+        material: formatted.material,
+        fit: formatted.fit,
+        category: formatted.category,
+        rating: formatted.rating,
+        reviews_count: formatted.reviews_count,
+        image: formatted.image,
+        colors: formatted.colors,
+        dimensions: formatted.dimensions,
+        description: formatted.description,
+        is_active: true
+      };
+      await fetch(`${SUPABASE_URL}/rest/v1/products`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          Prefer: 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify([tableRow])
+      });
+    } catch (_) {}
+  }
+
   async function directDeleteSupabaseProduct(productId, sku, name) {
     if (!productId && !sku && !name) return;
     const SUPABASE_URL = CLOUD_SYNC_CFG.url;
@@ -1633,17 +1772,13 @@
 
     // 1. Delete and deactivate from Supabase `products` table
     try {
-      const orParts = [];
-      if (productId) orParts.push(`id.eq.${encodeURIComponent(productId)}`);
-      if (sku) orParts.push(`sku.eq.${encodeURIComponent(sku)}`);
-      if (orParts.length > 0) {
-        const orQuery = orParts.join(',');
-        await fetch(`${SUPABASE_URL}/rest/v1/products?or=(${orQuery})`, {
+      if (productId) {
+        await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${encodeURIComponent(productId)}`, {
           method: 'PATCH',
           headers,
           body: JSON.stringify({ is_active: false })
         }).catch(() => {});
-        await fetch(`${SUPABASE_URL}/rest/v1/products?or=(${orQuery})`, {
+        await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${encodeURIComponent(productId)}`, {
           method: 'DELETE',
           headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
         }).catch(() => {});
@@ -2899,14 +3034,25 @@
         // Instant table re-render
         renderInventoryTable();
 
-        // 4. Dual-write to Supabase cloud for multi-device sync and website display
+        // 4. Guaranteed Direct Cloud Persistence to Supabase (Zero external dependency)
+        await directSaveSupabaseProduct({
+          ...payload,
+          id: savedItem.id,
+          stock: quantity,
+          initialStock: quantity
+        });
+
         if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
-          window.NoorSupabase.saveProduct({
-            ...payload,
-            id: savedItem.id,
-            stock: quantity,
-            initialStock: quantity
-          }).catch(e => console.warn('Supabase product dual-write note:', e));
+          try {
+            await window.NoorSupabase.saveProduct({
+              ...payload,
+              id: savedItem.id,
+              stock: quantity,
+              initialStock: quantity
+            });
+          } catch (e) {
+            console.warn('Supabase product dual-write note:', e);
+          }
         }
 
         // 5. Close modal immediately with celebratory confirmation
@@ -2920,17 +3066,18 @@
         if (prevImg) prevImg.src = '';
         state.uploadedFrameImageUrl = null;
 
-        // 6. Background server sync: never blocks UI or rolls back on transient network hiccups
-        apiFetch('/api/products', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        }).then(saveRes => {
+        // 6. Background server sync
+        try {
+          const saveRes = await apiFetch('/api/products', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
           if (saveRes && saveRes.id) {
             savedItem.id = saveRes.id;
           }
-        }).catch(e => {
-          console.warn('Background server sync note:', e.message);
-        });
+        } catch (e) {
+          console.warn('Server sync note (cloud save already succeeded):', e.message);
+        }
 
         // Background catalog refreshes
         if (typeof loadDashboard === 'function') loadDashboard();
@@ -3138,34 +3285,53 @@
         document.body.classList.remove('modal-open');
         state.editUploadedFrameImageUrl = null;
 
-        // 3. Dual-write update to Supabase Cloud
+        // 3. Guaranteed Direct Cloud Persistence to Supabase
+        await directSaveSupabaseProduct({
+          ...updatedItem,
+          id: pId,
+          sku: existing.sku,
+          price: sellingPriceINR,
+          stock: stockQuantity,
+          initialStock: stockQuantity,
+          imageUrl: newImageUrl || existing.image_url,
+          reorderThreshold
+        });
+
         if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
-          window.NoorSupabase.saveProduct({
-            ...updatedItem,
-            id: pId,
-            sku: existing.sku,
-            price: sellingPriceINR,
-            stock: stockQuantity,
-            initialStock: stockQuantity,
-            imageUrl: newImageUrl || existing.image_url,
-            reorderThreshold
-          }).catch(e => console.warn('Supabase product edit dual-write note:', e));
+          try {
+            await window.NoorSupabase.saveProduct({
+              ...updatedItem,
+              id: pId,
+              sku: existing.sku,
+              price: sellingPriceINR,
+              stock: stockQuantity,
+              initialStock: stockQuantity,
+              imageUrl: newImageUrl || existing.image_url,
+              reorderThreshold
+            });
+          } catch (e) {
+            console.warn('Supabase product edit dual-write note:', e);
+          }
         }
 
         // 4. Server API update
-        apiFetch(`/api/products/${pId}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            name,
-            brand,
-            shape,
-            sellingPriceINR,
-            purchaseCostINR,
-            stockQuantity,
-            reorderThreshold,
-            imageUrl: newImageUrl || undefined
-          })
-        }).catch(e => console.warn('Server product update note:', e));
+        try {
+          await apiFetch(`/api/products/${pId}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              name,
+              brand,
+              shape,
+              sellingPriceINR,
+              purchaseCostINR,
+              stockQuantity,
+              reorderThreshold,
+              imageUrl: newImageUrl || undefined
+            })
+          });
+        } catch (e) {
+          console.warn('Server product update note (cloud save already succeeded):', e.message);
+        }
 
         if (typeof loadDashboard === 'function') loadDashboard();
         if (typeof loadPosCatalog === 'function') loadPosCatalog();

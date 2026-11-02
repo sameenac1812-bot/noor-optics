@@ -293,8 +293,29 @@
         updated_at: new Date().toISOString()
       };
 
-      // 1. Try to upsert into products table directly (if RLS allows)
-      await supabaseClient.from('products').upsert([formatted]).catch(() => {});
+      // 1. Try to upsert into products table directly (matching schema columns only)
+      try {
+        const cloudProdRow = {
+          id: prodId,
+          name: formatted.name,
+          collection: formatted.collection,
+          price: formatted.price,
+          original_price: formatted.original_price,
+          badge: formatted.badge,
+          shape: formatted.shape,
+          material: formatted.material,
+          fit: formatted.fit,
+          category: formatted.category,
+          rating: formatted.rating,
+          reviews_count: formatted.reviews_count,
+          image: formatted.image,
+          colors: formatted.colors,
+          dimensions: formatted.dimensions,
+          description: formatted.description,
+          is_active: formatted.is_active
+        };
+        await supabaseClient.from('products').upsert([cloudProdRow]);
+      } catch (_) {}
 
       // 2. Guaranteed persistence in SYS-CATALOG-PRODUCTS metadata
       const { data: existingRows } = await supabaseClient
@@ -343,13 +364,14 @@
           const tokensToRemove = new Set([
             String(prodId).toLowerCase().trim(),
             String(prodSku).toLowerCase().trim(),
-            String(product.name || '').toLowerCase().trim()
+            String(product.name || '').toLowerCase().trim(),
+            String(product.brand || '').toLowerCase().trim()
           ]);
           const filteredTomb = tombList.filter(t => !tokensToRemove.has(String(t).toLowerCase().trim()));
           if (filteredTomb.length !== tombList.length) {
             await supabaseClient
               .from('customers')
-              .update({ notes: JSON.stringify({ products: filteredTomb, updated_at: new Date().toISOString() }) })
+              .update({ notes: JSON.stringify({ products: filteredTomb, updated_at: new Date().toISOString() }), updated_at: new Date().toISOString() })
               .eq('client_code', 'SYS-TOMBSTONE-PRODUCTS');
           }
         }
@@ -376,12 +398,8 @@
       // 1. Delete & deactivate from products table
       try {
         if (productId) {
-          await supabaseClient.from('products').update({ is_active: false }).eq('id', productId).catch(() => {});
-          await supabaseClient.from('products').delete().eq('id', productId).catch(() => {});
-        }
-        if (sku) {
-          await supabaseClient.from('products').update({ is_active: false }).eq('sku', sku).catch(() => {});
-          await supabaseClient.from('products').delete().eq('sku', sku).catch(() => {});
+          await supabaseClient.from('products').update({ is_active: false }).eq('id', productId);
+          await supabaseClient.from('products').delete().eq('id', productId);
         }
       } catch (_) {}
 

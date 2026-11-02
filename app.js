@@ -18,8 +18,7 @@
           const id = String(item.id).toLowerCase();
           const name = String(item.name || '').toLowerCase();
           const isLegacy = id.startsWith('noor-0') || id.startsWith('noor-1') ||
-            id.includes('mp4f2') || id.includes('5d89v') ||
-            name.includes('meta') || name.includes('onko') || name.includes('stockholm');
+            id.includes('mp4f2') || id.includes('5d89v');
           return !isLegacy;
         });
         localStorage.setItem('noor_custom_frames', JSON.stringify(cleaned));
@@ -1849,44 +1848,71 @@
     refreshCardScrollObserver();
   }
 
-  // ── Sync Live Catalog from SQLite API ──────────────────────────────────────
+  // ── Sync Live Catalog from SQLite API & Supabase Cloud ─────────────────────
   async function loadLiveCatalog() {
     try {
-      const resp = await fetch('/api/products');
       let cloudProducts = [];
-      if (resp.ok) {
-        const data = await resp.json();
-        if (Array.isArray(data)) {
-          cloudProducts = data;
-          // Synchronize local deleted tokens: live products from server database are active
-          try {
-            let tokens = getDeletedProductTokens();
-            let changed = false;
-            data.forEach(p => {
-              if (p.id && tokens.delete(String(p.id).toLowerCase().trim())) changed = true;
-              if (p.sku && tokens.delete(String(p.sku).toLowerCase().trim())) changed = true;
-              if (p.name && tokens.delete(String(p.name).toLowerCase().trim())) changed = true;
-            });
-            if (changed) {
-              localStorage.setItem('noor_deleted_products', JSON.stringify(Array.from(tokens)));
-            }
-          } catch (_) { }
+
+      // 1. Fetch from server SQLite API
+      try {
+        const resp = await fetch('/api/products');
+        if (resp.ok) {
+          const data = await resp.json();
+          if (Array.isArray(data)) {
+            cloudProducts = data;
+          }
         }
+      } catch (apiErr) {
+        console.warn('Live API fetch note:', apiErr.message);
       }
+
+      // 2. Fetch directly from Supabase Cloud (SYS-CATALOG-PRODUCTS) for 0ms lag
+      let supabaseProducts = [];
+      if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
+        try {
+          supabaseProducts = await window.NoorSupabase.fetchCatalog() || [];
+        } catch (_) {}
+      }
+
+      // Merge Supabase products (Supabase contains live cloud updates)
+      if (Array.isArray(supabaseProducts) && supabaseProducts.length > 0) {
+        supabaseProducts.forEach(sp => {
+          if (!sp || !sp.name) return;
+          const spSku = (sp.sku && sp.sku.trim() && sp.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? sp.sku.trim().toUpperCase() : null;
+          const spName = sp.name.trim().toLowerCase();
+          const matchIdx = cloudProducts.findIndex(p => p.id === sp.id || (p.sku && spSku && p.sku.toUpperCase() === spSku) || (p.name && p.name.trim().toLowerCase() === spName));
+          if (matchIdx < 0) {
+            // Newest cloud frame not yet in SQLite response; prepend to catalog!
+            cloudProducts.unshift({
+              ...sp,
+              image_url: sp.image || sp.imageUrl || sp.image_url,
+              selling_price_inr: sp.price || sp.selling_price_inr,
+              total_stock: sp.stock !== undefined ? sp.stock : (sp.total_stock !== undefined ? sp.total_stock : 10)
+            });
+          }
+        });
+      }
+
+      // 3. Clear local deleted tokens for all active products
+      try {
+        let tokens = getDeletedProductTokens();
+        let changed = false;
+        cloudProducts.forEach(p => {
+          if (p.id && tokens.delete(String(p.id).toLowerCase().trim())) changed = true;
+          if (p.sku && tokens.delete(String(p.sku).toLowerCase().trim())) changed = true;
+          if (p.name && tokens.delete(String(p.name).toLowerCase().trim())) changed = true;
+        });
+        if (changed) {
+          localStorage.setItem('noor_deleted_products', JSON.stringify(Array.from(tokens)));
+        }
+      } catch (_) { }
 
       const delTokens = getDeletedProductTokens();
 
-      // Merge local cached custom frames (reconciling with server; server is authoritative)
+      // 4. Merge local cached custom frames (never discard newly added items!)
       try {
         let localCached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
         if (Array.isArray(localCached)) {
-          localCached = localCached.filter(lc => {
-            if (!lc) return false;
-            const lId = lc.id ? String(lc.id).toLowerCase().trim() : '';
-            const lSku = lc.sku ? String(lc.sku).toLowerCase().trim() : '';
-            const lName = lc.name ? String(lc.name).toLowerCase().trim() : '';
-            return !delTokens.has(lId) && !delTokens.has(lSku) && !delTokens.has(lName);
-          });
           const reconciledLocal = [];
           localCached.forEach(lc => {
             if (!lc || !lc.name) return;
@@ -1894,21 +1920,18 @@
             const lName = lc.name.trim().toLowerCase();
             const matchIdx = cloudProducts.findIndex(p => p.id === lc.id || (p.sku && lSku && p.sku.toUpperCase() === lSku) || (p.name && p.name.trim().toLowerCase() === lName));
             if (matchIdx >= 0) {
-              const serverImg = cloudProducts[matchIdx].image_url;
+              const serverImg = cloudProducts[matchIdx].image_url || cloudProducts[matchIdx].image;
               if (serverImg && !serverImg.includes('frames/frame_01.jpg')) {
                 lc.image_url = serverImg;
               }
               lc.name = cloudProducts[matchIdx].name;
-              lc.selling_price_inr = cloudProducts[matchIdx].selling_price_inr;
-              lc.total_stock = cloudProducts[matchIdx].total_stock;
+              lc.selling_price_inr = cloudProducts[matchIdx].selling_price_inr || cloudProducts[matchIdx].price;
+              lc.total_stock = cloudProducts[matchIdx].total_stock !== undefined ? cloudProducts[matchIdx].total_stock : cloudProducts[matchIdx].stock;
               reconciledLocal.push(lc);
-            } else if (cloudProducts.length === 0) {
-              // Server is offline; use local cached item
-              const ageMs = Date.now() - (lc.created_at ? new Date(lc.created_at).getTime() : 0);
-              if (ageMs < 10 * 60 * 1000) {
-                cloudProducts.unshift(lc);
-                reconciledLocal.push(lc);
-              }
+            } else {
+              // Newly added frame locally - ALWAYS keep and display!
+              cloudProducts.unshift(lc);
+              reconciledLocal.push(lc);
             }
           });
           localStorage.setItem('noor_custom_frames', JSON.stringify(reconciledLocal));

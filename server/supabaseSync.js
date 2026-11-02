@@ -1112,8 +1112,8 @@ async function syncSupabaseProducts(db, force = false) {
         try {
           const isDeletedLocally = db.prepare(`
             SELECT product_id FROM deleted_products
-            WHERE product_id = ? OR (sku IS NOT NULL AND LOWER(sku) = LOWER(?)) OR (name IS NOT NULL AND LOWER(name) = LOWER(?))
-          `).get(prodId, sku, cp.name || '');
+            WHERE product_id = ? OR (sku IS NOT NULL AND sku != 'NOOR-FRAME' AND LOWER(sku) = LOWER(?))
+          `).get(prodId, sku);
           if (isDeletedLocally) {
             deleteProductFromCloud(prodId, sku, cp.name).catch(() => {});
             continue;
@@ -1300,6 +1300,39 @@ async function pushProductToCloud(product) {
       });
     }
 
+    // 2. Also upsert into Supabase products table (only columns in cloud schema)
+    try {
+      const tableRow = {
+        id: prodId,
+        name: formatted.name,
+        collection: formatted.collection,
+        price: formatted.price,
+        original_price: formatted.original_price,
+        badge: formatted.badge,
+        shape: formatted.shape,
+        material: formatted.material,
+        fit: formatted.fit,
+        category: formatted.category,
+        rating: formatted.rating,
+        reviews_count: formatted.reviews_count,
+        image: formatted.image,
+        colors: formatted.colors,
+        dimensions: formatted.dimensions,
+        description: formatted.description,
+        is_active: true
+      };
+      await fetch(`${SUPABASE_URL}/rest/v1/products`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify([tableRow])
+      });
+    } catch (_) {}
+
     console.log(`[SupabaseSync] Product "${product.name}" pushed to Supabase cloud successfully.`);
 
     // 3. Ensure product is untombstoned so it is never hidden or skipped
@@ -1372,31 +1405,25 @@ async function deleteProductFromCloud(productId, sku = null, name = null) {
     if (name) tokens.add(String(name).toLowerCase().trim());
 
     // 1. Delete and deactivate from Supabase `products` table
-    const filterParts = [];
-    if (productId) filterParts.push(`id.eq.${encodeURIComponent(productId)}`);
-    if (sku) filterParts.push(`sku.eq.${encodeURIComponent(sku)}`);
-    const orFilter = filterParts.join(',');
-
     try {
-      await fetch(`${SUPABASE_URL}/rest/v1/products?or=(${orFilter})`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ is_active: false })
-      });
-    } catch (_) {}
-
-    try {
-      await fetch(`${SUPABASE_URL}/rest/v1/products?or=(${orFilter})`, {
-        method: 'DELETE',
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-        }
-      });
+      if (productId) {
+        await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${encodeURIComponent(productId)}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ is_active: false })
+        });
+        await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${encodeURIComponent(productId)}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        });
+      }
     } catch (_) {}
 
     // 2. Remove from SYS-CATALOG-PRODUCTS in customers table
