@@ -7230,78 +7230,63 @@
       }
     }
 
-    // 1. Send direct hardware print signal to Windows POS Print Daemon on Port 5001
+    // 1. Send direct hardware print signal to Windows POS Print Daemon on Port 5001 (if local)
     try {
       const daemonResp = await fetch('http://127.0.0.1:5001/api/print', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           order: order,
-          manualReprint: true // Always true for explicit cashier actions to guarantee immediate print
-        })
+          manualReprint: Boolean(manualReprint)
+        }),
+        signal: AbortSignal.timeout(2000)
       });
 
       if (daemonResp.ok) {
-        showToast(`🖨️ Customer Bill #${order.order_number} sent to POS thermal printer!`, 'success');
+        showToast(`🖨️ Customer Bill #${order.order_number || order.id} sent to POS thermal printer!`, 'success');
         return;
       }
-    } catch (daemonErr) {
-      console.log('POS Daemon offline, queuing to cloud print queue & using browser fallback...');
-      try {
-        const SUPABASE_URL = CLOUD_SYNC_CFG.url;
-        const SUPABASE_ANON_KEY = CLOUD_SYNC_CFG.key;
-        const qRes = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
-          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-        });
-        if (qRes.ok) {
-          const qList = await qRes.json();
-          let currentJobs = [];
-          if (qList[0]?.notes) {
-            try { currentJobs = JSON.parse(qList[0].notes).jobs || []; } catch(_) {}
-          }
-          currentJobs.push({
-            id: 'job-receipt-' + (order.order_number || order.id) + '-' + Date.now(),
-            type: 'receipt',
-            order: order,
-            created_at: new Date().toISOString()
-          });
-          await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
-            method: 'PATCH',
-            headers: {
-              'apikey': SUPABASE_ANON_KEY,
-              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal'
-            },
-            body: JSON.stringify({ notes: JSON.stringify({ jobs: currentJobs }) })
-          });
-          showToast(`🖨️ Order #${order.order_number} queued for auto-printing!`, 'info');
-        }
-      } catch (_) {}
-    }
-
-    // 2. Fallback: Trigger silent iframe browser print so cashier is never stranded
-    try {
-      let iframe = document.getElementById('silent-receipt-print-frame');
-      if (!iframe) {
-        iframe = document.createElement('iframe');
-        iframe.id = 'silent-receipt-print-frame';
-        iframe.style.position = 'fixed';
-        iframe.style.top = '-9999px';
-        iframe.style.left = '-9999px';
-        iframe.style.width = '1px';
-        iframe.style.height = '1px';
-        iframe.style.border = 'none';
-        document.body.appendChild(iframe);
-      }
-      iframe.src = `/api/printer/orders/${order.id || orderId}/preview-html`;
-      iframe.onload = () => {
+    } catch (_) {
+      // Local daemon port not reachable (e.g. cashier is using phone or laptop on Wi-Fi).
+      // The order is ALREADY in Supabase orders table, so the POS daemon on the printer PC
+      // will automatically detect and print it via cloud poller without any phone interruption.
+      if (manualReprint) {
+        // Only queue an explicit reprint job if the cashier specifically requested a reprint
         try {
-          iframe.contentWindow.focus();
-          iframe.contentWindow.print();
-        } catch (e) {}
-      };
-    } catch (e) {}
+          const SUPABASE_URL = CLOUD_SYNC_CFG.url;
+          const SUPABASE_ANON_KEY = CLOUD_SYNC_CFG.key;
+          const qRes = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
+            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+          });
+          if (qRes.ok) {
+            const qList = await qRes.json();
+            let currentJobs = [];
+            if (qList[0]?.notes) {
+              try { currentJobs = JSON.parse(qList[0].notes).jobs || []; } catch(_) {}
+            }
+            currentJobs.push({
+              id: 'job-receipt-' + (order.order_number || order.id) + '-' + Date.now(),
+              type: 'receipt',
+              order: order,
+              created_at: new Date().toISOString()
+            });
+            await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+              },
+              body: JSON.stringify({ notes: JSON.stringify({ jobs: currentJobs }) })
+            });
+            showToast(`🖨️ Reprint for #${order.order_number || order.id} queued for POS printer!`, 'info');
+          }
+        } catch (_) {}
+      } else {
+        showToast(`🖨️ Bill for #${order.order_number || order.id} routed to POS thermal printer via cloud!`, 'success');
+      }
+    }
   };
 
   // ── POS Print Daemon Health Monitor (Port 5001) ───────────────────────────

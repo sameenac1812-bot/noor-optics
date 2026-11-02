@@ -34,7 +34,7 @@ let config = {
   storeAddress: 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028',
   storePhone: '+91 98765 43210',
   storeGstin: '29AAAAA0000A1Z5',
-  orderFreshnessMinutes: 1440,
+  orderFreshnessMinutes: 10,
   supabaseUrl: 'https://czajxtgwsxbrrymrhauz.supabase.co',
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk',
   backendUrl: 'https://noor-optics-five.vercel.app',
@@ -970,27 +970,68 @@ async function format25InchEscPosQrSticker(item) {
 
 // ── Process Print Order ───────────────────────────────────────────────────────
 async function processPrintOrder(order, forcePrint = false) {
-  const orderRef = order.order_number || order.order_ref || order.id;
+  const orderRef = order.order_number || order.order_ref || (order.id ? String(order.id) : null);
   if (!orderRef) return { success: false, error: 'Missing order reference' };
 
-  // Skip duplicate ONLY for background pollers if already physically printed
-  if (!forcePrint && printedHistory[orderRef] && printedHistory[orderRef] !== 'SKIPPED_STALE' && printedHistory[orderRef] !== 'PRINTING') {
-    log(`Duplicate print skipped for order ${orderRef} (Already printed at ${printedHistory[orderRef]})`);
-    return { success: true, skippedDuplicate: true, orderNumber: orderRef, printedAt: printedHistory[orderRef] };
+  // All known identifiers for this order to prevent multi-channel duplicate printing
+  const refs = [order.order_number, order.order_ref, order.id ? String(order.id) : null].filter(Boolean);
+  const alreadyPrinted = refs.some(r => printedHistory[r] && printedHistory[r] !== 'SKIPPED_STALE' && printedHistory[r] !== 'PRINTING');
+
+  if (!forcePrint && alreadyPrinted) {
+    log(`[Deduplication] Duplicate print skipped for order #${orderRef} (Already printed)`);
+    return { success: true, skippedDuplicate: true, orderNumber: orderRef };
   }
+
+  refs.forEach(r => { printedHistory[r] = 'PRINTING'; });
 
   log(`Preparing 2.5-inch Customer Bill for order #${orderRef}...`);
   const receiptBinary = format25InchEscPosReceipt(order);
   const result = await spoolBytesToPrinter(receiptBinary, `Bill-${orderRef}`);
 
   if (result.success) {
-    printedHistory[orderRef] = new Date().toISOString();
+    const nowIso = new Date().toISOString();
+    refs.forEach(r => { printedHistory[r] = nowIso; });
     savePrintedHistory();
-    return { success: true, orderNumber: orderRef, printedAt: printedHistory[orderRef] };
+    return { success: true, orderNumber: orderRef, printedAt: nowIso };
   } else {
     // Zero-drop failure recovery: enqueue to retry queue so bill prints as soon as printer is ready
     enqueueFailedPrintJob(order, `Bill-${orderRef}`);
     return { success: false, error: result.error, orderNumber: orderRef, queuedForRetry: true };
+  }
+}
+
+// ── Startup Historical Orders Seeder (Prevents Replaying Old Orders on Boot) ──
+let startupSeeded = false;
+async function seedStartupOrders() {
+  if (startupSeeded || !config.supabaseUrl || !config.supabaseAnonKey) return;
+  startupSeeded = true;
+  try {
+    const res = await fetch(`${config.supabaseUrl}/rest/v1/orders?select=id,order_number,order_ref&limit=100`, {
+      headers: {
+        'apikey': config.supabaseAnonKey,
+        'Authorization': `Bearer ${config.supabaseAnonKey}`
+      },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (res.ok) {
+      const existing = await res.json();
+      if (Array.isArray(existing)) {
+        let changed = false;
+        existing.forEach(o => {
+          const refs = [o.order_number, o.order_ref, o.id ? String(o.id) : null].filter(Boolean);
+          refs.forEach(r => {
+            if (!printedHistory[r]) {
+              printedHistory[r] = 'EXISTING_AT_STARTUP';
+              changed = true;
+            }
+          });
+        });
+        if (changed) savePrintedHistory();
+        log(`[Startup] Order history initialized (${Object.keys(printedHistory).length} historical orders cached; only NEW orders will auto-print).`);
+      }
+    }
+  } catch (e) {
+    log(`[Startup] Seed note: ${e.message}`, 'WARN');
   }
 }
 
@@ -1000,6 +1041,11 @@ async function pollCloudOrders() {
   if (isPollingCloud || !config.supabaseUrl || !config.supabaseAnonKey) return;
   isPollingCloud = true;
   try {
+    // On first run, seed existing orders so daemon never replays past orders
+    if (!startupSeeded) {
+      await seedStartupOrders();
+    }
+
     const res = await fetch(`${config.supabaseUrl}/rest/v1/orders?select=*&order=created_at.desc&limit=25`, {
       headers: {
         'apikey': config.supabaseAnonKey,
@@ -1020,8 +1066,8 @@ async function pollCloudOrders() {
     await refreshCatalogCache().catch(() => { });
 
     const now = Date.now();
-    // 24 hour window ensures orders placed overnight or while PC is off are never missed
-    const freshnessMs = (config.orderFreshnessMinutes || 1440) * 60 * 1000;
+    // Freshness window (10 minutes) ensures only recently placed active orders are auto-printed
+    const freshnessMs = (config.orderFreshnessMinutes || 10) * 60 * 1000;
 
     // Periodic heartbeat log every 30 seconds so the console shows active polling
     if (!state.lastHeartbeatTime || (now - state.lastHeartbeatTime > 30000)) {
@@ -1032,16 +1078,20 @@ async function pollCloudOrders() {
     for (const o of orders) {
       const ref = o.order_ref || o.order_number || (o.id ? String(o.id) : null);
       if (!ref || /TEST-REF|GHOST-TEST/i.test(ref)) continue;
-      // Skip if already successfully printed or currently printing
-      if (printedHistory[ref] && printedHistory[ref] !== 'SKIPPED_STALE') continue;
+
+      // Check all aliases for this order
+      const refs = [o.order_number, o.order_ref, o.id ? String(o.id) : null].filter(Boolean);
+      const isDone = refs.some(r => printedHistory[r] && printedHistory[r] !== 'SKIPPED_STALE');
+      if (isDone) continue;
 
       const orderTime = o.created_at ? new Date(o.created_at).getTime() : 0;
       if (orderTime && (now - orderTime > freshnessMs)) {
+        refs.forEach(r => { printedHistory[r] = 'SKIPPED_STALE'; });
         continue;
       }
 
       // Mark as printing immediately to prevent concurrency duplicates
-      printedHistory[ref] = 'PRINTING';
+      refs.forEach(r => { printedHistory[r] = 'PRINTING'; });
 
       const clientName = o.customer_name || 'Online Client';
       const grandTotal = o.grand_total || o.total_payable_inr || (o.total_payable_paise ? o.total_payable_paise / 100 : 0);
@@ -1141,7 +1191,18 @@ async function pollCloudPrintQueue() {
       } else if (job.type === 'receipt' || job.order) {
         log(`[Cloud Queue] Processing receipt print job ${jobId}...`);
         const orderToPrint = job.order || job;
-        const result = await processPrintOrder(orderToPrint, true);
+        const ref = orderToPrint.order_number || orderToPrint.order_ref || (orderToPrint.id ? String(orderToPrint.id) : null);
+        const refs = [orderToPrint.order_number, orderToPrint.order_ref, orderToPrint.id ? String(orderToPrint.id) : null].filter(Boolean);
+        const alreadyPrinted = refs.some(r => printedHistory[r] && printedHistory[r] !== 'SKIPPED_STALE' && printedHistory[r] !== 'PRINTING');
+
+        if (alreadyPrinted) {
+          log(`[Cloud Queue] Order #${ref || jobId} already printed; acknowledging duplicate without reprint.`);
+          printedHistory[jobId] = new Date().toISOString();
+          changed = true;
+          continue;
+        }
+
+        const result = await processPrintOrder(orderToPrint, false);
         if (result.success) {
           printedHistory[jobId] = new Date().toISOString();
           changed = true;

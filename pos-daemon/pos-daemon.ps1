@@ -111,7 +111,7 @@ $Config = @{
     storeAddress = "Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028"
     storePhone = "+91 98765 43210"
     storeGstin = "29AAAAA0000A1Z5"
-    orderFreshnessMinutes = 1440
+    orderFreshnessMinutes = 10
     supabaseUrl = "https://czajxtgwsxbrrymrhauz.supabase.co"
     supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk"
 }
@@ -972,6 +972,15 @@ function Poll-CloudPrintQueue {
                         $bytes = Format-StickerBytes $rawItems
                         $ok = Spool-Bytes $bytes "Sticker-$jobId"
                     } elseif ($job.type -eq "receipt" -and $job.order) {
+                        $orderRef = $job.order.order_number
+                        if (-not $orderRef) { $orderRef = $job.order.order_ref }
+                        if (-not $orderRef) { $orderRef = $job.order.id }
+                        if ($orderRef -and $History.ContainsKey([string]$orderRef) -and $History[[string]$orderRef] -ne "SKIPPED_STALE") {
+                            Write-DaemonLog "[Cloud Print Queue] Order #$orderRef already printed; skipping duplicate." "INFO"
+                            $History[$jobId] = (Get-Date).ToString("o")
+                            $changed = $true
+                            continue
+                        }
                         $bytes = Format-ReceiptBytes $job.order
                         $ok = Spool-Bytes $bytes "Receipt-$jobId"
                     }
