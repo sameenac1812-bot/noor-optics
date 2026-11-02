@@ -921,22 +921,11 @@ async function format25InchEscPosQrSticker(item) {
 }
 
 // ── Process Print Order ───────────────────────────────────────────────────────
-async function processPrintOrder(order, forcePrint = false) {
+async function processPrintOrder(order, forcePrint = true) {
   const orderRef = order.order_number || order.order_ref || order.orderNumber || (order.id ? String(order.id) : null);
   if (!orderRef) return { success: false, error: 'Missing order reference' };
 
-  // All known identifiers for this order to prevent multi-channel duplicate printing
   const refs = [order.order_number, order.order_ref, order.orderNumber, order.id ? String(order.id) : null].filter(Boolean);
-  const alreadyPrinted = refs.some(r => printedHistory[r] && printedHistory[r] !== 'SKIPPED_STALE');
-
-  if (!forcePrint && alreadyPrinted) {
-    log(`[Deduplication] Duplicate print skipped for order #${orderRef} (Already printed or in progress)`);
-    return { success: true, skippedDuplicate: true, orderNumber: orderRef };
-  }
-
-  // Claim printing lock immediately to prevent race conditions from concurrent pollers
-  refs.forEach(r => { printedHistory[r] = 'PRINTING'; });
-  savePrintedHistory();
 
   log(`Preparing 2.5-inch Customer Bill for order #${orderRef}...`);
   const receiptBinary = format25InchEscPosReceipt(order);
@@ -948,8 +937,6 @@ async function processPrintOrder(order, forcePrint = false) {
     savePrintedHistory();
     return { success: true, orderNumber: orderRef, printedAt: nowIso };
   } else {
-    // Zero-drop failure recovery: enqueue to retry queue so bill prints as soon as printer is ready
-    refs.forEach(r => { delete printedHistory[r]; });
     enqueueFailedPrintJob(order, `Bill-${orderRef}`);
     return { success: false, error: result.error, orderNumber: orderRef, queuedForRetry: true };
   }
@@ -1148,18 +1135,7 @@ async function pollCloudPrintQueue() {
       } else if (job.type === 'receipt' || job.order) {
         log(`[Cloud Queue] Processing receipt print job ${jobId}...`);
         const orderToPrint = job.order || job;
-        const ref = orderToPrint.order_number || orderToPrint.order_ref || (orderToPrint.id ? String(orderToPrint.id) : null);
-        const refs = [orderToPrint.order_number, orderToPrint.order_ref, orderToPrint.id ? String(orderToPrint.id) : null].filter(Boolean);
-        const alreadyPrinted = refs.some(r => printedHistory[r] && printedHistory[r] !== 'SKIPPED_STALE');
-
-        if (alreadyPrinted) {
-          log(`[Cloud Queue] Order #${ref || jobId} already printed; acknowledging duplicate without reprint.`);
-          printedHistory[jobId] = new Date().toISOString();
-          changed = true;
-          continue;
-        }
-
-        const result = await processPrintOrder(orderToPrint, false);
+        const result = await processPrintOrder(orderToPrint, true);
         if (result.success) {
           printedHistory[jobId] = new Date().toISOString();
           changed = true;
@@ -1250,8 +1226,8 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, queued: true, orderNumber: orderRef }));
 
-        // Process print in the background serial queue
-        processPrintOrder(orderData, isManual).catch(err => {
+        // Process print in the background serial queue - ALWAYS PRINTS
+        processPrintOrder(orderData, true).catch(err => {
           log(`Background print error for #${orderRef}: ${err.message}`, 'ERROR');
         });
       } catch (err) {

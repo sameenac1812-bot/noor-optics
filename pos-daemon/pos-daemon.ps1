@@ -928,12 +928,6 @@ function Poll-CloudPrintQueue {
                         $orderRef = $job.order.order_number
                         if (-not $orderRef) { $orderRef = $job.order.order_ref }
                         if (-not $orderRef) { $orderRef = $job.order.id }
-                        if ($orderRef -and $History.ContainsKey([string]$orderRef) -and $History[[string]$orderRef] -ne "SKIPPED_STALE") {
-                            Write-DaemonLog "[Cloud Print Queue] Order #$orderRef already printed; skipping duplicate." "INFO"
-                            $History[$jobId] = (Get-Date).ToString("o")
-                            $changed = $true
-                            continue
-                        }
                         $bytes = Format-ReceiptBytes $job.order
                         $ok = Spool-Bytes $bytes "Receipt-$jobId"
                     }
@@ -1034,19 +1028,15 @@ while ($running) {
                 $order = if ($payload.order) { $payload.order } else { $payload }
                 $orderRef = if ($order.order_number) { $order.order_number } elseif ($order.order_ref) { $order.order_ref } else { $order.id }
 
-                if ($History.ContainsKey($orderRef) -and -not $payload.manualReprint) {
-                    $resObj = @{ success = $true; skippedDuplicate = $true; orderNumber = $orderRef }
+                Write-DaemonLog "Printing 2.5-inch receipt for order #$orderRef..."
+                $bytes = Format-ReceiptBytes $order
+                $ok = Spool-Bytes $bytes "Bill-$orderRef"
+                if ($ok) {
+                    $History[$orderRef] = (Get-Date).ToString("o")
+                    Save-History
+                    $resObj = @{ success = $true; orderNumber = $orderRef }
                 } else {
-                    Write-DaemonLog "Printing 2.5-inch receipt for order #$orderRef..."
-                    $bytes = Format-ReceiptBytes $order
-                    $ok = Spool-Bytes $bytes "Bill-$orderRef"
-                    if ($ok) {
-                        $History[$orderRef] = (Get-Date).ToString("o")
-                        Save-History
-                        $resObj = @{ success = $true; orderNumber = $orderRef }
-                    } else {
-                        $resObj = @{ success = $false; error = "Spooler failure" }
-                    }
+                    $resObj = @{ success = $false; error = "Spooler failure" }
                 }
 
                 $buf = [System.Text.Encoding]::UTF8.GetBytes(($resObj | ConvertTo-Json))
