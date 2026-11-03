@@ -160,6 +160,90 @@ async function pushOrderPaymentStatusToCloud(orderRef, paymentStatus, reasonOrNo
         })
       });
     }
+
+    // Also directly update canonical orders table and print_jobs queue in Supabase
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanRef);
+    const queryParam = isUuid ? `id=eq.${cleanRef}` : `or=(order_ref.eq.${cleanRef},order_number.eq.${cleanRef})`;
+    const ordRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?${queryParam}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({
+        payment_status: paymentStatus,
+        status: paymentStatus === 'VERIFIED' ? 'confirmed' : 'cancelled',
+        updated_at: new Date().toISOString()
+      })
+    });
+
+    let orderRowId = isUuid ? cleanRef : null;
+    if (!orderRowId) {
+      try {
+        const fetchIdRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?or=(order_ref.eq.${encodeURIComponent(cleanRef)},order_number.eq.${encodeURIComponent(cleanRef)})&select=id`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        if (fetchIdRes.ok) {
+          const rows = await fetchIdRes.json();
+          if (Array.isArray(rows) && rows.length > 0) orderRowId = rows[0].id;
+        }
+      } catch (_) {}
+    }
+
+    if (orderRowId) {
+      if (paymentStatus === 'VERIFIED') {
+        // Atomically queue print job in cloud for portable POS daemon
+        await fetch(`${SUPABASE_URL}/rest/v1/print_jobs?order_id=eq.${orderRowId}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status: 'queued',
+            last_error: null,
+            updated_at: new Date().toISOString()
+          })
+        }).catch(() => {});
+
+        // Also ensure print job exists if not yet present
+        await fetch(`${SUPABASE_URL}/rest/v1/print_jobs`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify({
+            order_id: orderRowId,
+            print_type: 'receipt',
+            printer_id: 'POS-80',
+            status: 'queued',
+            attempt_count: 0,
+            updated_at: new Date().toISOString()
+          })
+        }).catch(() => {});
+      } else if (paymentStatus === 'REJECTED') {
+        await fetch(`${SUPABASE_URL}/rest/v1/print_jobs?order_id=eq.${orderRowId}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status: 'cancelled',
+            last_error: reasonOrNotes || 'Payment rejected by staff',
+            updated_at: new Date().toISOString()
+          })
+        }).catch(() => {});
+      }
+    }
+
     console.log(`[SupabaseSync] Order ${cleanRef} payment recorded as ${paymentStatus} in Supabase cloud.`);
     return true;
   } catch (err) {
@@ -521,12 +605,27 @@ async function syncSupabaseOrders(db) {
       const isCloudVerified = cloudVerifiedOrders.has(co.order_ref) || (co.id && cloudVerifiedOrders.has(co.id));
       const isCloudRejected = cloudRejectedOrders.has(co.order_ref) || (co.id && cloudRejectedOrders.has(co.id));
 
-      const isExplicitlyVerified = isCloudVerified ||
-                                   (co.payment_status && String(co.payment_status).toUpperCase() === 'VERIFIED') ||
-                                   (co.paymentStatus && String(co.paymentStatus).toUpperCase() === 'VERIFIED');
-      const isPosCash = isPos && (co.payment_method && co.payment_method.toUpperCase() === 'CASH');
-      const isPaid = isPosCash || isExplicitlyVerified;
-      const paymentStatus = isCloudRejected ? 'REJECTED' : (isPaid ? 'VERIFIED' : 'AWAITING_VERIFICATION');
+      let isPaid = false;
+      let paymentStatus = 'AWAITING_VERIFICATION';
+
+      if (isPos) {
+        // In-store POS counter orders are confirmed and verified immediately
+        isPaid = true;
+        paymentStatus = 'VERIFIED';
+      } else {
+        // Website orders strictly land in AWAITING_VERIFICATION (Verify UPI queue)
+        // until shop owner clicks Accept / Approve in Admin
+        if (isCloudRejected) {
+          paymentStatus = 'REJECTED';
+          isPaid = false;
+        } else if (isCloudVerified) {
+          paymentStatus = 'VERIFIED';
+          isPaid = true;
+        } else {
+          paymentStatus = 'AWAITING_VERIFICATION';
+          isPaid = false;
+        }
+      }
       const amountPaidPaise = isPaid ? grandTotalPaise : 0;
       const outstandingPaise = isPaid ? 0 : grandTotalPaise;
 
@@ -576,12 +675,21 @@ async function syncSupabaseOrders(db) {
         let finalAmountPaid = existing.amount_paid_paise !== undefined ? existing.amount_paid_paise : amountPaidPaise;
         let finalOutstanding = existing.outstanding_paise !== undefined ? existing.outstanding_paise : outstandingPaise;
 
-        if (isCloudVerified || isExplicitlyVerified) {
+        if (isPos) {
+          finalPaymentStatus = 'VERIFIED';
+          finalAmountPaid = grandTotalPaise;
+          finalOutstanding = 0;
+        } else if (isCloudVerified) {
           finalPaymentStatus = 'VERIFIED';
           finalAmountPaid = grandTotalPaise;
           finalOutstanding = 0;
         } else if (isCloudRejected) {
           finalPaymentStatus = 'REJECTED';
+          finalAmountPaid = 0;
+          finalOutstanding = grandTotalPaise;
+        } else {
+          finalPaymentStatus = 'AWAITING_VERIFICATION';
+          finalAmountPaid = 0;
           finalOutstanding = grandTotalPaise;
         }
 
@@ -857,36 +965,112 @@ async function pushOrderToSupabase(orderPayload) {
     const subtotal = Number(orderPayload.subtotalINR || (orderPayload.subtotalPaise ? orderPayload.subtotalPaise / 100 : orderPayload.totalPayableINR || orderPayload.grandTotalINR || orderPayload.grand_total || 0));
     const grandTotal = Number(orderPayload.grandTotalINR || (orderPayload.totalPayablePaise ? orderPayload.totalPayablePaise / 100 : orderPayload.grand_total || subtotal));
 
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+    const baseOrderBody = {
+      order_ref: orderRef,
+      order_number: orderRef,
+      source: isPosOrder ? 'instore' : 'website',
+      customer_name: custName,
+      customer_email: custEmail,
+      customer_phone: cleanPhone,
+      delivery_address: address,
+      city: city,
+      pin_code: pin,
+      items: itemsToPush,
+      prescription_pref: rxPref,
+      payment_method: payMethod,
+      payment_status: payStatus,
+      customer_age: orderPayload.customerAge || orderPayload.age || null,
+      prescription_id: orderPayload.prescriptionId || null,
+      idempotency_key: orderPayload.idempotency_key || `idem-${orderRef}-${Date.now()}`,
+      subtotal: subtotal,
+      shipping_fee: 0,
+      grand_total: grandTotal,
+      status: isPosOrder ? 'confirmed' : (payStatus === 'VERIFIED' ? 'confirmed' : 'PENDING_VERIFICATION')
+    };
+
+    let res = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
+        'Prefer': 'resolution=merge-duplicates,return=representation'
       },
-      body: JSON.stringify({
-        order_ref: orderRef,
-        customer_name: custName,
-        customer_email: custEmail,
-        customer_phone: cleanPhone,
-        delivery_address: address,
-        city: city,
-        pin_code: pin,
-        items: itemsToPush,
-        prescription_pref: rxPref,
-        payment_method: payMethod,
-        subtotal: subtotal,
-        shipping_fee: 0,
-        grand_total: grandTotal,
-        status: 'confirmed'
-      })
+      body: JSON.stringify(baseOrderBody)
     });
 
+    let errText = '';
+    if (!res.ok) {
+      errText = await res.text();
+      // Graceful fallback if migration has not added source/order_number/idempotency_key yet
+      if (res.status === 400 && (errText.includes('source') || errText.includes('order_number') || errText.includes('PGRST204'))) {
+        const legacyBody = {
+          order_ref: orderRef,
+          customer_name: custName,
+          customer_email: custEmail,
+          customer_phone: cleanPhone,
+          delivery_address: address,
+          city: city,
+          pin_code: pin,
+          items: itemsToPush,
+          prescription_pref: rxPref,
+          payment_method: payMethod,
+          subtotal: subtotal,
+          shipping_fee: 0,
+          grand_total: grandTotal,
+          status: 'confirmed'
+        };
+        res = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates,return=minimal'
+          },
+          body: JSON.stringify(legacyBody)
+        });
+        if (!res.ok) {
+          errText = await res.text();
+        }
+      }
+    }
+
     if (res.ok) {
-      console.log(`[SupabaseSync] Order ${orderRef} successfully pushed to Supabase cloud.`);
+      console.log(`[SupabaseSync] Order ${orderRef} (${isPosOrder ? 'instore' : 'website'}) successfully pushed to Supabase cloud.`);
+      // Also register into SYS-PRINT-QUEUE so any connected printer daemon gets it immediately via cloud
+      if (isPosOrder || payStatus === 'VERIFIED') {
+        pushPrintJobToCloudQueue({
+          type: 'receipt',
+          order: baseOrderBody
+        }).catch(() => {});
+      }
+      // If it is a website order, guarantee its print job is held until staff approves UPI payment
+      if (!isPosOrder && payStatus !== 'VERIFIED') {
+        try {
+          const fetchOrd = await fetch(`${SUPABASE_URL}/rest/v1/orders?order_ref=eq.${encodeURIComponent(orderRef)}&select=id`, {
+            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+          });
+          if (fetchOrd.ok) {
+            const ords = await fetchOrd.json();
+            if (ords && ords.length > 0) {
+              await fetch(`${SUPABASE_URL}/rest/v1/print_jobs?order_id=eq.${ords[0].id}`, {
+                method: 'PATCH',
+                headers: {
+                  'apikey': SUPABASE_ANON_KEY,
+                  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  status: 'uncertain',
+                  last_error: 'Held pending staff UPI payment verification'
+                })
+              });
+            }
+          }
+        } catch (_) {}
+      }
     } else {
-      const errText = await res.text();
       console.warn(`[SupabaseSync] Push order failed (${res.status}):`, errText);
     }
   } catch (err) {

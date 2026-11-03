@@ -79,21 +79,47 @@ function generateInvoiceNumber(prefix = 'NOOR-INV') {
 
 // ── Helper: Format Client Code (e.g. CLT-1001) ────────────────────────────────
 function getNextClientCode() {
-  const row = db.prepare("SELECT client_code FROM customers WHERE client_code LIKE 'CLT-%' ORDER BY client_code DESC LIMIT 1").get();
-  if (row && row.client_code) {
-    const num = parseInt(row.client_code.replace('CLT-', ''), 10);
-    if (!isNaN(num)) return `CLT-${num + 1}`;
+  let maxNum = 1000;
+  try {
+    const rows = db.prepare("SELECT client_code FROM customers WHERE client_code LIKE 'CLT-%'").all();
+    for (const r of rows) {
+      const match = String(r.client_code).match(/CLT-(\d+)/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (n > maxNum) maxNum = n;
+      }
+    }
+  } catch (_) {}
+  let seq = maxNum + 1;
+  while (true) {
+    const candidate = `CLT-${seq}`;
+    const exists = db.prepare('SELECT 1 FROM customers WHERE client_code = ?').get(candidate);
+    if (!exists) return candidate;
+    seq++;
   }
-  const countRow = db.prepare('SELECT count(*) as c FROM customers').get();
-  return `CLT-${1001 + (countRow ? countRow.c : 0)}`;
 }
 
 // ── Helper: Format Prescription Number (e.g. RX-2026-0001) ────────────────────
 function getNextPrescriptionNumber() {
   const year = new Date().getFullYear();
-  const countRow = db.prepare('SELECT count(*) as c FROM prescriptions').get();
-  const nextSeq = String((countRow ? countRow.c : 0) + 1).padStart(4, '0');
-  return `RX-${year}-${nextSeq}`;
+  let maxSeq = 0;
+  try {
+    const rows = db.prepare("SELECT prescription_number FROM prescriptions WHERE prescription_number LIKE ?").all(`RX-${year}-%`);
+    for (const r of rows) {
+      const match = String(r.prescription_number).match(/RX-\d{4}-(\d+)/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxSeq) maxSeq = num;
+      }
+    }
+  } catch (_) {}
+  let seq = maxSeq + 1;
+  while (true) {
+    const candidate = `RX-${year}-${String(seq).padStart(4, '0')}`;
+    const exists = db.prepare('SELECT 1 FROM prescriptions WHERE prescription_number = ?').get(candidate);
+    if (!exists) return candidate;
+    seq++;
+  }
 }
 
 // ── Helper: Normalize Phone Number ──────────────────────────────────────────
@@ -852,6 +878,7 @@ router.post('/inventory/adjust', authenticateToken, requirePermission('inventory
     logAudit(req.user.id, req.user.email, 'STOCK_ADJUSTED', 'INVENTORY', variantId, { delta, reason }, req);
     res.json({ success: true, ...result });
   } catch (err) {
+    console.error('[POS Checkout Error]:', err.message);
     res.status(400).json({ error: err.message });
   }
 });
@@ -1410,28 +1437,41 @@ router.post('/prescriptions', authenticateToken, (req, res) => {
   }
 
   const id = 'rx-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
-  const rxNumber = getNextPrescriptionNumber();
-
-  db.prepare(`
-    INSERT INTO prescriptions (
-      id, prescription_number, client_id, prescription_date,
-      od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis,
-      addition, ipd_distance, ipd_near, checked_by, prescriber_details,
-      notes, image_url, created_by_user_id, created_at, updated_at
-    ) VALUES (
-      ?, ?, ?, ?,
-      ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?,
-      ?, ?, ?, datetime('now'), datetime('now')
-    )
-  `).run(
-    id, rxNumber, targetClientId, prescriptionDate,
-    odSph || null, odCyl || null, odAxis || null,
-    osSph || null, osCyl || null, osAxis || null,
-    addition || null, ipdDistance || null, ipdNear || null,
-    checkedBy || req.user.name || null, prescriberDetails || null,
-    notes || null, imageUrl || null, req.user.id
-  );
+  let rxNumber = getNextPrescriptionNumber();
+  let inserted = false;
+  let attempt = 0;
+  while (!inserted && attempt < 10) {
+    attempt++;
+    try {
+      db.prepare(`
+        INSERT INTO prescriptions (
+          id, prescription_number, client_id, prescription_date,
+          od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis,
+          addition, ipd_distance, ipd_near, checked_by, prescriber_details,
+          notes, image_url, created_by_user_id, created_at, updated_at
+        ) VALUES (
+          ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
+          ?, ?, ?, datetime('now'), datetime('now')
+        )
+      `).run(
+        id, rxNumber, targetClientId, prescriptionDate,
+        odSph || null, odCyl || null, odAxis || null,
+        osSph || null, osCyl || null, osAxis || null,
+        addition || null, ipdDistance || null, ipdNear || null,
+        checkedBy || req.user.name || null, prescriberDetails || null,
+        notes || null, imageUrl || null, req.user.id
+      );
+      inserted = true;
+    } catch (rxErr) {
+      if (rxErr.message && rxErr.message.includes('UNIQUE constraint failed: prescriptions.prescription_number')) {
+        rxNumber = `RX-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}-${Math.floor(100 + Math.random() * 900)}`;
+      } else {
+        throw rxErr;
+      }
+    }
+  }
 
   logAudit(req.user.id, req.user.email, 'PRESCRIPTION_CREATED', 'PRESCRIPTION', id, {
     prescriptionNumber: rxNumber, clientId: targetClientId, clientName: client.name
@@ -1661,7 +1701,13 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     }
 
     // 0b. Resolve or create new prescription if submitted
-    let finalPrescriptionId = prescriptionId || null;
+    let finalPrescriptionId = prescriptionId || (incomingRx && incomingRx.id && !String(incomingRx.id).startsWith('draft-') ? incomingRx.id : null);
+    let existingRx = null;
+    if (finalPrescriptionId) {
+      try {
+        existingRx = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(finalPrescriptionId);
+      } catch (_) {}
+    }
 
     if (incomingRx && !finalCustomerId) {
       finalCustomerId = 'cust-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
@@ -1677,39 +1723,53 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       );
     }
 
-    if (incomingRx && finalCustomerId) {
-      finalPrescriptionId = 'rx-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
-      const rxNumber = getNextPrescriptionNumber();
-      db.prepare(`
-        INSERT INTO prescriptions (
-          id, prescription_number, client_id, prescription_date,
-          od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis,
-          addition, ipd_distance, ipd_near, checked_by, prescriber_details,
-          notes, image_url, created_by_user_id, created_at, updated_at
-        ) VALUES (
-          ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?,
-          ?, ?, ?, datetime('now'), datetime('now')
-        )
-      `).run(
-        finalPrescriptionId, rxNumber, finalCustomerId,
-        incomingRx.prescriptionDate || incomingRx.prescription_date || new Date().toISOString().slice(0, 10),
-        incomingRx.odSph || incomingRx.od_sph || null,
-        incomingRx.odCyl || incomingRx.od_cyl || null,
-        incomingRx.odAxis !== undefined ? incomingRx.odAxis : (incomingRx.od_axis !== undefined ? incomingRx.od_axis : null),
-        incomingRx.osSph || incomingRx.os_sph || null,
-        incomingRx.osCyl || incomingRx.os_cyl || null,
-        incomingRx.osAxis !== undefined ? incomingRx.osAxis : (incomingRx.os_axis !== undefined ? incomingRx.os_axis : null),
-        incomingRx.addition || null,
-        incomingRx.ipdDistance !== undefined ? incomingRx.ipdDistance : (incomingRx.ipd_distance !== undefined ? incomingRx.ipd_distance : null),
-        incomingRx.ipdNear !== undefined ? incomingRx.ipdNear : (incomingRx.ipd_near !== undefined ? incomingRx.ipd_near : null),
-        incomingRx.checkedBy || incomingRx.checked_by || req.user.name || null,
-        incomingRx.prescriberDetails || incomingRx.prescriber_details || null,
-        incomingRx.notes || null,
-        incomingRx.imageUrl || incomingRx.image_url || null,
-        req.user.id
-      );
+    if (incomingRx && !existingRx && finalCustomerId) {
+      finalPrescriptionId = (incomingRx.id && !String(incomingRx.id).startsWith('draft-')) ? incomingRx.id : ('rx-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000));
+      let rxNumber = getNextPrescriptionNumber();
+      let inserted = false;
+      let attempt = 0;
+      while (!inserted && attempt < 10) {
+        attempt++;
+        try {
+          db.prepare(`
+            INSERT INTO prescriptions (
+              id, prescription_number, client_id, prescription_date,
+              od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis,
+              addition, ipd_distance, ipd_near, checked_by, prescriber_details,
+              notes, image_url, created_by_user_id, created_at, updated_at
+            ) VALUES (
+              ?, ?, ?, ?,
+              ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, ?,
+              ?, ?, ?, datetime('now'), datetime('now')
+            )
+          `).run(
+            finalPrescriptionId, rxNumber, finalCustomerId,
+            incomingRx.prescriptionDate || incomingRx.prescription_date || new Date().toISOString().slice(0, 10),
+            incomingRx.odSph || incomingRx.od_sph || null,
+            incomingRx.odCyl || incomingRx.od_cyl || null,
+            incomingRx.odAxis !== undefined ? incomingRx.odAxis : (incomingRx.od_axis !== undefined ? incomingRx.od_axis : null),
+            incomingRx.osSph || incomingRx.os_sph || null,
+            incomingRx.osCyl || incomingRx.os_cyl || null,
+            incomingRx.osAxis !== undefined ? incomingRx.osAxis : (incomingRx.os_axis !== undefined ? incomingRx.os_axis : null),
+            incomingRx.addition || null,
+            incomingRx.ipdDistance !== undefined ? incomingRx.ipdDistance : (incomingRx.ipd_distance !== undefined ? incomingRx.ipd_distance : null),
+            incomingRx.ipdNear !== undefined ? incomingRx.ipdNear : (incomingRx.ipd_near !== undefined ? incomingRx.ipd_near : null),
+            incomingRx.checkedBy || incomingRx.checked_by || req.user.name || null,
+            incomingRx.prescriberDetails || incomingRx.prescriber_details || null,
+            incomingRx.notes || null,
+            incomingRx.imageUrl || incomingRx.image_url || null,
+            req.user.id
+          );
+          inserted = true;
+        } catch (rxErr) {
+          if (rxErr.message && rxErr.message.includes('UNIQUE constraint failed: prescriptions.prescription_number')) {
+            rxNumber = `RX-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}-${Math.floor(100 + Math.random() * 900)}`;
+          } else {
+            throw rxErr;
+          }
+        }
+      }
     }
 
     let subtotalPaise = 0;
@@ -1957,6 +2017,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     }, req);
 
     const rxRecord = result.prescriptionId ? db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(result.prescriptionId) : null;
+    const effectiveRx = rxRecord || incomingRx || null;
 
     pushOrderToSupabase({
       orderNumber,
@@ -1990,18 +2051,18 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
         subtotal_inr: pi.subtotal_paise / 100,
         subtotal_paise: pi.subtotal_paise,
         subtotalPaise: pi.subtotal_paise,
-        prescription: idx === 0 ? (rxRecord || incomingRx || null) : null
+        prescription: idx === 0 ? effectiveRx : null
       })),
       prescriptionId: result.prescriptionId,
-      prescription: rxRecord || incomingRx || null,
-      od_sph: rxRecord?.od_sph != null ? rxRecord.od_sph : (incomingRx?.od_sph != null ? incomingRx.od_sph : null),
-      od_cyl: rxRecord?.od_cyl != null ? rxRecord.od_cyl : (incomingRx?.od_cyl != null ? incomingRx.od_cyl : null),
-      od_axis: rxRecord?.od_axis != null ? rxRecord.od_axis : (incomingRx?.od_axis != null ? incomingRx.od_axis : null),
-      os_sph: rxRecord?.os_sph != null ? rxRecord.os_sph : (incomingRx?.os_sph != null ? incomingRx.os_sph : null),
-      os_cyl: rxRecord?.os_cyl != null ? rxRecord.os_cyl : (incomingRx?.os_cyl != null ? incomingRx.os_cyl : null),
-      os_axis: rxRecord?.os_axis != null ? rxRecord.os_axis : (incomingRx?.os_axis != null ? incomingRx.os_axis : null),
-      addition: rxRecord?.addition != null ? rxRecord.addition : (incomingRx?.addition != null ? incomingRx.addition : null),
-      ipd_distance: rxRecord?.ipd_distance != null ? rxRecord.ipd_distance : (incomingRx?.ipd_distance != null ? incomingRx.ipd_distance : null),
+      prescription: effectiveRx,
+      od_sph: effectiveRx?.od_sph != null ? effectiveRx.od_sph : (effectiveRx?.odSph != null ? effectiveRx.odSph : null),
+      od_cyl: effectiveRx?.od_cyl != null ? effectiveRx.od_cyl : (effectiveRx?.odCyl != null ? effectiveRx.odCyl : null),
+      od_axis: effectiveRx?.od_axis != null ? effectiveRx.od_axis : (effectiveRx?.odAxis != null ? effectiveRx.odAxis : null),
+      os_sph: effectiveRx?.os_sph != null ? effectiveRx.os_sph : (effectiveRx?.osSph != null ? effectiveRx.osSph : null),
+      os_cyl: effectiveRx?.os_cyl != null ? effectiveRx.os_cyl : (effectiveRx?.osCyl != null ? effectiveRx.osCyl : null),
+      os_axis: effectiveRx?.os_axis != null ? effectiveRx.os_axis : (effectiveRx?.osAxis != null ? effectiveRx.osAxis : null),
+      addition: effectiveRx?.addition != null ? effectiveRx.addition : (effectiveRx?.add != null ? effectiveRx.add : null),
+      ipd_distance: effectiveRx?.ipd_distance != null ? effectiveRx.ipd_distance : (effectiveRx?.ipdDistance != null ? effectiveRx.ipdDistance : null),
       paymentMethod: paymentMethod,
       subtotalINR: result.subtotalINR || (calculatedSubtotalPaise / 100),
       grandTotalINR: result.totalPayableINR
@@ -2016,9 +2077,11 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     }
 
     // Push prescription to Supabase Cloud
-    if (rxRecord) {
+    if (effectiveRx) {
       pushPrescriptionToSupabase({
-        ...rxRecord,
+        id: result.prescriptionId || ('rx-pos-' + orderNumber),
+        prescription_number: (rxRecord && rxRecord.prescription_number) || ('RX-POS-' + orderNumber),
+        ...effectiveRx,
         client_name: result.customerName,
         client_phone: req.body.customerPhone || (req.body.clientDetails && req.body.clientDetails.phone)
       }).catch(err => console.warn('[SupabaseSync] Push POS rx note:', err.message));
@@ -2026,6 +2089,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
 
     res.json({ success: true, ...result });
   } catch (err) {
+    console.error('[POS Checkout Error]:', err.message);
     res.status(400).json({ error: err.message });
   }
 });
@@ -2190,36 +2254,50 @@ router.post('/orders/online', (req, res) => {
     let finalPrescriptionId = null;
     if (prescription && (prescription.od_sph != null || prescription.odSph != null || prescription.os_sph != null || prescription.osSph != null || prescription.imageUrl || prescription.image_url)) {
       finalPrescriptionId = 'rx-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
-      const rxNumber = getNextPrescriptionNumber();
-      db.prepare(`
-        INSERT INTO prescriptions (
-          id, prescription_number, client_id, prescription_date,
-          od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis,
-          addition, ipd_distance, ipd_near, checked_by, prescriber_details,
-          notes, image_url, created_at, updated_at
-        ) VALUES (
-          ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?,
-          ?, ?, datetime('now'), datetime('now')
-        )
-      `).run(
-        finalPrescriptionId, rxNumber, customerId,
-        prescription.prescriptionDate || prescription.prescription_date || new Date().toISOString().slice(0, 10),
-        prescription.od_sph || prescription.odSph || '0.00',
-        prescription.od_cyl || prescription.odCyl || '0.00',
-        prescription.od_axis !== undefined ? prescription.od_axis : (prescription.odAxis !== undefined ? prescription.odAxis : null),
-        prescription.os_sph || prescription.osSph || '0.00',
-        prescription.os_cyl || prescription.osCyl || '0.00',
-        prescription.os_axis !== undefined ? prescription.os_axis : (prescription.osAxis !== undefined ? prescription.osAxis : null),
-        prescription.addition || prescription.add || null,
-        prescription.ipd_distance || prescription.ipdDistance || prescription.pd || null,
-        prescription.ipd_near || prescription.ipdNear || null,
-        prescription.checked_by || prescription.checkedBy || 'Website Client Submission',
-        prescription.prescriber_details || prescription.prescriberDetails || null,
-        prescription.notes || null,
-        prescription.image_url || prescription.imageUrl || null
-      );
+      let rxNumber = getNextPrescriptionNumber();
+      let inserted = false;
+      let attempt = 0;
+      while (!inserted && attempt < 10) {
+        attempt++;
+        try {
+          db.prepare(`
+            INSERT INTO prescriptions (
+              id, prescription_number, client_id, prescription_date,
+              od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis,
+              addition, ipd_distance, ipd_near, checked_by, prescriber_details,
+              notes, image_url, created_at, updated_at
+            ) VALUES (
+              ?, ?, ?, ?,
+              ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, ?,
+              ?, ?, datetime('now'), datetime('now')
+            )
+          `).run(
+            finalPrescriptionId, rxNumber, customerId,
+            prescription.prescriptionDate || prescription.prescription_date || new Date().toISOString().slice(0, 10),
+            prescription.od_sph || prescription.odSph || '0.00',
+            prescription.od_cyl || prescription.odCyl || '0.00',
+            prescription.od_axis !== undefined ? prescription.od_axis : (prescription.odAxis !== undefined ? prescription.odAxis : null),
+            prescription.os_sph || prescription.osSph || '0.00',
+            prescription.os_cyl || prescription.osCyl || '0.00',
+            prescription.os_axis !== undefined ? prescription.os_axis : (prescription.osAxis !== undefined ? prescription.osAxis : null),
+            prescription.addition || prescription.add || null,
+            prescription.ipd_distance || prescription.ipdDistance || prescription.pd || null,
+            prescription.ipd_near || prescription.ipdNear || null,
+            prescription.checked_by || prescription.checkedBy || 'Website Client Submission',
+            prescription.prescriber_details || prescription.prescriberDetails || null,
+            prescription.notes || null,
+            prescription.image_url || prescription.imageUrl || null
+          );
+          inserted = true;
+        } catch (rxErr) {
+          if (rxErr.message && rxErr.message.includes('UNIQUE constraint failed: prescriptions.prescription_number')) {
+            rxNumber = `RX-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}-${Math.floor(100 + Math.random() * 900)}`;
+          } else {
+            throw rxErr;
+          }
+        }
+      }
       createdPrescriptionId = finalPrescriptionId;
     }
 
@@ -2278,8 +2356,8 @@ router.post('/orders/online', (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 0, 'AWAITING_VERIFICATION', ?, '{}')
     `).run(invoiceId, invoiceNumber, orderId, customerName, customerPhone, customerEmail, deliveryAddress, subtotalPaise, taxPaise, totalPayablePaise, paymentMethod);
 
-    // Enqueue 58mm thermal print job
-    enqueuePrintJob(orderId, tokenNumber, 'TOKEN');
+    // Note: Online orders are held in 'AWAITING_VERIFICATION' until approved by shop owner.
+    // The print job will be enqueued upon payment acceptance.
 
     return {
       orderId,
@@ -2571,7 +2649,7 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), (
   });
 });
 
-router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:manage'), (req, res) => {
+router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:manage'), async (req, res) => {
   const { status, paymentStatus, reasonOrNotes } = req.body;
   const orderId = req.params.id;
 
@@ -2595,6 +2673,10 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
       `).run(orderId);
       db.prepare("UPDATE payments SET status = 'VERIFIED', notes = COALESCE(notes, '') || ' | Verified by Staff' WHERE order_id = ?").run(orderId);
       db.prepare("UPDATE invoices SET payment_status = 'VERIFIED', amount_paid_paise = grand_total_paise WHERE order_id = ?").run(orderId);
+      const approvedOrd = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+      if (approvedOrd) {
+        enqueuePrintJob(approvedOrd.id, approvedOrd.token_number, 'BILL');
+      }
     } else if (paymentStatus === 'REJECTED') {
       db.prepare(`
         UPDATE orders SET
@@ -2612,7 +2694,7 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
     try {
       const ord = db.prepare('SELECT order_number FROM orders WHERE id = ?').get(orderId);
       if (ord && ord.order_number) {
-        pushOrderPaymentStatusToCloud(ord.order_number, paymentStatus, reasonOrNotes).catch(() => {});
+        await pushOrderPaymentStatusToCloud(ord.order_number, paymentStatus, reasonOrNotes);
       }
     } catch (_) {}
   }
@@ -2926,6 +3008,7 @@ router.post('/payments/:id/verify', authenticateToken, requirePermission('paymen
     logAudit(req.user.id, req.user.email, action === 'VERIFY' ? 'PAYMENT_VERIFIED' : 'PAYMENT_REJECTED', 'PAYMENT', paymentId, result, req);
     res.json({ success: true, ...result });
   } catch (err) {
+    console.error('[POS Checkout Error]:', err.message);
     res.status(400).json({ error: err.message });
   }
 });

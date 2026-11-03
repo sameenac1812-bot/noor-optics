@@ -122,8 +122,8 @@ async function runAllTests() {
     const initialQty = variant.available_qty;
     const qtyToBuy = 2;
 
-    const testOrderId = 'test-ord-pos-' + Date.now();
-    const testOrderNum = 'TEST-POS-' + Math.floor(1000 + Math.random() * 9000);
+    const testOrderId = 'test-ord-pos-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    const testOrderNum = 'TEST-POS-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
     const subtotalPaise = variant.selling_price_paise * qtyToBuy;
     const taxPaise = Math.round(subtotalPaise * 0.18 / 1.18);
 

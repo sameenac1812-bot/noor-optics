@@ -132,17 +132,53 @@ if (Test-Path $ConfigFile) {
 
 # Auto-Detect POS Printer
 try {
-    $installed = @()
-    try { $installed += @(Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name) } catch {}
-    if ($installed.Count -eq 0) { try { $installed += @(Get-Printer | Select-Object -ExpandProperty Name) } catch {} }
+    $allPrinters = @()
+    try { $allPrinters += @(Get-CimInstance Win32_Printer -ErrorAction SilentlyContinue) } catch {}
+    if ($allPrinters.Count -eq 0) { try { $allPrinters += @(Get-Printer -ErrorAction SilentlyContinue) } catch {} }
 
-    if ($installed -notcontains $Config.printerName) {
-        $autoMatch = $installed | Where-Object { $_ -match "POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS" } | Select-Object -First 1
+    $installedNames = @($allPrinters | Select-Object -ExpandProperty Name)
+
+    Write-Host ""
+    Write-Host "=======================================================" -ForegroundColor Cyan
+    Write-Host "[Printer Discovery] Scanning Windows Printers..." -ForegroundColor Cyan
+    $idx = 1
+    foreach ($p in $installedNames) {
+        $isVirt = $p -match 'PDF|OneNote|Fax|XPS|Root Print Queue|Document Writer'
+        $tag = if ($isVirt) { " (Virtual)" } else { "" }
+        Write-Host "  $idx. $p$tag"
+        $idx++
+    }
+
+    $physical = $installedNames | Where-Object { $_ -notmatch 'PDF|OneNote|Fax|XPS|Root Print Queue|Document Writer' }
+
+    if ($installedNames -contains $Config.printerName) {
+        Write-Host "[Printer Discovery] Active Target: '$($Config.printerName)' (Configured)" -ForegroundColor Green
+    } else {
+        $autoMatch = $physical | Where-Object { 
+            $_ -match "POS" -or $_ -match "80" -or $_ -match "58" -or $_ -match "Thermal" -or 
+            $_ -match "Receipt" -or $_ -match "XP" -or $_ -match "RP" -or $_ -match "Text Only" -or 
+            $_ -match "Generic" -or $_ -match "Everycom" -or $_ -match "TVS" -or $_ -match "Epson" -or 
+            $_ -match "Citizen" -or $_ -match "Star" -or $_ -match "HPRT" -or $_ -match "ZJ" -or 
+            $_ -match "Xprinter" -or $_ -match "Rongta" -or $_ -match "Gprinter" -or $_ -match "Black Copper" -or 
+            $_ -match "Bixolon" -or $_ -match "Barcode"
+        } | Select-Object -First 1
+
         if ($autoMatch) {
             Write-Host "[Auto-Detect] Switched printer to connected POS device: '$autoMatch'" -ForegroundColor Green
             $Config.printerName = $autoMatch
+        } else {
+            $defaultPrinter = (Get-CimInstance Win32_Printer -Filter "Default = TRUE" -ErrorAction SilentlyContinue).Name
+            if ($defaultPrinter -and $defaultPrinter -notmatch 'PDF|OneNote|Fax|XPS|Root Print Queue|Document Writer') {
+                Write-Host "[Auto-Detect] Using Windows Default Printer: '$defaultPrinter'" -ForegroundColor Green
+                $Config.printerName = $defaultPrinter
+            } elseif ($physical.Count -gt 0) {
+                Write-Host "[Auto-Detect] Using physical printer: '$($physical[0])'" -ForegroundColor Green
+                $Config.printerName = $physical[0]
+            }
         }
     }
+    Write-Host "=======================================================" -ForegroundColor Cyan
+    Write-Host ""
 } catch {}
 
 # Load Print History
@@ -154,35 +190,11 @@ if (Test-Path $HistoryFile) {
     } catch {}
 }
 
-# Auto-detect printer if configured printer is not found
-try {
-    $installed = Get-Printer | Select-Object -ExpandProperty Name
-    if ($installed -notcontains $Config.printerName) {
-        $auto = $installed | Where-Object { $_ -match 'POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS' } | Select-Object -First 1
-        if ($auto) {
-            Write-Host "[Auto-Detect] Target '$($Config.printerName)' not found. Automatically connected to: '$auto'" -ForegroundColor Yellow
-            $Config.printerName = $auto
-        }
-    }
-} catch {}
-
 function Save-History {
     try {
         $History | ConvertTo-Json -Depth 4 | Set-Content $HistoryFile -Encoding UTF8
     } catch {}
 }
-
-# Auto-detect printer if configured printer is not found
-try {
-    $installed = Get-Printer | Select-Object -ExpandProperty Name
-    if ($installed -notcontains $Config.printerName) {
-        $auto = $installed | Where-Object { $_ -match 'POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS' } | Select-Object -First 1
-        if ($auto) {
-            Write-Host "[Auto-Detect] Target '$($Config.printerName)' not found. Automatically connected to: '$auto'" -ForegroundColor Yellow
-            $Config.printerName = $auto
-        }
-    }
-} catch {}
 
 function Write-DaemonLog($msg, $level = "INFO") {
     $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
@@ -194,18 +206,6 @@ function Write-DaemonLog($msg, $level = "INFO") {
         Add-Content -Path $logPath -Value $line -Encoding UTF8
     } catch {}
 }
-
-# Auto-detect printer if configured printer is not found
-try {
-    $installed = Get-Printer | Select-Object -ExpandProperty Name
-    if ($installed -notcontains $Config.printerName) {
-        $auto = $installed | Where-Object { $_ -match 'POS|Thermal|Receipt|58|80|XP|Text Only|Generic|RP|Everycom|TVS' } | Select-Object -First 1
-        if ($auto) {
-            Write-Host "[Auto-Detect] Target '$($Config.printerName)' not found. Automatically connected to: '$auto'" -ForegroundColor Yellow
-            $Config.printerName = $auto
-        }
-    }
-} catch {}
 
 Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue
 
@@ -283,7 +283,7 @@ if (Test-Path $qrCoderDll) {
 
 function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$price) {
     try {
-        # 1. Generate 2D QR Code Bitmap with Solid Finders and 2x2 Dotted Modules
+        # 1. Generate 2D QR Code Bitmap with Solid Finders and 3x3 Dotted Modules
         $qrBmp = $null
         $dll = Join-Path $ScriptDir "assets\QRCoder.dll"
         if (Test-Path $dll) {
@@ -294,24 +294,47 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
                 $gen = New-Object QRCoder.QRCodeGenerator
                 $data = $gen.CreateQrCode($sku, [QRCoder.QRCodeGenerator+ECCLevel]::M)
                 $matrix = $data.ModuleMatrix
-                $qrModCount = $matrix.Count
-                $qrQuiet = 4
-                $qrScale = 4
-                $totalMods = $qrModCount + ($qrQuiet * 2)
+                $rawCount = $matrix.Count # 29
+                $quietTrim = 4
+                $coreSize = $rawCount - ($quietTrim * 2) # 21 data modules
+
+                # Clean 2-module quiet zone around data core
+                $targetQuiet = 2
+                $totalMods = $coreSize + ($targetQuiet * 2) # 25
+                $qrScale = 4 # 25 * 4 = 100 pixels (~12.5mm)
                 $qrBmpW = $totalMods * $qrScale
+
                 $customQrBmp = New-Object System.Drawing.Bitmap($qrBmpW, $qrBmpW)
                 $gQr = [System.Drawing.Graphics]::FromImage($customQrBmp)
                 $gQr.Clear([System.Drawing.Color]::White)
                 $brushB = [System.Drawing.Brushes]::Black
 
                 for ($my = 0; $my -lt $totalMods; $my++) {
-                    $ay = $my - $qrQuiet
+                    $ay = $my - $targetQuiet # 0..20 core
                     for ($mx = 0; $mx -lt $totalMods; $mx++) {
-                        $ax = $mx - $qrQuiet
-                        $isBlack = ($ax -ge 0 -and $ax -lt $qrModCount -and $ay -ge 0 -and $ay -lt $qrModCount) -and $matrix[$ay][$ax]
+                        $ax = $mx - $targetQuiet # 0..20 core
+                        
+                        $isBlack = $false
+                        if ($ax -ge 0 -and $ax -lt $coreSize -and $ay -ge 0 -and $ay -lt $coreSize) {
+                            $isBlack = $matrix[$ay + $quietTrim][$ax + $quietTrim]
+                        }
+                        
                         if ($isBlack) {
-                            # Solid 4x4 module fill matching Image 2
-                            $gQr.FillRectangle($brushB, ($mx * $qrScale), ($my * $qrScale), $qrScale, $qrScale)
+                            # Corner position finder squares (7x7 in top-left, top-right, bottom-left)
+                            $isFinder = ($ax -lt 7 -and $ay -lt 7) -or `
+                                        ($ax -ge ($coreSize - 7) -and $ay -lt 7) -or `
+                                        ($ax -lt 7 -and $ay -ge ($coreSize - 7))
+                            
+                            $px = $mx * $qrScale
+                            $py = $my * $qrScale
+                            
+                            if ($isFinder) {
+                                # Solid 4x4 for the 7x7 corner squares (bold, dark, solid black squares)
+                                $gQr.FillRectangle($brushB, $px, $py, $qrScale, $qrScale)
+                            } else {
+                                # 3x3 medium dots inside: bold, dark, vibrant, with 1px thermal isolation to prevent bleeding
+                                $gQr.FillRectangle($brushB, $px, $py, 3, 3)
+                            }
                         }
                     }
                 }
@@ -324,7 +347,7 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
         # Fallback to online API if QRCoder is unavailable
         if (-not $qrBmp) {
             try {
-                $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=87x87&margin=4&data=" + [System.Uri]::EscapeDataString($sku)
+                $qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=100x100&margin=2&data=" + [System.Uri]::EscapeDataString($sku)
                 $wc = New-Object System.Net.WebClient
                 $imgData = $wc.DownloadData($qrApiUrl)
                 $msImg = New-Object System.IO.MemoryStream($imgData, 0, $imgData.Length)
@@ -335,9 +358,9 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
 
         if (-not $qrBmp) { return @() }
 
-        # 2. Draw unified 384-dot wide label (100% aligned with POS-80 thermal printhead)
+        # 2. Draw unified 384-dot wide label (~1mm more compact)
         $width = 384
-        $height = 240
+        $height = 200
         $bmp = New-Object System.Drawing.Bitmap($width, $height)
         $g = [System.Drawing.Graphics]::FromImage($bmp)
         $g.Clear([System.Drawing.Color]::White)
@@ -347,29 +370,29 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
 
         # Center QR code
         $qrX = [Math]::Floor(($width - $qrBmp.Width) / 2)
-        $qrY = 2
+        $qrY = 4
         $g.DrawImage($qrBmp, $qrX, $qrY, $qrBmp.Width, $qrBmp.Height)
 
-        # Draw tiny, crisp optical tag typography (strictly centered under QR)
-        $fontSku = New-Object System.Drawing.Font("Arial", 7.5, [System.Drawing.FontStyle]::Bold)
-        $fontName = New-Object System.Drawing.Font("Arial", 6.5, [System.Drawing.FontStyle]::Regular)
-        $fontPrice = New-Object System.Drawing.Font("Arial", 7.0, [System.Drawing.FontStyle]::Bold)
+        # Typography: A little tiny bit bigger
+        $fontSku = New-Object System.Drawing.Font("Arial", 8.5, [System.Drawing.FontStyle]::Bold)
+        $fontName = New-Object System.Drawing.Font("Arial", 7.5, [System.Drawing.FontStyle]::Regular)
+        $fontPrice = New-Object System.Drawing.Font("Arial", 8.5, [System.Drawing.FontStyle]::Bold)
         $brush = [System.Drawing.Brushes]::Black
 
-        $curY = $qrY + $qrBmp.Height + 2
+        $curY = $qrY + $qrBmp.Height + 4
 
         # SKU
         $sizeSku = $g.MeasureString($sku, $fontSku)
         $xSku = [Math]::Max(0, [Math]::Floor(($width - $sizeSku.Width) / 2))
         $g.DrawString($sku, $fontSku, $brush, $xSku, $curY)
-        $curY += [Math]::Floor($sizeSku.Height) - 1
+        $curY += [Math]::Floor($sizeSku.Height)
 
         # Frame Name
         if ($name) {
             $sizeName = $g.MeasureString($name, $fontName)
             $xName = [Math]::Max(0, [Math]::Floor(($width - $sizeName.Width) / 2))
             $g.DrawString($name, $fontName, $brush, $xName, $curY)
-            $curY += [Math]::Floor($sizeName.Height) - 1
+            $curY += [Math]::Floor($sizeName.Height)
         }
 
         # Retail Price
@@ -377,14 +400,14 @@ function Generate-UnifiedStickerRaster([string]$sku, [string]$name, [string]$pri
             $sizePrice = $g.MeasureString($price, $fontPrice)
             $xPrice = [Math]::Max(0, [Math]::Floor(($width - $sizePrice.Width) / 2))
             $g.DrawString($price, $fontPrice, $brush, $xPrice, $curY)
-            $curY += [Math]::Floor($sizePrice.Height) + 2
+            $curY += [Math]::Floor($sizePrice.Height) + 3
         }
 
         $g.Dispose()
         $qrBmp.Dispose()
 
-        # Crop to actual content height
-        $finalHeight = [Math]::Min($height, [Math]::Max(100, $curY))
+        # Crop to actual content height (~1mm more compact)
+        $finalHeight = [Math]::Min($height, [Math]::Max(90, $curY))
         $cropRect = New-Object System.Drawing.Rectangle(0, 0, $width, $finalHeight)
         $croppedBmp = $bmp.Clone($cropRect, $bmp.PixelFormat)
         $bmp.Dispose()
@@ -440,7 +463,7 @@ function Format-StickerBytes($rawItems) {
             }
 
             # Minimal line feed and partial cut
-            $allBw.Write([byte[]]@(0x1B, 0x64, 0x02)) # Feed 2 lines
+            $allBw.Write([byte[]]@(0x1B, 0x64, 0x01)) # Feed 1 line
             $allBw.Write([byte[]]@(0x1D, 0x56, 0x42, 0x00)) # Partial cut
         }
     }
@@ -687,13 +710,19 @@ function Format-ReceiptBytes($order) {
     $addRaw = & $getRxVal @('addition', 'add')
     $pdVal  = & $getRxVal @('ipd_distance', 'ipdDistance', 'pd')
     $docVal = & $getRxVal @('checked_by', 'checkedBy', 'rx_checked_by')
+    $prescriberVal = & $getRxVal @('prescriber_details', 'prescriberDetails', 'clinic')
+    $rxNotesVal = & $getRxVal @('notes', 'rx_notes')
 
     $hasAnyRx = ($odSphV -ne $null) -or ($odCylV -ne $null) -or ($odAxV -ne $null) -or `
                 ($osSphV -ne $null) -or ($osCylV -ne $null) -or ($osAxV -ne $null) -or `
                 ($addRaw -ne $null) -or ($pdVal -ne $null)
 
+    $pref = [string]$order.prescription_pref
+    $isZeroPower = $pref -match "zero|plano|blue|screen"
+    $isCallOptometrist = $pref -match "call|optometrist|consult"
+    $isManualRx = $pref -match "enter|manual"
     $rxMentioned = ($order.prescription_id) -or ($order.prescription_number) -or ($rx.prescription_number) -or `
-                   ($order.prescription_pref -and $order.prescription_pref -match "rx")
+                   ($pref -match "rx") -or $isManualRx
 
     if ($hasAnyRx) {
         $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
@@ -707,6 +736,7 @@ function Format-ReceiptBytes($order) {
             $str = [string]$val
             $num = 0.0
             if ([double]::TryParse($str, [ref]$num)) {
+                if ($num -eq 0) { return "  0.00" }
                 return "{0:+0.00;-0.00; 0.00}" -f $num
             }
             return "{0,6}" -f $str
@@ -730,13 +760,40 @@ function Format-ReceiptBytes($order) {
         if ($docVal) {
             $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Optometrist: $docVal`n"))
         }
+        if ($prescriberVal) {
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Prescriber:  $prescriberVal`n"))
+        }
+        if ($rxNotesVal -and $rxNotesVal -notmatch "in-store") {
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Rx Notes:    $rxNotesVal`n"))
+        }
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
-    } elseif ($rxMentioned) {
+    } elseif ($isZeroPower) {
+        # Website Case 1 - Choice 3: Zero Power Blue-Cut Lenses
         $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
         $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
         $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("PRESCRIPTION NOT PROVIDED`n"))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("ZERO-POWER (PLANO) LENSES`n"))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Blue-Cut Anti-Glare Computer Vision`n"))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
+    } elseif ($isCallOptometrist) {
+        # Website Case 1 - Choice 2: Call Optometrist Required
+        $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+        $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
+        $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OPTOMETRIST CALL REQUIRED`n"))
+        if ($order.customer_phone) {
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Call Client: $($order.customer_phone)`n"))
+        }
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
+    } elseif ($rxMentioned) {
+        # Website Case 1 - Choice 1: Manual prescription not filled or awaiting upload
+        $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+        $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
+        $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("PRESCRIPTION PENDING VERIFICATION`n"))
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
     }
 
@@ -812,177 +869,144 @@ Write-DaemonLog "Mode: Single Customer Bill"
 Write-DaemonLog "======================================================="
 
 
-# ── Cloud Order Poller (Direct Background Supabase Sync) ─────────────────────
-function Poll-CloudOrders {
-    if (-not $Config.supabaseUrl -or -not $Config.supabaseAnonKey) { return }
+# -- LIVE PRINTING CONTROLLER (Dual-Channel Direct + Cloud Queue) ----------------
+$daemonStartTime = [DateTime]::UtcNow
+$printedFile = Join-Path $ScriptDir ".printed_orders.json"
+$livePrintedOrders = [System.Collections.Generic.HashSet[string]]::new()
+$processedJobIds = [System.Collections.Generic.HashSet[string]]::new()
 
+if (Test-Path $printedFile) {
     try {
-        $headers = @{
-            "apikey" = $Config.supabaseAnonKey
-            "Authorization" = "Bearer $($Config.supabaseAnonKey)"
-        }
-        $url = "$($Config.supabaseUrl)/rest/v1/orders?select=*&order=created_at.desc&limit=10"
-        $orders = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 5 -ErrorAction SilentlyContinue
-
-        if ($orders -and $orders.Count -gt 0) {
-            $nowUtc = [DateTime]::UtcNow
-            $freshnessMinutes = [int]$Config.orderFreshnessMinutes
-            $changed = $false
-
-            foreach ($o in $orders) {
-                $ref = if ($o.order_ref) { [string]$o.order_ref } elseif ($o.order_number) { [string]$o.order_number } else { [string]$o.id }
-                if (-not $ref -or $ref -match "TEST") { continue }
-
-                $refs = @($o.order_ref, $o.order_number, [string]$o.id) | Where-Object { $_ -ne $null -and $_ -ne "" }
-                $alreadyPrinted = $false
-                foreach ($r in $refs) {
-                    if ($History.ContainsKey($r) -and $History[$r] -ne "SKIPPED_STALE") {
-                        $alreadyPrinted = $true
-                        break
-                    }
-                }
-                if ($alreadyPrinted) { continue }
-
-                # Stale historical check: don't print old orders on reboot
-                if ($o.created_at) {
-                    try {
-                        $orderTime = [DateTime]::Parse($o.created_at).ToUniversalTime()
-                        $ageMinutes = ($nowUtc - $orderTime).TotalMinutes
-                        if ($ageMinutes -gt $freshnessMinutes) {
-                            foreach ($r in $refs) { $History[$r] = "SKIPPED_STALE" }
-                            $changed = $true
-                            continue
-                        }
-                    } catch {}
-                }
-
-                Write-DaemonLog "[Cloud Sync] Detected newly confirmed cloud order #$ref! Auto-printing..."
-                if (-not $o.channel) {
-                    $detectedChan = if ($ref -match "-POS-") { "POS" } else { "WEBSITE" }
-                    $o | Add-Member -NotePropertyName "channel" -NotePropertyValue $detectedChan -Force
-                }
-
-                # Extract Rx from items or query Supabase prescriptions table by phone
-                if (-not $o.prescription -and $o.items) {
-                    $rawIts = $o.items
-                    if ($rawIts -is [string]) { try { $rawIts = $rawIts | ConvertFrom-Json } catch {} }
-                    if ($rawIts -and $rawIts.Count -gt 0) {
-                        foreach ($it in $rawIts) {
-                            if ($it.prescription) { $o | Add-Member -NotePropertyName "prescription" -NotePropertyValue $it.prescription -Force; break }
-                            elseif ($it.rx) { $o | Add-Member -NotePropertyName "prescription" -NotePropertyValue $it.rx -Force; break }
-                        }
-                    }
-                }
-                if (-not $o.prescription -and $o.customer_phone) {
-                    try {
-                        $cPhoneClean = [string]$o.customer_phone
-                        $rxUrl = "$($Config.supabaseUrl)/rest/v1/prescriptions?client_phone=eq.$([System.Uri]::EscapeDataString($cPhoneClean.Trim()))&order=created_at.desc&limit=1"
-                        $rxData = Invoke-RestMethod -Uri $rxUrl -Headers $headers -Method Get -TimeoutSec 3 -ErrorAction SilentlyContinue
-                        if ($rxData -and $rxData.Count -gt 0) {
-                            $o | Add-Member -NotePropertyName "prescription" -NotePropertyValue $rxData[0] -Force
-                        }
-                    } catch {}
-                }
-
-                $bytes = Format-ReceiptBytes $o
-                $ok = Spool-Bytes $bytes "Bill-$ref"
-
-                if ($ok) {
-                    $nowIso = (Get-Date).ToString("o")
-                    foreach ($r in $refs) { $History[$r] = $nowIso }
-                    $changed = $true
-                    Write-DaemonLog "[Cloud Sync] SUCCESS: Printed order #$ref to $($Config.printerName)!" "INFO"
-                } else {
-                    Write-DaemonLog "[Cloud Sync] FAILED: Could not spool order #$ref" "ERROR"
+        $loaded = Get-Content $printedFile -Raw | ConvertFrom-Json
+        if ($loaded) {
+            foreach ($item in $loaded) {
+                if ($item) {
+                    $livePrintedOrders.Add([string]$item) | Out-Null
+                    $processedJobIds.Add([string]$item) | Out-Null
                 }
             }
-
-            if ($changed) { Save-History }
         }
-    } catch {
-        Write-DaemonLog "[Cloud Sync] Error: $_" "ERROR"
-    }
+    } catch {}
 }
 
-# ── Cloud Print Queue (Direct Background Sticker & Manual Print Jobs) ────────
+function Save-PrintedOrdersState {
+    try {
+        $all = @($livePrintedOrders) + @($processedJobIds) | Select-Object -Unique
+        if ($all.Count -gt 300) { $all = $all[-300..-1] }
+        $all | ConvertTo-Json | Set-Content $printedFile -Encoding UTF8 -Force
+    } catch {}
+}
+
+function Format-QrStickerBytes($it) {
+    return Format-StickerBytes @($it)
+}
+
 function Poll-CloudPrintQueue {
     if (-not $Config.supabaseUrl -or -not $Config.supabaseAnonKey) { return }
-
     try {
         $headers = @{
             "apikey" = $Config.supabaseAnonKey
-            "Authorization" = "Bearer $($Config.supabaseAnonKey)"
+            "Authorization" = "Bearer " + $Config.supabaseAnonKey
         }
-        $url = "$($Config.supabaseUrl)/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE"
-        $recs = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 5 -ErrorAction SilentlyContinue
-
-        if ($recs -and $recs.Count -gt 0 -and $recs[0].notes) {
-            $notesObj = $null
-            try { $notesObj = $recs[0].notes | ConvertFrom-Json } catch {}
-
-            if ($notesObj -and $notesObj.jobs -and $notesObj.jobs.Count -gt 0) {
-                $jobs = @($notesObj.jobs)
-                $remainingJobs = New-Object System.Collections.ArrayList
-                $changed = $false
-
-                foreach ($job in $jobs) {
+        $url = $Config.supabaseUrl + "/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE&select=notes"
+        $res = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 4 -ErrorAction SilentlyContinue
+        if ($res -and $res.Count -gt 0 -and $res[0].notes) {
+            $parsed = $res[0].notes | ConvertFrom-Json
+            if ($parsed -and $parsed.jobs) {
+                foreach ($job in $parsed.jobs) {
+                    if (-not $job -or -not $job.id) { continue }
                     $jobId = [string]$job.id
-                    if ($History.ContainsKey($jobId)) {
-                        continue
-                    }
+                    if ($processedJobIds.Contains($jobId)) { continue }
 
-                    Write-DaemonLog "[Cloud Print Queue] Processing job #$jobId (Type: $($job.type))..."
+                    # Mark processed immediately to prevent retry loops
+                    $processedJobIds.Add($jobId) | Out-Null
+                    Save-PrintedOrdersState
 
-                    $ok = $false
-                    if ($job.type -eq "qr_sticker" -and $job.items) {
-                        $rawItems = @($job.items)
-                        $bytes = Format-StickerBytes $rawItems
-                        $ok = Spool-Bytes $bytes "Sticker-$jobId"
-                    } elseif ($job.type -eq "receipt" -and $job.order) {
-                        $orderRef = $job.order.order_number
-                        if (-not $orderRef) { $orderRef = $job.order.order_ref }
-                        if (-not $orderRef) { $orderRef = $job.order.id }
-                        $bytes = Format-ReceiptBytes $job.order
-                        $ok = Spool-Bytes $bytes "Receipt-$jobId"
-                    }
-
-                    if ($ok) {
-                        $History[$jobId] = (Get-Date).ToString("o")
-                        $changed = $true
-                        Write-DaemonLog "[Cloud Print Queue] SUCCESS: Spooled job #$jobId to $($Config.printerName)!" "INFO"
-                    } else {
-                        Write-DaemonLog "[Cloud Print Queue] FAILED: Spool error on job #$jobId" "ERROR"
-                        $remainingJobs.Add($job) | Out-Null
+                    if ($job.type -eq "qr_sticker") {
+                        $items = if ($job.items) { $job.items } else { @($job) }
+                        foreach ($it in $items) {
+                            $copies = if ($it.copies) { [int]$it.copies } else { 1 }
+                            for ($c = 0; $c -lt $copies; $c++) {
+                                $skuLabel = if ($it.sku) { $it.sku } else { $it.name }
+                                Write-DaemonLog "[Cloud Queue] 🏷️ Printing QR Sticker for $skuLabel..." "INFO"
+                                try {
+                                    $bytes = Format-StickerBytes @($it)
+                                    if ($bytes -and $bytes.Length -gt 0) {
+                                        $spoolOk = Spool-Bytes $bytes "Sticker-$skuLabel"
+                                        if ($spoolOk) {
+                                            Write-DaemonLog "[Cloud Queue] ✅ Sticker $skuLabel printed to $($Config.printerName)!" "INFO"
+                                        } else {
+                                            Write-DaemonLog "[Cloud Queue] ❌ Spooling failed for sticker $skuLabel" "WARN"
+                                        }
+                                    }
+                                } catch {
+                                    Write-DaemonLog "[Cloud Queue] Error formatting sticker: $_" "WARN"
+                                }
+                            }
+                        }
+                    } elseif ($job.type -eq "receipt") {
+                        $order = if ($job.order) { $job.order } else { $job }
+                        $ref = if ($order.order_number) { [string]$order.order_number } else { [string]$order.order_ref }
+                        if ($ref -and -not $livePrintedOrders.Contains($ref)) {
+                            Write-DaemonLog "[Cloud Queue] 🖨️ Printing Bill #$ref..." "INFO"
+                            try {
+                                $bytes = Format-ReceiptBytes $order
+                                if ($bytes -and $bytes.Length -gt 0) {
+                                    $ok = Spool-Bytes $bytes "Bill-$ref"
+                                    if ($ok) {
+                                        $livePrintedOrders.Add($ref) | Out-Null
+                                        Save-PrintedOrdersState
+                                        Write-DaemonLog "[Cloud Queue] ✅ SUCCESS: Bill #$ref printed to $($Config.printerName)!" "INFO"
+                                    }
+                                }
+                            } catch {
+                                Write-DaemonLog "[Cloud Queue] Error printing bill: $_" "WARN"
+                            }
+                        }
                     }
                 }
-
-                # Clear processed jobs in Supabase
-                $patchUrl = "$($Config.supabaseUrl)/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE"
-                $patchHeaders = @{
-                    "apikey" = $Config.supabaseAnonKey
-                    "Authorization" = "Bearer $($Config.supabaseAnonKey)"
-                    "Content-Type" = "application/json"
-                    "Prefer" = "return=minimal"
-                }
-                $patchBody = @{
-                    id = "sys-print-queue-global"
-                    client_code = "SYS-PRINT-QUEUE"
-                    name = "System Print Queue"
-                    city = "Bengaluru"
-                    notes = (@{ jobs = $remainingJobs.ToArray() } | ConvertTo-Json -Compress)
-                } | ConvertTo-Json
-
-                Invoke-RestMethod -Uri $patchUrl -Headers $patchHeaders -Method Patch -Body $patchBody -TimeoutSec 5 -ErrorAction SilentlyContinue | Out-Null
-                if ($changed) { Save-History }
             }
         }
     } catch {
-        Write-DaemonLog "[Cloud Print Queue] Error: $_" "ERROR"
+        Write-DaemonLog "[Cloud Queue] Poll error: $_" "WARN"
     }
 }
 
-Write-DaemonLog "[Cloud Sync] Autonomous background polling ACTIVE (Checking Supabase every 4s)"
-Write-DaemonLog "[Cloud Sync] You DO NOT need to keep the admin page open for orders to print!"
+function Poll-LiveCloudOrders {
+    if (-not $Config.supabaseUrl -or -not $Config.supabaseAnonKey) { return }
+    try {
+        $headers = @{
+            "apikey" = $Config.supabaseAnonKey
+            "Authorization" = "Bearer " + $Config.supabaseAnonKey
+        }
+        $since = [DateTime]::UtcNow.AddMinutes(-30).ToString("yyyy-MM-ddTHH:mm:ssZ")
+        $url = $Config.supabaseUrl + "/rest/v1/orders?status=eq.confirmed&created_at=gte." + $since + "&order=created_at.asc&limit=10"
+        $orders = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 5 -ErrorAction SilentlyContinue
+        if ($orders -and $orders.Count -gt 0) {
+            foreach ($ord in $orders) {
+                $ref = if ($ord.order_number) { [string]$ord.order_number } else { [string]$ord.order_ref }
+                if (-not $ref -or $livePrintedOrders.Contains($ref)) { continue }
+
+                # Wait for staff approval if website UPI order
+                $isWeb = ($ord.source -eq "website" -or $ord.channel -eq "WEBSITE")
+                $isAwaiting = ($ord.payment_status -eq "AWAITING_VERIFICATION" -or $ord.status -eq "PENDING_VERIFICATION")
+                if ($isWeb -and $isAwaiting) { continue }
+
+                Write-DaemonLog "[Live Cloud] Printing Live Order #$ref..." "INFO"
+                $bytes = Format-ReceiptBytes $ord
+                $ok = Spool-Bytes $bytes "Bill-$ref"
+                if ($ok) {
+                    $livePrintedOrders.Add($ref) | Out-Null
+                    Save-PrintedOrdersState
+                    Write-DaemonLog "[Live Cloud] SUCCESS: Bill #$ref printed to $($Config.printerName)!" "INFO"
+                }
+            }
+        }
+    } catch {}
+}
+
+Write-DaemonLog "[Cloud Sync] Live order monitoring ACTIVE (Checking new orders created after startup)"
+Write-DaemonLog "[Cloud Sync] Mode: LIVE-ONLY (Zero Backlog Replay, Instant Print)"
 
 $running = $true
 $asyncResult = $listener.BeginGetContext($null, $null)
@@ -1141,12 +1165,11 @@ while ($running) {
             $response.Close()
         }
 
-        # 2. Autonomous Cloud Order Polling (Every 4 seconds)
-        # Directly fetches newly placed website orders from Supabase without needing any browser!
+        # 2. Live Cloud Order Check (Every 3 seconds for new orders created after startup)
         $nowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         if ($nowEpoch - $lastCloudPoll -ge 3) {
             $lastCloudPoll = $nowEpoch
-            Poll-CloudOrders
+            Poll-LiveCloudOrders
             Poll-CloudPrintQueue
         }
 

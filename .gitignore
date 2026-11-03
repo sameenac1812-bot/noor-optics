@@ -20,3 +20,5 @@ scratch/
 .env*
 pos-daemon/logs/
 pos-daemon/.printed_orders.json
+server/database.sqlite
+

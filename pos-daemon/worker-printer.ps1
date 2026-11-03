@@ -131,17 +131,28 @@ if ($installed.Count -eq 0) {
 
 $resolvedPrinter = $PrinterName
 if ($installed.Count -gt 0 -and $installed -notcontains $PrinterName) {
-    $match = $installed | Where-Object { 
+    # Exclude virtual PDF / Document / OneNote printers
+    $physical = $installed | Where-Object { $_ -notmatch 'PDF|OneNote|Fax|XPS|Root Print Queue|Document Writer' }
+    
+    # Priority match for thermal / POS / receipt printer drivers
+    $match = $physical | Where-Object { 
         $_ -match "POS" -or $_ -match "80" -or $_ -match "58" -or $_ -match "Thermal" -or 
         $_ -match "Receipt" -or $_ -match "XP" -or $_ -match "RP" -or $_ -match "Generic" -or 
-        $_ -match "Printer" -or $_ -match "TM-" -or $_ -match "TVS" -or $_ -match "Everycom"
+        $_ -match "Text Only" -or $_ -match "TM-" -or $_ -match "TVS" -or $_ -match "Everycom" -or
+        $_ -match "Epson" -or $_ -match "Citizen" -or $_ -match "Star" -or $_ -match "HPRT" -or
+        $_ -match "ZJ" -or $_ -match "Xprinter" -or $_ -match "Rongta" -or $_ -match "Gprinter" -or
+        $_ -match "Black Copper" -or $_ -match "Bixolon" -or $_ -match "Barcode"
     } | Select-Object -First 1
 
     if ($match) {
         $resolvedPrinter = $match
     } else {
         $defaultPrinter = (Get-CimInstance -ClassName Win32_Printer -Filter "Default = TRUE" -ErrorAction SilentlyContinue).Name
-        if ($defaultPrinter) { $resolvedPrinter = $defaultPrinter }
+        if ($defaultPrinter -and $defaultPrinter -notmatch 'PDF|OneNote|Fax|XPS|Root Print Queue|Document Writer') {
+            $resolvedPrinter = $defaultPrinter
+        } elseif ($physical.Count -gt 0) {
+            $resolvedPrinter = $physical[0]
+        }
     }
 }
 

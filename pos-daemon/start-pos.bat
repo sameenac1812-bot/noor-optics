@@ -4,12 +4,18 @@ title Noor Optics - Portable POS Print Daemon
 color 0B
 
 echo ======================================================================
-echo           NOOR OPTICS - PORTABLE POS PRINT DAEMON v2.4.0
-echo            2.5-Inch Thermal Receipt Auto-Printing System
+echo           NOOR OPTICS - INSTANT LIVE POS PRINT DAEMON v3.0.0
+echo            LIVE PRINTING ONLY (Zero Backlog / Instant Print)
 echo ======================================================================
 echo.
 
 cd /d "%~dp0"
+
+REM 0. Optional Printer Name Argument (e.g. start-pos.bat "POS-80C")
+if not "%~1"=="" (
+    echo [CONFIG] Setting target printer to: %~1
+    powershell -NoProfile -Command "$cfg = Get-Content 'config.json' -Raw | ConvertFrom-Json; $cfg.printerName = '%~1'; $cfg | ConvertTo-Json -Depth 4 | Set-Content 'config.json' -Encoding UTF8"
+)
 
 REM 1. Cleanly terminate any stale process holding port 5001
 powershell -NoProfile -Command "Get-Process -Id (Get-NetTCPConnection -LocalPort 5001 -ErrorAction SilentlyContinue).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" 2>nul

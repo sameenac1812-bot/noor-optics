@@ -1179,6 +1179,8 @@
         prescription_pref: rxChoice,
         prescription: prescriptionData,
         channel: 'WEBSITE',
+        source: 'website',
+        idempotency_key: `idem-web-${orderId}-${Date.now()}`,
         payment_method: payChoice,
         subtotal: subtotal,
         shipping_fee: shipping,
@@ -1191,6 +1193,8 @@
       // 1. Submit to Unified Backend and Cloud Supabase in parallel for lightning-fast checkout
       const onlinePayload = {
         channel: 'WEBSITE',
+        source: 'website',
+        idempotency_key: orderData.idempotency_key,
         customerName: name,
         customerAge: age,
         customerEmail: email,
@@ -1236,10 +1240,10 @@
         console.warn('Backend unavailable, falling back to direct cloud submission:', backendErr);
       }
 
-      // 2. Fallback ONLY if backend was unreachable (prevents duplicate orders in database)
+      // 2. Direct Supabase cloud submission using dedicated pipeline
       if (!orderCreated && window.NoorSupabase && window.NoorSupabase.isConfigured()) {
         orderData.order_ref = authoritativeOrderId;
-        await window.NoorSupabase.submitOrder(orderData).catch(e => console.warn('Supabase fallback note:', e));
+        await window.NoorSupabase.createWebsiteOrder(orderData).catch(e => console.warn('Supabase website pipeline note:', e));
       }
 
       // Render clean, luxury customer-facing receipt
@@ -1829,31 +1833,47 @@
     try {
       let cloudProducts = [];
 
-      // 1. Fetch from server SQLite API
+      // Helper to identify and purge obsolete dummy Scandinavian template products
+      const isLegacyDummyMock = (p) => {
+        if (!p) return true;
+        const id = String(p.id || '').toLowerCase().trim();
+        const name = String(p.name || '').toLowerCase().trim();
+        if (/^noor-(0[1-9]|1[0-8])$/.test(id)) return true;
+        if (/helsinki|berlin hex|zurich titanium|milan aureum|stockholm noir|copenhagen round|oslo crystal|kyoto havana|reykjavik|vienna silhouette|amber arch|tokyo steel|gothenburg|malm|arctic sun|nord fjord|bergen dual|bordeaux edge/i.test(name)) return true;
+        return false;
+      };
+
+      // 1. Fetch from server SQLite API (authoritative 55 luxury frames: Burberry, Cartier, D&G...)
       try {
         const resp = await fetch('/api/products');
         if (resp.ok) {
           const data = await resp.json();
           if (Array.isArray(data)) {
-            cloudProducts = data;
+            cloudProducts = data.filter(p => !isLegacyDummyMock(p));
           }
         }
       } catch (apiErr) {
         console.warn('Live API fetch note:', apiErr.message);
       }
 
+      // Fallback to static EYEWEAR_CATALOG if API is offline
+      if (cloudProducts.length === 0 && Array.isArray(window.EYEWEAR_CATALOG) && window.EYEWEAR_CATALOG.length > 0) {
+        cloudProducts = window.EYEWEAR_CATALOG.filter(p => !isLegacyDummyMock(p));
+      }
+
       // 2. Fetch directly from Supabase Cloud (SYS-CATALOG-PRODUCTS) for 0ms lag
       let supabaseProducts = [];
       if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
         try {
-          supabaseProducts = await window.NoorSupabase.fetchCatalog() || [];
+          const rawSupabase = await window.NoorSupabase.fetchCatalog() || [];
+          supabaseProducts = (Array.isArray(rawSupabase) ? rawSupabase : []).filter(p => !isLegacyDummyMock(p));
         } catch (_) {}
       }
 
-      // Merge Supabase products (Supabase contains live cloud updates)
+      // Merge Supabase products (strictly only genuine non-dummy items)
       if (Array.isArray(supabaseProducts) && supabaseProducts.length > 0) {
         supabaseProducts.forEach(sp => {
-          if (!sp || !sp.name) return;
+          if (!sp || !sp.name || isLegacyDummyMock(sp)) return;
           const spSku = (sp.sku && sp.sku.trim() && sp.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? sp.sku.trim().toUpperCase() : null;
           const spName = sp.name.trim().toLowerCase();
           const matchIdx = cloudProducts.findIndex(p => p.id === sp.id || (p.sku && spSku && p.sku.toUpperCase() === spSku) || (p.name && p.name.trim().toLowerCase() === spName));
@@ -1891,7 +1911,7 @@
         if (Array.isArray(localCached)) {
           const reconciledLocal = [];
           localCached.forEach(lc => {
-            if (!lc || !lc.name) return;
+            if (!lc || !lc.name || isLegacyDummyMock(lc)) return;
             const lSku = (lc.sku && lc.sku.trim() && lc.sku.trim().toUpperCase() !== 'NOOR-FRAME') ? lc.sku.trim().toUpperCase() : null;
             const lName = lc.name.trim().toLowerCase();
             const matchIdx = cloudProducts.findIndex(p => p.id === lc.id || (p.sku && lSku && p.sku.toUpperCase() === lSku) || (p.name && p.name.trim().toLowerCase() === lName));
@@ -1925,7 +1945,7 @@
 
       state.catalog = cloudProducts
         .filter(p => {
-          if (!p) return false;
+          if (!p || isLegacyDummyMock(p)) return false;
           // If product came directly from live /api/products, it is active in database
           if (p.selling_price_paise !== undefined || p.variants !== undefined) return true;
           const pId = p.id ? String(p.id).toLowerCase().trim() : '';
