@@ -3237,6 +3237,121 @@ router.get('/finance/pl', authenticateToken, requirePermission('finance:view'), 
 // 13. INVOICES & PDF DOWNLOAD
 // ==============================================================================
 
+function ensureInvoiceForOrder(orderIdOrNumber) {
+  let invoice = db.prepare('SELECT * FROM invoices WHERE order_id = ? OR invoice_number = ? OR id = ?').get(orderIdOrNumber, orderIdOrNumber, orderIdOrNumber);
+  let order = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ?').get(orderIdOrNumber, orderIdOrNumber);
+
+  if (!order && invoice && invoice.order_id) {
+    order = db.prepare('SELECT * FROM orders WHERE id = ?').get(invoice.order_id);
+  }
+
+  if (!invoice && order) {
+    const invNumber = 'INV-' + (order.order_number ? String(order.order_number).replace(/^(NOOR-POS-|ORD-|NOOR-)/, '') : order.id);
+    const invId = 'inv-' + order.id;
+    const payment = db.prepare('SELECT payment_method FROM payments WHERE order_id = ? ORDER BY created_at DESC LIMIT 1').get(order.id);
+    const paymentMethod = payment ? payment.payment_method : (order.channel === 'POS' ? 'CASH / UPI' : 'RAZORPAY');
+
+    try {
+      db.prepare(`
+        INSERT OR IGNORE INTO invoices (
+          id, invoice_number, order_id, customer_name, customer_phone, customer_email,
+          customer_address, subtotal_paise, discount_paise, tax_paise, grand_total_paise,
+          amount_paid_paise, payment_status, payment_method, snapshot_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        invId,
+        invNumber,
+        order.id,
+        order.customer_name || 'Walk-in Client',
+        order.customer_phone || '',
+        order.customer_email || '',
+        order.delivery_address || '',
+        order.subtotal_paise || order.total_payable_paise || 0,
+        order.discount_paise || 0,
+        order.tax_paise || Math.round((order.total_payable_paise || 0) * 0.18 / 1.18),
+        order.total_payable_paise || 0,
+        order.amount_paid_paise || (order.payment_status === 'PAID' ? order.total_payable_paise : 0),
+        order.payment_status || 'PAID',
+        paymentMethod,
+        JSON.stringify({ order_number: order.order_number, channel: order.channel }),
+        order.created_at || new Date().toISOString()
+      );
+      invoice = db.prepare('SELECT * FROM invoices WHERE id = ? OR order_id = ?').get(invId, order.id);
+    } catch (_) {
+      invoice = {
+        id: invId,
+        invoice_number: invNumber,
+        order_id: order.id,
+        customer_name: order.customer_name || 'Walk-in Client',
+        customer_phone: order.customer_phone || '',
+        customer_email: order.customer_email || '',
+        customer_address: order.delivery_address || '',
+        subtotal_paise: order.subtotal_paise || order.total_payable_paise || 0,
+        discount_paise: order.discount_paise || 0,
+        tax_paise: order.tax_paise || Math.round((order.total_payable_paise || 0) * 0.18 / 1.18),
+        grand_total_paise: order.total_payable_paise || 0,
+        amount_paid_paise: order.amount_paid_paise || (order.payment_status === 'PAID' ? order.total_payable_paise : 0),
+        payment_status: order.payment_status || 'PAID',
+        payment_method: paymentMethod,
+        created_at: order.created_at || new Date().toISOString()
+      };
+    }
+
+    // Persist invoice items if needed
+    if (invoice && invoice.id) {
+      const oItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+      if (oItems && oItems.length > 0) {
+        for (const it of oItems) {
+          try {
+            db.prepare(`
+              INSERT OR IGNORE INTO invoice_items (id, invoice_id, product_name, sku, quantity, unit_price_paise, tax_rate, subtotal_paise)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run('inv-it-' + it.id, invoice.id, it.product_name + (it.variant_name && it.variant_name !== 'Default' ? ' (' + it.variant_name + ')' : ''), it.sku || 'FRAME', it.quantity || 1, it.unit_price_paise || 0, 18.0, it.subtotal_paise || (it.unit_price_paise * it.quantity));
+          } catch (_) {}
+        }
+      }
+    }
+  }
+
+  // Get items
+  let items = invoice && invoice.id ? db.prepare('SELECT * FROM invoice_items WHERE invoice_id = ?').all(invoice.id) : [];
+  if ((!items || items.length === 0) && order) {
+    const oItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+    items = (oItems && oItems.length > 0) ? oItems.map(it => ({
+      id: 'inv-item-' + it.id,
+      invoice_id: invoice ? invoice.id : 'inv-' + order.id,
+      product_name: it.product_name + (it.variant_name && it.variant_name !== 'Default' ? ` (${it.variant_name})` : ''),
+      sku: it.sku || 'FRAME',
+      quantity: it.quantity || 1,
+      unit_price_paise: it.unit_price_paise || 0,
+      subtotal_paise: it.subtotal_paise || ((it.unit_price_paise || 0) * (it.quantity || 1)),
+      tax_rate: 18.0
+    })) : [{
+      id: 'inv-item-1',
+      invoice_id: invoice ? invoice.id : 'inv-' + order.id,
+      product_name: 'Optical Eyewear & Frame',
+      sku: 'FRAME',
+      quantity: 1,
+      unit_price_paise: order.subtotal_paise || order.total_payable_paise || 0,
+      subtotal_paise: order.subtotal_paise || order.total_payable_paise || 0,
+      tax_rate: 18.0
+    }];
+  }
+
+  // Get prescription
+  let prescription = null;
+  if (order) {
+    if (order.prescription_id) {
+      prescription = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(order.prescription_id);
+    }
+    if (!prescription && order.customer_id) {
+      prescription = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? ORDER BY created_at DESC LIMIT 1').get(order.customer_id);
+    }
+  }
+
+  return { invoice, items, prescription, order };
+}
+
 router.get('/invoices', authenticateToken, (req, res) => {
   const invoices = db.prepare(`
     SELECT inv.*, o.order_number, o.channel
@@ -3253,32 +3368,28 @@ router.get('/invoices', authenticateToken, (req, res) => {
 });
 
 router.get('/invoices/order/:orderId/pdf', async (req, res) => {
-  const orderId = req.params.orderId;
-  const invoice = db.prepare('SELECT * FROM invoices WHERE order_id = ?').get(orderId);
-  if (!invoice) return res.status(404).send('Invoice not found for this order.');
-  const items = db.prepare('SELECT * FROM invoice_items WHERE invoice_id = ?').all(invoice.id);
+  const { invoice, items, prescription } = ensureInvoiceForOrder(req.params.orderId);
+  if (!invoice) return res.status(404).send('Invoice or order not found.');
   try {
-    const pdfBuffer = await generateInvoicePDF(invoice, items);
+    const pdfBuffer = await generateInvoicePDF(invoice, items, prescription);
+    const disposition = (req.query.download === '1' || req.query.download === 'true') ? 'attachment' : 'inline';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${invoice.invoice_number}.pdf"`);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${invoice.invoice_number || 'invoice'}.pdf"`);
     res.send(pdfBuffer);
   } catch (err) {
+    console.error('Invoice PDF error:', err);
     res.status(500).send('Error generating invoice PDF: ' + err.message);
   }
 });
 
 router.get('/invoices/:id/pdf', async (req, res) => {
-  const invId = req.params.id;
-  const invoice = db.prepare('SELECT * FROM invoices WHERE id = ? OR invoice_number = ?').get(invId, invId);
-
+  const { invoice, items, prescription } = ensureInvoiceForOrder(req.params.id);
   if (!invoice) return res.status(404).send('Invoice not found');
-
-  const items = db.prepare('SELECT * FROM invoice_items WHERE invoice_id = ?').all(invoice.id);
-
   try {
-    const pdfBuffer = await generateInvoicePDF(invoice, items);
+    const pdfBuffer = await generateInvoicePDF(invoice, items, prescription);
+    const disposition = (req.query.download === '0' || req.query.download === 'false' || req.query.inline === '1') ? 'inline' : 'attachment';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoice_number}.pdf"`);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${invoice.invoice_number || 'invoice'}.pdf"`);
     res.send(pdfBuffer);
   } catch (err) {
     console.error('Invoice PDF generation error:', err);

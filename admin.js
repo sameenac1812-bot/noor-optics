@@ -812,6 +812,7 @@
                 ` : ''}
                 <div style="display:flex; gap:4px; flex-wrap:wrap;">
                   <button class="btn-table-action" onclick="viewOrderDetails('${o.id}')" title="View Full Details">View</button>
+                  <button class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="event.stopPropagation(); downloadInvoicePDF('${o.id}', '${escapeHtml(o.order_number)}')" title="Download Tax Invoice PDF">📄 Invoice</button>
                   <button class="btn-table-action" onclick="instantPrintReceipt('${o.id}', true)" title="Instant Spool Receipt">🖨️ Receipt</button>
                   <button class="btn-table-action" style="background:#F3F4F6; color:#374151; font-weight:700;" onclick="manualReprintToDaemon('${o.id}')" title="Send Print Job to Cloud Daemon Queue">⚡ Queue Print</button>
                   ${o.prescription_id ? `<button class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="openEditPrescriptionModal('${o.prescription_id}')" title="Doctor: Edit Lens Values">✏️ Edit RX</button>` : ''}
@@ -1408,7 +1409,8 @@
         <button type="button" class="btn-header-action" style="background:#16A34A; color:#FFF; font-weight:800;" onclick="confirmUpiPayment('${order.id}', '${order.payment_id || ''}')">✓ Approve UPI Payment</button>
         <button type="button" class="btn-header-action" style="background:#DC2626; color:#FFF; font-weight:700;" onclick="rejectUpiPayment('${order.id}', '${order.payment_id || ''}')">✗ Reject Payment</button>
       ` : ''}
-      <button type="button" class="btn-header-action" onclick="window.open('/api/invoices/order/${order.id}/pdf', '_blank')">📄 Tax Invoice PDF</button>
+      <button type="button" class="btn-header-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="downloadInvoicePDF('${order.id}', '${escapeHtml(order.order_number)}')">📥 Download PDF Invoice</button>
+      <button type="button" class="btn-header-action btn-secondary" onclick="window.open('/api/invoices/order/${order.id}/pdf', '_blank')">👁️ View PDF</button>
       <button type="button" class="btn-header-action btn-secondary" onclick="previewThermalReceipt('${order.id}')">🖨️ Thermal Receipt</button>
       ${order.prescription_id ? `<button type="button" class="btn-header-action" style="background:#059669; color:#FFF; font-weight:700;" onclick="printPrescriptionRecord('${order.prescription_id}')">👓 Prescription RX</button>` : ''}
       <button type="button" class="btn-header-action btn-danger-soft" onclick="deleteOrderPrompt('${order.id}', '${escapeHtml(order.order_number)}')">🗑️ Delete Order</button>
@@ -5803,6 +5805,10 @@
             if (tokenElem) tokenElem.textContent = res.tokenNumber ? `#${res.tokenNumber}` : '-';
             if (clientElem) clientElem.textContent = payload.customerName || 'Walk-in Client';
             if (rxElem) rxElem.textContent = (res.prescriptionId || payload.newPrescription) ? 'Attached & Saved ✓' : 'Standard (Non-RX)';
+            const btnPdf = document.getElementById('btn-success-pdf');
+            if (btnPdf) {
+              btnPdf.onclick = () => downloadInvoicePDF(res.orderId, res.invoiceNumber);
+            }
             const btnReprint = document.getElementById('btn-success-reprint');
             if (btnReprint) {
               btnReprint.onclick = () => instantPrintReceipt(res.orderId);
@@ -7028,7 +7034,10 @@
               <td><span class="badge-status ${o.payment_status === 'VERIFIED' ? 'status-verified' : 'status-awaiting'}">${escapeHtml(o.payment_status)}</span></td>
               <td><span class="badge-status status-verified">${escapeHtml(o.status)}</span></td>
               <td>
-                <button type="button" class="btn-table-action" onclick="viewOrderDetails('${o.id}')">View</button>
+                <div style="display:flex; gap:4px;">
+                  <button type="button" class="btn-table-action" onclick="viewOrderDetails('${o.id}')">View</button>
+                  <button type="button" class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="downloadInvoicePDF('${o.id}', '${escapeHtml(o.order_number)}')" title="Download Tax Invoice PDF">📄 Invoice</button>
+                </div>
               </td>
             </tr>
           `).join('');
@@ -7324,6 +7333,24 @@
     } catch (err) {
       showToast('Print error: ' + err.message, 'error');
     }
+  };
+
+  // ── One-Click PDF Tax Invoice Downloader ──────────────────────────────────
+  window.downloadInvoicePDF = function (orderId, orderNumber) {
+    if (!orderId) {
+      showToast('Order reference missing.', 'error');
+      return;
+    }
+    showToast('Generating official Tax Invoice PDF...', 'info');
+    const url = `/api/invoices/order/${encodeURIComponent(orderId)}/pdf?download=1`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Invoice-${orderNumber || orderId}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      try { document.body.removeChild(link); } catch (_) {}
+    }, 500);
   };
 
   // ── Dispatch Print Signal to POS Portable Daemon (Port 5001) ─────────────

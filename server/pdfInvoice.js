@@ -21,7 +21,7 @@ function formatINR(paise) {
 /**
  * Generate PDF buffer for an invoice
  */
-function generateInvoicePDF(invoice, items) {
+function generateInvoicePDF(invoice, items, prescription = null) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'A4',
@@ -160,6 +160,47 @@ function generateInvoicePDF(invoice, items) {
 
     // ── Totals Calculation ──────────────────────────────────────────────────
     y = Math.max(y + 10, 420);
+
+    // ── Clinical Prescription Box (Left Side opposite Totals) ──
+    const rx = prescription || invoice.prescription || (invoice.snapshot_json ? (() => { try { return JSON.parse(invoice.snapshot_json).prescription; } catch(_) { return null; } })() : null);
+    if (rx && (rx.od_sph != null || rx.odSph != null || rx.os_sph != null || rx.osSph != null || rx.prescription_number)) {
+      const rxBoxTop = y;
+      doc.rect(45, rxBoxTop, 275, 95).fillColor('#F8FAFC').fill().strokeColor('#CBD5E1').lineWidth(0.5).stroke();
+      doc.fontSize(8.5).font('Helvetica-Bold').fillColor('#0F172A').text(`CLINICAL PRESCRIPTION: ${rx.prescription_number || 'ATTACHED RX'}`, 55, rxBoxTop + 8);
+
+      const odSph = rx.od_sph != null ? rx.od_sph : (rx.odSph || '0.00');
+      const odCyl = rx.od_cyl != null ? rx.od_cyl : (rx.odCyl || '0.00');
+      const odAxis = rx.od_axis != null ? (rx.od_axis + '°') : (rx.odAxis != null ? rx.odAxis + '°' : '-');
+
+      const osSph = rx.os_sph != null ? rx.os_sph : (rx.osSph || '0.00');
+      const osCyl = rx.os_cyl != null ? rx.os_cyl : (rx.osCyl || '0.00');
+      const osAxis = rx.os_axis != null ? (rx.os_axis + '°') : (rx.osAxis != null ? rx.osAxis + '°' : '-');
+
+      doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#475569')
+        .text('EYE', 55, rxBoxTop + 26)
+        .text('SPH', 115, rxBoxTop + 26)
+        .text('CYL', 170, rxBoxTop + 26)
+        .text('AXIS', 225, rxBoxTop + 26);
+
+      doc.font('Helvetica').fillColor('#1E293B')
+        .text('OD (Right)', 55, rxBoxTop + 42)
+        .text(odSph, 115, rxBoxTop + 42)
+        .text(odCyl, 170, rxBoxTop + 42)
+        .text(odAxis, 225, rxBoxTop + 42);
+
+      doc.text('OS (Left)', 55, rxBoxTop + 58)
+        .text(osSph, 115, rxBoxTop + 58)
+        .text(osCyl, 170, rxBoxTop + 58)
+        .text(osAxis, 225, rxBoxTop + 58);
+
+      const addText = (rx.addition || rx.add) ? `ADD: ${rx.addition || rx.add}` : '';
+      const ipdText = (rx.ipd_distance || rx.ipdDistance || rx.pd) ? `IPD: ${rx.ipd_distance || rx.ipdDistance || rx.pd}mm` : '';
+      const checkedText = (rx.checked_by || rx.checkedBy) ? `By: ${rx.checked_by || rx.checkedBy}` : '';
+      const extraRx = [addText, ipdText, checkedText].filter(Boolean).join('  |  ');
+      if (extraRx) {
+        doc.fontSize(7).font('Helvetica-Bold').fillColor('#64748B').text(extraRx, 55, rxBoxTop + 76);
+      }
+    }
 
     const totalsLeft = 350;
     const totalsWidth = 195;
