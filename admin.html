@@ -644,6 +644,7 @@
                       <th style="padding:10px 14px;">City</th>
                       <th style="padding:10px 14px;">Orders</th>
                       <th style="padding:10px 14px;">Total Spend</th>
+                      <th style="padding:10px 14px;">Pending Due</th>
                       <th style="padding:10px 14px;">Last Order</th>
                       <th style="padding:10px 14px;">Prescriptions</th>
                       <th style="padding:10px 14px;">Registered</th>
@@ -651,7 +652,7 @@
                     </tr>
                   </thead>
                   <tbody id="clients-table-body">
-                    <tr><td colspan="11" style="text-align:center; padding:2.5rem; color:#9CA3AF;">Loading client directory...</td></tr>
+                    <tr><td colspan="12" style="text-align:center; padding:2.5rem; color:#9CA3AF;">Loading client directory...</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -1254,6 +1255,17 @@
                 </div>
               </div>
 
+                            <!-- Manual Frame Entry Bar (No need to select stock - Type name, qty, price, click Add) -->
+              <div class="pos-manual-entry-bar" id="pos-manual-entry-bar">
+                <input type="text" id="pos-manual-item-name" class="pos-manual-name-input" placeholder="Item name *" autocomplete="off" />
+                <input type="number" id="pos-manual-item-qty" class="pos-manual-qty-input" value="1" min="1" step="1" title="Quantity" />
+                <div class="pos-manual-price-wrap">
+                  <span class="currency-sym">₹</span>
+                  <input type="number" id="pos-manual-item-price" class="pos-manual-price-input" placeholder="Price *" min="0" step="1" />
+                </div>
+                <button type="button" class="btn-pos-add-manual" id="btn-add-manual-item">Add</button>
+              </div>
+
               <!-- Items Table / Cart Header -->
               <div class="optic-items-table-header">
                 <span class="col-name">NAME</span>
@@ -1265,7 +1277,7 @@
               <!-- Items Table Body / Cart List -->
               <div class="pos-cart-items-list" id="pos-cart-items-list">
                 <div class="pos-cart-empty">
-                  <p>Bill is currently empty.<br/>Scan a QR sticker or tap frames from stock.</p>
+                  <p>Bill is currently empty.<br/>Type frame name &amp; price above, scan QR sticker, or tap frames.</p>
                 </div>
               </div>
             </div>
@@ -1281,41 +1293,84 @@
             </div>
 
             <!-- ═══════════════════════════════════════════════════════════════ -->
-            <!-- 6. TOTALS & DUES SUMMARY (OpticTool Style)                     -->
+            <!-- 6. TOTALS & DUES SUMMARY (OpticTool Split Multi-Stage Layout)  -->
             <!-- ═══════════════════════════════════════════════════════════════ -->
-            <div class="optic-card optic-totals-card">
-              <div class="optic-total-row">
-                <span class="label">Total Amount</span>
-                <span class="val" id="pos-subtotal-val">₹0.00</span>
-              </div>
-
-              <div class="optic-total-row discount">
-                <div style="display:flex; align-items:center; gap:6px;">
-                  <span class="label">Discount (₹)</span>
-                  <input type="number" id="pos-discount-amount" class="optic-discount-input" min="0" value="0" step="1" />
+            <div class="optic-card optic-totals-card optic-split-layout">
+              <div class="optic-totals-grid">
+                <!-- Left Column: Search Previous Due -->
+                <div class="optic-prev-due-col">
+                  <button type="button" class="btn-search-prev-due" id="btn-search-prev-due" title="Search customer's unpaid past balances">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <span>Search Previous Due</span>
+                  </button>
+                  <div class="optic-field-row" style="margin-top:10px;">
+                    <label for="pos-prev-due-amount">Previous Due</label>
+                    <div class="optic-input-box">
+                      <input type="number" id="pos-prev-due-amount" class="optic-calc-input" value="0" min="0" step="1" />
+                    </div>
+                  </div>
                 </div>
-                <span class="val" id="pos-discount-val">-₹0.00</span>
-              </div>
 
-              <div class="optic-total-row" style="font-size:0.78rem; color:#64748B;">
-                <span class="label">GST (18% Inclusive)</span>
-                <span class="val" id="pos-tax-val">₹0.00</span>
-              </div>
+                <!-- Right Column: Multi-Stage Breakdown & REM. Badge -->
+                <div class="optic-breakdown-col">
+                  <div class="optic-calc-row">
+                    <span class="calc-label">Total</span>
+                    <span class="calc-val" id="pos-subtotal-val">₹ 0</span>
+                  </div>
 
-              <div class="optic-total-row advance">
-                <div style="display:flex; align-items:center; gap:6px;">
-                  <span class="label">Advance Paid (₹)</span>
-                  <input type="number" id="pos-advance-amount" class="optic-discount-input" min="0" value="0" step="1" />
+                  <div class="optic-calc-row">
+                    <div class="calc-label-with-addon">
+                      <span>Discount</span>
+                      <span class="currency-tag">₹ ▼</span>
+                    </div>
+                    <div class="optic-input-box">
+                      <input type="number" id="pos-discount-amount" class="optic-calc-input" value="0" min="0" step="1" />
+                    </div>
+                  </div>
+
+                  <div class="optic-calc-row">
+                    <span class="calc-label">Advance</span>
+                    <div class="optic-input-box">
+                      <input type="number" id="pos-advance-amount" class="optic-calc-input" value="0" min="0" step="1" />
+                    </div>
+                  </div>
+
+                  <div class="optic-calc-row">
+                    <span class="calc-label">2nd Amount</span>
+                    <div class="optic-input-box">
+                      <input type="number" id="pos-second-amount" class="optic-calc-input" value="0" min="0" step="1" />
+                    </div>
+                  </div>
+
+                  <div class="optic-calc-row">
+                    <span class="calc-label">3rd Amount</span>
+                    <div class="optic-input-box">
+                      <input type="number" id="pos-third-amount" class="optic-calc-input" value="0" min="0" step="1" />
+                    </div>
+                  </div>
+
+                  <!-- Prominent REM. badge (OpticTool layout: bright green when paid/zero, prominent red/amber when due) -->
+                  <div class="optic-rem-badge rem-settled" id="optic-rem-badge">
+                    <span class="rem-title">REM.</span>
+                    <span class="rem-amount" id="pos-remaining-val">₹ 0</span>
+                  </div>
+
+                  <!-- Pick Up Time Selector -->
+                  <div class="optic-pickup-row">
+                    <div class="pickup-header">
+                      <span>PICK UP TIME ▼</span>
+                    </div>
+                    <div class="pickup-input-wrap">
+                      <input type="datetime-local" id="pos-pickup-time" class="optic-pickup-input" title="Set customer pickup date & time" />
+                    </div>
+                  </div>
+
+                  <input type="hidden" id="pos-grand-total-val" value="0.00" />
+                  <input type="hidden" id="pos-tax-val" value="0.00" />
+                  <input type="hidden" id="pos-discount-val" value="0.00" />
+                  <input type="hidden" id="pos-advance-val" value="0.00" />
                 </div>
-                <span class="val" id="pos-advance-val">₹0.00</span>
               </div>
-
-              <!-- Remaining Due Block (Prominent Red Banner in OpticTool Style) -->
-              <div class="optic-remaining-block" id="optic-remaining-block">
-                <span class="rem-label">Remaining Due</span>
-                <span class="rem-val" id="pos-remaining-val">₹0.00</span>
-              </div>
-              <input type="hidden" id="pos-grand-total-val" value="0.00" />
 
               <!-- Payment Method Selection -->
               <div class="optic-pm-wrap">
@@ -2701,6 +2756,90 @@
             <button type="button" class="btn-header-action" data-close-modal>Cancel</button>
             <button type="submit" class="btn-header-action btn-primary" style="background:#0F172A; color:#FFF; font-weight:700;">💾 Save Changes</button>
           </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+    <!-- ── MODAL K: COLLECT MULTI-STAGE PAYMENT (Advance / 2nd / 3rd Amount) ────── -->
+  <div class="modal-overlay" id="modal-collect-payment" role="dialog" aria-modal="true">
+    <div class="admin-modal" style="max-width:480px; width:92%; padding:0; border-radius:12px; overflow:hidden;">
+      <div class="modal-header" style="background:#0F172A; color:#FFFFFF; padding:1.25rem 1.5rem;">
+        <div>
+          <h3 style="margin:0; font-size:1.15rem; color:#FFFFFF; display:flex; align-items:center; gap:8px;">
+            <span>💳</span>
+            <span id="cp-modal-title">Collect Payment</span>
+          </h3>
+          <p class="modal-sub" id="cp-modal-sub" style="color:#94A3B8; margin-top:4px; font-size:0.8rem;">Record installment for customer balance</p>
+        </div>
+        <button type="button" class="btn-close-modal" data-close-modal style="color:#FFFFFF; font-size:1.5rem; background:none; border:none; cursor:pointer;">&times;</button>
+      </div>
+
+      <form id="form-collect-payment" onsubmit="handleCollectPaymentSubmit(event)">
+        <input type="hidden" id="cp-order-id" />
+        <div class="modal-body" style="padding:1.25rem 1.5rem;">
+          <!-- Customer & Order Summary Box -->
+          <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 14px; margin-bottom:1rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <strong id="cp-customer-name" style="font-size:0.95rem; color:#0F172A;">Customer</strong>
+              <span id="cp-order-inv" style="font-family:monospace; font-weight:700; color:#3B82F6; background:#EFF6FF; padding:2px 6px; border-radius:4px; font-size:0.8rem;">INV-0000</span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:0.82rem; color:#475569; margin-top:6px;">
+              <div>Total Bill: <strong id="cp-total-bill" style="color:#0F172A;">₹0</strong></div>
+              <div>Paid So Far: <strong id="cp-paid-sofar" style="color:#16A34A;">₹0</strong></div>
+              <div style="grid-column: span 2; padding-top:6px; border-top:1px dashed #CBD5E1; display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:700; color:#B91C1C;">Remaining Due:</span>
+                <strong id="cp-remaining-due" style="color:#B91C1C; font-size:1.05rem;">₹0</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Payment Stage Selection -->
+          <div class="form-group" style="margin-bottom:1rem;">
+            <label style="font-weight:700; font-size:0.82rem; color:#334155; margin-bottom:6px; display:block;">Payment Stage <span style="color:#EF4444;">*</span></label>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <label style="display:flex; align-items:center; gap:8px; background:#F1F5F9; border:1.5px solid #CBD5E1; padding:10px; border-radius:6px; cursor:pointer; font-size:0.83rem; font-weight:600;">
+                <input type="radio" name="cp-stage" value="second_payment" id="cp-stage-2nd" checked />
+                <span>2nd Payment (1st installment)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:8px; background:#F1F5F9; border:1.5px solid #CBD5E1; padding:10px; border-radius:6px; cursor:pointer; font-size:0.83rem; font-weight:600;">
+                <input type="radio" name="cp-stage" value="third_payment" id="cp-stage-3rd" />
+                <span>3rd Payment (Final balance)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Amount to Collect -->
+          <div class="form-group" style="margin-bottom:1rem;">
+            <label style="font-weight:700; font-size:0.82rem; color:#334155; margin-bottom:6px; display:block;">Amount to Collect (₹) <span style="color:#EF4444;">*</span></label>
+            <div style="position:relative;">
+              <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); font-weight:700; color:#64748B;">₹</span>
+              <input type="number" id="cp-amount-inr" class="form-control" style="padding-left:28px; font-size:1.15rem; font-weight:700;" min="1" step="1" required />
+            </div>
+          </div>
+
+          <!-- Payment Method -->
+          <div class="form-group" style="margin-bottom:1rem;">
+            <label style="font-weight:700; font-size:0.82rem; color:#334155; margin-bottom:6px; display:block;">Payment Method <span style="color:#EF4444;">*</span></label>
+            <select id="cp-payment-method" class="form-control" style="font-weight:600;">
+              <option value="CASH">💵 Cash</option>
+              <option value="UPI_GPAY">📱 UPI / GPay / PhonePe</option>
+              <option value="CARD">💳 Credit / Debit Card</option>
+            </select>
+          </div>
+
+          <!-- Note (Optional) -->
+          <div class="form-group" style="margin-bottom:0.5rem;">
+            <label style="font-weight:700; font-size:0.82rem; color:#334155; margin-bottom:6px; display:block;">Payment Note (Optional)</label>
+            <input type="text" id="cp-notes" class="form-control" placeholder="e.g. Received at pickup / balance cleared" />
+          </div>
+        </div>
+
+        <div class="modal-footer" style="padding:1rem 1.5rem; background:#F8FAFC; border-top:1px solid #E2E8F0; display:flex; justify-content:flex-end; gap:8px;">
+          <button type="button" class="btn-header-action" data-close-modal>Cancel</button>
+          <button type="submit" class="btn-header-action" id="btn-submit-collect-payment" style="background:#16A34A; color:#FFFFFF; font-weight:700; padding:8px 18px;">
+            ✓ Save Payment &amp; Print Receipt
+          </button>
         </div>
       </form>
     </div>

@@ -1045,6 +1045,8 @@ router.get('/customers', authenticateToken, async (req, res) => {
       c.*,
       COUNT(DISTINCT o.id) as total_orders,
       COALESCE(SUM(o.total_payable_paise), c.total_spent_paise, 0) as total_purchases_paise,
+      COALESCE(SUM(o.outstanding_paise), 0) as total_due_paise,
+      COALESCE(SUM(o.advance_paid_paise), 0) as total_advance_paise,
       MAX(o.created_at) as last_order_date,
       (SELECT COUNT(*) FROM prescriptions p WHERE p.client_id = c.id AND p.is_archived = 0) as prescriptions_count
     FROM customers c
@@ -1075,6 +1077,7 @@ router.get('/customers', authenticateToken, async (req, res) => {
   const formatted = customers.map(c => ({
     ...c,
     total_purchases_inr: (c.total_purchases_paise || 0) / 100,
+    total_due_inr: (c.total_due_paise || 0) / 100,
     tel_link: c.phone ? `tel:${c.phone}` : null,
     whatsapp_link: c.phone ? generateWhatsAppUrl(c.phone, c.name, storeName) : null
   }));
@@ -1139,14 +1142,25 @@ router.get('/customers/:id', authenticateToken, (req, res) => {
   `).all(client.id, clientPhone, clientPhone, clientPhone, clientPhone, clientPhone);
 
   const getItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?');
+  const getPayments = db.prepare('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at ASC');
   const enrichedOrders = orders.map(o => ({
     ...o,
-    total_payable_inr: o.total_payable_paise / 100,
-    amount_paid_inr: o.amount_paid_paise / 100,
+    total_payable_inr: (o.total_payable_paise || 0) / 100,
+    amount_paid_inr: (o.amount_paid_paise || 0) / 100,
+    advance_paid_inr: (o.advance_paid_paise || 0) / 100,
+    second_payment_inr: (o.second_payment_paise || 0) / 100,
+    third_payment_inr: (o.third_payment_paise || 0) / 100,
+    outstanding_inr: (o.outstanding_paise || 0) / 100,
+    previous_due_inr: (o.previous_due_paise || 0) / 100,
+    pickup_time: o.pickup_time || null,
     items: getItems.all(o.id).map(i => ({
       ...i,
       unit_price_inr: i.unit_price_paise / 100,
       subtotal_inr: i.subtotal_paise / 100
+    })),
+    payments: getPayments.all(o.id).map(p => ({
+      ...p,
+      amount_inr: (p.amount_paise || 0) / 100
     }))
   }));
 
@@ -1200,6 +1214,42 @@ router.get('/customers/:id', authenticateToken, (req, res) => {
     prescriptions,
     invoices,
     auditLogs
+  });
+});
+
+// ── GET /api/customers/:id/due (Quick check for previous unpaid dues) ────────
+router.get('/customers/:id/due', authenticateToken, (req, res) => {
+  const customerId = req.params.id;
+  const client = db.prepare('SELECT * FROM customers WHERE id = ? OR client_code = ? OR phone = ?').get(customerId, customerId, customerId);
+  if (!client) {
+    return res.json({ totalDueINR: 0, orders: [] });
+  }
+
+  const clientPhone = client.phone ? client.phone.trim() : null;
+  const unpaidOrders = db.prepare(`
+    SELECT id, order_number, total_payable_paise, amount_paid_paise, outstanding_paise, created_at
+    FROM orders
+    WHERE (customer_id = ? OR (? IS NOT NULL AND customer_phone = ?))
+      AND outstanding_paise > 0
+      AND status != 'CANCELLED'
+    ORDER BY created_at DESC
+  `).all(client.id, clientPhone, clientPhone);
+
+  const totalDuePaise = unpaidOrders.reduce((sum, o) => sum + (o.outstanding_paise || 0), 0);
+  const totalDueINR = totalDuePaise / 100;
+  res.json({
+    clientId: client.id,
+    clientName: client.name,
+    clientPhone: client.phone,
+    totalDueINR,
+    total_due_inr: totalDueINR,
+    total_due_paise: totalDuePaise,
+    orders: unpaidOrders.map(o => ({
+      ...o,
+      total_payable_inr: (o.total_payable_paise || 0) / 100,
+      amount_paid_inr: (o.amount_paid_paise || 0) / 100,
+      outstanding_inr: (o.outstanding_paise || 0) / 100
+    }))
   });
 });
 
@@ -1780,62 +1830,60 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     // 1. Validate & calculate line items and stock
     for (const item of items) {
       const vId = item.variantId || item.variant_id;
-      let variant = db.prepare(`
-        SELECT pv.*, p.name as prod_name, p.selling_price_paise, p.purchase_cost_paise, COALESCE(ib.available_qty, 0) as available_qty
-        FROM product_variants pv
-        JOIN products p ON pv.product_id = p.id
-        LEFT JOIN inventory_balances ib ON pv.id = ib.variant_id
-        WHERE pv.id = ?
-      `).get(vId);
+      const isManual = item.isManual || (!vId && (item.name || item.product_name));
+      let variant = null;
 
-      // Fallback: search by product_id, sku, or stripped base product id
-      if (!variant && vId) {
-        const baseProdId = String(vId).replace(/^var-/, '').replace(/-\d+$/, '');
+      if (!isManual && vId) {
         variant = db.prepare(`
           SELECT pv.*, p.name as prod_name, p.selling_price_paise, p.purchase_cost_paise, COALESCE(ib.available_qty, 0) as available_qty
           FROM product_variants pv
           JOIN products p ON pv.product_id = p.id
           LEFT JOIN inventory_balances ib ON pv.id = ib.variant_id
-          WHERE pv.product_id = ? OR pv.sku = ? OR p.sku = ? OR p.id = ?
-          LIMIT 1
-        `).get(vId, vId, vId, baseProdId);
+          WHERE pv.id = ?
+        `).get(vId);
 
+        // Fallback: search by product_id, sku, or stripped base product id
         if (!variant) {
-          const directProd = db.prepare('SELECT * FROM products WHERE id = ? OR sku = ? OR name = ?').get(baseProdId, vId, item.name || item.product_name);
-          if (directProd) {
-            variant = {
-              id: vId,
-              product_id: directProd.id,
-              prod_name: directProd.name,
-              brand: directProd.brand || 'Noor Optics',
-              sku: directProd.sku,
-              color_name: item.color || item.variant_name || 'Standard',
-              selling_price_paise: directProd.selling_price_paise,
-              purchase_cost_paise: directProd.purchase_cost_paise || 145000,
-              available_qty: 50
-            };
+          const baseProdId = String(vId).replace(/^var-/, '').replace(/-\d+$/, '');
+          variant = db.prepare(`
+            SELECT pv.*, p.name as prod_name, p.selling_price_paise, p.purchase_cost_paise, COALESCE(ib.available_qty, 0) as available_qty
+            FROM product_variants pv
+            JOIN products p ON pv.product_id = p.id
+            LEFT JOIN inventory_balances ib ON pv.id = ib.variant_id
+            WHERE pv.product_id = ? OR pv.sku = ? OR p.sku = ? OR p.id = ?
+            LIMIT 1
+          `).get(vId, vId, vId, baseProdId);
+
+          if (!variant) {
+            const directProd = db.prepare('SELECT * FROM products WHERE id = ? OR sku = ? OR name = ?').get(baseProdId, vId, item.name || item.product_name);
+            if (directProd) {
+              variant = {
+                id: vId,
+                product_id: directProd.id,
+                prod_name: directProd.name,
+                brand: directProd.brand || 'Noor Optics',
+                sku: directProd.sku,
+                color_name: item.color || item.variant_name || 'Standard',
+                selling_price_paise: directProd.selling_price_paise,
+                purchase_cost_paise: directProd.purchase_cost_paise || 145000,
+                available_qty: 50
+              };
+            }
           }
         }
       }
 
-      // Ultimate fallback: first available catalog variant
-      if (!variant) {
-        variant = db.prepare(`
-          SELECT pv.*, p.name as prod_name, p.selling_price_paise, p.purchase_cost_paise, COALESCE(ib.available_qty, 0) as available_qty
-          FROM product_variants pv
-          JOIN products p ON pv.product_id = p.id
-          LEFT JOIN inventory_balances ib ON pv.id = ib.variant_id
-          ORDER BY pv.id ASC LIMIT 1
-        `).get();
-      }
-
       const qty = parseInt(item.quantity || 1, 10);
-      const unitPrice = item.unitPricePaise ? parseInt(item.unitPricePaise, 10) : (item.unit_price_paise ? parseInt(item.unit_price_paise, 10) : (variant ? variant.selling_price_paise : 349900));
+      const unitPrice = item.unitPricePaise ? parseInt(item.unitPricePaise, 10)
+        : (item.unit_price_paise ? parseInt(item.unit_price_paise, 10)
+        : (item.priceINR ? Math.round(Number(item.priceINR) * 100)
+        : (item.price ? Math.round(Number(item.price) * 100)
+        : (variant ? variant.selling_price_paise : 299900))));
       const lineSubtotal = unitPrice * qty;
       subtotalPaise += lineSubtotal;
 
-      const prodName = item.product_name || item.name || item.model || (variant ? variant.prod_name : 'Noor Optical Frame');
-      const varSku = item.sku || (variant ? variant.sku : 'NOOR-POS-FRAME');
+      const prodName = item.product_name || item.name || item.model || (variant ? variant.prod_name : 'Custom Optical Frame');
+      const varSku = item.sku || (variant ? variant.sku : ('MANUAL-' + Date.now().toString().slice(-4)));
       const varColor = item.color || item.variant_name || (variant ? variant.color_name : 'Standard Frame');
       const brand = item.brand || (variant ? (variant.brand || 'Noor Optics') : 'Noor Optics');
       const model = item.model || prodName;
@@ -1845,7 +1893,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       preparedItems.push({
         id: 'oit-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
         order_id: orderId,
-        variant_id: variant ? variant.id : (item.variantId || 'var-noor-01-1'),
+        variant_id: variant ? variant.id : null,
         product_name: prodName,
         name: prodName,
         variant_name: varColor,
@@ -1858,75 +1906,96 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
         lens_name: item.lensName || item.lens_name || 'Standard Demo Lens',
         unit_price_paise: unitPrice,
         unit_price_inr: unitPrice / 100,
-        purchase_cost_paise: variant ? variant.purchase_cost_paise : 145000,
+        purchase_cost_paise: variant ? variant.purchase_cost_paise : 0,
         quantity: qty,
         subtotal_paise: lineSubtotal,
         subtotal_inr: lineSubtotal / 100
       });
 
-      // Safely decrement or create inventory balance
-      const existingBal = db.prepare('SELECT available_qty FROM inventory_balances WHERE variant_id = ?').get(variant.id);
-      let newBal = 0;
-      if (existingBal) {
-        newBal = Math.max(0, existingBal.available_qty - qty);
-        db.prepare(`
-          UPDATE inventory_balances
-          SET available_qty = ?, updated_at = datetime('now')
-          WHERE variant_id = ?
-        `).run(newBal, variant.id);
-      } else {
-        db.prepare(`
-          INSERT INTO inventory_balances (id, variant_id, location_id, available_qty, reserved_qty, updated_at)
-          VALUES (?, ?, 'loc-main', 0, 0, datetime('now'))
-        `).run('ib-' + Date.now() + '-' + variant.id, variant.id);
-      }
+      // Safely decrement or create inventory balance ONLY if real catalog variant
+      if (variant && variant.id) {
+        const existingBal = db.prepare('SELECT available_qty FROM inventory_balances WHERE variant_id = ?').get(variant.id);
+        let newBal = 0;
+        if (existingBal) {
+          newBal = Math.max(0, existingBal.available_qty - qty);
+          db.prepare(`
+            UPDATE inventory_balances
+            SET available_qty = ?, updated_at = datetime('now')
+            WHERE variant_id = ?
+          `).run(newBal, variant.id);
+        } else {
+          db.prepare(`
+            INSERT INTO inventory_balances (id, variant_id, location_id, available_qty, reserved_qty, updated_at)
+            VALUES (?, ?, 'loc-main', 0, 0, datetime('now'))
+          `).run('ib-' + Date.now() + '-' + variant.id, variant.id);
+        }
 
-      // Record Stock Movement safely
-      db.prepare(`
-        INSERT INTO stock_movements (id, variant_id, location_id, change_qty, balance_after, movement_type, reference_id, reason, created_by_user_id)
-        VALUES (?, ?, 'loc-main', ?, ?, 'SALE_POS', ?, 'Physical Store POS Checkout', ?)
-      `).run('mov-' + Date.now() + '-' + variant.id, variant.id, -qty, newBal, orderNumber, req.user.id);
+        // Record Stock Movement safely
+        db.prepare(`
+          INSERT INTO stock_movements (id, variant_id, location_id, change_qty, balance_after, movement_type, reference_id, reason, created_by_user_id)
+          VALUES (?, ?, 'loc-main', ?, ?, 'SALE_POS', ?, 'Physical Store POS Checkout', ?)
+        `).run('mov-' + Date.now() + '-' + variant.id, variant.id, -qty, newBal, orderNumber, req.user.id);
+      }
     }
 
     calculatedSubtotalPaise = subtotalPaise;
 
+    const previousDuePaise = req.body.previousDueINR !== undefined ? Math.round(Number(req.body.previousDueINR) * 100) : (req.body.previous_due_paise ? parseInt(req.body.previous_due_paise, 10) : 0);
+    const advancePaise = req.body.advanceINR !== undefined ? Math.round(Number(req.body.advanceINR) * 100) : (req.body.advance_paise ? parseInt(req.body.advance_paise, 10) : 0);
+    const secondPaymentPaise = req.body.secondAmountINR !== undefined ? Math.round(Number(req.body.secondAmountINR) * 100) : (req.body.second_payment_paise ? parseInt(req.body.second_payment_paise, 10) : 0);
+    const thirdPaymentPaise = req.body.thirdAmountINR !== undefined ? Math.round(Number(req.body.thirdAmountINR) * 100) : (req.body.third_payment_paise ? parseInt(req.body.third_payment_paise, 10) : 0);
+    const pickupTime = req.body.pickupTime || req.body.pickup_time || null;
+
     const taxRate = 0.18; // 18% GST inclusive
-    const netBase = Math.max(0, subtotalPaise - discountPaise);
+    const netBase = Math.max(0, subtotalPaise + previousDuePaise - discountPaise);
     const taxPaise = Math.round(netBase - (netBase / (1 + taxRate)));
     const totalPayablePaise = netBase;
 
-    // Payment Logic
-    let paymentStatus = 'VERIFIED';
-    let amountPaidPaise = totalPayablePaise;
-    let outstandingPaise = 0;
+    // Payment Logic (Advance, 2nd, 3rd installments, remaining balance)
+    let amountPaidPaise = advancePaise + secondPaymentPaise + thirdPaymentPaise;
+    if (req.body.advanceINR === undefined && req.body.advance_paise === undefined) {
+      amountPaidPaise = totalPayablePaise;
+      advancePaise = totalPayablePaise;
+    }
+    const outstandingPaise = Math.max(0, totalPayablePaise - amountPaidPaise);
 
-    if (paymentMethod === 'UPI_GPAY') {
-      paymentStatus = req.body.isVerifiedAtCounter ? 'VERIFIED' : 'AWAITING_VERIFICATION';
-      if (paymentStatus === 'AWAITING_VERIFICATION') {
-        amountPaidPaise = 0;
-        outstandingPaise = totalPayablePaise;
-      }
+    let paymentStatus = 'VERIFIED';
+    if (paymentMethod === 'UPI_GPAY' && !req.body.isVerifiedAtCounter) {
+      paymentStatus = 'AWAITING_VERIFICATION';
+      amountPaidPaise = 0;
+    } else if (outstandingPaise === 0) {
+      paymentStatus = 'VERIFIED';
+    } else if (amountPaidPaise > 0) {
+      paymentStatus = 'PARTIAL';
+    } else {
+      paymentStatus = 'PENDING';
     }
 
-    // 2. Insert Order (With authoritative customer_id and prescription_id)
+    // 2. Insert Order (With authoritative customer_id, prescription_id, and payment installments)
     const nowIso = new Date().toISOString();
     db.prepare(`
       INSERT INTO orders (
         id, order_number, token_number, channel, customer_id, customer_name,
         customer_phone, customer_email, prescription_id, status, payment_status, subtotal_paise,
         discount_paise, discount_reason, tax_paise, total_payable_paise,
-        amount_paid_paise, outstanding_paise, staff_user_id, notes, created_at, updated_at
+        amount_paid_paise, outstanding_paise, staff_user_id, notes,
+        advance_paid_paise, second_payment_paise, third_payment_paise, previous_due_paise, pickup_time,
+        created_at, updated_at
       ) VALUES (
         ?, ?, ?, 'POS', ?, ?,
         ?, ?, ?, 'CONFIRMED', ?, ?,
         ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?,
+        ?, ?, ?, ?, ?,
+        ?, ?
       )
     `).run(
       orderId, orderNumber, tokenNumber, finalCustomerId, finalCustomerName,
       finalCustomerPhone, finalCustomerEmail, finalPrescriptionId, paymentStatus, subtotalPaise,
       discountPaise, discountReason || null, taxPaise, totalPayablePaise,
-      amountPaidPaise, outstandingPaise, req.user.id, notes || null, nowIso, nowIso
+      amountPaidPaise, outstandingPaise, req.user.id, notes || null,
+      advancePaise, secondPaymentPaise, thirdPaymentPaise, previousDuePaise, pickupTime,
+      nowIso, nowIso
     );
 
     // Update customer's total spent
@@ -1954,16 +2023,32 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       );
     });
 
-    // 4. Record Payment
-    const paymentId = 'pay-' + Date.now();
-    db.prepare(`
-      INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      paymentId, orderId, paymentMethod, totalPayablePaise,
-      paymentStatus === 'VERIFIED' ? 'VERIFIED' : 'PENDING_VERIFICATION',
-      claimedUpiRef || null, 'POS checkout'
-    );
+    // 4. Record Multi-Stage Payments
+    const payBaseId = 'pay-' + Date.now();
+    if (advancePaise > 0) {
+      db.prepare(`
+        INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes, payment_stage, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'advance', datetime('now'))
+      `).run(payBaseId + '-adv', orderId, paymentMethod, advancePaise, paymentStatus === 'AWAITING_VERIFICATION' ? 'PENDING_VERIFICATION' : 'VERIFIED', claimedUpiRef || null, 'Advance Payment');
+    }
+    if (secondPaymentPaise > 0) {
+      db.prepare(`
+        INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes, payment_stage, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'second_payment', datetime('now'))
+      `).run(payBaseId + '-2nd', orderId, paymentMethod, secondPaymentPaise, 'VERIFIED', claimedUpiRef || null, '2nd Payment');
+    }
+    if (thirdPaymentPaise > 0) {
+      db.prepare(`
+        INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes, payment_stage, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'third_payment', datetime('now'))
+      `).run(payBaseId + '-3rd', orderId, paymentMethod, thirdPaymentPaise, 'VERIFIED', claimedUpiRef || null, '3rd Payment');
+    }
+    if (advancePaise === 0 && secondPaymentPaise === 0 && thirdPaymentPaise === 0 && amountPaidPaise > 0) {
+      db.prepare(`
+        INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes, payment_stage, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'advance', datetime('now'))
+      `).run(payBaseId, orderId, paymentMethod, amountPaidPaise, paymentStatus === 'AWAITING_VERIFICATION' ? 'PENDING_VERIFICATION' : 'VERIFIED', claimedUpiRef || null, 'In-Store POS Payment');
+    }
 
     // 5. Generate Immutable Invoice
     const invoiceId = 'inv-' + Date.now();
@@ -2094,6 +2179,140 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     console.error('[POS Checkout Error]:', err.message);
     res.status(400).json({ error: err.message });
   }
+});
+
+// ==============================================================================
+// 7B. COLLECT SUBSEQUENT INSTALLMENT PAYMENT (2ND PAYMENT / 3RD PAYMENT)
+// ==============================================================================
+router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '/orders/:id/payment'], authenticateToken, (req, res) => {
+  const orderId = req.params.id;
+  const {
+    amountINR,
+    amount_paise,
+    paymentMethod = 'CASH',
+    stage: explicitStage,
+    paymentStage,
+    notes,
+    claimedUpiRef
+  } = req.body;
+  const stage = paymentStage || explicitStage || 'second_payment';
+
+  const paymentPaise = amount_paise !== undefined ? parseInt(amount_paise, 10) : Math.round(Number(amountINR || 0) * 100);
+
+  if (!paymentPaise || paymentPaise <= 0) {
+    return res.status(400).json({ error: 'Payment amount must be greater than zero.' });
+  }
+
+  const order = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ?').get(orderId, orderId);
+  if (!order) {
+    return res.status(404).json({ error: 'Order not found.' });
+  }
+
+  const currentPaid = order.amount_paid_paise || 0;
+  const currentTotal = order.total_payable_paise || 0;
+  const newAmountPaid = currentPaid + paymentPaise;
+  const newOutstanding = Math.max(0, currentTotal - newAmountPaid);
+  const newPaymentStatus = (newOutstanding === 0) ? 'VERIFIED' : 'PARTIAL';
+
+  let stageCol = 'second_payment_paise';
+  let stageLabel = '2nd Payment';
+  if (stage === 'third_payment' || (order.second_payment_paise > 0 && stage !== 'second_payment')) {
+    stageCol = 'third_payment_paise';
+    stageLabel = '3rd Payment';
+  }
+
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE orders
+      SET amount_paid_paise = ?,
+          outstanding_paise = ?,
+          payment_status = ?,
+          updated_at = datetime('now'),
+          ${stageCol} = COALESCE(${stageCol}, 0) + ?
+      WHERE id = ?
+    `).run(newAmountPaid, newOutstanding, newPaymentStatus, paymentPaise, order.id);
+
+    // Record in payments table
+    const payId = 'pay-' + Date.now();
+    db.prepare(`
+      INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes, payment_stage, created_at)
+      VALUES (?, ?, ?, ?, 'VERIFIED', ?, ?, ?, datetime('now'))
+    `).run(payId, order.id, paymentMethod, paymentPaise, claimedUpiRef || null, notes || stageLabel, stageCol === 'third_payment_paise' ? 'third_payment' : 'second_payment');
+
+    // Update customer total spent
+    if (order.customer_id) {
+      db.prepare(`
+        UPDATE customers
+        SET total_spent_paise = total_spent_paise + ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(paymentPaise, order.customer_id);
+    }
+
+    // Queue thermal installment receipt print job
+    try {
+      const printJobId = 'pj-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+      const receiptPayload = {
+        id: order.id,
+        order_number: order.order_number,
+        token_number: order.token_number,
+        channel: 'POS',
+        customer_name: order.customer_name,
+        customer_phone: order.customer_phone,
+        items: [{
+          name: `Installment Payment (${stageLabel})`,
+          product_name: `Installment Payment (${stageLabel})`,
+          quantity: 1,
+          unit_price_inr: paymentPaise / 100,
+          subtotal_inr: paymentPaise / 100
+        }],
+        total_payable_inr: currentTotal / 100,
+        amount_paid_inr: newAmountPaid / 100,
+        outstanding_inr: newOutstanding / 100,
+        payment_method: paymentMethod,
+        notes: `Installment Collected: Rs.${(paymentPaise / 100).toLocaleString('en-IN')} via ${paymentMethod}. Balance Remaining: Rs.${(newOutstanding / 100).toLocaleString('en-IN')}`,
+        created_at: new Date().toISOString()
+      };
+      db.prepare(`
+        INSERT INTO print_jobs (id, order_id, job_type, printer_name, status, payload_json, created_at, updated_at)
+        VALUES (?, ?, 'receipt', 'POS-80', 'queued', ?, datetime('now'), datetime('now'))
+      `).run(printJobId, order.id, JSON.stringify(receiptPayload));
+    } catch (_) {}
+  })();
+
+  const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+  const allPayments = db.prepare('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at ASC').all(order.id).map(p => ({
+    ...p,
+    amount_inr: (p.amount_paise || 0) / 100
+  }));
+
+  // Sync to Supabase
+  pushOrderToSupabase({
+    orderNumber: order.order_number,
+    channel: 'POS',
+    customerName: order.customer_name,
+    customerPhone: order.customer_phone,
+    amountPaidINR: newAmountPaid / 100,
+    outstandingINR: newOutstanding / 100,
+    paymentStatus: newPaymentStatus,
+    grandTotalINR: currentTotal / 100,
+    secondPaymentINR: (updatedOrder.second_payment_paise || 0) / 100,
+    thirdPaymentINR: (updatedOrder.third_payment_paise || 0) / 100
+  }).catch(() => {});
+
+  res.json({
+    success: true,
+    message: `Payment of Rs.${(paymentPaise / 100).toLocaleString('en-IN')} recorded successfully!`,
+    remaining_due_inr: newOutstanding / 100,
+    remaining_due_paise: newOutstanding,
+    amount_paid_inr: newAmountPaid / 100,
+    order: {
+      ...updatedOrder,
+      amount_paid_inr: newAmountPaid / 100,
+      outstanding_inr: newOutstanding / 100,
+      total_payable_inr: currentTotal / 100,
+      payments: allPayments
+    }
+  });
 });
 
 // ==============================================================================
@@ -2553,6 +2772,12 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
         discount_inr: o.discount_paise / 100,
         total_payable_inr: o.total_payable_paise / 100,
         amount_paid_inr: o.amount_paid_paise / 100,
+        advance_paid_inr: (o.advance_paid_paise || 0) / 100,
+        second_payment_inr: (o.second_payment_paise || 0) / 100,
+        third_payment_inr: (o.third_payment_paise || 0) / 100,
+        outstanding_inr: (o.outstanding_paise || 0) / 100,
+        previous_due_inr: (o.previous_due_paise || 0) / 100,
+        pickup_time: o.pickup_time || null,
         items: getItems.all(o.id).map(i => ({
           ...i,
           unit_price_inr: i.unit_price_paise / 100,

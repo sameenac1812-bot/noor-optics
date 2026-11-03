@@ -884,11 +884,16 @@
                     ${o.payment_status === 'AWAITING_VERIFICATION'
                       ? `<span class="bill-due-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span style="background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; font-weight:800; font-size:0.68rem; padding:2px 6px; border-radius:4px;">VERIFY UPI</span>`
                       : (isDue
-                        ? `<span class="bill-due-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span class="badge-due-red">DUE</span>`
+                        ? `<span class="bill-due-amount">₹ ${((o.outstanding_inr != null) ? o.outstanding_inr : totalPayable).toLocaleString('en-IN')}</span> <span class="badge-due-red">DUE</span>`
                         : `<span class="bill-paid-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span class="badge-paid-green">PAID</span>`
                       )
                     }
                   </div>
+                  ${(isDue && (o.outstanding_inr || totalPayable) > 0) ? `
+                    <div style="margin-top:4px;">
+                      <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800; padding:3px 8px; font-size:0.72rem; border-radius:5px;" onclick="event.stopPropagation(); openCollectPaymentModal('${o.id}')">💳 Collect</button>
+                    </div>
+                  ` : ''}
                   <div class="bill-sub-badges-row">
                     ${hasRx ? `<span class="badge-rx-pill">1 Rx</span>` : ''}
                     <span class="badge-status status-${(o.status || 'confirmed').toLowerCase()}" style="font-size:0.68rem; padding:2px 6px;">${escapeHtml(o.status || 'CONFIRMED')}</span>
@@ -1087,19 +1092,10 @@
 
     // Wire Pay
     const btnPay = document.getElementById('action-sheet-pay');
-    if (btnPay) btnPay.onclick = async () => {
+    if (btnPay) btnPay.onclick = () => {
       modal?.classList.remove('open');
       document.body.classList.remove('modal-open');
-      try {
-        await apiFetch(`/api/orders/${orderId}/status`, {
-          method: 'PATCH',
-          body: JSON.stringify({ paymentStatus: 'VERIFIED' })
-        });
-        showToast(`Bill #${order.order_number} marked as PAID.`, 'success');
-        loadOrders();
-      } catch (err) {
-        showToast('Failed to update payment status: ' + err.message, 'error');
-      }
+      openCollectPaymentModal(orderId);
     };
 
     if (modal) {
@@ -1547,6 +1543,12 @@
             <span>Subtotal:</span>
             <span>${formatINR(order.subtotal_paise, true)}</span>
           </div>
+          ${order.previous_due_inr ? `
+            <div style="display:flex; justify-content:space-between; color:#475569;">
+              <span>Previous Due:</span>
+              <span>₹${order.previous_due_inr.toLocaleString('en-IN')}</span>
+            </div>
+          ` : ''}
           <div style="display:flex; justify-content:space-between; color:#D97706;">
             <span>Discount:</span>
             <span>-${formatINR(order.discount_paise || 0, true)}</span>
@@ -1555,9 +1557,37 @@
             <span>GST (18% Included):</span>
             <span>${formatINR(order.tax_paise || 0, true)}</span>
           </div>
-          <div style="display:flex; justify-content:space-between; font-size:1.1rem; font-weight:800; border-top:1px solid #CCC; padding-top:6px; margin-top:4px;">
+          <div style="display:flex; justify-content:space-between; font-size:1.05rem; font-weight:800; border-top:1px solid #CCC; padding-top:6px; margin-top:4px;">
             <span>Grand Total:</span>
             <span>${formatINR(order.total_payable_paise, true)}</span>
+          </div>
+          ${(order.advance_paid_inr || order.advance_paid_paise) ? `
+            <div style="display:flex; justify-content:space-between; color:#16A34A; font-weight:600;">
+              <span>Advance Paid:</span>
+              <span>₹${((order.advance_paid_inr != null) ? order.advance_paid_inr : (order.advance_paid_paise / 100)).toLocaleString('en-IN')}</span>
+            </div>
+          ` : ''}
+          ${(order.second_payment_inr || order.second_payment_paise) ? `
+            <div style="display:flex; justify-content:space-between; color:#16A34A; font-weight:600;">
+              <span>2nd Payment:</span>
+              <span>₹${((order.second_payment_inr != null) ? order.second_payment_inr : (order.second_payment_paise / 100)).toLocaleString('en-IN')}</span>
+            </div>
+          ` : ''}
+          ${(order.third_payment_inr || order.third_payment_paise) ? `
+            <div style="display:flex; justify-content:space-between; color:#16A34A; font-weight:600;">
+              <span>3rd Payment:</span>
+              <span>₹${((order.third_payment_inr != null) ? order.third_payment_inr : (order.third_payment_paise / 100)).toLocaleString('en-IN')}</span>
+            </div>
+          ` : ''}
+          ${order.pickup_time ? `
+            <div style="display:flex; justify-content:space-between; color:#0284C7; font-weight:600; font-size:0.8rem;">
+              <span>Pickup Time:</span>
+              <span>${formatDateTime(order.pickup_time)}</span>
+            </div>
+          ` : ''}
+          <div style="display:flex; justify-content:space-between; font-size:1.15rem; font-weight:900; color:${((order.outstanding_inr != null ? order.outstanding_inr : order.outstanding_paise) > 0) ? '#DC2626' : '#16A34A'}; border-top:1.5px dashed #CBD5E1; padding-top:6px; margin-top:4px;">
+            <span>Remaining Due (REM):</span>
+            <span>₹${((order.outstanding_inr != null) ? order.outstanding_inr : ((order.outstanding_paise || 0) / 100)).toLocaleString('en-IN')}</span>
           </div>
         </div>
       </div>
@@ -1566,6 +1596,9 @@
     // Dynamic actions based on order status and channel
     actionsEl.innerHTML = `
       <button type="button" class="btn-header-action" data-close-modal>Close</button>
+      ${((order.outstanding_inr != null ? order.outstanding_inr : order.outstanding_paise) > 0) ? `
+        <button type="button" class="btn-header-action" style="background:#16A34A; color:#FFF; font-weight:800;" onclick="openCollectPaymentModal('${order.id}')">💳 Collect Payment</button>
+      ` : ''}
       ${order.payment_status === 'AWAITING_VERIFICATION' ? `
         <button type="button" class="btn-header-action" style="background:#16A34A; color:#FFF; font-weight:800;" onclick="confirmUpiPayment('${order.id}', '${order.payment_id || ''}')">✓ Approve UPI Payment</button>
         <button type="button" class="btn-header-action" style="background:#DC2626; color:#FFF; font-weight:700;" onclick="rejectUpiPayment('${order.id}', '${order.payment_id || ''}')">✗ Reject Payment</button>
@@ -5335,7 +5368,12 @@
       if (discountValEl) discountValEl.textContent = '-₹0.00';
       if (taxEl) taxEl.textContent = '₹0.00';
       if (advanceValEl) advanceValEl.textContent = '₹0.00';
-      if (remainingValEl) remainingValEl.textContent = '₹0.00';
+      if (remainingValEl) remainingValEl.textContent = '₹ 0';
+      const remBadgeEmpty = document.getElementById('optic-rem-badge');
+      if (remBadgeEmpty) {
+        remBadgeEmpty.classList.remove('rem-has-due');
+        remBadgeEmpty.classList.add('rem-settled');
+      }
       if (grandTotalEl) grandTotalEl.value = '0.00';
       if (btnCheckout) btnCheckout.disabled = true;
       return;
@@ -5368,23 +5406,44 @@
       `;
     }).join('');
 
+    const prevDueInput = document.getElementById('pos-prev-due-amount');
+    const prevDueINR = parseFloat(prevDueInput ? prevDueInput.value : 0) || 0;
+    const prevDuePaise = Math.round(prevDueINR * 100);
+
     const discountINR = parseFloat(discountInput ? discountInput.value : 0) || 0;
     const discountPaise = Math.round(discountINR * 100);
-    const netBasePaise = Math.max(0, subtotalPaise - discountPaise);
+
+    const totalBeforeDiscountPaise = subtotalPaise + prevDuePaise;
+    const grandTotalPaise = Math.max(0, totalBeforeDiscountPaise - discountPaise);
     // GST 18% inclusive
-    const taxPaise = Math.round(netBasePaise - (netBasePaise / 1.18));
-    const grandTotalPaise = netBasePaise;
+    const taxPaise = Math.round(grandTotalPaise - (grandTotalPaise / 1.18));
 
     const advanceINR = parseFloat(advanceInput ? advanceInput.value : 0) || 0;
-    const advancePaise = Math.round(advanceINR * 100);
-    const remainingPaise = Math.max(0, grandTotalPaise - advancePaise);
+    const secondInput = document.getElementById('pos-second-amount');
+    const secondINR = parseFloat(secondInput ? secondInput.value : 0) || 0;
+    const thirdInput = document.getElementById('pos-third-amount');
+    const thirdINR = parseFloat(thirdInput ? thirdInput.value : 0) || 0;
+
+    const totalPaidPaise = Math.round((advanceINR + secondINR + thirdINR) * 100);
+    const remainingPaise = Math.max(0, grandTotalPaise - totalPaidPaise);
 
     if (countEl) countEl.textContent = `${totalItems} item${totalItems > 1 ? 's' : ''}`;
     if (subtotalEl) subtotalEl.textContent = formatINR(subtotalPaise, true);
     if (discountValEl) discountValEl.textContent = `-${formatINR(discountPaise, true)}`;
     if (taxEl) taxEl.textContent = formatINR(taxPaise, true);
     if (advanceValEl) advanceValEl.textContent = formatINR(advancePaise, true);
-    if (remainingValEl) remainingValEl.textContent = formatINR(remainingPaise, true);
+    if (subtotalEl) subtotalEl.textContent = '₹ ' + (totalBeforeDiscountPaise / 100).toLocaleString('en-IN');
+    if (remainingValEl) remainingValEl.textContent = '₹ ' + (remainingPaise / 100).toLocaleString('en-IN');
+    const remBadgeActive = document.getElementById('optic-rem-badge');
+    if (remBadgeActive) {
+      if (remainingPaise === 0) {
+        remBadgeActive.classList.remove('rem-has-due');
+        remBadgeActive.classList.add('rem-settled');
+      } else {
+        remBadgeActive.classList.remove('rem-settled');
+        remBadgeActive.classList.add('rem-has-due');
+      }
+    }
     if (grandTotalEl) grandTotalEl.value = (grandTotalPaise / 100).toFixed(2);
     if (btnCheckout) btnCheckout.disabled = false;
 
@@ -5836,6 +5895,12 @@
       if (previewImg) previewImg.src = '';
       if (discountInput) discountInput.value = 0;
       if (advanceInput) advanceInput.value = 0;
+      const pDue = document.getElementById('pos-prev-due-amount'); if (pDue) pDue.value = 0;
+      const pSec = document.getElementById('pos-second-amount'); if (pSec) pSec.value = 0;
+      const pThr = document.getElementById('pos-third-amount'); if (pThr) pThr.value = 0;
+      const pPk = document.getElementById('pos-pickup-time'); if (pPk) pPk.value = '';
+      const mNm = document.getElementById('pos-manual-item-name'); if (mNm) mNm.value = '';
+      const mPr = document.getElementById('pos-manual-item-price'); if (mPr) mPr.value = '';
 
       const tokenDisplay = document.getElementById('pos-token-display');
       if (tokenDisplay) {
@@ -5871,6 +5936,116 @@
 
     if (advanceInput) {
       advanceInput.addEventListener('input', () => updatePosCartUI());
+    }
+
+    const prevDueInput = document.getElementById('pos-prev-due-amount');
+    const secondInput = document.getElementById('pos-second-amount');
+    const thirdInput = document.getElementById('pos-third-amount');
+    const pickupInput = document.getElementById('pos-pickup-time');
+    const btnSearchPrevDue = document.getElementById('btn-search-prev-due');
+    const btnAddManual = document.getElementById('btn-add-manual-item');
+    const manualNameInput = document.getElementById('pos-manual-item-name');
+    const manualQtyInput = document.getElementById('pos-manual-item-qty');
+    const manualPriceInput = document.getElementById('pos-manual-item-price');
+
+    if (prevDueInput) prevDueInput.addEventListener('input', () => updatePosCartUI());
+    if (secondInput) secondInput.addEventListener('input', () => updatePosCartUI());
+    if (thirdInput) thirdInput.addEventListener('input', () => updatePosCartUI());
+
+    // Search customer's past due balance
+    if (btnSearchPrevDue) {
+      btnSearchPrevDue.addEventListener('click', async () => {
+        const client = state.posSelectedClient;
+        const inlinePhone = document.getElementById('pos-inline-phone')?.value.trim();
+
+        let clientId = client?.id;
+        if (!clientId && inlinePhone) {
+          const match = (state.clientsCache || []).find(c => c.phone === inlinePhone);
+          if (match) clientId = match.id;
+        }
+
+        if (clientId) {
+          try {
+            const dueRes = await apiFetch(`/api/customers/${clientId}/due`);
+            const dueINR = dueRes.total_due_inr || 0;
+            if (prevDueInput) prevDueInput.value = dueINR;
+            updatePosCartUI();
+            if (dueINR > 0) {
+              showToast(`Found ₹${dueINR.toLocaleString('en-IN')} previous unpaid due for client.`, 'info');
+            } else {
+              showToast('No previous unpaid dues found for this client.', 'info');
+            }
+          } catch (e) {
+            showToast('Could not fetch client due: ' + e.message, 'warning');
+          }
+        } else {
+          showToast('Please select or type a registered customer phone number first.', 'info');
+        }
+      });
+    }
+
+    // Manual item entry handler
+    const addManualItem = () => {
+      const name = (manualNameInput?.value || '').trim();
+      const qty = parseInt(manualQtyInput?.value || '1', 10) || 1;
+      const price = parseFloat(manualPriceInput?.value || '0');
+
+      if (!name) {
+        showToast('Please enter an item or frame name.', 'warning');
+        manualNameInput?.focus();
+        return;
+      }
+      if (isNaN(price) || price < 0) {
+        showToast('Please enter a valid price.', 'warning');
+        manualPriceInput?.focus();
+        return;
+      }
+
+      const pricePaise = Math.round(price * 100);
+      const lineTotalINR = qty * price;
+      const lineTotalPaise = qty * pricePaise;
+
+      state.posCart.push({
+        isManual: true,
+        productId: null,
+        variantId: null,
+        name: name,
+        product_name: name,
+        model: name,
+        brand: 'In-Store Custom',
+        sku: 'MANUAL-' + Date.now().toString().slice(-4),
+        color: 'Standard',
+        quantity: qty,
+        priceINR: price,
+        pricePaise: pricePaise,
+        lineTotalINR: lineTotalINR,
+        lineTotalPaise: lineTotalPaise,
+        maxStock: 9999
+      });
+
+      manualNameInput.value = '';
+      manualQtyInput.value = '1';
+      manualPriceInput.value = '';
+      updatePosCartUI();
+      showToast(`Added "${name}" to bill.`, 'success');
+    };
+
+    if (btnAddManual) btnAddManual.addEventListener('click', addManualItem);
+    if (manualPriceInput) {
+      manualPriceInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addManualItem();
+        }
+      });
+    }
+    if (manualNameInput) {
+      manualNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          manualPriceInput?.focus();
+        }
+      });
     }
 
     // Payment mode selection buttons
@@ -5922,6 +6097,10 @@
         try {
           const discountINR = parseFloat(discountInput ? discountInput.value : 0) || 0;
           const advanceINR = parseFloat(advanceInput ? advanceInput.value : 0) || 0;
+          const previousDueINR = parseFloat(document.getElementById('pos-prev-due-amount')?.value || 0) || 0;
+          const secondAmountINR = parseFloat(document.getElementById('pos-second-amount')?.value || 0) || 0;
+          const thirdAmountINR = parseFloat(document.getElementById('pos-third-amount')?.value || 0) || 0;
+          const pickupTime = document.getElementById('pos-pickup-time')?.value || null;
           const claimedUtr = document.getElementById('pos-claimed-utr') ? document.getElementById('pos-claimed-utr').value.trim() : null;
           const notes = document.getElementById('pos-bill-notes')?.value.trim() || null;
 
@@ -5942,6 +6121,10 @@
             paymentMethod: state.posPaymode,
             discountINR,
             advanceINR,
+            previousDueINR,
+            secondAmountINR,
+            thirdAmountINR,
+            pickupTime,
             notes,
             claimedUpiRef: claimedUtr,
             isVerifiedAtCounter: true,
@@ -6016,6 +6199,10 @@
           if (previewImg) previewImg.src = '';
           if (discountInput) discountInput.value = 0;
           if (advanceInput) advanceInput.value = 0;
+          const pDue2 = document.getElementById('pos-prev-due-amount'); if (pDue2) pDue2.value = 0;
+          const pSec2 = document.getElementById('pos-second-amount'); if (pSec2) pSec2.value = 0;
+          const pThr2 = document.getElementById('pos-third-amount'); if (pThr2) pThr2.value = 0;
+          const pPk2 = document.getElementById('pos-pickup-time'); if (pPk2) pPk2.value = '';
 
           // Generate next token number
           const tokenDisplay = document.getElementById('pos-token-display');
@@ -7006,6 +7193,7 @@
           <td>${escapeHtml(c.city || '-')}</td>
           <td><strong>${c.order_count || 0}</strong></td>
           <td><strong>${spendINR}</strong></td>
+          <td>${(c.total_due_inr > 0) ? `<span class="badge-due-red" style="padding:2px 8px; border-radius:12px; font-weight:800; font-size:0.75rem;">₹${c.total_due_inr.toLocaleString('en-IN')}</span>` : `<span style="color:#059669; font-weight:700; font-size:0.75rem;">✓ Settled</span>`}</td>
           <td>${formatShortDate(c.last_order_date)}</td>
           <td><span class="badge-status channel-online">🩺 ${c.prescription_count || 0}</span></td>
           <td>${formatShortDate(c.created_at)}</td>
@@ -7269,11 +7457,12 @@
               <td>${formatDateTime(o.created_at)}</td>
               <td>${o.items?.length || 1} frame(s)</td>
               <td><strong>${formatINR(o.total_payable_paise, true)}</strong></td>
-              <td><span class="badge-status ${o.payment_status === 'VERIFIED' ? 'status-verified' : 'status-awaiting'}">${escapeHtml(o.payment_status)}</span></td>
+              <td>${(o.outstanding_inr > 0 || (o.payment_status !== 'VERIFIED' && o.payment_status !== 'REFUNDED')) ? `<span class="badge-due-red">Due: ₹${((o.outstanding_inr != null) ? o.outstanding_inr : ((o.total_payable_paise || 0)/100)).toLocaleString('en-IN')}</span>` : `<span class="badge-status status-verified">PAID</span>`}</td>
               <td><span class="badge-status status-verified">${escapeHtml(o.status)}</span></td>
               <td>
                 <div style="display:flex; gap:4px;">
                   <button type="button" class="btn-table-action" onclick="viewOrderDetails('${o.id}')">View</button>
+                  ${(o.outstanding_inr > 0) ? `<button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:700;" onclick="openCollectPaymentModal('${o.id}')">💳 Pay</button>` : ''}
                   <button type="button" class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="downloadInvoicePDF('${o.id}', '${escapeHtml(o.order_number)}')" title="Download Tax Invoice PDF">📄 Invoice</button>
                 </div>
               </td>
@@ -8455,3 +8644,107 @@
   }
 
 })();
+
+  // ── Multi-Stage Payment Collection System ──────────────────────────────────
+  window.openCollectPaymentModal = function (orderId) {
+    const order = (state.ordersCache || []).find(o => o.id === orderId);
+    if (!order) {
+      showToast('Order not found.', 'error');
+      return;
+    }
+
+    const modal = document.getElementById('modal-collect-payment');
+    if (!modal) return;
+
+    document.getElementById('cp-order-id').value = order.id;
+    document.getElementById('cp-customer-name').textContent = order.customer_name || 'Walk-in Client';
+    document.getElementById('cp-order-inv').textContent = order.order_number || ('INV-' + order.id.slice(-4));
+
+    const totalINR = (order.total_payable_inr != null) ? order.total_payable_inr : ((order.total_payable_paise || 0) / 100);
+    const paidINR = (order.amount_paid_inr != null) ? order.amount_paid_inr : ((order.amount_paid_paise || 0) / 100);
+    const remainingINR = Math.max(0, totalINR - paidINR);
+
+    document.getElementById('cp-total-bill').textContent = '₹ ' + totalINR.toLocaleString('en-IN');
+    document.getElementById('cp-paid-sofar').textContent = '₹ ' + paidINR.toLocaleString('en-IN');
+    document.getElementById('cp-remaining-due').textContent = '₹ ' + remainingINR.toLocaleString('en-IN');
+
+    // Pre-fill amount with exact balance
+    const amountInput = document.getElementById('cp-amount-inr');
+    if (amountInput) amountInput.value = remainingINR > 0 ? remainingINR : '';
+
+    // Auto-select payment stage: if 2nd payment already exists, default to 3rd payment
+    const stage2Radio = document.getElementById('cp-stage-2nd');
+    const stage3Radio = document.getElementById('cp-stage-3rd');
+    if (order.second_payment_paise > 0 || order.second_payment_inr > 0) {
+      if (stage3Radio) stage3Radio.checked = true;
+    } else {
+      if (stage2Radio) stage2Radio.checked = true;
+    }
+
+    modal.classList.add('open');
+    document.body.classList.add('modal-open');
+  };
+
+  window.handleCollectPaymentSubmit = async function (e) {
+    if (e) e.preventDefault();
+    const orderId = document.getElementById('cp-order-id')?.value;
+    const amountINR = parseFloat(document.getElementById('cp-amount-inr')?.value || 0) || 0;
+    const stage = document.querySelector('input[name="cp-stage"]:checked')?.value || 'second_payment';
+    const paymentMethod = document.getElementById('cp-payment-method')?.value || 'CASH';
+    const notes = document.getElementById('cp-notes')?.value.trim() || null;
+    const btnSubmit = document.getElementById('btn-submit-collect-payment');
+
+    if (!orderId) {
+      showToast('Invalid order reference.', 'error');
+      return;
+    }
+    if (amountINR <= 0) {
+      showToast('Please enter a valid payment amount.', 'warning');
+      return;
+    }
+
+    if (btnSubmit) {
+      btnSubmit.disabled = true;
+      btnSubmit.textContent = 'Saving Payment...';
+    }
+
+    try {
+      const res = await apiFetch(`/api/pos/orders/${orderId}/collect-payment`, {
+        method: 'POST',
+        body: JSON.stringify({
+          paymentStage: stage,
+          amountINR,
+          paymentMethod,
+          notes
+        })
+      });
+
+      showToast(`Payment of ₹${amountINR.toLocaleString('en-IN')} recorded! Receipt queued for printing.`, 'success');
+
+      // Close modal
+      const modal = document.getElementById('modal-collect-payment');
+      if (modal) modal.classList.remove('open');
+      document.body.classList.remove('modal-open');
+
+      // Refresh datasets across the system
+      loadOrders();
+      if (typeof loadClients === 'function') loadClients();
+      loadDashboard();
+
+      // If order details modal is open, refresh it
+      if (window._activeViewingOrderId === orderId) {
+        setTimeout(() => viewOrderDetails(orderId), 300);
+      }
+      // If client profile modal is open, refresh it
+      if (state.activeProfileClientId) {
+        setTimeout(() => openClientProfile(state.activeProfileClientId), 300);
+      }
+    } catch (err) {
+      showToast('Failed to record payment: ' + err.message, 'error');
+    } finally {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '✓ Save Payment &amp; Print Receipt';
+      }
+    }
+  };

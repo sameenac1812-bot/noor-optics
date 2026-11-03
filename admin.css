@@ -5773,3 +5773,302 @@ body.modal-open {
   border-color: #E2E8F0;
 }
 
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   OPTIC-TOOL MANUAL FRAME ENTRY & MULTI-STAGE SPLIT BILLING LAYOUT
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Manual Frame Entry Bar (Image: Item name *, Qty, Price *, Add) */
+.pos-manual-entry-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #F8FAFC;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #E2E8F0;
+  margin-bottom: 8px;
+}
+
+.pos-manual-name-input {
+  flex: 1;
+  min-width: 140px;
+  height: 38px;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  padding: 0 10px;
+  font-size: 0.88rem;
+  color: #0F172A;
+  background: #FFFFFF;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.pos-manual-name-input:focus {
+  border-color: #0284C7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.pos-manual-qty-input {
+  width: 52px;
+  height: 38px;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  padding: 0 6px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-align: center;
+  color: #0F172A;
+  background: #FFFFFF;
+  outline: none;
+}
+
+.pos-manual-price-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pos-manual-price-wrap .currency-sym {
+  position: absolute;
+  left: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #64748B;
+  pointer-events: none;
+}
+
+.pos-manual-price-input {
+  width: 90px;
+  height: 38px;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  padding: 0 8px 0 22px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0F172A;
+  background: #FFFFFF;
+  outline: none;
+}
+
+.pos-manual-price-input:focus,
+.pos-manual-qty-input:focus {
+  border-color: #0284C7;
+}
+
+.btn-pos-add-manual {
+  height: 38px;
+  padding: 0 16px;
+  background: #0F2C59;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-pos-add-manual:hover {
+  background: #1E3A8A;
+}
+
+/* OpticTool Split Layout (Totals Card) */
+.optic-split-layout {
+  padding: 14px 16px;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+}
+
+.optic-totals-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1.3fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .optic-totals-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+/* Left Column: Previous Due */
+.optic-prev-due-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-search-prev-due {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #1E293B;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-search-prev-due:hover {
+  border-color: #0284C7;
+  color: #0284C7;
+  background: #F0F9FF;
+}
+
+.optic-field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.optic-field-row label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1E293B;
+}
+
+.optic-input-box {
+  width: 85px;
+}
+
+.optic-calc-input {
+  width: 100%;
+  height: 32px;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 6px;
+  padding: 0 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-align: right;
+  color: #0F172A;
+  background: #FFFFFF;
+  outline: none;
+}
+
+.optic-calc-input:focus {
+  border-color: #0284C7;
+}
+
+/* Right Column: Multi-Stage Breakdown */
+.optic-breakdown-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.optic-calc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+
+.calc-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1E293B;
+}
+
+.calc-val {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #0F172A;
+}
+
+.calc-label-with-addon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1E293B;
+}
+
+.calc-label-with-addon .currency-tag {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #64748B;
+  background: #F1F5F9;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+/* Prominent REM. badge (Matching OpticTool reference image) */
+.optic-rem-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin: 6px 0;
+  font-weight: 900;
+  transition: all 0.2s ease;
+}
+
+.optic-rem-badge.rem-settled {
+  background: #10B981;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+}
+
+.optic-rem-badge.rem-has-due {
+  background: #EF4444;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.optic-rem-badge .rem-title {
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}
+
+.optic-rem-badge .rem-amount {
+  font-size: 1.15rem;
+}
+
+/* Pick Up Time Selector */
+.optic-pickup-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.pickup-header {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #0284C7;
+  letter-spacing: 0.04em;
+}
+
+.optic-pickup-input {
+  width: 100%;
+  height: 34px;
+  border: 1.5px dashed #CBD5E1;
+  border-radius: 6px;
+  padding: 0 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #334155;
+  background: #F8FAFC;
+  outline: none;
+}
+
+.optic-pickup-input:focus {
+  border-color: #0284C7;
+  border-style: solid;
+  background: #FFFFFF;
+}
