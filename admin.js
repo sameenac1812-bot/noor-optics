@@ -32,9 +32,9 @@
     user: null,
     activeNav: 'dashboard', // dashboard | orders | inventory | pos
     storeSettings: {
-      store_name: 'Noor Optics Flagship Boutique',
+      store_name: 'Noor Optic',
       store_phone: '+91 98765 43210',
-      store_address: '104, 100ft Road, Indiranagar, Bengaluru, Karnataka - 560038',
+      store_address: 'Pillar No: 45, Beside HP Petrol Pump, Opposite Subhan Bakery, Rethibowli, Gudimalkapur, Hyderabad, Telangana 500028',
       store_gstin: '29AAAAA0000A1Z5',
       store_upi_id: 'nooroptics@okhdfcbank'
     },
@@ -5413,7 +5413,7 @@
     qrContainer.innerHTML = '';
 
     const upiId = state.storeSettings.store_upi_id || 'nooroptics@okhdfcbank';
-    const merchantName = encodeURIComponent(state.storeSettings.store_name || 'NOOR OPTICS');
+    const merchantName = encodeURIComponent(state.storeSettings.store_name || 'NOOR OPTIC');
     const upiUri = `upi://pay?pa=${upiId}&pn=${merchantName}&am=${amountINR.toFixed(2)}&cu=INR&tn=NoorPOSBill`;
 
     new window.QRCode(qrContainer, {
@@ -7059,7 +7059,7 @@
       return;
     }
     const intlPhone = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
-    const storeName = state.storeSettings.store_name || 'Noor Optics';
+    const storeName = state.storeSettings.store_name || 'Noor Optic';
     const text = encodeURIComponent(`Hello ${clientName || 'Valued Customer'}, this is ${storeName}. We are contacting you regarding your optical eyewear and prescription records. Please let us know if you need any assistance.`);
     window.open(`https://wa.me/${intlPhone}?text=${text}`, '_blank');
   };
@@ -7277,7 +7277,7 @@
       // Tab 4: Communications
       const phoneDigits = String(client.phone || '').replace(/[^0-9]/g, '');
       const intlDigits = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
-      const storeName = state.storeSettings.store_name || 'Noor Optics';
+      const storeName = state.storeSettings.store_name || 'Noor Optic';
       const defaultMsg = `Hello ${client.name || 'Valued Client'}, this is ${storeName}. We are contacting you regarding your recent purchase and optical eyewear. Please let us know if you need any assistance or lens fitting adjustments.`;
 
       document.getElementById('cp-call-phone-label').textContent = client.phone || 'No phone';

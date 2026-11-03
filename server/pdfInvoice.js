@@ -5,6 +5,8 @@
 
 'use strict';
 
+const path = require('path');
+const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const { getStoreSettings } = require('./printer');
 
@@ -28,7 +30,7 @@ function generateInvoicePDF(invoice, items, prescription = null) {
       margin: 45,
       info: {
         Title: `Tax Invoice - ${invoice.invoice_number}`,
-        Author: 'Noor Optics Flagship Boutique'
+        Author: 'Noor Optic'
       }
     });
 
@@ -37,83 +39,74 @@ function generateInvoicePDF(invoice, items, prescription = null) {
     doc.on('end', () => resolve(Buffer.concat(buffers)));
     doc.on('error', err => reject(err));
 
-    const settings = getStoreSettings();
-    const storeName = settings.store_name || 'NOOR OPTIC';
-    const storeAddress = settings.store_address || 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028';
-    const storePhone = settings.store_phone || '+91 98765 43210';
-    const storeEmail = settings.store_email || 'concierge@nooroptics.com';
-    const storeGstin = settings.store_gstin || '29AAAAA0000A1Z5';
+    const storeName = 'NOOR OPTIC';
+    const storeAddress = 'Pillar No: 45, Beside HP Petrol Pump, Opposite Subhan Bakery,\nRethibowli, Gudimalkapur, Hyderabad, Telangana 500028';
 
-    // ── Header ──────────────────────────────────────────────────────────────
+    // ── Logo & Header ────────────────────────────────────────────────────────
+    const possibleLogoPaths = [
+      path.join(__dirname, 'logo.jpg'),
+      path.join(__dirname, '..', 'images', 'noor_optic_logo.jpg'),
+      path.join(process.cwd(), 'server', 'logo.jpg'),
+      path.join(process.cwd(), 'images', 'noor_optic_logo.jpg')
+    ];
+    const logoPath = possibleLogoPaths.find(p => fs.existsSync(p));
+    let headerTextX = 45;
+    if (logoPath) {
+      try {
+        doc.image(logoPath, 45, 38, { width: 56 });
+        headerTextX = 112;
+      } catch (imgErr) {
+        console.warn('Could not render logo in PDF:', imgErr.message);
+      }
+    }
+
     doc
       .fontSize(22)
       .font('Helvetica-Bold')
       .fillColor('#111111')
-      .text(storeName.toUpperCase(), 45, 45);
+      .text(storeName, headerTextX, 42);
 
     doc
-      .fontSize(9)
+      .fontSize(8.5)
       .font('Helvetica')
-      .fillColor('#555555')
-      .text('Curated Scandinavian Eyewear & Vision Care Flagship', 45, 72)
-      .text(storeAddress, 45, 85)
-      .text(`Phone: ${storePhone}  |  Email: ${storeEmail}`, 45, 98)
-      .text(`GSTIN: ${storeGstin}`, 45, 111);
+      .fillColor('#4B5563')
+      .text(storeAddress, headerTextX, 70, { width: 235, lineGap: 3 });
 
     // Invoice Meta Right Aligned
     doc
       .fontSize(16)
       .font('Helvetica-Bold')
       .fillColor('#111111')
-      .text('TAX INVOICE', 350, 45, { align: 'right' });
-
-    doc
-      .fontSize(9)
-      .font('Helvetica')
-      .fillColor('#333333')
-      .text(`Invoice No: ${invoice.invoice_number}`, 350, 72, { align: 'right' })
-      .text(`Date: ${new Date(invoice.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 350, 85, { align: 'right' })
-      .text(`Order Ref: ${invoice.order_id}`, 350, 98, { align: 'right' });
-
-    // Payment Status Stamp Box
-    const isPaid = invoice.payment_status === 'VERIFIED';
-    const stampColor = isPaid ? '#059669' : '#D97706';
-    const stampText = isPaid ? 'PAYMENT VERIFIED / PAID' : 'PAYMENT PENDING VERIFICATION';
-
-    doc
-      .rect(385, 115, 165, 20)
-      .fillColor(isPaid ? '#ECFDF5' : '#FEF3C7')
-      .fill()
-      .strokeColor(stampColor)
-      .lineWidth(1)
-      .stroke();
+      .text('TAX INVOICE', 350, 42, { align: 'right' });
 
     doc
       .fontSize(8.5)
-      .font('Helvetica-Bold')
-      .fillColor(stampColor)
-      .text(stampText, 385, 120, { width: 165, align: 'center' });
+      .font('Helvetica')
+      .fillColor('#333333')
+      .text(`Invoice No: ${invoice.invoice_number}`, 350, 68, { align: 'right' })
+      .text(`Date: ${new Date(invoice.created_at || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 350, 82, { align: 'right' })
+      .text(`Order Ref: ${invoice.order_number || invoice.order_id}`, 350, 96, { align: 'right' });
 
-    doc.moveTo(45, 145).lineTo(550, 145).strokeColor('#E5E7EB').lineWidth(1).stroke();
+    doc.moveTo(45, 122).lineTo(550, 122).strokeColor('#E5E7EB').lineWidth(1).stroke();
 
     // ── Customer Information ────────────────────────────────────────────────
     doc
       .fontSize(10)
       .font('Helvetica-Bold')
       .fillColor('#111111')
-      .text('BILLED TO:', 45, 155);
+      .text('BILLED TO:', 45, 134);
 
     doc
       .fontSize(9)
       .font('Helvetica')
       .fillColor('#444444')
-      .text(invoice.customer_name || 'Walk-in Client', 45, 170)
-      .text(invoice.customer_phone ? `Phone: ${invoice.customer_phone}` : '', 45, 183)
-      .text(invoice.customer_email ? `Email: ${invoice.customer_email}` : '', 45, 196)
-      .text(invoice.customer_address ? `Delivery: ${invoice.customer_address}` : '', 45, 209);
+      .text(invoice.customer_name || 'Walk-in Client', 45, 149)
+      .text(invoice.customer_phone ? `Phone: ${invoice.customer_phone}` : '', 45, 162)
+      .text(invoice.customer_email ? `Email: ${invoice.customer_email}` : '', 45, 175)
+      .text(invoice.customer_address ? `Delivery: ${invoice.customer_address}` : '', 45, 188);
 
     // ── Items Table ─────────────────────────────────────────────────────────
-    const tableTop = 235;
+    const tableTop = 215;
 
     // Header Row
     doc
@@ -268,7 +261,7 @@ function generateInvoicePDF(invoice, items, prescription = null) {
       .fontSize(8)
       .font('Helvetica')
       .fillColor('#999999')
-      .text('Noor Optics E-Commerce & Retail Management System · Digitally Certified Tax Invoice', 45, 760, { align: 'center', width: 505 });
+      .text('Noor Optic E-Commerce & Retail Management System · Digitally Certified Tax Invoice', 45, 760, { align: 'center', width: 505 });
 
     doc.end();
   });

@@ -1419,9 +1419,9 @@ function seedDatabase(customDb) {
 
     // ── 8. Store Settings ────────────────────────────────────────────────────
     const defaultSettings = [
-      { key: 'store_name', value: 'Noor Optics Flagship Boutique' },
-      { key: 'store_tagline', value: 'Curated Scandinavian Eyewear & Vision Care' },
-      { key: 'store_address', value: '104, 100ft Road, Indiranagar, Bengaluru, Karnataka - 560038' },
+      { key: 'store_name', value: 'Noor Optic' },
+      { key: 'store_tagline', value: '' },
+      { key: 'store_address', value: 'Pillar No: 45, Beside HP Petrol Pump, Opposite Subhan Bakery, Rethibowli, Gudimalkapur, Hyderabad, Telangana 500028' },
       { key: 'store_phone', value: '+91 98765 43210' },
       { key: 'store_email', value: 'concierge@nooroptics.com' },
       { key: 'store_gstin', value: '29AAAAA0000A1Z5' },
