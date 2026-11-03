@@ -3069,14 +3069,14 @@ router.get('/finance/summary', authenticateToken, requirePermission('finance:vie
   const paramsExpenses = [];
 
   if (startDate) {
-    dateFilterOrders += ' AND o.created_at >= ?';
-    paramsOrders.push(startDate + ' 00:00:00');
+    dateFilterOrders += " AND COALESCE(date(datetime(o.created_at, '+05:30')), date(o.created_at), substr(o.created_at, 1, 10)) >= ?";
+    paramsOrders.push(startDate);
     dateFilterExpenses += ' AND e.expense_date >= ?';
     paramsExpenses.push(startDate);
   }
   if (endDate) {
-    dateFilterOrders += ' AND o.created_at <= ?';
-    paramsOrders.push(endDate + ' 23:59:59');
+    dateFilterOrders += " AND COALESCE(date(datetime(o.created_at, '+05:30')), date(o.created_at), substr(o.created_at, 1, 10)) <= ?";
+    paramsOrders.push(endDate);
     dateFilterExpenses += ' AND e.expense_date <= ?';
     paramsExpenses.push(endDate);
   }
@@ -3732,32 +3732,29 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
     if (!endDate) endDate = todayStr;
   }
 
-  const startTimestamp = `${startDate} 00:00:00`;
-  const endTimestamp = `${endDate} 23:59:59`;
+  const dateExpr = "COALESCE(date(datetime(created_at, '+05:30')), date(created_at), substr(created_at, 1, 10))";
 
   // 1. In-Store Sales (Completed/Verified POS)
   const inStoreRow = db.prepare(`
     SELECT
       COUNT(id) as order_count,
-      COALESCE(SUM(total_payable_paise), 0) as total_sales_paise
+      COALESCE(SUM(CASE WHEN payment_status = 'VERIFIED' THEN total_payable_paise ELSE 0 END), 0) as total_sales_paise
     FROM orders
     WHERE channel = 'POS'
       AND status != 'CANCELLED'
-      AND payment_status = 'VERIFIED'
-      AND created_at >= ? AND created_at <= ?
-  `).get(startTimestamp, endTimestamp);
+      AND ${dateExpr} >= ? AND ${dateExpr} <= ?
+  `).get(startDate, endDate);
 
   // 2. Website Sales (Completed/Verified Online)
   const websiteRow = db.prepare(`
     SELECT
       COUNT(id) as order_count,
-      COALESCE(SUM(total_payable_paise), 0) as total_sales_paise
+      COALESCE(SUM(CASE WHEN payment_status = 'VERIFIED' THEN total_payable_paise ELSE 0 END), 0) as total_sales_paise
     FROM orders
     WHERE channel IN ('ONLINE', 'WEBSITE')
       AND status != 'CANCELLED'
-      AND payment_status = 'VERIFIED'
-      AND created_at >= ? AND created_at <= ?
-  `).get(startTimestamp, endTimestamp);
+      AND ${dateExpr} >= ? AND ${dateExpr} <= ?
+  `).get(startDate, endDate);
 
   // 3. Combined Total Revenue
   const inStoreSalesINR = (inStoreRow.total_sales_paise || 0) / 100;
@@ -3813,11 +3810,12 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
   if (isHourly) {
     // Generate 24 hours (00 to 23)
     const ordersInRange = db.prepare(`
-      SELECT channel, total_payable_paise, strftime('%H', created_at) as hour_part
+      SELECT channel, total_payable_paise,
+             COALESCE(strftime('%H', datetime(created_at, '+05:30')), strftime('%H', created_at), '12') as hour_part
       FROM orders
       WHERE status != 'CANCELLED' AND payment_status = 'VERIFIED'
-        AND created_at >= ? AND created_at <= ?
-    `).all(startTimestamp, endTimestamp);
+        AND ${dateExpr} >= ? AND ${dateExpr} <= ?
+    `).all(startDate, endDate);
 
     const hourlyMap = {};
     for (let h = 0; h < 24; h++) {
@@ -3827,7 +3825,7 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
     }
 
     ordersInRange.forEach(o => {
-      const h = o.hour_part;
+      const h = String(parseInt(o.hour_part, 10) || 0).padStart(2, '0');
       if (hourlyMap[h]) {
         const amt = (o.total_payable_paise || 0) / 100;
         if (o.channel === 'POS') {
@@ -3844,16 +3842,17 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
   } else {
     // Group by Day (YYYY-MM-DD)
     const dailyOrders = db.prepare(`
-      SELECT channel, total_payable_paise, substr(created_at, 1, 10) as day_date
+      SELECT channel, total_payable_paise,
+             ${dateExpr} as day_date
       FROM orders
       WHERE status != 'CANCELLED' AND payment_status = 'VERIFIED'
-        AND created_at >= ? AND created_at <= ?
-    `).all(startTimestamp, endTimestamp);
+        AND ${dateExpr} >= ? AND ${dateExpr} <= ?
+    `).all(startDate, endDate);
 
     const dayMap = {};
     // Seed days between startDate and endDate
-    const cur = new Date(startDate);
-    const end = new Date(endDate);
+    const cur = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
     while (cur <= end) {
       const dStr = cur.toISOString().slice(0, 10);
       const shortLabel = cur.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
@@ -3932,9 +3931,6 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
 // ── GET /api/reports/daily-sales (Reconciled Daily Sales Report) ───────────────
 router.get('/reports/daily-sales', authenticateToken, (req, res) => {
   const businessDate = req.query.date || getKolkataDateString();
-  const startTimestamp = `${businessDate} 00:00:00`;
-  const endTimestamp = `${businessDate} 23:59:59`;
-
   const allOrders = db.prepare(`
     SELECT
       o.*,
@@ -3943,9 +3939,9 @@ router.get('/reports/daily-sales', authenticateToken, (req, res) => {
       (SELECT GROUP_CONCAT(product_name || ' (' || quantity || ')') FROM order_items oi WHERE oi.order_id = o.id) as items_summary
     FROM orders o
     LEFT JOIN invoices inv ON o.id = inv.order_id
-    WHERE o.created_at >= ? AND o.created_at <= ?
+    WHERE COALESCE(date(datetime(o.created_at, '+05:30')), date(o.created_at), substr(o.created_at, 1, 10)) = ?
     ORDER BY o.created_at ASC
-  `).all(startTimestamp, endTimestamp);
+  `).all(businessDate);
 
   let inStoreCount = 0;
   let inStoreSalesPaise = 0;

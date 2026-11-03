@@ -7913,6 +7913,32 @@
     const btnRefresh = document.getElementById('btn-refresh-dash');
     if (btnRefresh) btnRefresh.addEventListener('click', () => { loadDashboard(); showToast('Dashboard refreshed.', 'info'); });
 
+    // KPI Cards interactive shortcuts
+    document.getElementById('card-in-store-sales')?.addEventListener('click', () => {
+      switchNav('orders');
+      document.querySelector('.optic-orders-channel-tabs .channel-tab-btn[data-channel="POS"]')?.click();
+    });
+    document.getElementById('card-website-sales')?.addEventListener('click', () => {
+      switchNav('orders');
+      document.querySelector('.optic-orders-channel-tabs .channel-tab-btn[data-channel="WEBSITE"]')?.click();
+    });
+    document.getElementById('card-combined-revenue')?.addEventListener('click', () => {
+      switchNav('orders');
+      document.querySelector('.optic-orders-channel-tabs .channel-tab-btn[data-channel="ALL"]')?.click();
+    });
+    document.getElementById('kpi-in-store-count')?.closest('.kpi-card')?.addEventListener('click', () => {
+      switchNav('orders');
+      document.querySelector('.optic-orders-channel-tabs .channel-tab-btn[data-channel="POS"]')?.click();
+    });
+    document.getElementById('kpi-website-count')?.closest('.kpi-card')?.addEventListener('click', () => {
+      switchNav('orders');
+      document.querySelector('.optic-orders-channel-tabs .channel-tab-btn[data-channel="WEBSITE"]')?.click();
+    });
+    document.getElementById('kpi-distinct-frames')?.closest('.kpi-card')?.addEventListener('click', () => switchNav('inventory'));
+    document.getElementById('kpi-physical-units')?.closest('.kpi-card')?.addEventListener('click', () => switchNav('inventory'));
+    document.getElementById('kpi-low-stock')?.closest('.kpi-card')?.addEventListener('click', () => switchNav('inventory'));
+    document.getElementById('kpi-out-of-stock')?.closest('.kpi-card')?.addEventListener('click', () => switchNav('inventory'));
+
     // 4. OpticTool Orders 4-Channel Navigation (All, In-Store, Website, Clients)
     document.querySelectorAll('.optic-orders-channel-tabs .channel-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
