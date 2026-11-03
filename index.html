@@ -176,91 +176,80 @@
   <section class="lk-category-showcase" id="lk-category-showcase" aria-label="Eyewear Categories by Gender & Brand">
     <div class="lk-showcase-container">
       
-      <!-- Festive Promotional Banner -->
-      <div class="lk-promo-banner" id="lk-promo-banner" onclick="filterByPromoSale()">
-        <div class="lk-banner-content">
-          <div class="lk-banner-left">
-            <span class="lk-banner-badge">FESTIVE EDIT</span>
-            <span class="lk-banner-gold-title">Diwali Sale is live</span>
+      <!-- Eyeglasses & Sunglasses Split Grid (Compact & Sleek) -->
+      <div class="lk-split-grid">
+        <!-- 1. Eyeglasses Section -->
+        <div class="lk-category-block">
+          <div class="lk-section-header">
+            <div class="lk-title-group">
+              <h2 class="lk-section-title">Eyeglasses</h2>
+              <span class="lk-title-badge">with Power</span>
+            </div>
+            <button type="button" class="lk-link-viewall" onclick="selectVisualCategory('Eyeglasses', 'all')">View All</button>
           </div>
-          <div class="lk-banner-right">
-            <span class="lk-banner-sub">1000+ Styles Starting @ ₹1200</span>
-            <div class="lk-banner-arrow" aria-hidden="true">→</div>
+          <div class="lk-cards-row">
+            <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Men" onclick="selectVisualCategory('Eyeglasses', 'Men')" role="button" tabindex="0">
+              <div class="lk-card-img-wrap">
+                <img src="images/categories/eyeglass_men.jpg?v=2" alt="Men's Eyeglasses" loading="lazy" />
+              </div>
+              <span class="lk-card-label">Men</span>
+            </div>
+            <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Women" onclick="selectVisualCategory('Eyeglasses', 'Women')" role="button" tabindex="0">
+              <div class="lk-card-img-wrap">
+                <img src="images/categories/eyeglass_women.jpg?v=2" alt="Women's Eyeglasses" loading="lazy" />
+              </div>
+              <span class="lk-card-label">Women</span>
+            </div>
+            <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Kids" onclick="selectVisualCategory('Eyeglasses', 'Kids')" role="button" tabindex="0">
+              <div class="lk-card-img-wrap">
+                <img src="images/categories/eyeglass_kids.jpg?v=2" alt="Kids Eyeglasses" loading="lazy" />
+              </div>
+              <span class="lk-card-label">Kids</span>
+            </div>
+            <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="sale" onclick="selectVisualCategory('Eyeglasses', 'sale')" role="button" tabindex="0">
+              <div class="lk-card-img-wrap lk-sale-card">
+                <span class="lk-sale-pill">Starts @₹800</span>
+                <img src="images/categories/eyeglass_sale.jpg?v=2" alt="Eyeglasses On Sale" loading="lazy" />
+              </div>
+              <span class="lk-card-label">On Sale</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- 1. Eyeglasses Section -->
-      <div class="lk-category-block">
-        <div class="lk-section-header">
-          <div class="lk-title-group">
-            <h2 class="lk-section-title">Eyeglasses</h2>
-            <span class="lk-title-badge">with Power</span>
-          </div>
-          <button type="button" class="lk-link-viewall" onclick="selectVisualCategory('Eyeglasses', 'all')">View All</button>
-        </div>
-        <div class="lk-cards-row">
-          <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Men" onclick="selectVisualCategory('Eyeglasses', 'Men')" role="button" tabindex="0">
-            <div class="lk-card-img-wrap">
-              <img src="/images/categories/eyeglass_men.jpg" alt="Men's Eyeglasses" loading="lazy" />
+        <!-- 2. Sunglasses Section -->
+        <div class="lk-category-block">
+          <div class="lk-section-header">
+            <div class="lk-title-group">
+              <h2 class="lk-section-title">Sunglasses</h2>
             </div>
-            <span class="lk-card-label">Men</span>
+            <button type="button" class="lk-link-viewall" onclick="selectVisualCategory('Sunglasses', 'all')">View All</button>
           </div>
-          <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Women" onclick="selectVisualCategory('Eyeglasses', 'Women')" role="button" tabindex="0">
-            <div class="lk-card-img-wrap">
-              <img src="/images/categories/eyeglass_women.jpg" alt="Women's Eyeglasses" loading="lazy" />
+          <div class="lk-cards-row">
+            <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Men" onclick="selectVisualCategory('Sunglasses', 'Men')" role="button" tabindex="0">
+              <div class="lk-card-img-wrap">
+                <img src="images/categories/sunglass_men.jpg?v=2" alt="Men's Sunglasses" loading="lazy" />
+              </div>
+              <span class="lk-card-label">Men</span>
             </div>
-            <span class="lk-card-label">Women</span>
-          </div>
-          <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Kids" onclick="selectVisualCategory('Eyeglasses', 'Kids')" role="button" tabindex="0">
-            <div class="lk-card-img-wrap">
-              <img src="/images/categories/eyeglass_kids.jpg" alt="Kids Eyeglasses" loading="lazy" />
+            <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Women" onclick="selectVisualCategory('Sunglasses', 'Women')" role="button" tabindex="0">
+              <div class="lk-card-img-wrap">
+                <img src="images/categories/sunglass_women.jpg?v=2" alt="Women's Sunglasses" loading="lazy" />
+              </div>
+              <span class="lk-card-label">Women</span>
             </div>
-            <span class="lk-card-label">Kids</span>
-          </div>
-          <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="all" onclick="selectVisualCategory('Eyeglasses', 'all')" role="button" tabindex="0">
-            <div class="lk-card-img-wrap lk-sale-card">
-              <span class="lk-sale-pill">Starts @₹800</span>
-              <img src="/images/categories/eyeglass_sale.jpg" alt="Eyeglasses On Sale" loading="lazy" />
+            <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Kids" onclick="selectVisualCategory('Sunglasses', 'Kids')" role="button" tabindex="0">
+              <div class="lk-card-img-wrap">
+                <img src="images/categories/sunglass_kids.jpg?v=2" alt="Kids Sunglasses" loading="lazy" />
+              </div>
+              <span class="lk-card-label">Kids</span>
             </div>
-            <span class="lk-card-label">On Sale</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 2. Sunglasses Section -->
-      <div class="lk-category-block">
-        <div class="lk-section-header">
-          <div class="lk-title-group">
-            <h2 class="lk-section-title">Sunglasses</h2>
-          </div>
-          <button type="button" class="lk-link-viewall" onclick="selectVisualCategory('Sunglasses', 'all')">View All</button>
-        </div>
-        <div class="lk-cards-row">
-          <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Men" onclick="selectVisualCategory('Sunglasses', 'Men')" role="button" tabindex="0">
-            <div class="lk-card-img-wrap">
-              <img src="/images/categories/sunglass_men.jpg" alt="Men's Sunglasses" loading="lazy" />
+            <div class="lk-cat-card" data-cat="Sunglasses" data-gender="sale" onclick="selectVisualCategory('Sunglasses', 'sale')" role="button" tabindex="0">
+              <div class="lk-card-img-wrap lk-sale-card">
+                <span class="lk-sale-pill">Starts @₹500</span>
+                <img src="images/categories/sunglass_sale.jpg?v=2" alt="Sunglasses On Sale" loading="lazy" />
+              </div>
+              <span class="lk-card-label">On Sale</span>
             </div>
-            <span class="lk-card-label">Men</span>
-          </div>
-          <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Women" onclick="selectVisualCategory('Sunglasses', 'Women')" role="button" tabindex="0">
-            <div class="lk-card-img-wrap">
-              <img src="/images/categories/sunglass_women.jpg" alt="Women's Sunglasses" loading="lazy" />
-            </div>
-            <span class="lk-card-label">Women</span>
-          </div>
-          <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Kids" onclick="selectVisualCategory('Sunglasses', 'Kids')" role="button" tabindex="0">
-            <div class="lk-card-img-wrap">
-              <img src="/images/categories/sunglass_kids.jpg" alt="Kids Sunglasses" loading="lazy" />
-            </div>
-            <span class="lk-card-label">Kids</span>
-          </div>
-          <div class="lk-cat-card" data-cat="Sunglasses" data-gender="all" onclick="selectVisualCategory('Sunglasses', 'all')" role="button" tabindex="0">
-            <div class="lk-card-img-wrap lk-sale-card">
-              <span class="lk-sale-pill">Starts @₹500</span>
-              <img src="/images/categories/sunglass_sale.jpg" alt="Sunglasses On Sale" loading="lazy" />
-            </div>
-            <span class="lk-card-label">On Sale</span>
           </div>
         </div>
       </div>
@@ -289,22 +278,9 @@
     </div>
   </section>
 
-  <!-- Secondary Bar: Shape Pills & Mobile Action Bar -->
+  <!-- Secondary Bar: Mobile Action Bar & Item Counter -->
   <nav class="store-sub-bar" aria-label="Product Categories & Active Filters">
     <div class="sub-bar-container">
-      <!-- Shape Pills Selector (Horizontal Smooth Swipe) -->
-      <div class="shape-pill-scroll-wrap">
-        <div class="shape-pill-nav" id="shape-pills-nav">
-          <button class="shape-pill active" data-shape="all">All Shapes</button>
-          <button class="shape-pill" data-shape="Rectangular">Rectangular</button>
-          <button class="shape-pill" data-shape="Round">Round</button>
-          <button class="shape-pill" data-shape="Square">Square</button>
-          <button class="shape-pill" data-shape="Geometric">Hex / Geometric</button>
-          <button class="shape-pill" data-shape="Aviator">Aviator</button>
-          <button class="shape-pill" data-shape="Cat-Eye">Cat-Eye</button>
-        </div>
-      </div>
-
       <!-- Action Row: Item Counter & Mobile Sort/Filter Buttons -->
       <div class="sub-bar-actions-row">
         <div class="catalog-counter" id="catalog-count"><span class="count-desktop">Loading curated frames...</span><span class="count-mobile">Loading...</span></div>

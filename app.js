@@ -224,7 +224,7 @@
       const g = state.filters.gender.toLowerCase();
       list = list.filter(item => {
         const itemGender = (item.gender || 'Unisex').toLowerCase();
-        if (g === 'kids') return itemGender === 'kids';
+        if (g === 'kids') return itemGender === 'kids' || itemGender === 'unisex';
         return itemGender === g || itemGender === 'unisex';
       });
     }
@@ -519,9 +519,30 @@
           state.filters[key] = 'all';
           syncFilterDrawerUI();
         }
+        syncVisualShowcaseUI();
         syncShapePillNav();
         renderProductGrid();
       });
+    });
+  }
+
+  // ── Sync Visual Category & Brand Showcase UI ─────────────────────────────────
+  function syncVisualShowcaseUI() {
+    document.querySelectorAll('.lk-cat-card').forEach(card => {
+      const cardCat = card.getAttribute('data-cat');
+      const cardGender = card.getAttribute('data-gender');
+      let isActive = false;
+      if (cardGender === 'sale') {
+        isActive = (state.filters.category === cardCat && state.filters.priceRange === 'under-3500');
+      } else {
+        isActive = (state.filters.category === cardCat && state.filters.gender === cardGender);
+      }
+      card.classList.toggle('active', isActive);
+    });
+
+    document.querySelectorAll('.lk-brand-pill').forEach(btn => {
+      const b = btn.getAttribute('data-brand') || 'all';
+      btn.classList.toggle('active', b === (state.filters.brand || 'all'));
     });
   }
 
@@ -585,8 +606,7 @@
       category: 'all',
       brand: 'all'
     };
-    document.querySelectorAll('.lk-cat-card').forEach(c => c.classList.remove('active'));
-    document.querySelectorAll('.lk-brand-pill').forEach(b => b.classList.toggle('active', b.getAttribute('data-brand') === 'all'));
+    syncVisualShowcaseUI();
     if (DOM.searchInput) DOM.searchInput.value = '';
     if (DOM.searchClearBtn) DOM.searchClearBtn.classList.remove('visible');
     syncFilterDrawerUI();
@@ -2053,7 +2073,6 @@
             shape: p.shape || (staticMatch ? staticMatch.shape : 'Rectangular'),
             material: p.material || (staticMatch ? staticMatch.material : 'Italian Bio-Acetate'),
             fit: p.fit || (staticMatch ? staticMatch.fit : 'Regular'),
-            category: p.category || (staticMatch ? staticMatch.category : 'Optical'),
             rating: staticMatch ? staticMatch.rating : 4.9,
             reviewsCount: staticMatch ? staticMatch.reviewsCount : 24,
             image: p.image_url || p.image || p.imageUrl || (staticMatch ? staticMatch.image : 'images/frames/frame_01.jpg'),
@@ -2072,6 +2091,80 @@
       renderProductGrid();
     }
   }
+
+  // ── Lenskart-Style Visual Showcase Controllers ─────────────────────────────
+  function selectVisualCategory(category, gender) {
+    if (gender === 'sale') {
+      // Toggle if already selected
+      if (state.filters.category === category && state.filters.priceRange === 'under-3500') {
+        state.filters.category = 'all';
+        state.filters.priceRange = 'all';
+        state.filters.gender = 'all';
+      } else {
+        state.filters.category = category || 'all';
+        state.filters.priceRange = 'under-3500';
+        state.filters.gender = 'all';
+      }
+    } else {
+      // Toggle if already selected
+      if (state.filters.category === category && state.filters.gender === gender) {
+        state.filters.category = 'all';
+        state.filters.gender = 'all';
+      } else {
+        if (category) state.filters.category = category;
+        if (gender) state.filters.gender = gender;
+        if (state.filters.priceRange === 'under-3500') state.filters.priceRange = 'all';
+      }
+    }
+
+    syncVisualShowcaseUI();
+    renderActiveFilterChips();
+    renderProductGrid();
+
+    // Smooth scroll to catalog
+    const countEl = document.getElementById('catalog-count') || document.getElementById('product-grid');
+    if (countEl) {
+      countEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    const gText = state.filters.gender === 'all' ? 'All' : state.filters.gender;
+    const catText = state.filters.category === 'all' ? 'All Frames' : state.filters.category;
+    showToast(`Browsing ${catText} (${gText})`);
+  }
+
+  function selectBrand(brand) {
+    if (state.filters.brand === brand) {
+      state.filters.brand = 'all';
+    } else {
+      state.filters.brand = brand || 'all';
+    }
+
+    syncVisualShowcaseUI();
+    renderActiveFilterChips();
+    renderProductGrid();
+
+    const countEl = document.getElementById('catalog-count') || document.getElementById('product-grid');
+    if (countEl) {
+      countEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    showToast(state.filters.brand === 'all' ? 'Browsing all boutique brands' : `Brand: ${state.filters.brand}`);
+  }
+
+  function filterByPromoSale() {
+    state.filters.priceRange = (state.filters.priceRange === 'under-3500') ? 'all' : 'under-3500';
+    syncVisualShowcaseUI();
+    renderActiveFilterChips();
+    renderProductGrid();
+    const countEl = document.getElementById('catalog-count') || document.getElementById('product-grid');
+    if (countEl) countEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    showToast('Showing sale collection!');
+  }
+
+  // Expose to window for inline HTML onclick handlers
+  window.selectVisualCategory = selectVisualCategory;
+  window.selectBrand = selectBrand;
+  window.filterByPromoSale = filterByPromoSale;
 
   // ── Initialization ────────────────────────────────────────────────────────
   function init() {
@@ -2102,56 +2195,3 @@
   }
 
 })();
-
-  // ── Lenskart-Style Visual Showcase Controllers ─────────────────────────────
-  window.selectVisualCategory = function (category, gender) {
-    if (category) state.filters.category = category;
-    if (gender) state.filters.gender = gender;
-
-    // Update active highlight on cards
-    document.querySelectorAll('.lk-cat-card').forEach(card => {
-      const cardCat = card.getAttribute('data-cat');
-      const cardGender = card.getAttribute('data-gender');
-      const isActive = (cardCat === state.filters.category && cardGender === state.filters.gender);
-      card.classList.toggle('active', isActive);
-    });
-
-    renderActiveFilterChips();
-    renderProductGrid();
-
-    // Smooth scroll to catalog
-    const countEl = document.getElementById('catalog-count') || document.getElementById('product-grid');
-    if (countEl) {
-      countEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    const gText = state.filters.gender === 'all' ? 'All' : state.filters.gender;
-    showToast(`Browsing ${state.filters.category} (${gText})`);
-  };
-
-  window.selectBrand = function (brand) {
-    state.filters.brand = brand || 'all';
-
-    document.querySelectorAll('.lk-brand-pill').forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-brand') === (brand || 'all'));
-    });
-
-    renderActiveFilterChips();
-    renderProductGrid();
-
-    const countEl = document.getElementById('catalog-count') || document.getElementById('product-grid');
-    if (countEl) {
-      countEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    showToast(brand === 'all' ? 'Browsing all boutique brands' : `Brand: ${brand}`);
-  };
-
-  window.filterByPromoSale = function () {
-    state.filters.priceRange = 'under-3500';
-    renderActiveFilterChips();
-    renderProductGrid();
-    const countEl = document.getElementById('catalog-count') || document.getElementById('product-grid');
-    if (countEl) countEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    showToast('Showing festive sale collection!');
-  };

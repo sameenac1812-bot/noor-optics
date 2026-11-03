@@ -2949,130 +2949,71 @@ body.drawer-open .toast-pill {
 
 
 /* ═════════════════════════════════════════════════════════════════════════════
-   LENSKART-STYLE VISUAL CATEGORY & GENDER SHOWCASE
+   LENSKART-STYLE VISUAL CATEGORY & GENDER SHOWCASE (COMPACT & RESPONSIVE)
    ═════════════════════════════════════════════════════════════════════════════ */
 .lk-category-showcase {
   background: #FFFFFF;
   border-bottom: 1px solid #E2E8F0;
-  padding: 1rem 0 1.25rem 0;
+  padding: 0.85rem 0 0.65rem 0;
+  width: 100%;
 }
 
 .lk-showcase-container {
-  max-width: 1280px;
+  max-width: var(--container-max);
+  width: 100%;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 1.5rem;
 }
 
-/* Festive Promotional Banner */
-.lk-promo-banner {
-  background: linear-gradient(135deg, #0B0F19 0%, #171E2E 50%, #0F172A 100%);
-  border: 1px solid #D4AF37;
-  border-radius: 12px;
-  padding: 0.75rem 1.25rem;
-  margin-bottom: 1.25rem;
-  cursor: pointer;
-  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.15);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+/* Dual Column Split Grid on Desktop (Eyeglasses on Left, Sunglasses on Right) */
+.lk-split-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: start;
+  margin-bottom: 0.75rem;
 }
 
-.lk-promo-banner:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.25);
-}
-
-.lk-banner-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.lk-banner-left {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.lk-banner-badge {
-  background: #D4AF37;
-  color: #0B0F19;
-  font-size: 0.65rem;
-  font-weight: 900;
-  letter-spacing: 0.5px;
-  padding: 2px 7px;
-  border-radius: 4px;
-}
-
-.lk-banner-gold-title {
-  color: #F8FAFC;
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-}
-
-.lk-banner-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.lk-banner-sub {
-  color: #E2E8F0;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.lk-banner-arrow {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: #FFFFFF;
-  color: #0F172A;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 900;
-  font-size: 0.9rem;
+@media (max-width: 860px) {
+  .lk-split-grid {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
 }
 
 /* Category Blocks */
 .lk-category-block {
-  margin-bottom: 1.25rem;
-}
-
-.lk-category-block:last-child {
-  margin-bottom: 0.25rem;
+  margin-bottom: 0;
 }
 
 .lk-section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.45rem;
 }
 
 .lk-title-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .lk-section-title {
-  font-size: 1.15rem;
+  font-size: 0.88rem;
   font-weight: 800;
   color: #0F172A;
   margin: 0;
-  letter-spacing: -0.2px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
 }
 
 .lk-title-badge {
   background: #EEF2FF;
   color: #4F46E5;
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 99px;
   border: 1px solid #E0E7FF;
 }
@@ -3081,10 +3022,10 @@ body.drawer-open .toast-pill {
   background: none;
   border: none;
   color: #2563EB;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 700;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 2px 4px;
   transition: color 0.15s ease;
 }
 
@@ -3093,17 +3034,19 @@ body.drawer-open .toast-pill {
   text-decoration: underline;
 }
 
-/* Cards Row */
+/* Compact Avatar Cards Row */
 .lk-cards-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
   gap: 12px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
 }
 
-@media (max-width: 600px) {
-  .lk-cards-row {
-    gap: 10px;
-  }
+.lk-cards-row::-webkit-scrollbar {
+  display: none;
 }
 
 .lk-cat-card {
@@ -3112,6 +3055,8 @@ body.drawer-open .toast-pill {
   align-items: center;
   cursor: pointer;
   user-select: none;
+  width: 66px;
+  flex: 0 0 auto;
   transition: transform 0.15s ease;
 }
 
@@ -3121,9 +3066,9 @@ body.drawer-open .toast-pill {
 
 .lk-card-img-wrap {
   position: relative;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  border-radius: 16px;
+  width: 62px;
+  height: 62px;
+  border-radius: 14px;
   background: #F8FAFC;
   border: 1.5px solid #E2E8F0;
   overflow: hidden;
@@ -3136,13 +3081,13 @@ body.drawer-open .toast-pill {
 
 .lk-cat-card:hover .lk-card-img-wrap {
   border-color: #94A3B8;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
 }
 
 .lk-cat-card.active .lk-card-img-wrap {
   border-color: #2563EB;
   border-width: 2px;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.22);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
 .lk-card-img-wrap img {
@@ -3153,28 +3098,30 @@ body.drawer-open .toast-pill {
 }
 
 .lk-cat-card:hover .lk-card-img-wrap img {
-  transform: scale(1.04);
+  transform: scale(1.05);
 }
 
 .lk-sale-pill {
   position: absolute;
-  top: 6px;
-  left: 6px;
+  top: 2px;
+  left: 2px;
   background: #1E1B4B;
   color: #FFFFFF;
-  font-size: 0.62rem;
+  font-size: 0.5rem;
   font-weight: 800;
-  padding: 2px 6px;
+  padding: 1px 4px;
   border-radius: 4px;
   z-index: 2;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25);
 }
 
 .lk-card-label {
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  color: #334155;
-  margin-top: 6px;
+  color: #475569;
+  margin-top: 4px;
+  text-align: center;
+  white-space: nowrap;
   transition: color 0.15s ease;
 }
 
@@ -3183,12 +3130,18 @@ body.drawer-open .toast-pill {
   font-weight: 800;
 }
 
-/* Shop by Brand Pills */
+/* Shop by Brand Section */
+.lk-brands-block {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #F1F5F9;
+}
+
 .lk-brand-pills-row {
   display: flex;
-  gap: 8px;
+  gap: 7px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: 2px;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -3198,12 +3151,12 @@ body.drawer-open .toast-pill {
 }
 
 .lk-brand-pill {
-  padding: 6px 14px;
+  padding: 4px 12px;
   border-radius: 99px;
   border: 1px solid #CBD5E1;
   background: #F8FAFC;
   color: #334155;
-  font-size: 0.8rem;
+  font-size: 0.74rem;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
@@ -3220,5 +3173,5 @@ body.drawer-open .toast-pill {
   background: #0F172A;
   color: #FFFFFF;
   border-color: #0F172A;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.2);
 }
