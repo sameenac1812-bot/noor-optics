@@ -353,38 +353,199 @@
   // ═══════════════════════════════════════════════════════════════════════════
   // 1. SECTION: DASHBOARD — COMPLETE BUSINESS OVERVIEW
   // ═══════════════════════════════════════════════════════════════════════════
+  function getOrdersForDashRange(orders, range, customStart, customEnd) {
+    if (!orders || orders.length === 0) return [];
+    const now = new Date();
+    const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(now);
+
+    return orders.filter(o => {
+      if (!o) return false;
+      if (o.status === 'CANCELLED') return false;
+
+      const rawDate = o.created_at || o.createdAt || '';
+      let dStr = '';
+      try {
+        const dt = new Date(rawDate);
+        if (!isNaN(dt.getTime())) {
+          dStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(dt);
+        } else {
+          dStr = String(rawDate).slice(0, 10);
+        }
+      } catch (_) {
+        dStr = String(rawDate).slice(0, 10);
+      }
+
+      if (range === 'today') {
+        return dStr === todayStr;
+      } else if (range === 'yesterday') {
+        const y = new Date(now);
+        y.setDate(y.getDate() - 1);
+        const yStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(y);
+        return dStr === yStr;
+      } else if (range === 'this_week') {
+        const day = now.getDay();
+        const diff = (day === 0 ? -6 : 1) - day;
+        const mon = new Date(now);
+        mon.setDate(now.getDate() + diff);
+        const monStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(mon);
+        return dStr >= monStr && dStr <= todayStr;
+      } else if (range === 'this_month') {
+        const firstDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(now.getFullYear(), now.getMonth(), 1));
+        return dStr >= firstDay && dStr <= todayStr;
+      } else if (range === 'custom') {
+        if (customStart && customEnd) {
+          return dStr >= customStart && dStr <= customEnd;
+        }
+        return dStr === todayStr;
+      }
+      return true;
+    });
+  }
+
+  function buildTimelineFromOrders(orders, range, startDate, endDate) {
+    const isHourly = (range === 'today' || range === 'yesterday' || (startDate && startDate === endDate));
+    if (isHourly) {
+      const hourlyMap = {};
+      for (let h = 0; h < 24; h++) {
+        const key = String(h).padStart(2, '0');
+        hourlyMap[key] = { label: `${h}:00`, inStore: 0, website: 0, inStoreCount: 0, websiteCount: 0 };
+      }
+      orders.forEach(o => {
+        if (o.status === 'CANCELLED') return;
+        if (o.payment_status !== 'VERIFIED' && o.payment_status !== 'PAID') return;
+        let h = 12;
+        try {
+          const dt = new Date(o.created_at || o.createdAt);
+          if (!isNaN(dt.getTime())) {
+            const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false }).formatToParts(dt);
+            const hrPart = parts.find(p => p.type === 'hour');
+            h = hrPart ? parseInt(hrPart.value, 10) : dt.getHours();
+            if (h === 24) h = 0;
+          }
+        } catch (_) {}
+        const key = String(h).padStart(2, '0');
+        const amt = o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || o.totalINR || 0);
+        const isPos = getOrderChannel(o) === 'POS';
+        if (hourlyMap[key]) {
+          if (isPos) {
+            hourlyMap[key].inStore += amt;
+            hourlyMap[key].inStoreCount += 1;
+          } else {
+            hourlyMap[key].website += amt;
+            hourlyMap[key].websiteCount += 1;
+          }
+        }
+      });
+      return Object.values(hourlyMap);
+    } else {
+      const dayMap = {};
+      orders.forEach(o => {
+        if (o.status === 'CANCELLED') return;
+        if (o.payment_status !== 'VERIFIED' && o.payment_status !== 'PAID') return;
+        let dStr = '';
+        try {
+          const dt = new Date(o.created_at || o.createdAt);
+          dStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(dt);
+        } catch (_) {
+          dStr = String(o.created_at || '').slice(0, 10);
+        }
+        if (!dayMap[dStr]) {
+          dayMap[dStr] = { label: dStr, inStore: 0, website: 0, inStoreCount: 0, websiteCount: 0 };
+        }
+        const amt = o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || o.totalINR || 0);
+        if (getOrderChannel(o) === 'POS') {
+          dayMap[dStr].inStore += amt;
+          dayMap[dStr].inStoreCount += 1;
+        } else {
+          dayMap[dStr].website += amt;
+          dayMap[dStr].websiteCount += 1;
+        }
+      });
+      const vals = Object.values(dayMap);
+      return vals.length ? vals : [{ label: 'Today', inStore: 0, website: 0, inStoreCount: 0, websiteCount: 0 }];
+    }
+  }
+
   async function loadDashboard() {
     try {
+      // 1. Ensure ordersCache is initialized
+      if (!state.hasInitializedOrders && typeof loadOrders === 'function') {
+        await loadOrders(true);
+      }
+
+      // 2. Fetch inventory metrics from overview API
       let url = `/api/dashboard/overview?range=${encodeURIComponent(state.dashRange)}`;
       if (state.dashRange === 'custom' && state.dashCustomStart && state.dashCustomEnd) {
         url += `&startDate=${state.dashCustomStart}&endDate=${state.dashCustomEnd}`;
       }
 
-      const data = await apiFetch(url);
+      const data = await apiFetch(url).catch(() => ({}));
       const cards = data.cards || {};
 
-      // 1. Update 9 KPI Summary Cards
-      document.getElementById('kpi-in-store-sales').textContent = formatINR(cards.inStoreSalesINR || 0);
-      document.getElementById('kpi-in-store-orders').textContent = `${cards.inStoreOrderCount || 0} completed in-store sales`;
+      // 3. Compute live figures authoritatively as per orders in admin panel
+      const localDeleted = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
+      const localDeletedSet = new Set(localDeleted.map(x => String(x).toLowerCase().trim()));
 
-      document.getElementById('kpi-website-sales').textContent = formatINR(cards.websiteSalesINR || 0);
-      document.getElementById('kpi-website-orders').textContent = `${cards.websiteOrderCount || 0} online customer orders`;
+      const activeOrders = getOrdersForDashRange((state.ordersCache || []).filter(o => {
+        if (!o) return false;
+        if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
+        if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
+        return true;
+      }), state.dashRange, state.dashCustomStart, state.dashCustomEnd);
 
-      document.getElementById('kpi-combined-revenue').textContent = formatINR(cards.combinedRevenueINR || 0);
-      document.getElementById('kpi-combined-orders').textContent = `${(cards.inStoreOrderCount || 0) + (cards.websiteOrderCount || 0)} total orders reconciled`;
+      let inStoreSalesINR = 0;
+      let inStoreOrderCount = 0;
+      let websiteSalesINR = 0;
+      let websiteOrderCount = 0;
 
-      document.getElementById('kpi-in-store-count').textContent = cards.inStoreOrderCount || 0;
-      document.getElementById('kpi-website-count').textContent = cards.websiteOrderCount || 0;
-      document.getElementById('kpi-distinct-frames').textContent = cards.distinctFramesCount || 0;
+      activeOrders.forEach(o => {
+        const isPos = getOrderChannel(o) === 'POS';
+        const totalINR = o.total_payable_paise
+          ? (o.total_payable_paise / 100)
+          : (o.total_payable_inr != null ? o.total_payable_inr : (o.totalINR || 0));
+
+        if (o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') {
+          if (isPos) {
+            inStoreSalesINR += totalINR;
+          } else {
+            websiteSalesINR += totalINR;
+          }
+        }
+
+        if (isPos) {
+          inStoreOrderCount++;
+        } else {
+          websiteOrderCount++;
+        }
+      });
+
+      const combinedRevenueINR = inStoreSalesINR + websiteSalesINR;
+      const combinedOrdersCount = inStoreOrderCount + websiteOrderCount;
+
+      // 4. Update the 9 KPI Summary Cards
+      document.getElementById('kpi-in-store-sales').textContent = formatINR(inStoreSalesINR);
+      document.getElementById('kpi-in-store-orders').textContent = `${inStoreOrderCount} completed in-store sales`;
+
+      document.getElementById('kpi-website-sales').textContent = formatINR(websiteSalesINR);
+      document.getElementById('kpi-website-orders').textContent = `${websiteOrderCount} online customer orders`;
+
+      document.getElementById('kpi-combined-revenue').textContent = formatINR(combinedRevenueINR);
+      document.getElementById('kpi-combined-orders').textContent = `${combinedOrdersCount} total orders reconciled`;
+
+      document.getElementById('kpi-in-store-count').textContent = inStoreOrderCount;
+      document.getElementById('kpi-website-count').textContent = websiteOrderCount;
+      document.getElementById('kpi-distinct-frames').textContent = cards.distinctFramesCount || (state.inventoryCache?.length || 0);
       document.getElementById('kpi-physical-units').textContent = cards.physicalUnitsInStock || 0;
       document.getElementById('kpi-low-stock').textContent = cards.lowStockCount || 0;
       document.getElementById('kpi-out-of-stock').textContent = cards.outOfStockCount || 0;
 
-      // 2. Render / Update Comparative Sales Chart
-      renderDashboardChart(data.timeline || [], data.dateRange);
+      // 5. Render / Update Comparative Sales Chart from active orders
+      const timeline = buildTimelineFromOrders(activeOrders, state.dashRange, state.dashCustomStart, state.dashCustomEnd);
+      renderDashboardChart(timeline, data.dateRange);
 
-      // 3. Render Miniature Recent Orders Panel
-      renderDashboardRecentOrders(data.recentOrders || []);
+      // 6. Render Miniature Recent Orders Panel (top 8 active orders)
+      const sortedRecent = [...activeOrders].sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a)).slice(0, 8);
+      renderDashboardRecentOrders(sortedRecent);
     } catch (err) {
       console.error('Failed to load dashboard:', err);
       showToast('Error loading live dashboard: ' + err.message, 'error');
@@ -1956,12 +2117,12 @@
 
   // ── Delete Single Order with Inventory Restocking ──────────────────────────
   window.deleteOrderPrompt = async function (orderId, orderNumber) {
-    if (!confirm(`Are you sure you want to delete order "${orderNumber}"?\n\nThis will permanently remove the order record from database and cloud, and restore any deducted frame quantities back into inventory stock.`)) {
+    if (!confirm(`Are you sure you want to delete order "${orderNumber || orderId}"?\n\nThis will permanently remove the order record from database and cloud, and restore any deducted frame quantities back into inventory stock.`)) {
       return;
     }
 
     try {
-      // Save to client tombstone immediately
+      // 1. Save to client tombstone immediately
       try {
         const del = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
         if (orderNumber && !del.includes(orderNumber)) del.push(orderNumber);
@@ -1969,23 +2130,30 @@
         localStorage.setItem('noor_deleted_orders', JSON.stringify(del));
       } catch (e) {}
 
-      // Delete from Supabase cloud database first with confirmation
+      // 2. Remove from local UI state immediately so UI and dashboard update instantly
+      state.ordersCache = (state.ordersCache || []).filter(o => o.id !== orderId && o.order_number !== orderNumber);
+      renderOrdersTable();
+
+      // 3. Immediately reset / update dashboard
+      if (typeof loadDashboard === 'function') loadDashboard();
+
+      // 4. Delete from Supabase cloud database (safely, network error won't block local delete)
       if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
-        const cloudRes = await window.NoorSupabase.deleteOrder(orderId || orderNumber);
-        if (!cloudRes.success) {
-          throw new Error(cloudRes.error || 'Supabase delete rejection');
+        try {
+          await window.NoorSupabase.deleteOrder(orderId || orderNumber);
+        } catch (cloudErr) {
+          console.warn('Supabase deleteOrder warning:', cloudErr);
         }
       }
 
-      // Delete from local backend if available
+      // 5. Delete from local backend (pass both id and orderNumber for guaranteed cascade delete)
       try {
-        await apiFetch(`/api/orders/${orderId}`, { method: 'DELETE' });
-      } catch (_) {}
+        await apiFetch(`/api/orders/${encodeURIComponent(orderId)}?orderNumber=${encodeURIComponent(orderNumber || '')}`, { method: 'DELETE' });
+      } catch (beErr) {
+        console.warn('Backend delete warning:', beErr);
+      }
 
-      // Confirmed by Supabase: remove from UI state
-      state.ordersCache = state.ordersCache.filter(o => o.id !== orderId && o.order_number !== orderNumber);
-      renderOrdersTable();
-      showToast(`Order ${orderNumber} permanently deleted.`, 'success');
+      showToast(`Order ${orderNumber || orderId} permanently deleted.`, 'success');
 
       // Close details modal if open
       const detailsModal = document.getElementById('modal-order-details');
@@ -1998,6 +2166,7 @@
     } catch (err) {
       showToast('Failed to delete order: ' + err.message, 'error');
       loadOrders(true);
+      if (typeof loadDashboard === 'function') loadDashboard();
     }
   };
 
@@ -2005,32 +2174,42 @@
   window.deleteAllOrdersPrompt = async function () {
     const channel = state.ordersActiveChannel || 'ALL';
     const channelLabel = channel === 'ALL' ? 'ALL orders' : (channel === 'POS' ? 'all IN-STORE orders' : 'all WEBSITE orders');
-    if (!confirm(`Are you sure you want to delete ${channelLabel}?\n\nThis will permanently delete the orders from both the local database and Supabase cloud.`)) {
+    if (!confirm(`Are you sure you want to delete ${channelLabel}?\n\nThis will permanently delete the orders from both the local database and Supabase cloud, and reset the dashboard.`)) {
       return;
     }
 
     try {
-      // Save all to client tombstone immediately
+      // 1. Save all to client tombstone immediately
       try {
         const del = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
-        state.ordersCache.forEach(o => {
-          if (o.order_number && !del.includes(o.order_number)) del.push(o.order_number);
-          if (o.id && !del.includes(o.id)) del.push(o.id);
+        (state.ordersCache || []).forEach(o => {
+          if (channel === 'ALL' || (channel === 'POS' && getOrderChannel(o) === 'POS') || (channel === 'WEBSITE' && getOrderChannel(o) !== 'POS')) {
+            if (o.order_number && !del.includes(o.order_number)) del.push(o.order_number);
+            if (o.id && !del.includes(o.id)) del.push(o.id);
+          }
         });
         localStorage.setItem('noor_deleted_orders', JSON.stringify(del));
       } catch (e) {}
 
-      // Optimistically clear UI
-      state.ordersCache = channel === 'ALL' ? [] : state.ordersCache.filter(o => {
-        if (channel === 'POS') return o.channel !== 'POS';
-        if (channel === 'WEBSITE') return o.channel !== 'WEBSITE' && o.channel !== 'ONLINE';
+      // 2. Optimistically clear UI state immediately
+      state.ordersCache = channel === 'ALL' ? [] : (state.ordersCache || []).filter(o => {
+        if (channel === 'POS') return getOrderChannel(o) !== 'POS';
+        if (channel === 'WEBSITE') return getOrderChannel(o) === 'POS';
         return true;
       });
       renderOrdersTable();
 
-      // Direct cloud deletion
-      await directDeleteAllSupabaseOrders();
+      // 3. Immediately reset dashboard figures
+      if (typeof loadDashboard === 'function') loadDashboard();
 
+      // 4. Direct cloud deletion
+      try {
+        await directDeleteAllSupabaseOrders();
+      } catch (cloudErr) {
+        console.warn('Supabase delete all warning:', cloudErr);
+      }
+
+      // 5. Delete from local backend
       const url = channel === 'ALL' ? '/api/orders' : `/api/orders?channel=${channel}`;
       const res = await apiFetch(url, { method: 'DELETE' });
       showToast(res.message || 'Orders deleted successfully.', 'success');

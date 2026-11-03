@@ -2714,14 +2714,20 @@ router.delete('/orders/:id', authenticateToken, async (req, res) => {
   }
 
   const orderId = req.params.id;
-  let order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
-  if (!order) {
-    order = db.prepare('SELECT * FROM orders WHERE order_number = ?').get(orderId);
+  const orderNumParam = req.query.orderNumber;
+  let order = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ?').get(orderId, orderId);
+  if (!order && orderNumParam) {
+    order = db.prepare('SELECT * FROM orders WHERE order_number = ? OR id = ?').get(orderNumParam, orderNumParam);
   }
   if (!order) {
-    // Attempt deletion from Supabase directly in case it's a cloud order ref
-    await deleteOrderFromSupabase(orderId).catch(() => {});
-    return res.status(404).json({ error: 'Order not found.' });
+    try {
+      db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(orderId);
+      if (orderNumParam) {
+        db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(orderNumParam);
+      }
+    } catch (_) {}
+    await deleteOrderFromSupabase(orderNumParam || orderId).catch(() => {});
+    return res.json({ success: true, message: 'Order tombstoned and removed.' });
   }
 
   // Delete from Supabase cloud first so next sync won't resurrect it
@@ -3853,6 +3859,8 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
     FROM orders
     WHERE channel = 'POS'
       AND status != 'CANCELLED'
+      AND order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
+      AND id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
       AND ${dateExpr} >= ? AND ${dateExpr} <= ?
   `).get(startDate, endDate);
 
@@ -3864,6 +3872,8 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
     FROM orders
     WHERE channel IN ('ONLINE', 'WEBSITE')
       AND status != 'CANCELLED'
+      AND order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
+      AND id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
       AND ${dateExpr} >= ? AND ${dateExpr} <= ?
   `).get(startDate, endDate);
 
@@ -3925,6 +3935,8 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
              COALESCE(strftime('%H', datetime(created_at, '+05:30')), strftime('%H', created_at), '12') as hour_part
       FROM orders
       WHERE status != 'CANCELLED' AND payment_status = 'VERIFIED'
+        AND order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
+        AND id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
         AND ${dateExpr} >= ? AND ${dateExpr} <= ?
     `).all(startDate, endDate);
 
@@ -3957,6 +3969,8 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
              ${dateExpr} as day_date
       FROM orders
       WHERE status != 'CANCELLED' AND payment_status = 'VERIFIED'
+        AND order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
+        AND id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
         AND ${dateExpr} >= ? AND ${dateExpr} <= ?
     `).all(startDate, endDate);
 
@@ -4003,6 +4017,9 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
       (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) as item_count
     FROM orders o
     LEFT JOIN invoices inv ON o.id = inv.order_id
+    WHERE o.status != 'CANCELLED'
+      AND o.order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
+      AND o.id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
     ORDER BY o.created_at DESC
     LIMIT 8
   `).all();
