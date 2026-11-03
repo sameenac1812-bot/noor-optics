@@ -855,12 +855,19 @@
             <!-- ── Category Filter Pills Bar (Image 1) ────────────────────── -->
             <div class="optic-category-pills" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
               <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button type="button" class="optic-cat-pill active" data-inv-cat="ALL">Frames</button>
-                <button type="button" class="optic-cat-pill" data-inv-cat="Glasses">Glasses</button>
-                <button type="button" class="optic-cat-pill" data-inv-cat="Lenses">Lenses</button>
-                <button type="button" class="optic-cat-pill" data-inv-cat="Accessories">Accessories</button>
+                <button type="button" class="optic-cat-pill active" data-inv-cat="ALL">All Frames</button>
+                <button type="button" class="optic-cat-pill" data-inv-cat="Grey Jack">Grey Jack</button>
+                <button type="button" class="optic-cat-pill" data-inv-cat="Luxury Sunglasses">Luxury Sunglasses</button>
+                <button type="button" class="optic-cat-pill" data-inv-cat="Ray-Ban Eyesight">Ray-Ban Eyesight</button>
+                <button type="button" class="optic-cat-pill" data-inv-cat="Ray-Ban Sunglasses">Ray-Ban Sunglasses</button>
+                <button type="button" class="optic-cat-pill" data-inv-cat="Vogue Eyesight">Vogue Eyesight</button>
+                <button type="button" class="optic-cat-pill" data-inv-cat="Frames">Boutique Frames</button>
               </div>
-              <div style="display:flex; gap:8px;">
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <button type="button" class="optic-tab-pill" id="btn-print-all-frame-qrs" onclick="printAllInventoryQRsPrompt()" title="Print QR stickers for all frames in view" style="padding:6px 14px; font-size:0.8rem; font-weight:700; background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; display:inline-flex; align-items:center; gap:6px; cursor:pointer; border-radius:8px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="3" height="3"/><rect x="14" y="7" width="3" height="3"/><rect x="7" y="14" width="3" height="3"/></svg>
+                  <span id="txt-print-all-qrs">🏷️ Print All Frame QRs</span>
+                </button>
                 <button type="button" class="optic-tab-pill btn-danger-pill" id="btn-delete-all-inventory" onclick="deleteAllInventoryPrompt()" title="Permanently delete all products from inventory" style="padding:6px 14px; font-size:0.8rem; font-weight:700;">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                   <span>Clear All</span>

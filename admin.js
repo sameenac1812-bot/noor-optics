@@ -4392,7 +4392,7 @@
     }
 
     state.activeBatchStickerIds = frameIds;
-    const firstFrame = state.inventoryList.find(p => p.id === frameIds[0]);
+    const firstFrame = state.inventoryList.find(p => p.id === frameIds[0]) || state.inventoryList[0];
     state.activeStickerFrame = firstFrame;
 
     const modal = document.getElementById('modal-qr-sticker');
@@ -4411,7 +4411,49 @@
           <span>⚡ Print All ${frameIds.length} Stickers in Sequence to POS-80</span>
         `;
       }
+
+      const btnSheet = document.getElementById('btn-trigger-sticker-print');
+      if (btnSheet) {
+        btnSheet.innerHTML = `📄 Print Sheet (${frameIds.length} Frames)`;
+      }
     }
+  };
+
+  window.printAllInventoryQRsPrompt = function () {
+    const activeCat = state.inventoryOpticCategory || 'ALL';
+    const query = (state.inventorySearchQuery || '').toLowerCase().trim();
+
+    const filtered = (state.inventoryList || []).filter(p => {
+      if (activeCat !== 'ALL') {
+        const cat = (p.category || p.shape || p.name || p.brand || '').toLowerCase();
+        if (activeCat.toLowerCase() === 'frames' || activeCat.toLowerCase() === 'glasses') {
+          if (!cat.includes('frame') && !cat.includes('glass') && !cat.includes('optic') && !cat.includes('sunglass')) {
+            return false;
+          }
+        } else if (!cat.includes(activeCat.toLowerCase())) {
+          return false;
+        }
+      }
+      if (query) {
+        const name = (p.name || '').toLowerCase();
+        const sku = (p.sku || '').toLowerCase();
+        const brand = (p.brand || '').toLowerCase();
+        const model = (p.model || '').toLowerCase();
+        if (!name.includes(query) && !sku.includes(query) && !brand.includes(query) && !model.includes(query)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const targetList = filtered.length > 0 ? filtered : state.inventoryList;
+    if (!targetList || targetList.length === 0) {
+      showToast('No optical frames found in inventory to print.', 'warning');
+      return;
+    }
+
+    const frameIds = targetList.map(p => p.id);
+    openBatchStickersModal(frameIds);
   };
 
   /**
