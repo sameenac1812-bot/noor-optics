@@ -875,6 +875,15 @@
               </div>
             </div>
 
+            <!-- ── Gender Filter Pills Bar ─────────────────────────────────── -->
+            <div class="optic-gender-pills" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; margin-bottom:12px; align-items:center;">
+              <span style="font-size:0.75rem; font-weight:800; color:#64748B; margin-right:4px;">GENDER:</span>
+              <button type="button" class="optic-gender-pill active" data-inv-gender="ALL" style="padding:4px 12px; font-size:0.75rem; font-weight:700; border-radius:99px; border:1px solid #CBD5E1; background:#0F172A; color:#FFFFFF; cursor:pointer;">All Genders</button>
+              <button type="button" class="optic-gender-pill" data-inv-gender="Men" style="padding:4px 12px; font-size:0.75rem; font-weight:700; border-radius:99px; border:1px solid #CBD5E1; background:#F8FAFC; color:#334155; cursor:pointer;">👨 Men</button>
+              <button type="button" class="optic-gender-pill" data-inv-gender="Women" style="padding:4px 12px; font-size:0.75rem; font-weight:700; border-radius:99px; border:1px solid #CBD5E1; background:#F8FAFC; color:#334155; cursor:pointer;">👩 Women</button>
+              <button type="button" class="optic-gender-pill" data-inv-gender="Unisex" style="padding:4px 12px; font-size:0.75rem; font-weight:700; border-radius:99px; border:1px solid #CBD5E1; background:#F8FAFC; color:#334155; cursor:pointer;">✨ Unisex</button>
+            </div>
+
             <!-- ── Search Input (Image 1) ─────────────────────────────────── -->
             <div class="optic-search-box">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -2647,6 +2656,23 @@
           <div class="form-group" style="margin:0;">
             <label style="font-size:0.78rem; font-weight:700; color:#334155; margin-bottom:4px; display:block;">Shape / Style</label>
             <input type="text" id="edit-frame-shape" class="form-control" />
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+          <div class="form-group" style="margin:0;">
+            <label style="font-size:0.78rem; font-weight:700; color:#334155; margin-bottom:4px; display:block;">Category / Type</label>
+            <select id="edit-frame-category" class="form-control">
+              <option value="Eyeglasses">Eyeglasses</option>
+              <option value="Sunglasses">Sunglasses</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label style="font-size:0.78rem; font-weight:700; color:#334155; margin-bottom:4px; display:block;">Gender</label>
+            <select id="edit-frame-gender" class="form-control">
+              <option value="Men">Men</option>
+              <option value="Women">Women</option>
+              <option value="Unisex">Unisex</option>
+            </select>
           </div>
         </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">

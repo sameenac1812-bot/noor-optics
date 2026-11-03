@@ -456,15 +456,15 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
     const createTx = db.transaction(() => {
       db.prepare(`
         INSERT INTO products (
-          id, sku, name, brand, shape, material, fit, category,
+          id, sku, name, brand, shape, material, fit, category, gender,
           selling_price_paise, original_price_paise, purchase_cost_paise,
           supplier_id, reorder_threshold, image_url, description,
           is_active, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))
       `).run(
         productId, cleanSku, name, brand || 'Noor Optics',
         shape || 'Rectangular', material || 'Japanese Titanium',
-        fit || 'Regular', category || 'Optical', sellingPaise, origPaise,
+        fit || 'Regular', category || 'Eyeglasses', req.body.gender || 'Unisex', sellingPaise, origPaise,
         costPaise, supplierId || null, cleanReorderThreshold,
         cleanImageUrl, cleanDesc
       );
@@ -512,7 +512,7 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
 
 router.put('/products/:id', authenticateToken, requirePermission('products:manage'), (req, res) => {
   const pId = req.params.id;
-  const { name, brand, shape, material, fit, sellingPriceINR, purchaseCostINR, reorderThreshold, isActive, description, stockQuantity } = req.body;
+  const { name, brand, shape, material, fit, category, gender, sellingPriceINR, purchaseCostINR, reorderThreshold, isActive, description, stockQuantity } = req.body;
   const imageUrl = req.body.imageUrl || req.body.image_url;
   const cleanImageUrl = (imageUrl && typeof imageUrl === 'string') ? imageUrl.trim() : null;
 
@@ -523,6 +523,8 @@ router.put('/products/:id', authenticateToken, requirePermission('products:manag
     UPDATE products SET
       name = COALESCE(?, name),
       brand = COALESCE(?, brand),
+      category = COALESCE(?, category),
+      gender = COALESCE(?, gender),
       shape = COALESCE(?, shape),
       material = COALESCE(?, material),
       fit = COALESCE(?, fit),
@@ -534,7 +536,7 @@ router.put('/products/:id', authenticateToken, requirePermission('products:manag
       image_url = CASE WHEN ? IS NOT NULL AND ? != '' AND ? != 'images/stockholm_noir.jpg' THEN ? ELSE image_url END,
       updated_at = datetime('now')
     WHERE id = ?
-  `).run(name, brand, shape, material, fit, sellingPaise, costPaise, reorderThreshold, isActive !== undefined ? (isActive ? 1 : 0) : null, description, cleanImageUrl, cleanImageUrl, cleanImageUrl, cleanImageUrl, pId);
+  `).run(name, brand, category || null, gender || null, shape, material, fit, sellingPaise, costPaise, reorderThreshold, isActive !== undefined ? (isActive ? 1 : 0) : null, description, cleanImageUrl, cleanImageUrl, cleanImageUrl, cleanImageUrl, pId);
 
   // Update stock balance if provided
   if (stockQuantity !== undefined) {

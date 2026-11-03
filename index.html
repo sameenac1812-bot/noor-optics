@@ -170,6 +170,125 @@
     </div>
   </section>
 
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <!-- LENSKART-STYLE VISUAL CATEGORY & GENDER SHOWCASE SECTION        -->
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <section class="lk-category-showcase" id="lk-category-showcase" aria-label="Eyewear Categories by Gender & Brand">
+    <div class="lk-showcase-container">
+      
+      <!-- Festive Promotional Banner -->
+      <div class="lk-promo-banner" id="lk-promo-banner" onclick="filterByPromoSale()">
+        <div class="lk-banner-content">
+          <div class="lk-banner-left">
+            <span class="lk-banner-badge">FESTIVE EDIT</span>
+            <span class="lk-banner-gold-title">Diwali Sale is live</span>
+          </div>
+          <div class="lk-banner-right">
+            <span class="lk-banner-sub">1000+ Styles Starting @ ₹1200</span>
+            <div class="lk-banner-arrow" aria-hidden="true">→</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1. Eyeglasses Section -->
+      <div class="lk-category-block">
+        <div class="lk-section-header">
+          <div class="lk-title-group">
+            <h2 class="lk-section-title">Eyeglasses</h2>
+            <span class="lk-title-badge">with Power</span>
+          </div>
+          <button type="button" class="lk-link-viewall" onclick="selectVisualCategory('Eyeglasses', 'all')">View All</button>
+        </div>
+        <div class="lk-cards-row">
+          <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Men" onclick="selectVisualCategory('Eyeglasses', 'Men')" role="button" tabindex="0">
+            <div class="lk-card-img-wrap">
+              <img src="/images/categories/eyeglass_men.jpg" alt="Men's Eyeglasses" loading="lazy" />
+            </div>
+            <span class="lk-card-label">Men</span>
+          </div>
+          <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Women" onclick="selectVisualCategory('Eyeglasses', 'Women')" role="button" tabindex="0">
+            <div class="lk-card-img-wrap">
+              <img src="/images/categories/eyeglass_women.jpg" alt="Women's Eyeglasses" loading="lazy" />
+            </div>
+            <span class="lk-card-label">Women</span>
+          </div>
+          <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Kids" onclick="selectVisualCategory('Eyeglasses', 'Kids')" role="button" tabindex="0">
+            <div class="lk-card-img-wrap">
+              <img src="/images/categories/eyeglass_kids.jpg" alt="Kids Eyeglasses" loading="lazy" />
+            </div>
+            <span class="lk-card-label">Kids</span>
+          </div>
+          <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="all" onclick="selectVisualCategory('Eyeglasses', 'all')" role="button" tabindex="0">
+            <div class="lk-card-img-wrap lk-sale-card">
+              <span class="lk-sale-pill">Starts @₹800</span>
+              <img src="/images/categories/eyeglass_sale.jpg" alt="Eyeglasses On Sale" loading="lazy" />
+            </div>
+            <span class="lk-card-label">On Sale</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Sunglasses Section -->
+      <div class="lk-category-block">
+        <div class="lk-section-header">
+          <div class="lk-title-group">
+            <h2 class="lk-section-title">Sunglasses</h2>
+          </div>
+          <button type="button" class="lk-link-viewall" onclick="selectVisualCategory('Sunglasses', 'all')">View All</button>
+        </div>
+        <div class="lk-cards-row">
+          <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Men" onclick="selectVisualCategory('Sunglasses', 'Men')" role="button" tabindex="0">
+            <div class="lk-card-img-wrap">
+              <img src="/images/categories/sunglass_men.jpg" alt="Men's Sunglasses" loading="lazy" />
+            </div>
+            <span class="lk-card-label">Men</span>
+          </div>
+          <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Women" onclick="selectVisualCategory('Sunglasses', 'Women')" role="button" tabindex="0">
+            <div class="lk-card-img-wrap">
+              <img src="/images/categories/sunglass_women.jpg" alt="Women's Sunglasses" loading="lazy" />
+            </div>
+            <span class="lk-card-label">Women</span>
+          </div>
+          <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Kids" onclick="selectVisualCategory('Sunglasses', 'Kids')" role="button" tabindex="0">
+            <div class="lk-card-img-wrap">
+              <img src="/images/categories/sunglass_kids.jpg" alt="Kids Sunglasses" loading="lazy" />
+            </div>
+            <span class="lk-card-label">Kids</span>
+          </div>
+          <div class="lk-cat-card" data-cat="Sunglasses" data-gender="all" onclick="selectVisualCategory('Sunglasses', 'all')" role="button" tabindex="0">
+            <div class="lk-card-img-wrap lk-sale-card">
+              <span class="lk-sale-pill">Starts @₹500</span>
+              <img src="/images/categories/sunglass_sale.jpg" alt="Sunglasses On Sale" loading="lazy" />
+            </div>
+            <span class="lk-card-label">On Sale</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Shop by Brand Section -->
+      <div class="lk-category-block lk-brands-block">
+        <div class="lk-section-header">
+          <div class="lk-title-group">
+            <h2 class="lk-section-title">Shop By Brand</h2>
+          </div>
+          <button type="button" class="lk-link-viewall" onclick="selectBrand('all')">All Brands</button>
+        </div>
+        <div class="lk-brand-pills-row">
+          <button type="button" class="lk-brand-pill active" data-brand="all" onclick="selectBrand('all')">All Brands</button>
+          <button type="button" class="lk-brand-pill" data-brand="Ray-Ban" onclick="selectBrand('Ray-Ban')">Ray-Ban</button>
+          <button type="button" class="lk-brand-pill" data-brand="Grey Jack" onclick="selectBrand('Grey Jack')">Grey Jack</button>
+          <button type="button" class="lk-brand-pill" data-brand="Luxury Eyewear" onclick="selectBrand('Luxury Eyewear')">Luxury Eyewear</button>
+          <button type="button" class="lk-brand-pill" data-brand="Vogue" onclick="selectBrand('Vogue')">Vogue</button>
+          <button type="button" class="lk-brand-pill" data-brand="Cartier" onclick="selectBrand('Cartier')">Cartier</button>
+          <button type="button" class="lk-brand-pill" data-brand="Versace" onclick="selectBrand('Versace')">Versace</button>
+          <button type="button" class="lk-brand-pill" data-brand="Dolce & Gabbana" onclick="selectBrand('Dolce & Gabbana')">D&amp;G</button>
+          <button type="button" class="lk-brand-pill" data-brand="Burberry" onclick="selectBrand('Burberry')">Burberry</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
   <!-- Secondary Bar: Shape Pills & Mobile Action Bar -->
   <nav class="store-sub-bar" aria-label="Product Categories & Active Filters">
     <div class="sub-bar-container">
@@ -355,6 +474,75 @@
       <button class="drawer-close-btn" data-drawer-close aria-label="Close Filter Drawer">&times;</button>
     </div>
     <div class="drawer-body">
+      <!-- Gender Facet -->
+      <div class="filter-facet-section">
+        <h4 class="filter-facet-title">Gender</h4>
+        <div class="filter-options-grid">
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-gender" value="all" checked /> All
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-gender" value="Men" /> Men
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-gender" value="Women" /> Women
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-gender" value="Kids" /> Kids / Unisex
+          </label>
+        </div>
+      </div>
+
+      <!-- Eyewear Category Facet -->
+      <div class="filter-facet-section">
+        <h4 class="filter-facet-title">Category</h4>
+        <div class="filter-options-grid">
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-category" value="all" checked /> All Categories
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-category" value="Eyeglasses" /> Eyeglasses
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-category" value="Sunglasses" /> Sunglasses
+          </label>
+        </div>
+      </div>
+
+      <!-- Brand Facet -->
+      <div class="filter-facet-section">
+        <h4 class="filter-facet-title">Brand</h4>
+        <div class="filter-options-grid">
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-brand" value="all" checked /> All Brands
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-brand" value="Ray-Ban" /> Ray-Ban
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-brand" value="Grey Jack" /> Grey Jack
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-brand" value="Luxury Eyewear" /> Luxury Eyewear
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-brand" value="Vogue" /> Vogue
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-brand" value="Cartier" /> Cartier
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-brand" value="Versace" /> Versace
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-brand" value="Dolce & Gabbana" /> Dolce &amp; Gabbana
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-brand" value="Burberry" /> Burberry
+          </label>
+        </div>
+      </div>
+
       <!-- Shape Facet -->
       <div class="filter-facet-section">
         <h4 class="filter-facet-title">Frame Shape</h4>

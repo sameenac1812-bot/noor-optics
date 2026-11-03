@@ -106,6 +106,7 @@ function initializeDatabase() {
       shape TEXT NOT NULL,
       material TEXT NOT NULL,
       fit TEXT NOT NULL DEFAULT 'Regular',
+      gender TEXT NOT NULL DEFAULT 'Unisex',
       category TEXT NOT NULL DEFAULT 'Optical',
       selling_price_paise INTEGER NOT NULL,
       original_price_paise INTEGER,
@@ -513,6 +514,9 @@ function initializeDatabase() {
     const orderCols = db.pragma('table_info(orders)').map(c => c.name);
     if (!orderCols.includes('prescription_id')) db.exec('ALTER TABLE orders ADD COLUMN prescription_id TEXT;');
     if (!orderCols.includes('customer_age')) db.exec('ALTER TABLE orders ADD COLUMN customer_age INTEGER;');
+
+    const prodCols = db.pragma('table_info(products)').map(c => c.name);
+    if (!prodCols.includes('gender')) db.exec("ALTER TABLE products ADD COLUMN gender TEXT DEFAULT 'Unisex';");
 
     const oiCols = db.pragma('table_info(order_items)').map(c => c.name);
     if (!oiCols.includes('brand')) db.exec('ALTER TABLE order_items ADD COLUMN brand TEXT;');

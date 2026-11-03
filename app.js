@@ -54,7 +54,10 @@
       material: 'all',
       fit: 'all',
       color: 'all',
-      priceRange: 'all'
+      priceRange: 'all',
+      gender: 'all',
+      category: 'all',
+      brand: 'all'
     },
     // Active product in Quick View
     quickViewProductId: null,
@@ -213,6 +216,42 @@
           (item.description && item.description.toLowerCase().includes(q)) ||
           item.colors.some(c => c.name.toLowerCase().includes(q))
         );
+      });
+    }
+
+    // Gender Filter ('Men', 'Women', 'Kids', 'all')
+    if (state.filters.gender && state.filters.gender !== 'all') {
+      const g = state.filters.gender.toLowerCase();
+      list = list.filter(item => {
+        const itemGender = (item.gender || 'Unisex').toLowerCase();
+        if (g === 'kids') return itemGender === 'kids';
+        return itemGender === g || itemGender === 'unisex';
+      });
+    }
+
+    // Category / Eyewear Type Filter ('Eyeglasses', 'Sunglasses', 'all')
+    if (state.filters.category && state.filters.category !== 'all') {
+      const c = state.filters.category.toLowerCase();
+      list = list.filter(item => {
+        const itemCat = (item.category || item.collection || '').toLowerCase();
+        const itemName = (item.name || '').toLowerCase();
+        if (c.includes('sunglass')) {
+          return itemCat.includes('sunglass') || itemName.includes('sunglass');
+        } else if (c.includes('eyeglass') || c.includes('optic') || c.includes('frame')) {
+          return !itemCat.includes('sunglass') && !itemName.includes('sunglass');
+        }
+        return itemCat.includes(c) || itemName.includes(c);
+      });
+    }
+
+    // Brand Filter ('all', 'Ray-Ban', 'Grey Jack', 'Luxury Eyewear', etc.)
+    if (state.filters.brand && state.filters.brand !== 'all') {
+      const b = state.filters.brand.toLowerCase();
+      list = list.filter(item => {
+        const itemBrand = (item.brand || '').toLowerCase();
+        const itemCat = (item.category || '').toLowerCase();
+        const itemName = (item.name || '').toLowerCase();
+        return itemBrand.includes(b) || itemCat.includes(b) || itemName.includes(b);
       });
     }
 
@@ -429,6 +468,15 @@
       };
       chips.push({ key: 'priceRange', label: labels[state.filters.priceRange] || 'Price' });
     }
+    if (state.filters.gender && state.filters.gender !== 'all') {
+      chips.push({ key: 'gender', label: `Gender: ${state.filters.gender}` });
+    }
+    if (state.filters.category && state.filters.category !== 'all') {
+      chips.push({ key: 'category', label: `Type: ${state.filters.category}` });
+    }
+    if (state.filters.brand && state.filters.brand !== 'all') {
+      chips.push({ key: 'brand', label: `Brand: ${state.filters.brand}` });
+    }
 
     if (chips.length === 0) {
       DOM.activeFilterChips.innerHTML = '';
@@ -532,8 +580,13 @@
       material: 'all',
       fit: 'all',
       color: 'all',
-      priceRange: 'all'
+      priceRange: 'all',
+      gender: 'all',
+      category: 'all',
+      brand: 'all'
     };
+    document.querySelectorAll('.lk-cat-card').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.lk-brand-pill').forEach(b => b.classList.toggle('active', b.getAttribute('data-brand') === 'all'));
     if (DOM.searchInput) DOM.searchInput.value = '';
     if (DOM.searchClearBtn) DOM.searchClearBtn.classList.remove('visible');
     syncFilterDrawerUI();
@@ -1529,6 +1582,9 @@
         if (target.name === 'filter-material') state.filters.material = target.value;
         if (target.name === 'filter-fit') state.filters.fit = target.value;
         if (target.name === 'filter-price') state.filters.priceRange = target.value;
+        if (target.name === 'filter-gender') state.filters.gender = target.value;
+        if (target.name === 'filter-category') state.filters.category = target.value;
+        if (target.name === 'filter-brand') state.filters.brand = target.value;
       });
 
       DOM.filterDrawer.querySelectorAll('.filter-color-chip').forEach(chip => {
@@ -1987,6 +2043,9 @@
             id: p.id,
             sku: p.sku,
             name: p.name,
+            brand: p.brand || (staticMatch ? staticMatch.brand : 'Noor Optics'),
+            gender: p.gender || (staticMatch ? staticMatch.gender : 'Unisex'),
+            category: p.category || (staticMatch ? staticMatch.category : 'Eyeglasses'),
             collection: staticMatch ? staticMatch.collection : (p.brand || 'Nordic Collection'),
             price: price,
             originalPrice: originalPrice,
@@ -2043,3 +2102,56 @@
   }
 
 })();
+
+  // ── Lenskart-Style Visual Showcase Controllers ─────────────────────────────
+  window.selectVisualCategory = function (category, gender) {
+    if (category) state.filters.category = category;
+    if (gender) state.filters.gender = gender;
+
+    // Update active highlight on cards
+    document.querySelectorAll('.lk-cat-card').forEach(card => {
+      const cardCat = card.getAttribute('data-cat');
+      const cardGender = card.getAttribute('data-gender');
+      const isActive = (cardCat === state.filters.category && cardGender === state.filters.gender);
+      card.classList.toggle('active', isActive);
+    });
+
+    renderActiveFilterChips();
+    renderProductGrid();
+
+    // Smooth scroll to catalog
+    const countEl = document.getElementById('catalog-count') || document.getElementById('product-grid');
+    if (countEl) {
+      countEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    const gText = state.filters.gender === 'all' ? 'All' : state.filters.gender;
+    showToast(`Browsing ${state.filters.category} (${gText})`);
+  };
+
+  window.selectBrand = function (brand) {
+    state.filters.brand = brand || 'all';
+
+    document.querySelectorAll('.lk-brand-pill').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-brand') === (brand || 'all'));
+    });
+
+    renderActiveFilterChips();
+    renderProductGrid();
+
+    const countEl = document.getElementById('catalog-count') || document.getElementById('product-grid');
+    if (countEl) {
+      countEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    showToast(brand === 'all' ? 'Browsing all boutique brands' : `Brand: ${brand}`);
+  };
+
+  window.filterByPromoSale = function () {
+    state.filters.priceRange = 'under-3500';
+    renderActiveFilterChips();
+    renderProductGrid();
+    const countEl = document.getElementById('catalog-count') || document.getElementById('product-grid');
+    if (countEl) countEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    showToast('Showing festive sale collection!');
+  };

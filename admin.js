@@ -2781,6 +2781,15 @@
 
     // Filter frames
     const filtered = state.inventoryList.filter(p => {
+      // Gender filter
+      if (state.inventoryGender && state.inventoryGender !== 'ALL') {
+        const itemGender = (p.gender || 'Unisex').toLowerCase();
+        const targetGender = state.inventoryGender.toLowerCase();
+        if (targetGender === 'men' && itemGender !== 'men' && itemGender !== 'unisex') return false;
+        if (targetGender === 'women' && itemGender !== 'women' && itemGender !== 'unisex') return false;
+        if (targetGender === 'unisex' && itemGender !== 'unisex') return false;
+      }
+
       if (activeCat !== 'ALL') {
         const cat = (p.category || p.shape || p.name || '').toLowerCase();
         if (activeCat.toLowerCase() === 'frames' || activeCat.toLowerCase() === 'glasses') {
@@ -3434,6 +3443,10 @@
     if (nameInput) nameInput.value = frame.name || '';
     if (brandInput) brandInput.value = frame.brand || '';
     if (shapeInput) shapeInput.value = frame.shape || 'Rectangular';
+    const catSelect = document.getElementById('edit-frame-category');
+    const genSelect = document.getElementById('edit-frame-gender');
+    if (catSelect) catSelect.value = frame.category || 'Eyeglasses';
+    if (genSelect) genSelect.value = frame.gender || 'Unisex';
     if (retailInput) retailInput.value = frame.selling_price_inr !== undefined ? frame.selling_price_inr : Math.round((frame.selling_price_paise || 0) / 100);
     if (wholesaleInput) wholesaleInput.value = frame.purchase_cost_inr !== undefined ? frame.purchase_cost_inr : Math.round((frame.purchase_cost_paise || 0) / 100);
     if (stockInput) stockInput.value = frame.total_stock !== undefined ? frame.total_stock : 10;
@@ -3514,6 +3527,8 @@
         name: name || existing.name,
         brand: brand || existing.brand,
         shape: shape || existing.shape,
+        category: category || existing.category,
+        gender: gender || existing.gender,
         selling_price_inr: sellingPriceINR,
         selling_price_paise: Math.round(sellingPriceINR * 100),
         purchase_cost_inr: purchaseCostINR,
@@ -3590,6 +3605,8 @@
               name,
               brand,
               shape,
+            category,
+            gender,
               sellingPriceINR,
               purchaseCostINR,
               stockQuantity,
@@ -8255,6 +8272,21 @@
     }
 
     // 5. OpticTool Total Inventory Category Pills & Search
+    document.querySelectorAll('.optic-gender-pills .optic-gender-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.optic-gender-pills .optic-gender-pill').forEach(b => {
+          b.classList.remove('active');
+          b.style.background = '#F8FAFC';
+          b.style.color = '#334155';
+        });
+        btn.classList.add('active');
+        btn.style.background = '#0F172A';
+        btn.style.color = '#FFFFFF';
+        state.inventoryGender = btn.dataset.invGender;
+        renderInventoryTable();
+      });
+    });
+
     document.querySelectorAll('.optic-category-pills .optic-cat-pill').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.optic-category-pills .optic-cat-pill').forEach(b => b.classList.remove('active'));
