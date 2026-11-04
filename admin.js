@@ -1490,51 +1490,113 @@
       </table>
 
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1.25rem; align-items:start; margin-top:1rem; padding-top:1rem; border-top:1px solid #E5E7EB;">
-        <!-- Left Column: Client's Preferred Prescription RX Values -->
-        <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:12px; font-size:0.82rem;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span style="font-size:1.15rem;">👓</span>
-              <strong style="color:#166534; font-size:0.88rem;">${order.prescription_number ? `Prescription RX: ${escapeHtml(order.prescription_number)}` : 'Client Prescription (RX)'}</strong>
-            </div>
-            ${order.prescription_id ? `
-              <div style="display:flex; gap:4px;">
-                <button type="button" class="btn-table-action" style="padding:2px 8px; font-size:0.75rem; background:#166534; color:#FFF; font-weight:700;" onclick="printPrescriptionRecord('${order.prescription_id}')">🖨️ Print RX</button>
-                <button type="button" class="btn-table-action" style="padding:2px 8px; font-size:0.75rem; background:#2563EB; color:#FFF; font-weight:700;" onclick="openEditPrescriptionModal('${order.prescription_id}')">✏️ Edit</button>
-              </div>
-            ` : (order.customer_id ? `
-              <button type="button" class="btn-table-action" style="padding:2px 8px; font-size:0.75rem; background:#2563EB; color:#FFF; font-weight:700;" onclick="openEditPrescriptionModal('', '${order.customer_id}')">+ Add RX</button>
-            ` : '')}
-          </div>
+        <!-- Left Column: Client's Preferred Prescription RX Values (Multi-Rx Supported) -->
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          ${(() => {
+            let rxList = [];
+            if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
+              rxList = order.prescriptions.filter(Boolean);
+            } else if (order.prescriptions_json) {
+              try {
+                const p = JSON.parse(order.prescriptions_json);
+                if (Array.isArray(p) && p.length > 0) rxList = p;
+              } catch (_) {}
+            }
+            if (rxList.length === 0 && (order.od_sph || order.os_sph || order.prescription_number || order.prescription_id)) {
+              rxList = [{
+                id: order.prescription_id,
+                prescription_number: order.prescription_number,
+                od_sph: order.od_sph,
+                od_cyl: order.od_cyl,
+                od_axis: order.od_axis,
+                os_sph: order.os_sph,
+                os_cyl: order.os_cyl,
+                os_axis: order.os_axis,
+                addition: order.addition,
+                ipd_distance: order.ipd_distance,
+                rx_checked_by: order.rx_checked_by,
+                rx_notes: order.rx_notes
+              }];
+            }
 
-          ${(order.od_sph || order.os_sph || order.prescription_number) ? `
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; background:#FFFFFF; border:1px solid #DCFCE7; border-radius:6px; padding:8px 10px; font-size:0.80rem; line-height:1.5;">
-              <div>
-                <strong style="color:#0A2540; font-size:0.72rem; display:block; text-transform:uppercase;">OD (Right Eye)</strong>
-                <div>SPH: <strong>${order.od_sph || '0.00'}</strong></div>
-                <div>CYL: <strong>${order.od_cyl || '0.00'}</strong></div>
-                <div>AXIS: <strong>${order.od_axis != null ? order.od_axis + '°' : '-'}</strong></div>
-              </div>
-              <div>
-                <strong style="color:#0A2540; font-size:0.72rem; display:block; text-transform:uppercase;">OS (Left Eye)</strong>
-                <div>SPH: <strong>${order.os_sph || '0.00'}</strong></div>
-                <div>CYL: <strong>${order.os_cyl || '0.00'}</strong></div>
-                <div>AXIS: <strong>${order.os_axis != null ? order.os_axis + '°' : '-'}</strong></div>
-              </div>
-              <div>
-                <strong style="color:#0A2540; font-size:0.72rem; display:block; text-transform:uppercase;">Optics & PD</strong>
-                ${order.addition ? `<div>ADD: <strong>${escapeHtml(order.addition)}</strong></div>` : '<div>ADD: -</div>'}
-                ${order.ipd_distance ? `<div>IPD: <strong>${order.ipd_distance} mm</strong></div>` : ''}
-                ${order.rx_checked_by ? `<div style="font-size:0.72rem; color:#6B7280; margin-top:2px;">By: ${escapeHtml(order.rx_checked_by)}</div>` : ''}
-              </div>
-            </div>
-            ${order.rx_notes ? `<div style="font-size:0.74rem; color:#4B5563; margin-top:6px; font-style:italic;">Notes: ${escapeHtml(order.rx_notes)}</div>` : ''}
-          ` : `
-            <div style="background:#FFFFFF; border:1px dashed #CBD5E1; border-radius:6px; padding:8px 10px; font-size:0.80rem; color:#64748B;">
-              <div>Preference: <strong>${escapeHtml(order.prescription_pref || 'Standard Demonstration Lenses')}</strong></div>
-              <div style="font-size:0.74rem; margin-top:3px; color:#94A3B8;">No structured OD/OS power values submitted for this order.</div>
-            </div>
-          `}
+            if (rxList.length === 0) {
+              return `
+                <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:12px; font-size:0.82rem;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      <span style="font-size:1.15rem;">👓</span>
+                      <strong style="color:#166534; font-size:0.88rem;">Client Prescription (RX)</strong>
+                    </div>
+                    ${order.customer_id ? `
+                      <button type="button" class="btn-table-action" style="padding:2px 8px; font-size:0.75rem; background:#2563EB; color:#FFF; font-weight:700;" onclick="openEditPrescriptionModal('', '${order.customer_id}')">+ Add RX</button>
+                    ` : ''}
+                  </div>
+                  <div style="background:#FFFFFF; border:1px dashed #CBD5E1; border-radius:6px; padding:8px 10px; font-size:0.80rem; color:#64748B;">
+                    <div>Preference: <strong>${escapeHtml(order.prescription_pref || 'Standard Demonstration Lenses')}</strong></div>
+                    <div style="font-size:0.74rem; margin-top:3px; color:#94A3B8;">No structured OD/OS power values submitted for this order.</div>
+                  </div>
+                </div>
+              `;
+            }
+
+            return rxList.map((rx, idx) => {
+              const rxId = rx.id || '';
+              const rxNum = rx.prescription_number || rx.prescriptionNumber || '';
+              const odSph = rx.od_sph != null ? rx.od_sph : (rx.odSph || '0.00');
+              const odCyl = rx.od_cyl != null ? rx.od_cyl : (rx.odCyl || '0.00');
+              const odAxis = rx.od_axis != null ? (rx.od_axis + '°') : (rx.odAxis != null ? rx.odAxis + '°' : '-');
+              const osSph = rx.os_sph != null ? rx.os_sph : (rx.osSph || '0.00');
+              const osCyl = rx.os_cyl != null ? rx.os_cyl : (rx.osCyl || '0.00');
+              const osAxis = rx.os_axis != null ? (rx.os_axis + '°') : (rx.osAxis != null ? rx.osAxis + '°' : '-');
+              const addVal = rx.addition || rx.add || '-';
+              const ipd = rx.ipd_distance || rx.ipdDistance || rx.pd;
+              const doc = rx.checked_by || rx.checkedBy || rx.rx_checked_by;
+              const notes = rx.notes || rx.rx_notes;
+
+              const titleLabel = rxList.length > 1
+                ? `Prescription RX #${idx + 1}: ${escapeHtml(rxNum || 'Attached')}`
+                : (rxNum ? `Prescription RX: ${escapeHtml(rxNum)}` : 'Client Prescription (RX)');
+
+              return `
+                <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:12px; font-size:0.82rem;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      <span style="font-size:1.15rem;">👓</span>
+                      <strong style="color:#166534; font-size:0.88rem;">${titleLabel}</strong>
+                    </div>
+                    ${rxId ? `
+                      <div style="display:flex; gap:4px;">
+                        <button type="button" class="btn-table-action" style="padding:2px 8px; font-size:0.75rem; background:#166534; color:#FFF; font-weight:700;" onclick="printPrescriptionRecord('${rxId}')">🖨️ Print RX</button>
+                        <button type="button" class="btn-table-action" style="padding:2px 8px; font-size:0.75rem; background:#2563EB; color:#FFF; font-weight:700;" onclick="openEditPrescriptionModal('${rxId}')">✏️ Edit</button>
+                      </div>
+                    ` : ''}
+                  </div>
+
+                  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; background:#FFFFFF; border:1px solid #DCFCE7; border-radius:6px; padding:8px 10px; font-size:0.80rem; line-height:1.5;">
+                    <div>
+                      <strong style="color:#0A2540; font-size:0.72rem; display:block; text-transform:uppercase;">OD (Right Eye)</strong>
+                      <div>SPH: <strong>${odSph}</strong></div>
+                      <div>CYL: <strong>${odCyl}</strong></div>
+                      <div>AXIS: <strong>${odAxis}</strong></div>
+                    </div>
+                    <div>
+                      <strong style="color:#0A2540; font-size:0.72rem; display:block; text-transform:uppercase;">OS (Left Eye)</strong>
+                      <div>SPH: <strong>${osSph}</strong></div>
+                      <div>CYL: <strong>${osCyl}</strong></div>
+                      <div>AXIS: <strong>${osAxis}</strong></div>
+                    </div>
+                    <div>
+                      <strong style="color:#0A2540; font-size:0.72rem; display:block; text-transform:uppercase;">Optics & PD</strong>
+                      <div>ADD: <strong>${escapeHtml(addVal)}</strong></div>
+                      ${ipd ? `<div>IPD: <strong>${ipd} mm</strong></div>` : ''}
+                      ${doc ? `<div style="font-size:0.72rem; color:#6B7280; margin-top:2px;">By: ${escapeHtml(doc)}</div>` : ''}
+                    </div>
+                  </div>
+                  ${notes ? `<div style="font-size:0.74rem; color:#4B5563; margin-top:6px; font-style:italic;">Notes: ${escapeHtml(notes)}</div>` : ''}
+                </div>
+              `;
+            }).join('');
+          })()}
         </div>
 
         <!-- Right Column: Financial Summary -->
@@ -5447,54 +5509,88 @@
     if (grandTotalEl) grandTotalEl.value = (grandTotalPaise / 100).toFixed(2);
     if (btnCheckout) btnCheckout.disabled = false;
 
-    // ── Update Attached Prescription Summary Badge ────────
-    const attachedRx = state.posDraftPrescription || state.posSelectedPrescription;
-    const rxBadge = document.getElementById('pos-rx-attached-badge');
-    const rxBadgeText = document.getElementById('pos-rx-badge-text');
-    const rxMiniTable = document.getElementById('pos-rx-mini-table');
+    // ── Update Attached Prescriptions Summary (Supports Multiple Rx) ────────
+    const rxListContainer = document.getElementById('pos-rx-attached-list');
+    const rxCountBadge = document.getElementById('pos-rx-count-badge');
+    const fallbackBadge = document.getElementById('pos-rx-attached-badge');
 
-    if (attachedRx && rxBadge) {
-      rxBadge.style.display = 'block';
-      if (rxBadgeText) {
-        rxBadgeText.textContent = attachedRx.prescription_number || '🩺 RX Attached';
+    // Ensure state.posPrescriptions is an array
+    if (!Array.isArray(state.posPrescriptions)) {
+      state.posPrescriptions = [];
+      if (state.posDraftPrescription || state.posSelectedPrescription) {
+        state.posPrescriptions.push(state.posDraftPrescription || state.posSelectedPrescription);
       }
-      if (rxMiniTable) {
-        const odSph = attachedRx.od_sph || attachedRx.odSph || '0.00';
-        const odCyl = attachedRx.od_cyl || attachedRx.odCyl || '—';
-        const odAxis = (attachedRx.od_axis || attachedRx.odAxis) ? (attachedRx.od_axis || attachedRx.odAxis) + '°' : '—';
-        const osSph = attachedRx.os_sph || attachedRx.osSph || '0.00';
-        const osCyl = attachedRx.os_cyl || attachedRx.osCyl || '—';
-        const osAxis = (attachedRx.os_axis || attachedRx.osAxis) ? (attachedRx.os_axis || attachedRx.osAxis) + '°' : '—';
+    }
 
-        rxMiniTable.innerHTML = `
-          <table style="width:100%; font-size:0.72rem; border-collapse:collapse; margin-top:4px;">
-            <thead>
-              <tr style="color:#94A3B8; text-align:left; border-bottom:1px solid rgba(255,255,255,0.15);">
-                <th style="padding:2px 4px;">EYE</th>
-                <th style="padding:2px 4px;">SPH</th>
-                <th style="padding:2px 4px;">CYL</th>
-                <th style="padding:2px 4px;">AXIS</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style="padding:3px 4px; font-weight:700; color:#BAE6FD;">OD (Right)</td>
-                <td style="padding:3px 4px;">${odSph}</td>
-                <td style="padding:3px 4px;">${odCyl}</td>
-                <td style="padding:3px 4px;">${odAxis}</td>
-              </tr>
-              <tr>
-                <td style="padding:3px 4px; font-weight:700; color:#BAE6FD;">OS (Left)</td>
-                <td style="padding:3px 4px;">${osSph}</td>
-                <td style="padding:3px 4px;">${osCyl}</td>
-                <td style="padding:3px 4px;">${osAxis}</td>
-              </tr>
-            </tbody>
-          </table>
-        `;
+    const rxList = state.posPrescriptions;
+
+    if (rxCountBadge) {
+      if (rxList.length > 0) {
+        rxCountBadge.style.display = 'inline-block';
+        rxCountBadge.textContent = rxList.length === 1 ? '1 Rx' : `${rxList.length} Rx Added`;
+      } else {
+        rxCountBadge.style.display = 'none';
       }
-    } else if (rxBadge) {
-      rxBadge.style.display = 'none';
+    }
+
+    if (rxListContainer) {
+      if (rxList.length === 0) {
+        rxListContainer.innerHTML = '';
+        if (fallbackBadge) fallbackBadge.style.display = 'none';
+      } else {
+        rxListContainer.innerHTML = rxList.map((rx, idx) => {
+          const odSph = rx.od_sph != null ? rx.od_sph : (rx.odSph != null ? rx.odSph : '0.00');
+          const odCyl = rx.od_cyl != null ? rx.od_cyl : (rx.odCyl != null ? rx.odCyl : '—');
+          const odAxis = (rx.od_axis != null || rx.odAxis != null) ? ((rx.od_axis != null ? rx.od_axis : rx.odAxis) + '°') : '—';
+          const osSph = rx.os_sph != null ? rx.os_sph : (rx.osSph != null ? rx.osSph : '0.00');
+          const osCyl = rx.os_cyl != null ? rx.os_cyl : (rx.osCyl != null ? rx.osCyl : '—');
+          const osAxis = (rx.os_axis != null || rx.osAxis != null) ? ((rx.os_axis != null ? rx.os_axis : rx.osAxis) + '°') : '—';
+          const add = rx.addition || rx.add;
+          const pd = rx.ipd_distance || rx.ipdDistance;
+          const rxLabel = rx.prescription_number || `Prescription #${idx + 1}`;
+
+          return `
+            <div class="optic-attached-rx-card" style="margin-bottom:6px;">
+              <div class="optic-rx-badge-top">
+                <span class="optic-rx-badge-num">🩺 ${escapeHtml(rxLabel)}${rxList.length > 1 ? ` (Rx ${idx+1})` : ''}</span>
+                <button type="button" class="btn-rx-remove" onclick="removePosAttachedRx(${idx})" title="Remove this prescription">&times;</button>
+              </div>
+              <div class="optic-rx-mini-table">
+                <table style="width:100%; font-size:0.72rem; border-collapse:collapse; margin-top:4px;">
+                  <thead>
+                    <tr style="color:#94A3B8; text-align:left; border-bottom:1px solid rgba(255,255,255,0.15);">
+                      <th style="padding:2px 4px;">EYE</th>
+                      <th style="padding:2px 4px;">SPH</th>
+                      <th style="padding:2px 4px;">CYL</th>
+                      <th style="padding:2px 4px;">AXIS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style="padding:3px 4px; font-weight:700; color:#BAE6FD;">OD (Right)</td>
+                      <td style="padding:3px 4px;">${odSph}</td>
+                      <td style="padding:3px 4px;">${odCyl}</td>
+                      <td style="padding:3px 4px;">${odAxis}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:3px 4px; font-weight:700; color:#BAE6FD;">OS (Left)</td>
+                      <td style="padding:3px 4px;">${osSph}</td>
+                      <td style="padding:3px 4px;">${osCyl}</td>
+                      <td style="padding:3px 4px;">${osAxis}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                ${(add || pd) ? `
+                  <div style="font-size:0.68rem; color:#BAE6FD; margin-top:4px; padding-top:2px; border-top:1px dashed rgba(255,255,255,0.15);">
+                    ${add ? `ADD: <strong>${escapeHtml(add)}</strong> ` : ''}
+                    ${pd ? `• IPD: <strong>${escapeHtml(pd)} mm</strong>` : ''}
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
     }
 
     // Dynamic UPI QR if UPI_GPAY is selected
@@ -5834,13 +5930,26 @@
     if (btnRxCreateNew) {
       btnRxCreateNew.addEventListener('click', () => {
         openPrescriptionModal(null, (rxData) => {
-          state.posDraftPrescription = rxData;
-          state.posSelectedPrescription = null;
+          if (!Array.isArray(state.posPrescriptions)) state.posPrescriptions = [];
+          state.posPrescriptions.push(rxData);
+          state.posDraftPrescription = state.posPrescriptions[0];
+          state.posSelectedPrescription = state.posPrescriptions[0];
           updatePosCartUI();
-          showToast('Prescription attached to bill!', 'success');
+          showToast(`Prescription #${state.posPrescriptions.length} attached to bill!`, 'success');
         });
       });
     }
+
+    // Global helper to remove a specific attached prescription
+    window.removePosAttachedRx = function(index) {
+      if (Array.isArray(state.posPrescriptions) && state.posPrescriptions[index]) {
+        state.posPrescriptions.splice(index, 1);
+        state.posDraftPrescription = state.posPrescriptions[0] || null;
+        state.posSelectedPrescription = state.posPrescriptions[0] || null;
+        updatePosCartUI();
+        showToast('Prescription removed from bill.', 'info');
+      }
+    };
 
     const btnRxSearchExisting = document.getElementById('btn-rx-search-existing');
     if (btnRxSearchExisting) {
@@ -5887,6 +5996,7 @@
       state.posSelectedClient = null;
       state.posSelectedPrescription = null;
       state.posDraftPrescription = null;
+      state.posPrescriptions = [];
       state.uploadedRxImageUrl = null;
       clearPosInlineCustomer();
       const wrap = document.getElementById('pos-rx-preview-wrap');
@@ -6106,14 +6216,18 @@
 
           // ── 1. PRESERVE CART & PRESCRIPTION SNAPSHOT BEFORE STATE RESET ──
           const cartSnapshot = state.posCart.map(item => ({ ...item }));
-          const rxSnapshot = state.posDraftPrescription || state.posSelectedPrescription || null;
+          const rxListSnapshot = Array.isArray(state.posPrescriptions) && state.posPrescriptions.length > 0
+            ? state.posPrescriptions.map(rx => ({ ...rx }))
+            : (state.posDraftPrescription || state.posSelectedPrescription ? [{ ...(state.posDraftPrescription || state.posSelectedPrescription) }] : []);
+          const rxSnapshot = rxListSnapshot[0] || null;
           const subtotalPaiseSnapshot = state.posCart.reduce((sum, item) => sum + (item.lineTotalPaise || 0), 0);
 
           const payload = {
             customerId: clientPayload.id || null,
             clientDetails: clientPayload.id ? null : clientPayload,
-            prescriptionId: state.posSelectedPrescription ? state.posSelectedPrescription.id : null,
-            newPrescription: state.posSelectedPrescription ? null : (state.posDraftPrescription || (state.uploadedRxImageUrl ? { imageUrl: state.uploadedRxImageUrl } : null)),
+            prescriptions: rxListSnapshot,
+            prescriptionId: rxListSnapshot[0]?.id || null,
+            newPrescription: rxListSnapshot[0]?.id ? null : (rxListSnapshot[0] || (state.uploadedRxImageUrl ? { imageUrl: state.uploadedRxImageUrl } : null)),
             customerName: clientPayload.name,
             customerPhone: clientPayload.phone || null,
             customerCity: clientPayload.city || null,
@@ -6168,6 +6282,7 @@
               grand_total: res.totalPayableINR,
               total_payable_paise: Math.round(res.totalPayableINR * 100),
               items: cartSnapshot,
+              prescriptions: rxListSnapshot,
               prescription: rxSnapshot,
               od_sph: rxSnapshot?.od_sph || rxSnapshot?.odSph,
               od_cyl: rxSnapshot?.od_cyl || rxSnapshot?.odCyl,
@@ -6752,7 +6867,12 @@
         const found = clientRxList.find(r => r.id === rxId);
         if (found) {
           state.posSelectedPrescription = found;
-          state.posDraftPrescription = null;
+          state.posDraftPrescription = found;
+          if (!Array.isArray(state.posPrescriptions)) state.posPrescriptions = [];
+          if (!state.posPrescriptions.some(r => r.id === found.id)) {
+            state.posPrescriptions.push(found);
+          }
+          updatePosCartUI();
           if (rxSummary) {
             rxSummary.style.display = 'block';
             rxSummary.innerHTML = `

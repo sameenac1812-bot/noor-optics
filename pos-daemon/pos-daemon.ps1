@@ -676,125 +676,153 @@ function Format-ReceiptBytes($order) {
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Balance Due:" $balText)))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
-    # 7. Prescription Extraction
-    $rx = $order.prescription
-    if (-not $rx -and $order.items) {
+    # 7. Prescription Extraction (Multi-Rx Support)
+    $allRxList = @()
+    if ($order.prescriptions) {
+        $rawPresc = $order.prescriptions
+        if ($rawPresc -is [string]) {
+            try { $rawPresc = $rawPresc | ConvertFrom-Json } catch {}
+        }
+        foreach ($p in $rawPresc) { if ($p) { $allRxList += $p } }
+    } elseif ($order.prescriptions_json) {
+        try {
+            $rawPresc = $order.prescriptions_json | ConvertFrom-Json
+            foreach ($p in $rawPresc) { if ($p) { $allRxList += $p } }
+        } catch {}
+    }
+
+    if ($allRxList.Count -eq 0 -and $order.items) {
         $rawIts = $order.items
         if ($rawIts -is [string]) {
             try { $rawIts = $rawIts | ConvertFrom-Json } catch {}
         }
-        if ($rawIts -and $rawIts.Count -gt 0) {
-            $firstIt = $rawIts[0]
-            if ($firstIt.prescription) { $rx = $firstIt.prescription }
-            elseif ($firstIt.rx) { $rx = $firstIt.rx }
+        if ($rawIts) {
+            foreach ($it in $rawIts) {
+                if ($it.prescription) { $allRxList += $it.prescription }
+                elseif ($it.rx) { $allRxList += $it.rx }
+            }
         }
     }
-    if (-not $rx) { $rx = $order.newPrescription }
-    if (-not $rx) { $rx = $order }
 
-    $getRxVal = {
-        param($keys)
-        foreach ($k in $keys) {
-            if ($rx -and $rx.$k -ne $null -and [string]$rx.$k -ne "" -and [string]$rx.$k -ne "---") { return $rx.$k }
-            if ($order -and $order.$k -ne $null -and [string]$order.$k -ne "" -and [string]$order.$k -ne "---") { return $order.$k }
-        }
-        return $null
+    if ($allRxList.Count -eq 0) {
+        if ($order.prescription) { $allRxList += $order.prescription }
+        elseif ($order.newPrescription) { $allRxList += $order.newPrescription }
+        else { $allRxList += $order }
     }
 
-    $odSphV = & $getRxVal @('od_sph', 'odSph')
-    $odCylV = & $getRxVal @('od_cyl', 'odCyl')
-    $odAxV  = & $getRxVal @('od_axis', 'odAxis')
-    $osSphV = & $getRxVal @('os_sph', 'osSph')
-    $osCylV = & $getRxVal @('os_cyl', 'osCyl')
-    $osAxV  = & $getRxVal @('os_axis', 'osAxis')
-    $addRaw = & $getRxVal @('addition', 'add')
-    $pdVal  = & $getRxVal @('ipd_distance', 'ipdDistance', 'pd')
-    $docVal = & $getRxVal @('checked_by', 'checkedBy', 'rx_checked_by')
-    $prescriberVal = & $getRxVal @('prescriber_details', 'prescriberDetails', 'clinic')
-    $rxNotesVal = & $getRxVal @('notes', 'rx_notes')
+    function Format-Diopter($val) {
+        if ($val -eq $null -or [string]$val -eq "" -or [string]$val -eq "-" -or [string]$val -eq "---") { return "  --- " }
+        $str = [string]$val
+        $num = 0.0
+        if ([double]::TryParse($str, [ref]$num)) {
+            if ($num -eq 0) { return "  0.00" }
+            return "{0:+0.00;-0.00; 0.00}" -f $num
+        }
+        return "{0,6}" -f $str
+    }
 
-    $hasAnyRx = ($odSphV -ne $null) -or ($odCylV -ne $null) -or ($odAxV -ne $null) -or `
-                ($osSphV -ne $null) -or ($osCylV -ne $null) -or ($osAxV -ne $null) -or `
-                ($addRaw -ne $null) -or ($pdVal -ne $null)
+    $printedAnyRx = $false
+    $rxIndex = 0
+    foreach ($rx in $allRxList) {
+        $rxIndex++
+        $getRxVal = {
+            param($keys)
+            foreach ($k in $keys) {
+                if ($rx -and $rx.$k -ne $null -and [string]$rx.$k -ne "" -and [string]$rx.$k -ne "---") { return $rx.$k }
+                if ($order -and $order.$k -ne $null -and [string]$order.$k -ne "" -and [string]$order.$k -ne "---") { return $order.$k }
+            }
+            return $null
+        }
+
+        $odSphV = & $getRxVal @('od_sph', 'odSph')
+        $odCylV = & $getRxVal @('od_cyl', 'odCyl')
+        $odAxV  = & $getRxVal @('od_axis', 'odAxis')
+        $osSphV = & $getRxVal @('os_sph', 'osSph')
+        $osCylV = & $getRxVal @('os_cyl', 'osCyl')
+        $osAxV  = & $getRxVal @('os_axis', 'osAxis')
+        $addRaw = & $getRxVal @('addition', 'add')
+        $pdVal  = & $getRxVal @('ipd_distance', 'ipdDistance', 'pd')
+        $docVal = & $getRxVal @('checked_by', 'checkedBy', 'rx_checked_by')
+        $prescriberVal = & $getRxVal @('prescriber_details', 'prescriberDetails', 'clinic')
+        $rxNotesVal = & $getRxVal @('notes', 'rx_notes')
+
+        $hasAnyRx = ($odSphV -ne $null) -or ($odCylV -ne $null) -or ($odAxV -ne $null) -or `
+                    ($osSphV -ne $null) -or ($osCylV -ne $null) -or ($osAxV -ne $null) -or `
+                    ($addRaw -ne $null) -or ($pdVal -ne $null)
+
+        if ($hasAnyRx) {
+            $printedAnyRx = $true
+            $hdr = if ($allRxList.Count -gt 1) { "--- CLIENT PRESCRIPTION #$rxIndex ---`n" } else { "--- CLIENT PRESCRIPTION (RX) ---`n" }
+            $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+            $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes($hdr))
+            $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
+            $bw.Write([byte[]]@(0x1B, 0x61, 0x00))
+
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Eye    SPH    CYL   AXIS   ADD  `n"))
+            $odS = Format-Diopter $odSphV
+            $odC = Format-Diopter $odCylV
+            $odA = if ($odAxV) { "{0,3}" -f $odAxV } else { "---" }
+            $add = if ($addRaw) { Format-Diopter $addRaw } else { " --- " }
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OD   $odS  $odC   $odA  $add`n"))
+
+            $osS = Format-Diopter $osSphV
+            $osC = Format-Diopter $osCylV
+            $osA = if ($osAxV) { "{0,3}" -f $osAxV } else { "---" }
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OS   $osS  $osC   $osA  $add`n"))
+
+            if ($pdVal) {
+                $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Distance PD: $pdVal mm`n"))
+            }
+            if ($docVal) {
+                $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Optometrist: $docVal`n"))
+            }
+            if ($prescriberVal) {
+                $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Prescriber:  $prescriberVal`n"))
+            }
+            if ($rxNotesVal -and $rxNotesVal -notmatch "in-store") {
+                $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Rx Notes:    $rxNotesVal`n"))
+            }
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
+        }
+    }
 
     $pref = [string]$order.prescription_pref
     $isZeroPower = $pref -match "zero|plano|blue|screen"
     $isCallOptometrist = $pref -match "call|optometrist|consult"
     $isManualRx = $pref -match "enter|manual"
-    $rxMentioned = ($order.prescription_id) -or ($order.prescription_number) -or ($rx.prescription_number) -or `
-                   ($pref -match "rx") -or $isManualRx
+    $rxMentioned = ($order.prescription_id) -or ($order.prescription_number) -or ($pref -match "rx") -or $isManualRx
 
-    if ($hasAnyRx) {
-        $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
-        $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
-        $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
-        $bw.Write([byte[]]@(0x1B, 0x61, 0x00))
-
-        function Format-Diopter($val) {
-            if ($val -eq $null -or [string]$val -eq "" -or [string]$val -eq "-" -or [string]$val -eq "---") { return "  --- " }
-            $str = [string]$val
-            $num = 0.0
-            if ([double]::TryParse($str, [ref]$num)) {
-                if ($num -eq 0) { return "  0.00" }
-                return "{0:+0.00;-0.00; 0.00}" -f $num
+    if (-not $printedAnyRx) {
+        if ($isZeroPower) {
+            # Website Case 1 - Choice 3: Zero Power Blue-Cut Lenses
+            $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+            $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
+            $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("ZERO-POWER (PLANO) LENSES`n"))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Blue-Cut Anti-Glare Computer Vision`n"))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
+        } elseif ($isCallOptometrist) {
+            # Website Case 1 - Choice 2: Call Optometrist Required
+            $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+            $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
+            $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OPTOMETRIST CALL REQUIRED`n"))
+            if ($order.customer_phone) {
+                $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Call Client: $($order.customer_phone)`n"))
             }
-            return "{0,6}" -f $str
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
+        } elseif ($rxMentioned) {
+            # Website Case 1 - Choice 1: Manual prescription not filled or awaiting upload
+            $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
+            $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
+            $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("PRESCRIPTION PENDING VERIFICATION`n"))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
         }
-
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Eye    SPH    CYL   AXIS   ADD  `n"))
-        $odS = Format-Diopter $odSphV
-        $odC = Format-Diopter $odCylV
-        $odA = if ($odAxV) { "{0,3}" -f $odAxV } else { "---" }
-        $add = if ($addRaw) { Format-Diopter $addRaw } else { " --- " }
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OD   $odS  $odC   $odA  $add`n"))
-
-        $osS = Format-Diopter $osSphV
-        $osC = Format-Diopter $osCylV
-        $osA = if ($osAxV) { "{0,3}" -f $osAxV } else { "---" }
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OS   $osS  $osC   $osA  $add`n"))
-
-        if ($pdVal) {
-            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Distance PD: $pdVal mm`n"))
-        }
-        if ($docVal) {
-            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Optometrist: $docVal`n"))
-        }
-        if ($prescriberVal) {
-            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Prescriber:  $prescriberVal`n"))
-        }
-        if ($rxNotesVal -and $rxNotesVal -notmatch "in-store") {
-            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Rx Notes:    $rxNotesVal`n"))
-        }
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
-    } elseif ($isZeroPower) {
-        # Website Case 1 - Choice 3: Zero Power Blue-Cut Lenses
-        $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
-        $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
-        $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("ZERO-POWER (PLANO) LENSES`n"))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Blue-Cut Anti-Glare Computer Vision`n"))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
-    } elseif ($isCallOptometrist) {
-        # Website Case 1 - Choice 2: Call Optometrist Required
-        $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
-        $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
-        $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OPTOMETRIST CALL REQUIRED`n"))
-        if ($order.customer_phone) {
-            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Call Client: $($order.customer_phone)`n"))
-        }
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
-    } elseif ($rxMentioned) {
-        # Website Case 1 - Choice 1: Manual prescription not filled or awaiting upload
-        $bw.Write([byte[]]@(0x1B, 0x61, 0x01))
-        $bw.Write([byte[]]@(0x1B, 0x45, 0x01))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("--- CLIENT PRESCRIPTION (RX) ---`n"))
-        $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("PRESCRIPTION PENDING VERIFICATION`n"))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
     }
 
     # 8. Crisp Anti-Blotting UPI Payment QR Code

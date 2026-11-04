@@ -112,18 +112,46 @@ function format58mmTextReceipt(order, items, settings = {}) {
     text += row('Balance Due:', formatINR(order.outstanding_paise)) + '\n';
   }
 
-  // Prescription (Rx) Section
-  if ((order.od_sph !== undefined && order.od_sph !== null && order.od_sph !== '') || order.prescription_number) {
-    text += divider + '\n';
-    text += center('--- CLIENT PRESCRIPTION (RX) ---') + '\n';
-    if (order.prescription_number) text += center(order.prescription_number) + '\n';
-    text += 'Eye   SPH    CYL   AXIS   ADD   \n';
+  // Prescription (Rx) Section (Multi-Rx Support)
+  let rxList = [];
+  if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
+    rxList = order.prescriptions.filter(Boolean);
+  } else if (order.prescriptions_json) {
+    try {
+      const p = JSON.parse(order.prescriptions_json);
+      if (Array.isArray(p) && p.length > 0) rxList = p;
+    } catch (_) {}
+  }
+  if (rxList.length === 0 && ((order.od_sph !== undefined && order.od_sph !== null && order.od_sph !== '') || order.prescription_number)) {
+    rxList = [order];
+  }
+
+  if (rxList.length > 0) {
     const fmt = v => (v === undefined || v === null || v === '' || v === '---') ? ' --- ' : String(v).padEnd(6);
     const fmtAx = a => (a === undefined || a === null || a === '' || a === '---') ? '---' : String(a).padEnd(3);
-    text += `OD  ${fmt(order.od_sph)} ${fmt(order.od_cyl)} ${fmtAx(order.od_axis)}  ${fmt(order.addition)}\n`;
-    text += `OS  ${fmt(order.os_sph)} ${fmt(order.os_cyl)} ${fmtAx(order.os_axis)}  ${fmt(order.addition)}\n`;
-    if (order.ipd_distance) text += `Distance PD: ${order.ipd_distance} mm\n`;
-    if (order.rx_checked_by) text += `Optometrist: ${order.rx_checked_by}\n`;
+
+    rxList.forEach((rx, idx) => {
+      text += divider + '\n';
+      const label = rxList.length > 1 ? `--- CLIENT PRESCRIPTION #${idx + 1} ---` : '--- CLIENT PRESCRIPTION (RX) ---';
+      text += center(label) + '\n';
+      const rxNum = rx.prescription_number || rx.prescriptionNumber;
+      if (rxNum) text += center(rxNum) + '\n';
+      text += 'Eye   SPH    CYL   AXIS   ADD   \n';
+      const odSph = rx.od_sph !== undefined ? rx.od_sph : rx.odSph;
+      const odCyl = rx.od_cyl !== undefined ? rx.od_cyl : rx.odCyl;
+      const odAxis = rx.od_axis !== undefined ? rx.od_axis : rx.odAxis;
+      const osSph = rx.os_sph !== undefined ? rx.os_sph : rx.osSph;
+      const osCyl = rx.os_cyl !== undefined ? rx.os_cyl : rx.osCyl;
+      const osAxis = rx.os_axis !== undefined ? rx.os_axis : rx.osAxis;
+      const add = rx.addition || rx.add;
+      const pd = rx.ipd_distance || rx.ipdDistance || rx.pd;
+      const doc = rx.checked_by || rx.checkedBy || rx.rx_checked_by;
+
+      text += `OD  ${fmt(odSph)} ${fmt(odCyl)} ${fmtAx(odAxis)}  ${fmt(add)}\n`;
+      text += `OS  ${fmt(osSph)} ${fmt(osCyl)} ${fmtAx(osAxis)}  ${fmt(add)}\n`;
+      if (pd) text += `Distance PD: ${pd} mm\n`;
+      if (doc) text += `Optometrist: ${doc}\n`;
+    });
   }
   text += divider + '\n';
   text += center('2-Year Frame Warranty') + '\n';
@@ -277,29 +305,60 @@ function generate58mmHTML(order, items, settings = {}) {
     </div>
   ` : ''}
 
-  ${(order.od_sph !== undefined && order.od_sph !== null && order.od_sph !== '') || order.prescription_number ? `
-    <div class="divider"></div>
-    <div style="text-align:center; font-weight:800; font-size:10px; margin:4px 0; text-transform:uppercase; letter-spacing:0.5px;">--- Client Prescription (Rx) ---</div>
-    <table style="font-size:9.5px; width:100%; text-align:center; margin:3px 0; border-collapse:collapse;">
-      <thead>
-        <tr style="border-bottom:1px dashed #666; font-weight:700;">
-          <th style="text-align:left; padding:2px 0;">Eye</th><th>SPH</th><th>CYL</th><th>AXIS</th><th>ADD</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td style="text-align:left; font-weight:700; padding:2px 0;">OD</td>
-          <td>${order.od_sph || '0.00'}</td><td>${order.od_cyl || '0.00'}</td><td>${order.od_axis || '---'}</td><td>${order.addition || '0.00'}</td>
-        </tr>
-        <tr>
-          <td style="text-align:left; font-weight:700; padding:2px 0;">OS</td>
-          <td>${order.os_sph || '0.00'}</td><td>${order.os_cyl || '0.00'}</td><td>${order.os_axis || '---'}</td><td>${order.addition || '0.00'}</td>
-        </tr>
-      </tbody>
-    </table>
-    ${order.ipd_distance ? `<div style="font-size:9px; margin-top:2px;"><strong>Distance PD:</strong> ${order.ipd_distance} mm</div>` : ''}
-    ${order.rx_checked_by ? `<div style="font-size:9px;"><strong>Optometrist:</strong> ${order.rx_checked_by}</div>` : ''}
-  ` : ''}
+  ${(() => {
+    let rxList = [];
+    if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
+      rxList = order.prescriptions.filter(Boolean);
+    } else if (order.prescriptions_json) {
+      try {
+        const p = JSON.parse(order.prescriptions_json);
+        if (Array.isArray(p) && p.length > 0) rxList = p;
+      } catch (_) {}
+    }
+    if (rxList.length === 0 && ((order.od_sph !== undefined && order.od_sph !== null && order.od_sph !== '') || order.prescription_number)) {
+      rxList = [order];
+    }
+    if (rxList.length === 0) return '';
+
+    return rxList.map((rx, idx) => {
+      const label = rxList.length > 1 ? `--- Client Prescription #${idx + 1} ---` : '--- Client Prescription (Rx) ---';
+      const rxNum = rx.prescription_number || rx.prescriptionNumber;
+      const odSph = rx.od_sph !== undefined ? rx.od_sph : (rx.odSph || '0.00');
+      const odCyl = rx.od_cyl !== undefined ? rx.od_cyl : (rx.odCyl || '0.00');
+      const odAxis = rx.od_axis !== undefined ? (rx.od_axis + '°') : (rx.odAxis !== undefined ? rx.odAxis + '°' : '---');
+      const osSph = rx.os_sph !== undefined ? rx.os_sph : (rx.osSph || '0.00');
+      const osCyl = rx.os_cyl !== undefined ? rx.os_cyl : (rx.osCyl || '0.00');
+      const osAxis = rx.os_axis !== undefined ? (rx.os_axis + '°') : (rx.osAxis !== undefined ? rx.osAxis + '°' : '---');
+      const add = rx.addition || rx.add || '0.00';
+      const pd = rx.ipd_distance || rx.ipdDistance || rx.pd;
+      const doc = rx.checked_by || rx.checkedBy || rx.rx_checked_by;
+
+      return `
+        <div class="divider"></div>
+        <div style="text-align:center; font-weight:800; font-size:10px; margin:4px 0; text-transform:uppercase; letter-spacing:0.5px;">${label}</div>
+        ${rxNum ? `<div style="text-align:center; font-size:9px; font-weight:600; color:#333;">${rxNum}</div>` : ''}
+        <table style="font-size:9.5px; width:100%; text-align:center; margin:3px 0; border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:1px dashed #666; font-weight:700;">
+              <th style="text-align:left; padding:2px 0;">Eye</th><th>SPH</th><th>CYL</th><th>AXIS</th><th>ADD</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="text-align:left; font-weight:700; padding:2px 0;">OD</td>
+              <td>${odSph}</td><td>${odCyl}</td><td>${odAxis}</td><td>${add}</td>
+            </tr>
+            <tr>
+              <td style="text-align:left; font-weight:700; padding:2px 0;">OS</td>
+              <td>${osSph}</td><td>${osCyl}</td><td>${osAxis}</td><td>${add}</td>
+            </tr>
+          </tbody>
+        </table>
+        ${pd ? `<div style="font-size:9px; margin-top:2px;"><strong>Distance PD:</strong> ${pd} mm</div>` : ''}
+        ${doc ? `<div style="font-size:9px;"><strong>Optometrist:</strong> ${doc}</div>` : ''}
+      `;
+    }).join('');
+  })()}
 
   <div class="divider"></div>
   <div style="text-align:center; margin:8px 0;">

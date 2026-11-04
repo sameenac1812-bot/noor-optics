@@ -1185,26 +1185,31 @@
 
               <!-- Card B: Prescription RX -->
               <div class="optic-subcard">
-                <div class="optic-subcard-title">
-                  <span>📄</span> Prescription RX
+                <div class="optic-subcard-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div class="optic-subcard-title">
+                    <span>📄</span> Prescription RX
+                  </div>
+                  <span class="optic-badge-count" id="pos-rx-count-badge" style="display:none; font-size:0.72rem; padding:2px 7px; border-radius:10px; background:#0284C7; color:#fff; font-weight:800;">0 Rx</span>
                 </div>
                 <div class="optic-subcard-buttons">
-                  <button type="button" class="btn-subcard-action" id="btn-rx-create-new">
+                  <button type="button" class="btn-subcard-action" id="btn-rx-create-new" title="Create and attach new optical prescription">
                     <span>🩺 Create New</span>
                   </button>
-                  <button type="button" class="btn-subcard-action" id="btn-rx-search-existing">
+                  <button type="button" class="btn-subcard-action" id="btn-rx-search-existing" title="Search and attach customer prescription">
                     <span>🔍 Search RX</span>
                   </button>
                 </div>
 
-                <!-- Attached Prescription Badge / Summary -->
-                <div class="optic-attached-rx-card" id="pos-rx-attached-badge" style="display:none;">
-                  <div class="optic-rx-badge-top">
-                    <span class="optic-rx-badge-num" id="pos-rx-badge-text">RX Attached</span>
-                    <button type="button" class="btn-rx-remove" id="btn-pos-remove-rx" title="Detach prescription">&times;</button>
-                  </div>
-                  <div class="optic-rx-mini-table" id="pos-rx-mini-table">
-                    <!-- Populated dynamically via admin.js -->
+                <!-- Attached Prescriptions List (Supports Multiple Rx) -->
+                <div class="optic-attached-rx-list" id="pos-rx-attached-list" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+                  <div class="optic-attached-rx-card" id="pos-rx-attached-badge" style="display:none;">
+                    <div class="optic-rx-badge-top">
+                      <span class="optic-rx-badge-num" id="pos-rx-badge-text">RX Attached</span>
+                      <button type="button" class="btn-rx-remove" id="btn-pos-remove-rx" title="Detach prescription">&times;</button>
+                    </div>
+                    <div class="optic-rx-mini-table" id="pos-rx-mini-table">
+                      <!-- Populated dynamically via admin.js -->
+                    </div>
                   </div>
                 </div>
               </div>

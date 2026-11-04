@@ -513,6 +513,7 @@ function initializeDatabase() {
 
     const orderCols = db.pragma('table_info(orders)').map(c => c.name);
     if (!orderCols.includes('prescription_id')) db.exec('ALTER TABLE orders ADD COLUMN prescription_id TEXT;');
+    if (!orderCols.includes('prescriptions_json')) db.exec('ALTER TABLE orders ADD COLUMN prescriptions_json TEXT;');
     if (!orderCols.includes('customer_age')) db.exec('ALTER TABLE orders ADD COLUMN customer_age INTEGER;');
     if (!orderCols.includes('advance_paid_paise')) db.exec('ALTER TABLE orders ADD COLUMN advance_paid_paise INTEGER DEFAULT 0;');
     if (!orderCols.includes('second_payment_paise')) db.exec('ALTER TABLE orders ADD COLUMN second_payment_paise INTEGER DEFAULT 0;');

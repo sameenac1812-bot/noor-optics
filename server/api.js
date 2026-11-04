@@ -1752,16 +1752,17 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       }
     }
 
-    // 0b. Resolve or create new prescription if submitted
-    let finalPrescriptionId = prescriptionId || (incomingRx && incomingRx.id && !String(incomingRx.id).startsWith('draft-') ? incomingRx.id : null);
-    let existingRx = null;
-    if (finalPrescriptionId) {
-      try {
-        existingRx = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(finalPrescriptionId);
-      } catch (_) {}
+    // 0b. Resolve or create new prescriptions (supports multiple prescriptions)
+    let rawRxList = [];
+    if (Array.isArray(req.body.prescriptions) && req.body.prescriptions.length > 0) {
+      rawRxList = req.body.prescriptions.filter(Boolean);
+    } else if (incomingRx) {
+      rawRxList = [incomingRx];
+    } else if (prescriptionId) {
+      rawRxList = [{ id: prescriptionId }];
     }
 
-    if (incomingRx && !finalCustomerId) {
+    if (rawRxList.length > 0 && !finalCustomerId) {
       finalCustomerId = 'cust-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
       const clientCode = getNextClientCode();
       db.prepare(`
@@ -1775,54 +1776,79 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       );
     }
 
-    if (incomingRx && !existingRx && finalCustomerId) {
-      finalPrescriptionId = (incomingRx.id && !String(incomingRx.id).startsWith('draft-')) ? incomingRx.id : ('rx-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000));
-      let rxNumber = getNextPrescriptionNumber();
-      let inserted = false;
-      let attempt = 0;
-      while (!inserted && attempt < 10) {
-        attempt++;
-        try {
-          db.prepare(`
-            INSERT INTO prescriptions (
-              id, prescription_number, client_id, prescription_date,
-              od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis,
-              addition, ipd_distance, ipd_near, checked_by, prescriber_details,
-              notes, image_url, created_by_user_id, created_at, updated_at
-            ) VALUES (
-              ?, ?, ?, ?,
-              ?, ?, ?, ?, ?, ?,
-              ?, ?, ?, ?, ?,
-              ?, ?, ?, datetime('now'), datetime('now')
-            )
-          `).run(
-            finalPrescriptionId, rxNumber, finalCustomerId,
-            incomingRx.prescriptionDate || incomingRx.prescription_date || new Date().toISOString().slice(0, 10),
-            incomingRx.odSph || incomingRx.od_sph || null,
-            incomingRx.odCyl || incomingRx.od_cyl || null,
-            incomingRx.odAxis !== undefined ? incomingRx.odAxis : (incomingRx.od_axis !== undefined ? incomingRx.od_axis : null),
-            incomingRx.osSph || incomingRx.os_sph || null,
-            incomingRx.osCyl || incomingRx.os_cyl || null,
-            incomingRx.osAxis !== undefined ? incomingRx.osAxis : (incomingRx.os_axis !== undefined ? incomingRx.os_axis : null),
-            incomingRx.addition || null,
-            incomingRx.ipdDistance !== undefined ? incomingRx.ipdDistance : (incomingRx.ipd_distance !== undefined ? incomingRx.ipd_distance : null),
-            incomingRx.ipdNear !== undefined ? incomingRx.ipdNear : (incomingRx.ipd_near !== undefined ? incomingRx.ipd_near : null),
-            incomingRx.checkedBy || incomingRx.checked_by || req.user.name || null,
-            incomingRx.prescriberDetails || incomingRx.prescriber_details || null,
-            incomingRx.notes || null,
-            incomingRx.imageUrl || incomingRx.image_url || null,
-            req.user.id
-          );
-          inserted = true;
-        } catch (rxErr) {
-          if (rxErr.message && rxErr.message.includes('UNIQUE constraint failed: prescriptions.prescription_number')) {
-            rxNumber = `RX-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}-${Math.floor(100 + Math.random() * 900)}`;
-          } else {
-            throw rxErr;
+    const savedPrescriptions = [];
+    for (let rIdx = 0; rIdx < rawRxList.length; rIdx++) {
+      const rxItem = rawRxList[rIdx];
+      let rxId = (rxItem.id && !String(rxItem.id).startsWith('draft-')) ? rxItem.id : null;
+      let rxRecord = null;
+      if (rxId) {
+        try { rxRecord = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(rxId); } catch (_) {}
+      }
+
+      const hasDiopters = (rxItem.odSph !== undefined || rxItem.od_sph !== undefined ||
+                           rxItem.osSph !== undefined || rxItem.os_sph !== undefined ||
+                           rxItem.prescriptionDate || rxItem.prescription_date ||
+                           rxItem.prescriptionNumber || rxItem.prescription_number);
+
+      if (!rxRecord && hasDiopters && finalCustomerId) {
+        rxId = rxId || ('rx-' + Date.now() + '-' + rIdx + '-' + Math.floor(1000 + Math.random() * 9000));
+        let rxNumber = rxItem.prescriptionNumber || rxItem.prescription_number || getNextPrescriptionNumber();
+        let inserted = false;
+        let attempt = 0;
+        while (!inserted && attempt < 10) {
+          attempt++;
+          try {
+            db.prepare(`
+              INSERT INTO prescriptions (
+                id, prescription_number, client_id, prescription_date,
+                od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis,
+                addition, ipd_distance, ipd_near, checked_by, prescriber_details,
+                notes, image_url, created_by_user_id, created_at, updated_at
+              ) VALUES (
+                ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, datetime('now'), datetime('now')
+              )
+            `).run(
+              rxId, rxNumber, finalCustomerId,
+              rxItem.prescriptionDate || rxItem.prescription_date || new Date().toISOString().slice(0, 10),
+              rxItem.odSph !== undefined ? rxItem.odSph : (rxItem.od_sph !== undefined ? rxItem.od_sph : null),
+              rxItem.odCyl !== undefined ? rxItem.odCyl : (rxItem.od_cyl !== undefined ? rxItem.od_cyl : null),
+              rxItem.odAxis !== undefined ? rxItem.odAxis : (rxItem.od_axis !== undefined ? rxItem.od_axis : null),
+              rxItem.osSph !== undefined ? rxItem.osSph : (rxItem.os_sph !== undefined ? rxItem.os_sph : null),
+              rxItem.osCyl !== undefined ? rxItem.osCyl : (rxItem.os_cyl !== undefined ? rxItem.os_cyl : null),
+              rxItem.osAxis !== undefined ? rxItem.osAxis : (rxItem.os_axis !== undefined ? rxItem.os_axis : null),
+              rxItem.addition || rxItem.add || null,
+              rxItem.ipdDistance !== undefined ? rxItem.ipdDistance : (rxItem.ipd_distance !== undefined ? rxItem.ipd_distance : null),
+              rxItem.ipdNear !== undefined ? rxItem.ipdNear : (rxItem.ipd_near !== undefined ? rxItem.ipd_near : null),
+              rxItem.checkedBy || rxItem.checked_by || req.user.name || null,
+              rxItem.prescriberDetails || rxItem.prescriber_details || null,
+              rxItem.notes || null,
+              rxItem.imageUrl || rxItem.image_url || null,
+              req.user.id
+            );
+            inserted = true;
+            rxRecord = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(rxId);
+          } catch (rxErr) {
+            if (rxErr.message && rxErr.message.includes('UNIQUE constraint failed: prescriptions.prescription_number')) {
+              rxNumber = `RX-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}-${Math.floor(100 + Math.random() * 900)}`;
+            } else {
+              throw rxErr;
+            }
           }
         }
       }
+
+      if (rxRecord) {
+        savedPrescriptions.push(rxRecord);
+      } else if (hasDiopters) {
+        savedPrescriptions.push(rxItem);
+      }
     }
+
+    const finalPrescriptionId = savedPrescriptions[0]?.id || prescriptionId || null;
+    const finalPrescriptionsJson = savedPrescriptions.length > 0 ? JSON.stringify(savedPrescriptions) : null;
 
     let subtotalPaise = 0;
     preparedItems.length = 0; // Clear array in case of retry
@@ -1971,19 +1997,19 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       paymentStatus = 'PENDING';
     }
 
-    // 2. Insert Order (With authoritative customer_id, prescription_id, and payment installments)
+    // 2. Insert Order (With authoritative customer_id, prescription_id, prescriptions_json, and payment installments)
     const nowIso = new Date().toISOString();
     db.prepare(`
       INSERT INTO orders (
         id, order_number, token_number, channel, customer_id, customer_name,
-        customer_phone, customer_email, prescription_id, status, payment_status, subtotal_paise,
+        customer_phone, customer_email, prescription_id, prescriptions_json, status, payment_status, subtotal_paise,
         discount_paise, discount_reason, tax_paise, total_payable_paise,
         amount_paid_paise, outstanding_paise, staff_user_id, notes,
         advance_paid_paise, second_payment_paise, third_payment_paise, previous_due_paise, pickup_time,
         created_at, updated_at
       ) VALUES (
         ?, ?, ?, 'POS', ?, ?,
-        ?, ?, ?, 'CONFIRMED', ?, ?,
+        ?, ?, ?, ?, 'CONFIRMED', ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?, ?, ?,
@@ -1991,7 +2017,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       )
     `).run(
       orderId, orderNumber, tokenNumber, finalCustomerId, finalCustomerName,
-      finalCustomerPhone, finalCustomerEmail, finalPrescriptionId, paymentStatus, subtotalPaise,
+      finalCustomerPhone, finalCustomerEmail, finalPrescriptionId, finalPrescriptionsJson, paymentStatus, subtotalPaise,
       discountPaise, discountReason || null, taxPaise, totalPayablePaise,
       amountPaidPaise, outstandingPaise, req.user.id, notes || null,
       advancePaise, secondPaymentPaise, thirdPaymentPaise, previousDuePaise, pickupTime,
@@ -2055,7 +2081,8 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     const snapshotJson = JSON.stringify({
       orderNumber, tokenNumber, customerName: finalCustomerName, customerPhone: finalCustomerPhone,
       items: preparedItems, subtotalPaise, discountPaise, taxPaise, totalPayablePaise,
-      prescriptionId: finalPrescriptionId
+      prescriptionId: finalPrescriptionId,
+      prescriptions: savedPrescriptions
     });
 
     db.prepare(`
@@ -2093,7 +2120,8 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       printJobId: printJob.jobId,
       customerId: finalCustomerId,
       customerName: finalCustomerName,
-      prescriptionId: finalPrescriptionId
+      prescriptionId: finalPrescriptionId,
+      prescriptions: savedPrescriptions
     };
   });
 
@@ -2142,6 +2170,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       })),
       prescriptionId: result.prescriptionId,
       prescription: effectiveRx,
+      prescriptions: result.prescriptions || savedPrescriptions,
       od_sph: effectiveRx?.od_sph != null ? effectiveRx.od_sph : (effectiveRx?.odSph != null ? effectiveRx.odSph : null),
       od_cyl: effectiveRx?.od_cyl != null ? effectiveRx.od_cyl : (effectiveRx?.odCyl != null ? effectiveRx.odCyl : null),
       od_axis: effectiveRx?.od_axis != null ? effectiveRx.od_axis : (effectiveRx?.odAxis != null ? effectiveRx.odAxis : null),
@@ -2778,6 +2807,27 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
         outstanding_inr: (o.outstanding_paise || 0) / 100,
         previous_due_inr: (o.previous_due_paise || 0) / 100,
         pickup_time: o.pickup_time || null,
+        prescriptions: (() => {
+          if (o.prescriptions_json) {
+            try { const p = JSON.parse(o.prescriptions_json); if (Array.isArray(p) && p.length > 0) return p; } catch(_) {}
+          }
+          const s = {
+            id: o.prescription_id || (rx ? rx.id : null),
+            prescription_number: o.prescription_number || (rx ? rx.prescription_number : null),
+            od_sph: o.od_sph || (rx ? rx.od_sph : null),
+            od_cyl: o.od_cyl || (rx ? rx.od_cyl : null),
+            od_axis: o.od_axis !== undefined && o.od_axis !== null ? o.od_axis : (rx ? rx.od_axis : null),
+            os_sph: o.os_sph || (rx ? rx.os_sph : null),
+            os_cyl: o.os_cyl || (rx ? rx.os_cyl : null),
+            os_axis: o.os_axis !== undefined && o.os_axis !== null ? o.os_axis : (rx ? rx.os_axis : null),
+            addition: o.addition || (rx ? rx.addition : null),
+            ipd_distance: o.ipd_distance || (rx ? rx.ipd_distance : null),
+            ipd_near: o.ipd_near || (rx ? rx.ipd_near : null),
+            checked_by: o.rx_checked_by || (rx ? rx.checked_by : null),
+            notes: o.rx_notes || (rx ? rx.notes : null)
+          };
+          return (s.od_sph != null || s.os_sph != null || s.prescription_number) ? [s] : [];
+        })(),
         items: getItems.all(o.id).map(i => ({
           ...i,
           unit_price_inr: i.unit_price_paise / 100,
@@ -2845,6 +2895,14 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), (
     }
   }
 
+  let orderRxList = [];
+  if (order.prescriptions_json) {
+    try {
+      const parsedRx = JSON.parse(order.prescriptions_json);
+      if (Array.isArray(parsedRx) && parsedRx.length > 0) orderRxList = parsedRx;
+    } catch (_) {}
+  }
+
   const resolvedOrder = {
     ...order,
     prescription_id: order.prescription_id || (rx ? rx.id : null),
@@ -2861,7 +2919,25 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), (
     rx_checked_by: order.rx_checked_by || (rx ? rx.checked_by : null),
     rx_notes: order.rx_notes || (rx ? rx.notes : null),
     total_payable_inr: order.total_payable_paise / 100,
-    amount_paid_inr: order.amount_paid_paise / 100
+    amount_paid_inr: order.amount_paid_paise / 100,
+    prescriptions: (orderRxList && orderRxList.length > 0) ? orderRxList : (() => {
+      const s = {
+        id: order.prescription_id || (rx ? rx.id : null),
+        prescription_number: order.prescription_number || (rx ? rx.prescription_number : null),
+        od_sph: order.od_sph || (rx ? rx.od_sph : null),
+        od_cyl: order.od_cyl || (rx ? rx.od_cyl : null),
+        od_axis: order.od_axis !== undefined && order.od_axis !== null ? order.od_axis : (rx ? rx.od_axis : null),
+        os_sph: order.os_sph || (rx ? rx.os_sph : null),
+        os_cyl: order.os_cyl || (rx ? rx.os_cyl : null),
+        os_axis: order.os_axis !== undefined && order.os_axis !== null ? order.os_axis : (rx ? rx.os_axis : null),
+        addition: order.addition || (rx ? rx.addition : null),
+        ipd_distance: order.ipd_distance || (rx ? rx.ipd_distance : null),
+        ipd_near: order.ipd_near || (rx ? rx.ipd_near : null),
+        checked_by: order.rx_checked_by || (rx ? rx.checked_by : null),
+        notes: order.rx_notes || (rx ? rx.notes : null)
+      };
+      return (s.od_sph != null || s.os_sph != null || s.prescription_number) ? [s] : [];
+    })()
   };
 
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
@@ -3571,18 +3647,38 @@ function ensureInvoiceForOrder(orderIdOrNumber) {
     }];
   }
 
-  // Get prescription
-  let prescription = null;
-  if (order) {
+  // Get prescriptions (supports multiple attached prescriptions)
+  let prescriptions = [];
+  if (invoice && invoice.snapshot_json) {
+    try {
+      const snap = JSON.parse(invoice.snapshot_json);
+      if (Array.isArray(snap.prescriptions) && snap.prescriptions.length > 0) {
+        prescriptions = snap.prescriptions;
+      }
+    } catch (_) {}
+  }
+  if (prescriptions.length === 0 && order && order.prescriptions_json) {
+    try {
+      const parsed = JSON.parse(order.prescriptions_json);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        prescriptions = parsed;
+      }
+    } catch (_) {}
+  }
+  let prescription = prescriptions[0] || null;
+  if (!prescription && order) {
     if (order.prescription_id) {
       prescription = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(order.prescription_id);
     }
     if (!prescription && order.customer_id) {
       prescription = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? ORDER BY created_at DESC LIMIT 1').get(order.customer_id);
     }
+    if (prescription && prescriptions.length === 0) {
+      prescriptions.push(prescription);
+    }
   }
 
-  return { invoice, items, prescription, order };
+  return { invoice, items, prescription, prescriptions, order };
 }
 
 router.get('/invoices', authenticateToken, (req, res) => {
@@ -3601,10 +3697,10 @@ router.get('/invoices', authenticateToken, (req, res) => {
 });
 
 router.get('/invoices/order/:orderId/pdf', async (req, res) => {
-  const { invoice, items, prescription } = ensureInvoiceForOrder(req.params.orderId);
+  const { invoice, items, prescription, prescriptions } = ensureInvoiceForOrder(req.params.orderId);
   if (!invoice) return res.status(404).send('Invoice or order not found.');
   try {
-    const pdfBuffer = await generateInvoicePDF(invoice, items, prescription);
+    const pdfBuffer = await generateInvoicePDF(invoice, items, (prescriptions && prescriptions.length > 0) ? prescriptions : prescription);
     const disposition = (req.query.download === '1' || req.query.download === 'true') ? 'attachment' : 'inline';
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `${disposition}; filename="${invoice.invoice_number || 'invoice'}.pdf"`);
@@ -3616,10 +3712,10 @@ router.get('/invoices/order/:orderId/pdf', async (req, res) => {
 });
 
 router.get('/invoices/:id/pdf', async (req, res) => {
-  const { invoice, items, prescription } = ensureInvoiceForOrder(req.params.id);
+  const { invoice, items, prescription, prescriptions } = ensureInvoiceForOrder(req.params.id);
   if (!invoice) return res.status(404).send('Invoice not found');
   try {
-    const pdfBuffer = await generateInvoicePDF(invoice, items, prescription);
+    const pdfBuffer = await generateInvoicePDF(invoice, items, (prescriptions && prescriptions.length > 0) ? prescriptions : prescription);
     const disposition = (req.query.download === '0' || req.query.download === 'false' || req.query.inline === '1') ? 'inline' : 'attachment';
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `${disposition}; filename="${invoice.invoice_number || 'invoice'}.pdf"`);

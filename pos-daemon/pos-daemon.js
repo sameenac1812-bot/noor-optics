@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const DAEMON_VERSION = '3.1.0-LIVE-AUTONOMOUS';
+const DAEMON_VERSION = '3.2.0-MULTI-RX';
 const SCRIPT_DIR = __dirname;
 const CONFIG_FILE = path.join(SCRIPT_DIR, 'config.json');
 const PRINTED_FILE = path.join(SCRIPT_DIR, '.printed_orders.json');
@@ -541,102 +541,127 @@ function format25InchEscPosReceipt(rawOrder) {
   }
   writeText(divider);
 
-  // 7. Client Prescription (Rx) Section (100% Reliable Dual-Pipeline Extraction)
-  let embeddedRx = null;
-  const itemList = Array.isArray(order.items) ? order.items : (Array.isArray(rawOrder.items) ? rawOrder.items : []);
-  if (itemList.length > 0) {
+  // 7. Client Prescription (Rx) Section (100% Reliable Multi-Rx Extraction)
+  let allRxList = [];
+  if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
+    allRxList = order.prescriptions.filter(Boolean);
+  } else if (Array.isArray(rawOrder.prescriptions) && rawOrder.prescriptions.length > 0) {
+    allRxList = rawOrder.prescriptions.filter(Boolean);
+  } else if (order.prescriptions_json) {
+    try {
+      const p = JSON.parse(order.prescriptions_json);
+      if (Array.isArray(p) && p.length > 0) allRxList = p;
+    } catch (_) {}
+  }
+
+  if (allRxList.length === 0) {
+    const itemList = Array.isArray(order.items) ? order.items : (Array.isArray(rawOrder.items) ? rawOrder.items : []);
     for (const it of itemList) {
       if (it && (it.prescription || it.rx)) {
-        embeddedRx = it.prescription || it.rx;
-        break;
+        allRxList.push(it.prescription || it.rx);
       }
     }
   }
 
-  const rx = embeddedRx || order.prescription || rawOrder.prescription || order.client_prescription || order.newPrescription || order;
-  const getRxField = (keys) => {
-    for (const k of keys) {
-      if (rx && rx[k] !== undefined && rx[k] !== null && String(rx[k]).trim() !== '' && String(rx[k]).trim() !== '---') return rx[k];
-      if (order && order[k] !== undefined && order[k] !== null && String(order[k]).trim() !== '' && String(order[k]).trim() !== '---') return order[k];
-      if (rawOrder && rawOrder[k] !== undefined && rawOrder[k] !== null && String(rawOrder[k]).trim() !== '' && String(rawOrder[k]).trim() !== '---') return rawOrder[k];
+  if (allRxList.length === 0) {
+    const fallbackRx = order.prescription || rawOrder.prescription || order.client_prescription || order.newPrescription || order;
+    if (fallbackRx) allRxList.push(fallbackRx);
+  }
+
+  function fmtRx(val) {
+    if (val === undefined || val === null || val === '' || val === '---') return '  --- ';
+    const n = Number(val);
+    if (isNaN(n)) return String(val).padStart(6);
+    if (n === 0) return '  0.00';
+    const sign = n > 0 ? '+' : '-';
+    return sign + Math.abs(n).toFixed(2);
+  }
+  function fmtAx(val) {
+    if (val === undefined || val === null || val === '' || val === '---') return '---';
+    return String(val).padStart(3);
+  }
+
+  let printedAnyRx = false;
+  allRxList.forEach((rx, idx) => {
+    const getRxField = (keys) => {
+      for (const k of keys) {
+        if (rx && rx[k] !== undefined && rx[k] !== null && String(rx[k]).trim() !== '' && String(rx[k]).trim() !== '---') return rx[k];
+        if (order && order[k] !== undefined && order[k] !== null && String(order[k]).trim() !== '' && String(order[k]).trim() !== '---') return order[k];
+        if (rawOrder && rawOrder[k] !== undefined && rawOrder[k] !== null && String(rawOrder[k]).trim() !== '' && String(rawOrder[k]).trim() !== '---') return rawOrder[k];
+      }
+      return null;
+    };
+
+    const odSphVal = getRxField(['od_sph', 'odSph']);
+    const odCylVal = getRxField(['od_cyl', 'odCyl']);
+    const odAxisVal = getRxField(['od_axis', 'odAxis']);
+    const osSphVal = getRxField(['os_sph', 'osSph']);
+    const osCylVal = getRxField(['os_cyl', 'osCyl']);
+    const osAxisVal = getRxField(['os_axis', 'osAxis']);
+    const addVal = getRxField(['addition', 'add']);
+    const pdVal = getRxField(['ipd_distance', 'ipdDistance', 'pd']);
+    const docVal = getRxField(['checked_by', 'checkedBy', 'rx_checked_by']);
+    const prescriberVal = getRxField(['prescriber_details', 'prescriberDetails', 'clinic']);
+    const rxNotesVal = getRxField(['notes', 'rx_notes']);
+
+    const hasAnyRxValue = odSphVal !== null || odCylVal !== null || odAxisVal !== null ||
+      osSphVal !== null || osCylVal !== null || osAxisVal !== null ||
+      addVal !== null || pdVal !== null;
+
+    if (hasAnyRxValue) {
+      printedAnyRx = true;
+      const headerTitle = allRxList.length > 1
+        ? `--- CLIENT PRESCRIPTION #${idx + 1} ---`
+        : '--- CLIENT PRESCRIPTION (RX) ---';
+      writeBytes([0x1B, 0x61, 0x01]); // Center
+      writeBytes([0x1B, 0x45, 0x01]); // Bold ON
+      writeText(headerTitle + '\n');
+      writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
+      writeBytes([0x1B, 0x61, 0x00]); // Left
+
+      writeText('Eye    SPH    CYL   AXIS   ADD  \n');
+      writeText(`OD   ${fmtRx(odSphVal)}  ${fmtRx(odCylVal)}   ${fmtAx(odAxisVal)}  ${fmtRx(addVal)}\n`);
+      writeText(`OS   ${fmtRx(osSphVal)}  ${fmtRx(osCylVal)}   ${fmtAx(osAxisVal)}  ${fmtRx(addVal)}\n`);
+
+      if (pdVal) writeText(`Distance PD: ${pdVal} mm\n`);
+      if (docVal) writeText(`Optometrist: ${docVal}\n`);
+      if (prescriberVal) writeText(`Prescriber:  ${prescriberVal.slice(0, COLS - 13)}\n`);
+      if (rxNotesVal && !/in-store/i.test(rxNotesVal)) writeText(`Rx Notes:    ${rxNotesVal.slice(0, COLS - 13)}\n`);
+      writeText(divider);
     }
-    return null;
-  };
+  });
 
-  const odSphVal = getRxField(['od_sph', 'odSph']);
-  const odCylVal = getRxField(['od_cyl', 'odCyl']);
-  const odAxisVal = getRxField(['od_axis', 'odAxis']);
-  const osSphVal = getRxField(['os_sph', 'osSph']);
-  const osCylVal = getRxField(['os_cyl', 'osCyl']);
-  const osAxisVal = getRxField(['os_axis', 'osAxis']);
-  const addVal = getRxField(['addition', 'add']);
-  const pdVal = getRxField(['ipd_distance', 'ipdDistance', 'pd']);
-  const docVal = getRxField(['checked_by', 'checkedBy', 'rx_checked_by']);
-  const prescriberVal = getRxField(['prescriber_details', 'prescriberDetails', 'clinic']);
-  const rxNotesVal = getRxField(['notes', 'rx_notes']);
+  if (!printedAnyRx) {
+    const pref = String(order.prescription_pref || rawOrder.prescription_pref || '').toLowerCase();
+    const isZeroPower = /zero|plano|blue[- ]?cut|screen/i.test(pref);
+    const isCallOptometrist = /call|optometrist|consult/i.test(pref);
+    const isManualRx = /enter[- ]?rx|manual/i.test(pref);
+    const rxExplicitlyMentioned = Boolean(order.prescription_id || order.prescription_number || isManualRx || /rx/i.test(pref));
 
-  const hasAnyRxValue = odSphVal !== null || odCylVal !== null || odAxisVal !== null ||
-    osSphVal !== null || osCylVal !== null || osAxisVal !== null ||
-    addVal !== null || pdVal !== null;
-
-  const pref = String(order.prescription_pref || rawOrder.prescription_pref || '').toLowerCase();
-  const isZeroPower = /zero|plano|blue[- ]?cut|screen/i.test(pref);
-  const isCallOptometrist = /call|optometrist|consult/i.test(pref);
-  const isManualRx = /enter[- ]?rx|manual/i.test(pref);
-  const rxExplicitlyMentioned = Boolean(order.prescription_id || order.prescription_number || (rx && rx.prescription_number) || isManualRx || /rx/i.test(pref));
-
-  if (hasAnyRxValue) {
-    writeBytes([0x1B, 0x61, 0x01]); // Center
-    writeBytes([0x1B, 0x45, 0x01]); // Bold ON
-    writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
-    writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
-    writeBytes([0x1B, 0x61, 0x00]); // Left
-
-    function fmtRx(val) {
-      if (val === undefined || val === null || val === '' || val === '---') return '  --- ';
-      const n = Number(val);
-      if (isNaN(n)) return String(val).padStart(6);
-      if (n === 0) return '  0.00';
-      const sign = n > 0 ? '+' : '-';
-      return sign + Math.abs(n).toFixed(2);
+    if (isZeroPower) {
+      writeBytes([0x1B, 0x61, 0x01]);
+      writeBytes([0x1B, 0x45, 0x01]);
+      writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
+      writeBytes([0x1B, 0x45, 0x00]);
+      writeText('ZERO-POWER (PLANO) LENSES\n');
+      writeText('Blue-Cut Anti-Glare Computer Vision\n');
+      writeText(divider);
+    } else if (isCallOptometrist) {
+      writeBytes([0x1B, 0x61, 0x01]);
+      writeBytes([0x1B, 0x45, 0x01]);
+      writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
+      writeBytes([0x1B, 0x45, 0x00]);
+      writeText('OPTOMETRIST CALL REQUIRED\n');
+      if (custPhone !== '-') writeText(`Call Client: ${custPhone}\n`);
+      writeText(divider);
+    } else if (rxExplicitlyMentioned) {
+      writeBytes([0x1B, 0x61, 0x01]);
+      writeBytes([0x1B, 0x45, 0x01]);
+      writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
+      writeBytes([0x1B, 0x45, 0x00]);
+      writeText('PRESCRIPTION PENDING VERIFICATION\n');
+      writeText(divider);
     }
-    function fmtAx(val) {
-      if (val === undefined || val === null || val === '' || val === '---') return '---';
-      return String(val).padStart(3);
-    }
-
-    writeText('Eye    SPH    CYL   AXIS   ADD  \n');
-    writeText(`OD   ${fmtRx(odSphVal)}  ${fmtRx(odCylVal)}   ${fmtAx(odAxisVal)}  ${fmtRx(addVal)}\n`);
-    writeText(`OS   ${fmtRx(osSphVal)}  ${fmtRx(osCylVal)}   ${fmtAx(osAxisVal)}  ${fmtRx(addVal)}\n`);
-
-    if (pdVal) writeText(`Distance PD: ${pdVal} mm\n`);
-    if (docVal) writeText(`Optometrist: ${docVal}\n`);
-    if (prescriberVal) writeText(`Prescriber:  ${prescriberVal.slice(0, COLS - 13)}\n`);
-    if (rxNotesVal && !/in-store/i.test(rxNotesVal)) writeText(`Rx Notes:    ${rxNotesVal.slice(0, COLS - 13)}\n`);
-    writeText(divider);
-  } else if (isZeroPower) {
-    writeBytes([0x1B, 0x61, 0x01]);
-    writeBytes([0x1B, 0x45, 0x01]);
-    writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
-    writeBytes([0x1B, 0x45, 0x00]);
-    writeText('ZERO-POWER (PLANO) LENSES\n');
-    writeText('Blue-Cut Anti-Glare Computer Vision\n');
-    writeText(divider);
-  } else if (isCallOptometrist) {
-    writeBytes([0x1B, 0x61, 0x01]);
-    writeBytes([0x1B, 0x45, 0x01]);
-    writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
-    writeBytes([0x1B, 0x45, 0x00]);
-    writeText('OPTOMETRIST CALL REQUIRED\n');
-    if (custPhone !== '-') writeText(`Call Client: ${custPhone}\n`);
-    writeText(divider);
-  } else if (rxExplicitlyMentioned) {
-    writeBytes([0x1B, 0x61, 0x01]);
-    writeBytes([0x1B, 0x45, 0x01]);
-    writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
-    writeBytes([0x1B, 0x45, 0x00]);
-    writeText('PRESCRIPTION PENDING VERIFICATION\n');
-    writeText(divider);
   }
 
   // 8. UPI Payment QR Code (Centered)
