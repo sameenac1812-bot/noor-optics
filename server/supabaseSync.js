@@ -1239,6 +1239,12 @@ async function syncSupabaseCustomers(db) {
 
       const existing = db.prepare("SELECT id FROM customers WHERE id = ? OR (phone IS NOT NULL AND phone != '' AND phone = ?)").get(c.id, c.phone);
       if (existing) {
+        let safeCode = c.client_code;
+        if (safeCode) {
+          const codeTaken = db.prepare('SELECT id FROM customers WHERE client_code = ? AND id != ?').get(safeCode, existing.id);
+          if (codeTaken) safeCode = null;
+        }
+
         db.prepare(`
           UPDATE customers
           SET name = COALESCE(?, name), client_code = COALESCE(?, client_code), age = COALESCE(?, age), dob = COALESCE(?, dob),
@@ -1246,7 +1252,7 @@ async function syncSupabaseCustomers(db) {
               pin_code = COALESCE(?, pin_code), notes = COALESCE(?, notes), is_archived = ?, updated_at = ?
           WHERE id = ?
         `).run(
-          c.name, c.client_code, c.age || null, c.dob || null, c.phone || null,
+          c.name, safeCode, c.age || null, c.dob || null, c.phone || null,
           c.email || null, c.address || null, c.city || 'Bengaluru', c.pin_code || null,
           c.notes || null, c.is_archived ? 1 : 0, c.updated_at || new Date().toISOString(),
           existing.id
