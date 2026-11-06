@@ -665,8 +665,8 @@ async function printLiveOrder(order, source = 'Live') {
   if (!order) return { success: false, error: 'No order provided' };
   const orderRef = String(order.order_number || order.order_ref || order.id || 'ORDER').trim();
 
-  // Deduplicate live orders across sessions (allow explicit manual reprint)
-  if (source !== 'reprint' && (printedOrdersSet.has(orderRef) || (order.id && printedOrdersSet.has(String(order.id))))) {
+  // Deduplicate live orders across sessions (allow explicit manual reprint or local_pos)
+  if (source !== 'reprint' && source !== 'local_pos' && (printedOrdersSet.has(orderRef) || (order.id && printedOrdersSet.has(String(order.id))))) {
     console.log(`[Live Print] Order #${orderRef} was already printed. Skipping duplicate.`);
     return { success: true, alreadyPrinted: true };
   }
