@@ -10,6 +10,11 @@ const path = require('path');
 const fs = require('fs');
 const { db } = require('./db');
 
+// ── Paper Width & UPI Configuration (Tweakable) ──
+const PAPER_WIDTH_COLS = 32; // Characters per line for 2.5-inch thermal paper (e.g. 32, 40, 48)
+const PAPER_WIDTH_MM = 58;   // Paper width in mm for browser preview & printing
+const UPI_ID = '9182341567@mairtel'; // Shop UPI ID for payment QR code & receipt text
+
 /**
  * Format currency in Indian Rupees
  */
@@ -21,179 +26,464 @@ function formatINR(paise) {
 }
 
 /**
- * Generate 58mm formatted plain text receipt for thermal printer
+ * Generate 2.5-inch (58mm) formatted plain text receipt matching Image reference layout
  */
-function format58mmTextReceipt(order, items, settings = {}) {
-  const storeName = settings.store_name || 'NOOR OPTIC';
-  const storeAddress = settings.store_address || 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028';
+function format58mmTextReceipt(order, items = [], settings = {}) {
+  const COLS = parseInt(settings.printer_columns, 10) || PAPER_WIDTH_COLS;
+  const storeName = 'NOOR OPTIC';
+  const storeAddress = settings.store_address || 'Pillar No: 45, Beside HP Petrol Pump, Opposite Subhan Bakery, Rethibowli, Gudimalkapur, Hyderabad, Telangana 500028';
   const storePhone = settings.store_phone || '+91 98765 43210';
-  const storeGstin = settings.store_gstin || '29AAAAA0000A1Z5';
-  const dateStr = new Date(order.created_at || Date.now()).toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: true
-  });
+  const activeUpiId = settings.store_upi_id || UPI_ID;
 
-  const LINE_WIDTH = settings.printer_nominal_width_mm === '80' ? 44 : 32;
-  const divider = '-'.repeat(LINE_WIDTH);
-  const doubleDivider = '='.repeat(LINE_WIDTH);
+  const divider = '-'.repeat(COLS);
 
   function center(text) {
-    const s = String(text || '');
-    const clipped = s.length > LINE_WIDTH ? s.substring(0, LINE_WIDTH) : s;
-    const pad = Math.max(0, Math.floor((LINE_WIDTH - clipped.length) / 2));
-    return ' '.repeat(pad) + clipped;
+    const s = String(text || '').trim();
+    if (s.length >= COLS) return s.slice(0, COLS);
+    const pad = Math.max(0, Math.floor((COLS - s.length) / 2));
+    return ' '.repeat(pad) + s;
   }
 
   function row(left, right) {
+    const l = String(left || '');
     const r = String(right || '');
-    const maxL = Math.max(0, LINE_WIDTH - r.length - 1);
-    const l = String(left || '').length > maxL ? String(left || '').substring(0, maxL) : String(left || '');
-    const space = Math.max(1, LINE_WIDTH - l.length - r.length);
-    return l + ' '.repeat(space) + r;
+    if (l.length + r.length >= COLS) {
+      return l + '\n' + r.padStart(COLS);
+    }
+    const spaces = Math.max(1, COLS - l.length - r.length);
+    return l + ' '.repeat(spaces) + r;
   }
 
-  let text = '';
-  text += center(storeName.toUpperCase()) + '\n';
-  // Wrap store address to LINE_WIDTH
-  const addrWords = storeAddress.split(' ');
-  let addrLine = '';
-  addrWords.forEach(w => {
-    if ((addrLine + ' ' + w).trim().length <= LINE_WIDTH) {
-      addrLine = (addrLine + ' ' + w).trim();
+  function wrapTextLines(text, width) {
+    const words = String(text || '').trim().split(/\s+/);
+    const lines = [];
+    let cur = '';
+    words.forEach(w => {
+      if ((cur ? cur + ' ' + w : w).length <= width) {
+        cur = cur ? cur + ' ' + w : w;
+      } else {
+        if (cur) lines.push(cur);
+        cur = w;
+      }
+    });
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  function formatNum(val) {
+    const n = Math.round(Number(val) || 0);
+    return n.toLocaleString('en-IN');
+  }
+
+  function formatDateTime(d) {
+    if (!d) return '';
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return String(d);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const day = String(dt.getDate()).padStart(2, '0');
+      const mon = months[dt.getMonth()];
+      const year = dt.getFullYear();
+      let hours = dt.getHours();
+      const mins = String(dt.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${day} ${mon} ${year} ${String(hours).padStart(2, '0')}:${mins} ${ampm}`;
+    } catch (_) {
+      return String(d);
+    }
+  }
+
+  function formatDateOnly(d) {
+    if (!d) return '';
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return String(d);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${String(dt.getDate()).padStart(2, '0')} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
+    } catch (_) {
+      return String(d);
+    }
+  }
+
+  function formatTimeOnly(d) {
+    if (!d) return '';
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return String(d);
+      let hours = dt.getHours();
+      const mins = String(dt.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${String(hours).padStart(2, '0')}:${mins} ${ampm}`;
+    } catch (_) {
+      return String(d);
+    }
+  }
+
+  const lines = [];
+
+  // 1 & 2. Centered Shop Name, Address, Phone
+  lines.push(center(storeName));
+  const addrLines = wrapTextLines(storeAddress, COLS);
+  addrLines.forEach(al => lines.push(center(al)));
+  lines.push(center(`Ph: ${storePhone}`));
+
+  // 3. Dashed line
+  lines.push(divider);
+
+  // 4. Invoice no (left) and date + time (right)
+  const invNo = String(order.token_number ? ('TOKEN #' + order.token_number) : (order.order_number || 'NOOR-INV'));
+  const dateStr = formatDateTime(order.created_at || Date.now());
+  lines.push(row(invNo, dateStr));
+
+  // 5. Dashed line
+  lines.push(divider);
+
+  // 6. Name, Phone, City, Age (left) | Pick Up Date + time (right)
+  const custName = String(order.customer_name || 'Walk-in Client').slice(0, 18);
+  const custPhone = String(order.customer_phone || '-').slice(0, 18);
+  const city = String(order.city || order.client_city || order.customer_city || 'Hyderabad').slice(0, 10);
+  const age = order.customer_age || order.client_age || order.age || '--';
+
+  let pDate = '--';
+  let pTime = '--';
+  if (order.pickup_time) {
+    pDate = formatDateOnly(order.pickup_time);
+    pTime = formatTimeOnly(order.pickup_time);
+  }
+
+  lines.push(row(`Name: ${custName}`, 'Pick Up Date'));
+  lines.push(row(`Phone: ${custPhone}`, pDate));
+  lines.push(row(`City: ${city} Age: ${age}`, pTime));
+
+  // 7. Dashed line
+  lines.push(divider);
+
+  // 8. Table header: ITEM | QTY | RATE | TOTAL, then dashed line
+  const itemColW = Math.max(10, COLS - 17);
+  lines.push('ITEM'.padEnd(itemColW) + ' ' + 'QTY'.padStart(3) + ' ' + 'RATE'.padStart(5) + ' ' + 'TOTAL'.padStart(6));
+  lines.push(divider);
+
+  // 9. Item rows (item name on the left, QTY / RATE / TOTAL right-aligned; long names wrap to a second line)
+  const itemList = Array.isArray(items) && items.length > 0 ? items : (Array.isArray(order.items) ? order.items : [{ product_name: 'Optical Frame', quantity: 1, unit_price_paise: order.total_payable_paise || 0 }]);
+  itemList.forEach(item => {
+    const name = String(item.product_name || item.name || item.model || 'Frame');
+    const qty = parseInt(item.quantity || 1, 10);
+    const unitPrice = (item.unit_price_inr != null) ? Number(item.unit_price_inr)
+      : (item.unit_price_paise != null) ? Number(item.unit_price_paise) / 100
+      : (item.priceINR != null) ? Number(item.priceINR)
+      : (item.unit_price != null) ? Number(item.unit_price) : 0;
+    const lineTotal = (item.subtotal_inr != null) ? Number(item.subtotal_inr)
+      : (item.subtotal_paise != null) ? Number(item.subtotal_paise) / 100
+      : (item.lineTotalINR != null) ? Number(item.lineTotalINR)
+      : (unitPrice * qty);
+
+    const colsStr = ' ' + String(qty).padStart(3) + ' ' + formatNum(unitPrice).padStart(5) + ' ' + formatNum(lineTotal).padStart(6);
+
+    if (name.length <= itemColW) {
+      lines.push(name.padEnd(itemColW) + colsStr);
     } else {
-      text += center(addrLine) + '\n';
-      addrLine = w;
-    }
-  });
-  if (addrLine) text += center(addrLine) + '\n';
-  text += center('Ph: ' + storePhone) + '\n';
-  if (storeGstin) text += center('GSTIN: ' + storeGstin) + '\n';
-  text += doubleDivider + '\n';
-  text += center(`*** TOKEN #${order.token_number} ***`) + '\n';
-  text += center(`Order: ${order.order_number}`) + '\n';
-  text += center(`Channel: ${order.channel}`) + '\n';
-  text += center(dateStr) + '\n';
-  text += divider + '\n';
-
-  if (order.customer_name && order.customer_name !== 'Walk-in Client') {
-    text += `Customer: ${order.customer_name.substring(0, LINE_WIDTH - 10)}\n`;
-    if (order.customer_phone) text += `Phone: ${order.customer_phone}\n`;
-    text += divider + '\n';
-  }
-
-  text += row('ITEM / VARIANT', 'TOTAL') + '\n';
-  text += divider + '\n';
-
-  items.forEach(item => {
-    const itemTotal = formatINR(item.subtotal_paise || ((item.unit_price_paise || 0) * (item.quantity || 1)));
-    text += `${(item.product_name || 'Frame').substring(0, LINE_WIDTH)}\n`;
-    const unitPrice = item.unit_price_paise ? formatINR(item.unit_price_paise) : itemTotal;
-    const details = ` ${item.quantity || 1}x @ ${unitPrice}`;
-    text += row(details, itemTotal) + '\n';
-    if (item.variant_name) {
-      text += `  Color: ${item.variant_name.substring(0, LINE_WIDTH - 9)}\n`;
-    }
-    if (item.lens_name && item.lens_name !== 'Standard Demo Lens') {
-      text += `  [Lens: ${item.lens_name.substring(0, LINE_WIDTH - 9)}]\n`;
+      lines.push(name);
+      lines.push(' '.repeat(itemColW) + colsStr);
     }
   });
 
-  text += divider + '\n';
-  text += row('Subtotal:', formatINR(order.subtotal_paise)) + '\n';
-  if (order.discount_paise > 0) {
-    text += row('Discount:', '-' + formatINR(order.discount_paise)) + '\n';
-  }
-  text += row('Tax (GST 18% Incl):', formatINR(order.tax_paise)) + '\n';
-  text += doubleDivider + '\n';
-  text += row('GRAND TOTAL:', formatINR(order.total_payable_paise)) + '\n';
-  text += row('Payment Status:', order.payment_status) + '\n';
-  text += row('Paid Amount:', formatINR(order.amount_paid_paise)) + '\n';
-  if (order.outstanding_paise > 0) {
-    text += row('Balance Due:', formatINR(order.outstanding_paise)) + '\n';
+  // 10. Dashed line
+  lines.push(divider);
+
+  // 11. Right-aligned: Total, Discount, Advance, 2nd Amount (with its date/time in small text below), 3rd Amount, dashed line, Remaining
+  const grandTotal = Number(order.total_payable_inr || (order.total_payable_paise ? order.total_payable_paise / 100 : order.grand_total || order.total || 0));
+  const discount = Number(order.discount_inr || (order.discount_paise ? order.discount_paise / 100 : 0));
+  const advance = Number(order.advance_paid_inr || (order.advance_paid_paise ? order.advance_paid_paise / 100 : (order.amount_paid_inr != null ? order.amount_paid_inr : (order.amount_paid_paise ? order.amount_paid_paise / 100 : 0))));
+  const second = Number(order.second_payment_inr || (order.second_payment_paise ? order.second_payment_paise / 100 : 0));
+  const third = Number(order.third_payment_inr || (order.third_payment_paise ? order.third_payment_paise / 100 : 0));
+  const remaining = Number(order.outstanding_inr != null ? order.outstanding_inr : (order.outstanding_paise != null ? order.outstanding_paise / 100 : Math.max(0, grandTotal - (advance + second + third))));
+
+  function finRow(lbl, val) {
+    const l = String(lbl);
+    const v = (val !== null && val !== undefined && val !== '') ? formatNum(val) : '';
+    const line = l.padStart(16) + '  ' + v.padStart(8);
+    return line.padStart(COLS);
   }
 
-  // Prescription (Rx) Section (Multi-Rx Support)
-  let rxList = [];
+  lines.push(finRow('Total:', grandTotal));
+  lines.push(finRow('Discount:', discount));
+  lines.push(finRow('Advance:', advance));
+  lines.push(finRow('2nd Amount:', second > 0 ? second : ''));
+  if (second > 0) {
+    const sDate = formatDateTime(order.second_payment_date || order.updated_at || Date.now());
+    lines.push(sDate.padStart(COLS));
+  }
+  lines.push(finRow('3rd Amount:', third > 0 ? third : ''));
+  lines.push(divider);
+  lines.push(finRow('Remaining:', remaining));
+
+  // 12. Dashed line
+  lines.push(divider);
+
+  // 13. PRESCRIPTION block
+  let allRxList = [];
   if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
-    rxList = order.prescriptions.filter(Boolean);
+    allRxList = order.prescriptions.filter(Boolean);
   } else if (order.prescriptions_json) {
     try {
       const p = JSON.parse(order.prescriptions_json);
-      if (Array.isArray(p) && p.length > 0) rxList = p;
+      if (Array.isArray(p) && p.length > 0) allRxList = p;
     } catch (_) {}
   }
-  if (rxList.length === 0 && ((order.od_sph !== undefined && order.od_sph !== null && order.od_sph !== '') || order.prescription_number)) {
-    rxList = [order];
+  if (allRxList.length === 0) {
+    const fallbackRx = order.prescription || order.client_prescription || order.newPrescription || order;
+    if (fallbackRx) allRxList.push(fallbackRx);
   }
 
-  if (rxList.length > 0) {
-    const fmt = v => (v === undefined || v === null || v === '' || v === '---') ? ' --- ' : String(v).padEnd(6);
-    const fmtAx = a => (a === undefined || a === null || a === '' || a === '---') ? '---' : String(a).padEnd(3);
-
-    rxList.forEach((rx, idx) => {
-      text += divider + '\n';
-      const label = rxList.length > 1 ? `--- CLIENT PRESCRIPTION #${idx + 1} ---` : '--- CLIENT PRESCRIPTION (RX) ---';
-      text += center(label) + '\n';
-      const rxNum = rx.prescription_number || rx.prescriptionNumber;
-      if (rxNum) text += center(rxNum) + '\n';
-      text += 'Eye   SPH    CYL   AXIS   ADD   \n';
-      const odSph = rx.od_sph !== undefined ? rx.od_sph : rx.odSph;
-      const odCyl = rx.od_cyl !== undefined ? rx.od_cyl : rx.odCyl;
-      const odAxis = rx.od_axis !== undefined ? rx.od_axis : rx.odAxis;
-      const osSph = rx.os_sph !== undefined ? rx.os_sph : rx.osSph;
-      const osCyl = rx.os_cyl !== undefined ? rx.os_cyl : rx.osCyl;
-      const osAxis = rx.os_axis !== undefined ? rx.os_axis : rx.osAxis;
-      const add = rx.addition || rx.add;
-      const pd = rx.ipd_distance || rx.ipdDistance || rx.pd;
-      const doc = rx.checked_by || rx.checkedBy || rx.rx_checked_by;
-
-      text += `OD  ${fmt(odSph)} ${fmt(odCyl)} ${fmtAx(odAxis)}  ${fmt(add)}\n`;
-      text += `OS  ${fmt(osSph)} ${fmt(osCyl)} ${fmtAx(osAxis)}  ${fmt(add)}\n`;
-      if (pd) text += `Distance PD: ${pd} mm\n`;
-      if (doc) text += `Optometrist: ${doc}\n`;
-    });
+  function fmtDio(val) {
+    if (val === undefined || val === null || val === '' || val === '--' || val === '---') return '--';
+    const n = Number(val);
+    if (isNaN(n)) return String(val).slice(0, 6);
+    if (n === 0) return '0.00';
+    const sign = n > 0 ? '+' : '';
+    return sign + n.toFixed(2);
   }
-  text += divider + '\n';
-  text += center('2-Year Frame Warranty') + '\n';
-  text += center('14-Day Free Glazing Adjustment') + '\n';
-  text += center('Thank You for Choosing Noor!') + '\n\n\n\n';
 
-  return text;
+  function fmtAx(val) {
+    if (val === undefined || val === null || val === '' || val === '--' || val === '---') return '--';
+    return String(val).slice(0, 6);
+  }
+
+  allRxList.forEach((rx, idx) => {
+    const getRxVal = (keys) => {
+      for (const k of keys) {
+        if (rx && rx[k] !== undefined && rx[k] !== null && String(rx[k]).trim() !== '' && String(rx[k]).trim() !== '---') return rx[k];
+        if (order && order[k] !== undefined && order[k] !== null && String(order[k]).trim() !== '' && String(order[k]).trim() !== '---') return order[k];
+      }
+      return null;
+    };
+
+    const rxNo = getRxVal(['prescription_number', 'prescriptionNumber', 'prescription_id', 'id']) || (order.prescription_number || (idx + 1));
+    const odSph = getRxVal(['od_sph', 'odSph']);
+    const odCyl = getRxVal(['od_cyl', 'odCyl']);
+    const odAxis = getRxVal(['od_axis', 'odAxis']);
+    const osSph = getRxVal(['os_sph', 'osSph']);
+    const osCyl = getRxVal(['os_cyl', 'osCyl']);
+    const osAxis = getRxVal(['os_axis', 'osAxis']);
+    const addition = getRxVal(['addition', 'add']);
+
+    lines.push(`RX# ${rxNo}`);
+    lines.push(' '.repeat(11) + 'SPH'.padStart(7) + 'CYL'.padStart(7) + 'AXIS'.padStart(7));
+    lines.push('OD Right'.padEnd(11) + fmtDio(odSph).padStart(7) + fmtDio(odCyl).padStart(7) + fmtAx(odAxis).padStart(7));
+    lines.push('OS Left'.padEnd(11) + fmtDio(osSph).padStart(7) + fmtDio(osCyl).padStart(7) + fmtAx(osAxis).padStart(7));
+    lines.push('Addition'.padEnd(11) + fmtDio(addition).padStart(7));
+  });
+
+  // 14. Dashed line
+  lines.push(divider);
+
+  // 15. "Thanks for Shopping" (centered)
+  lines.push(center('Thanks for Shopping'));
+
+  // 16 & 17. Payment QR code note & UPI ID
+  lines.push(center(activeUpiId));
+
+  // 18. Small bottom feed
+  lines.push('\n\n');
+
+  return lines.join('\n');
 }
 
 /**
  * Generate 58mm HTML for Browser Print Dialog & Web Preview
  */
-function generate58mmHTML(order, items, settings = {}) {
-  const storeName = settings.store_name || 'NOOR OPTIC';
-  const storeAddress = settings.store_address || 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028';
+function generate58mmHTML(order, items = [], settings = {}) {
+  const storeName = 'NOOR OPTIC';
+  const storeAddress = settings.store_address || 'Pillar No: 45, Beside HP Petrol Pump, Opposite Subhan Bakery, Rethibowli, Gudimalkapur, Hyderabad, Telangana 500028';
   const storePhone = settings.store_phone || '+91 98765 43210';
-  const widthMm = settings.printer_nominal_width_mm || 58;
+  const widthMm = settings.printer_nominal_width_mm || PAPER_WIDTH_MM;
+  const activeUpiId = settings.store_upi_id || UPI_ID;
 
-  const dateStr = new Date(order.created_at || Date.now()).toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: true
-  });
+  function formatNum(val) {
+    const n = Math.round(Number(val) || 0);
+    return n.toLocaleString('en-IN');
+  }
 
-  const itemsHtml = items.map(item => `
-    <tr>
-      <td style="padding: 2px 0;">
-        <div style="font-weight:600;">${item.product_name}</div>
-        <div style="font-size:9px; color:#555;">${item.quantity} × ${formatINR(item.unit_price_paise)} (${item.variant_name})</div>
-        ${item.lens_name && item.lens_name !== 'Standard Demo Lens' ? `<div style="font-size:9px; color:#444;">Lens: ${item.lens_name}</div>` : ''}
-      </td>
-      <td style="text-align:right; vertical-align:top; font-weight:600; padding:2px 0;">
-        ${formatINR(item.subtotal_paise)}
-      </td>
-    </tr>
-  `).join('');
+  function formatDateTime(d) {
+    if (!d) return '';
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return String(d);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const day = String(dt.getDate()).padStart(2, '0');
+      const mon = months[dt.getMonth()];
+      const year = dt.getFullYear();
+      let hours = dt.getHours();
+      const mins = String(dt.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${day} ${mon} ${year} ${String(hours).padStart(2, '0')}:${mins} ${ampm}`;
+    } catch (_) {
+      return String(d);
+    }
+  }
 
-  return `
-<!DOCTYPE html>
+  function formatDateOnly(d) {
+    if (!d) return '';
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return String(d);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${String(dt.getDate()).padStart(2, '0')} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
+    } catch (_) {
+      return String(d);
+    }
+  }
+
+  function formatTimeOnly(d) {
+    if (!d) return '';
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return String(d);
+      let hours = dt.getHours();
+      const mins = String(dt.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${String(hours).padStart(2, '0')}:${mins} ${ampm}`;
+    } catch (_) {
+      return String(d);
+    }
+  }
+
+  const invNo = String(order.order_number || (order.token_number ? ('TOKEN #' + order.token_number) : 'NOOR-INV'));
+  const dateStr = formatDateTime(order.created_at || Date.now());
+
+  const custName = String(order.customer_name || 'Walk-in Client');
+  const custPhone = String(order.customer_phone || '-');
+  const city = String(order.city || order.client_city || order.customer_city || 'Hyderabad');
+  const age = order.customer_age || order.client_age || order.age || '--';
+
+  let pDate = '--';
+  let pTime = '--';
+  if (order.pickup_time) {
+    pDate = formatDateOnly(order.pickup_time);
+    pTime = formatTimeOnly(order.pickup_time);
+  }
+
+  const itemList = Array.isArray(items) && items.length > 0 ? items : (Array.isArray(order.items) ? order.items : [{ product_name: 'Optical Frame', quantity: 1, unit_price_paise: order.total_payable_paise || 0 }]);
+  const itemsHtml = itemList.map(item => {
+    const name = String(item.product_name || item.name || item.model || 'Frame');
+    const qty = parseInt(item.quantity || 1, 10);
+    const unitPrice = (item.unit_price_inr != null) ? Number(item.unit_price_inr)
+      : (item.unit_price_paise != null) ? Number(item.unit_price_paise) / 100
+      : (item.priceINR != null) ? Number(item.priceINR)
+      : (item.unit_price != null) ? Number(item.unit_price) : 0;
+    const lineTotal = (item.subtotal_inr != null) ? Number(item.subtotal_inr)
+      : (item.subtotal_paise != null) ? Number(item.subtotal_paise) / 100
+      : (item.lineTotalINR != null) ? Number(item.lineTotalINR)
+      : (unitPrice * qty);
+
+    return `
+      <tr>
+        <td style="text-align:left; word-break:break-word;">${name}</td>
+        <td style="text-align:right; width:35px;">${qty}</td>
+        <td style="text-align:right; width:55px;">${formatNum(unitPrice)}</td>
+        <td style="text-align:right; width:60px;">${formatNum(lineTotal)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const grandTotal = Number(order.total_payable_inr || (order.total_payable_paise ? order.total_payable_paise / 100 : order.grand_total || order.total || 0));
+  const discount = Number(order.discount_inr || (order.discount_paise ? order.discount_paise / 100 : 0));
+  const advance = Number(order.advance_paid_inr || (order.advance_paid_paise ? order.advance_paid_paise / 100 : (order.amount_paid_inr != null ? order.amount_paid_inr : (order.amount_paid_paise ? order.amount_paid_paise / 100 : 0))));
+  const second = Number(order.second_payment_inr || (order.second_payment_paise ? order.second_payment_paise / 100 : 0));
+  const third = Number(order.third_payment_inr || (order.third_payment_paise ? order.third_payment_paise / 100 : 0));
+  const remaining = Number(order.outstanding_inr != null ? order.outstanding_inr : (order.outstanding_paise != null ? order.outstanding_paise / 100 : Math.max(0, grandTotal - (advance + second + third))));
+  const secondDate = second > 0 ? formatDateTime(order.second_payment_date || order.updated_at || Date.now()) : '';
+
+  let allRxList = [];
+  if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
+    allRxList = order.prescriptions.filter(Boolean);
+  } else if (order.prescriptions_json) {
+    try {
+      const p = JSON.parse(order.prescriptions_json);
+      if (Array.isArray(p) && p.length > 0) allRxList = p;
+    } catch (_) {}
+  }
+  if (allRxList.length === 0) {
+    const fallbackRx = order.prescription || order.client_prescription || order.newPrescription || order;
+    if (fallbackRx) allRxList.push(fallbackRx);
+  }
+
+  function fmtDio(val) {
+    if (val === undefined || val === null || val === '' || val === '--' || val === '---') return '--';
+    const n = Number(val);
+    if (isNaN(n)) return String(val).slice(0, 6);
+    if (n === 0) return '0.00';
+    const sign = n > 0 ? '+' : '';
+    return sign + n.toFixed(2);
+  }
+
+  function fmtAx(val) {
+    if (val === undefined || val === null || val === '' || val === '--' || val === '---') return '--';
+    return String(val).slice(0, 6);
+  }
+
+  const rxHtml = allRxList.map((rx, idx) => {
+    const getRxVal = (keys) => {
+      for (const k of keys) {
+        if (rx && rx[k] !== undefined && rx[k] !== null && String(rx[k]).trim() !== '' && String(rx[k]).trim() !== '---') return rx[k];
+        if (order && order[k] !== undefined && order[k] !== null && String(order[k]).trim() !== '' && String(order[k]).trim() !== '---') return order[k];
+      }
+      return null;
+    };
+
+    const rxNo = getRxVal(['prescription_number', 'prescriptionNumber', 'prescription_id', 'id']) || (order.prescription_number || (idx + 1));
+    const odSph = getRxVal(['od_sph', 'odSph']);
+    const odCyl = getRxVal(['od_cyl', 'odCyl']);
+    const odAxis = getRxVal(['od_axis', 'odAxis']);
+    const osSph = getRxVal(['os_sph', 'osSph']);
+    const osCyl = getRxVal(['os_cyl', 'osCyl']);
+    const osAxis = getRxVal(['os_axis', 'osAxis']);
+    const addition = getRxVal(['addition', 'add']);
+
+    return `
+      <div style="font-weight:bold; margin-top:2px;">RX# ${rxNo}</div>
+      <table style="width:100%; border-collapse:collapse; margin-top:2px;">
+        <thead>
+          <tr style="text-align:right;">
+            <th style="width:35%; text-align:left;"></th>
+            <th style="width:21%;">SPH</th>
+            <th style="width:22%;">CYL</th>
+            <th style="width:22%;">AXIS</th>
+          </tr>
+        </thead>
+        <tbody style="text-align:right;">
+          <tr>
+            <td style="text-align:left;">OD Right</td>
+            <td>${fmtDio(odSph)}</td>
+            <td>${fmtDio(odCyl)}</td>
+            <td>${fmtAx(odAxis)}</td>
+          </tr>
+          <tr>
+            <td style="text-align:left;">OS Left</td>
+            <td>${fmtDio(osSph)}</td>
+            <td>${fmtDio(osCyl)}</td>
+            <td>${fmtAx(osAxis)}</td>
+          </tr>
+          <tr>
+            <td style="text-align:left;">Addition</td>
+            <td>${fmtDio(addition)}</td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+  }).join('<div class="dash">--------------------------------</div>');
+
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Receipt - Token #${order.token_number} - ${order.order_number}</title>
+  <title>Receipt - ${invNo}</title>
   <style>
     @media print {
       @page {
@@ -202,183 +492,112 @@ function generate58mmHTML(order, items, settings = {}) {
       }
       body {
         margin: 0;
-        padding: 4mm 2mm 10mm 2mm;
-        width: ${widthMm - 6}mm;
+        padding: 3mm 2mm;
+        width: ${widthMm - 4}mm;
       }
       .no-print { display: none !important; }
     }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Courier, monospace;
+      font-family: 'Courier New', Courier, monospace;
       font-size: 11px;
-      line-height: 1.35;
-      color: #000000;
-      background: #FFFFFF;
+      line-height: 1.32;
+      color: #000;
+      background: #FFF;
       margin: 0 auto;
-      padding: 12px 8px;
+      padding: 10px 4px 20px 4px;
       max-width: ${widthMm}mm;
       box-sizing: border-box;
     }
-    .header { text-align: center; margin-bottom: 6px; }
-    .brand-logo { width: 68px; height: auto; display: block; margin: 0 auto 4px auto; }
-    .brand-title { font-size: 15px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
-    .brand-sub { font-size: 9px; text-transform: uppercase; color: #444; }
-    .token-badge {
-      font-size: 20px;
-      font-weight: 900;
-      text-align: center;
-      margin: 6px 0;
-      padding: 4px;
-      border: 1.5px dashed #000;
-      letter-spacing: 1px;
-    }
-    .divider { border-top: 1px dashed #000; margin: 5px 0; }
-    .double-divider { border-top: 2px solid #000; margin: 6px 0; }
-    table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
-    .totals-row { display: flex; justify-content: space-between; margin: 2px 0; }
-    .grand-total { font-size: 13px; font-weight: 800; margin: 4px 0; }
-    .footer { text-align: center; font-size: 9px; margin-top: 10px; color: #333; }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    .brand-title { font-size: 16px; font-weight: bold; margin: 3px 0 2px 0; }
+    .logo { width: 52px; height: auto; display: block; margin: 0 auto 3px auto; }
+    .dash { border-top: 1px dashed #000; margin: 5px 0; overflow: hidden; letter-spacing: -1px; }
+    .flex-row { display: flex; justify-content: space-between; }
+    .cust-box { display: flex; justify-content: space-between; }
+    .col-right { text-align: right; }
+    table { width: 100%; border-collapse: collapse; font-family: inherit; font-size: inherit; }
+    th, td { padding: 1px 0; }
+    .fin-box { display: flex; flex-direction: column; align-items: flex-end; }
+    .fin-line { display: flex; justify-content: flex-end; width: 100%; }
+    .fin-lbl { width: 110px; text-align: right; margin-right: 12px; }
+    .fin-val { width: 70px; text-align: right; }
+    .sub-date { font-size: 9px; text-align: right; width: 100%; margin-top: 1px; }
+    .qr-img { width: 120px; height: 120px; display: block; margin: 6px auto 3px auto; border: 1px solid #000; padding: 2px; }
+    .upi-text { text-align: center; font-weight: bold; font-size: 10px; margin-top: 2px; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <img src="/images/bill_logo.png" class="brand-logo" alt="NOOR" onerror="this.style.display='none';" />
+  <div class="center">
+    <img src="/images/bill_logo.png" class="logo" alt="NOOR" onerror="this.style.display='none';" />
     <div class="brand-title">${storeName}</div>
-    <div class="brand-sub">Curated Scandinavian Eyewear</div>
-    <div style="font-size:9px;">${storeAddress}</div>
-    <div style="font-size:9px;">Ph: ${storePhone}</div>
+    <div style="font-size:9.5px; margin: 2px 0;">${storeAddress}</div>
+    <div style="font-size:10px;">Ph: ${storePhone}</div>
   </div>
 
-  <div class="token-badge">
-    TOKEN #${order.token_number}
+  <div class="dash">--------------------------------</div>
+  <div class="flex-row">
+    <span>${invNo}</span>
+    <span>${dateStr}</span>
   </div>
 
-  <div style="font-size:9.5px; text-align:center; margin-bottom:4px;">
-    <div><strong>Order:</strong> ${order.order_number} (${order.channel})</div>
-    <div>${dateStr}</div>
-  </div>
-
-  ${order.customer_name && order.customer_name !== 'Walk-in Client' ? `
-    <div class="divider"></div>
-    <div style="font-size:9.5px;">
-      <strong>Customer:</strong> ${order.customer_name}<br>
-      ${order.customer_phone ? `<strong>Phone:</strong> ${order.customer_phone}` : ''}
+  <div class="dash">--------------------------------</div>
+  <div class="cust-box">
+    <div>
+      <div>Name: ${custName}</div>
+      <div>Phone: ${custPhone}</div>
+      <div>City: ${city} Age: ${age}</div>
     </div>
-  ` : ''}
+    <div class="col-right">
+      <div>Pick Up Date</div>
+      <div>${pDate}</div>
+      <div>${pTime}</div>
+    </div>
+  </div>
 
-  <div class="divider"></div>
+  <div class="dash">--------------------------------</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:left;">ITEM</th>
+        <th style="text-align:right; width:35px;">QTY</th>
+        <th style="text-align:right; width:55px;">RATE</th>
+        <th style="text-align:right; width:60px;">TOTAL</th>
+      </tr>
+    </thead>
+  </table>
+  <div class="dash">--------------------------------</div>
   <table>
     <tbody>
       ${itemsHtml}
     </tbody>
   </table>
 
-  <div class="divider"></div>
-  <div class="totals-row">
-    <span>Subtotal:</span>
-    <span>${formatINR(order.subtotal_paise)}</span>
-  </div>
-  ${order.discount_paise > 0 ? `
-    <div class="totals-row">
-      <span>Discount:</span>
-      <span>-${formatINR(order.discount_paise)}</span>
-    </div>
-  ` : ''}
-
-  <div class="double-divider"></div>
-  <div class="totals-row grand-total">
-    <span>TOTAL:</span>
-    <span>${formatINR(order.total_payable_paise)}</span>
+  <div class="dash">--------------------------------</div>
+  <div class="fin-box">
+    <div class="fin-line"><span class="fin-lbl">Total:</span><span class="fin-val">${formatNum(grandTotal)}</span></div>
+    <div class="fin-line"><span class="fin-lbl">Discount:</span><span class="fin-val">${formatNum(discount)}</span></div>
+    <div class="fin-line"><span class="fin-lbl">Advance:</span><span class="fin-val">${formatNum(advance)}</span></div>
+    <div class="fin-line"><span class="fin-lbl">2nd Amount:</span><span class="fin-val">${second > 0 ? formatNum(second) : ''}</span></div>
+    ${second > 0 ? `<div class="sub-date">${secondDate}</div>` : ''}
+    <div class="fin-line"><span class="fin-lbl">3rd Amount:</span><span class="fin-val">${third > 0 ? formatNum(third) : ''}</span></div>
+    <div class="dash" style="width:100%;">--------------------------------</div>
+    <div class="fin-line bold"><span class="fin-lbl">Remaining:</span><span class="fin-val">${formatNum(remaining)}</span></div>
   </div>
 
-  <div class="totals-row">
-    <span>Payment:</span>
-    <span><strong>${order.payment_status}</strong></span>
-  </div>
-  <div class="totals-row">
-    <span>Amount Paid:</span>
-    <span>${formatINR(order.amount_paid_paise)}</span>
-  </div>
-  ${order.outstanding_paise > 0 ? `
-    <div class="totals-row" style="color:red; font-weight:700;">
-      <span>Balance Due:</span>
-      <span>${formatINR(order.outstanding_paise)}</span>
-    </div>
-  ` : ''}
+  <div class="dash">--------------------------------</div>
+  ${rxHtml}
 
-  ${(() => {
-    let rxList = [];
-    if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
-      rxList = order.prescriptions.filter(Boolean);
-    } else if (order.prescriptions_json) {
-      try {
-        const p = JSON.parse(order.prescriptions_json);
-        if (Array.isArray(p) && p.length > 0) rxList = p;
-      } catch (_) {}
-    }
-    if (rxList.length === 0 && ((order.od_sph !== undefined && order.od_sph !== null && order.od_sph !== '') || order.prescription_number)) {
-      rxList = [order];
-    }
-    if (rxList.length === 0) return '';
-
-    return rxList.map((rx, idx) => {
-      const label = rxList.length > 1 ? `--- Client Prescription #${idx + 1} ---` : '--- Client Prescription (Rx) ---';
-      const rxNum = rx.prescription_number || rx.prescriptionNumber;
-      const odSph = rx.od_sph !== undefined ? rx.od_sph : (rx.odSph || '0.00');
-      const odCyl = rx.od_cyl !== undefined ? rx.od_cyl : (rx.odCyl || '0.00');
-      const odAxis = rx.od_axis !== undefined ? (rx.od_axis + '°') : (rx.odAxis !== undefined ? rx.odAxis + '°' : '---');
-      const osSph = rx.os_sph !== undefined ? rx.os_sph : (rx.osSph || '0.00');
-      const osCyl = rx.os_cyl !== undefined ? rx.os_cyl : (rx.osCyl || '0.00');
-      const osAxis = rx.os_axis !== undefined ? (rx.os_axis + '°') : (rx.osAxis !== undefined ? rx.osAxis + '°' : '---');
-      const add = rx.addition || rx.add || '0.00';
-      const pd = rx.ipd_distance || rx.ipdDistance || rx.pd;
-      const doc = rx.checked_by || rx.checkedBy || rx.rx_checked_by;
-
-      return `
-        <div class="divider"></div>
-        <div style="text-align:center; font-weight:800; font-size:10px; margin:4px 0; text-transform:uppercase; letter-spacing:0.5px;">${label}</div>
-        ${rxNum ? `<div style="text-align:center; font-size:9px; font-weight:600; color:#333;">${rxNum}</div>` : ''}
-        <table style="font-size:9.5px; width:100%; text-align:center; margin:3px 0; border-collapse:collapse;">
-          <thead>
-            <tr style="border-bottom:1px dashed #666; font-weight:700;">
-              <th style="text-align:left; padding:2px 0;">Eye</th><th>SPH</th><th>CYL</th><th>AXIS</th><th>ADD</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style="text-align:left; font-weight:700; padding:2px 0;">OD</td>
-              <td>${odSph}</td><td>${odCyl}</td><td>${odAxis}</td><td>${add}</td>
-            </tr>
-            <tr>
-              <td style="text-align:left; font-weight:700; padding:2px 0;">OS</td>
-              <td>${osSph}</td><td>${osCyl}</td><td>${osAxis}</td><td>${add}</td>
-            </tr>
-          </tbody>
-        </table>
-        ${pd ? `<div style="font-size:9px; margin-top:2px;"><strong>Distance PD:</strong> ${pd} mm</div>` : ''}
-        ${doc ? `<div style="font-size:9px;"><strong>Optometrist:</strong> ${doc}</div>` : ''}
-      `;
-    }).join('');
-  })()}
-
-  <div class="divider"></div>
-  <div style="text-align:center; margin:8px 0;">
-    <div style="font-size:9.5px; font-weight:800; letter-spacing:0.5px; margin-bottom:4px; text-transform:uppercase;">Scan to Pay via UPI</div>
-    <img src="/images/payment_qr.jpg" style="width:125px; height:125px; display:inline-block; border:1px solid #111; padding:2px;" alt="UPI QR" />
-    <div style="font-size:9px; font-weight:700; margin-top:3px;">UPI ID: 9182341567@mairtel</div>
-  </div>
-
-  <div class="divider"></div>
-  <div class="footer" style="text-align:center; padding-top:4px;">
-    <div style="font-weight:800; font-size:11px;">Thank You for Choosing Noor!</div>
+  <div class="dash">--------------------------------</div>
+  <div class="center bold" style="margin: 4px 0;">Thanks for Shopping</div>
+  <div class="center">
+    <img src="/images/payment_qr.jpg" class="qr-img" alt="UPI QR" />
+    <div class="upi-text">${activeUpiId}</div>
   </div>
 </body>
-</html>
-  `;
+</html>`;
 }
 
-/**
- * Enqueue a print job for an order
- */
 function enqueuePrintJob(orderId, tokenNumber, docType = 'TOKEN') {
   const jobId = 'prn-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
   const settings = getStoreSettings();

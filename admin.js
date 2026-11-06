@@ -5481,6 +5481,7 @@
     const taxPaise = Math.round(grandTotalPaise - (grandTotalPaise / 1.18));
 
     const advanceINR = parseFloat(advanceInput ? advanceInput.value : 0) || 0;
+    const advancePaise = Math.round(advanceINR * 100);
     const secondInput = document.getElementById('pos-second-amount');
     const secondINR = parseFloat(secondInput ? secondInput.value : 0) || 0;
     const thirdInput = document.getElementById('pos-third-amount');
@@ -5490,12 +5491,11 @@
     const remainingPaise = Math.max(0, grandTotalPaise - totalPaidPaise);
 
     if (countEl) countEl.textContent = `${totalItems} item${totalItems > 1 ? 's' : ''}`;
-    if (subtotalEl) subtotalEl.textContent = formatINR(subtotalPaise, true);
-    if (discountValEl) discountValEl.textContent = `-${formatINR(discountPaise, true)}`;
-    if (taxEl) taxEl.textContent = formatINR(taxPaise, true);
-    if (advanceValEl) advanceValEl.textContent = formatINR(advancePaise, true);
-    if (subtotalEl) subtotalEl.textContent = '₹ ' + (totalBeforeDiscountPaise / 100).toLocaleString('en-IN');
-    if (remainingValEl) remainingValEl.textContent = '₹ ' + (remainingPaise / 100).toLocaleString('en-IN');
+    if (subtotalEl) subtotalEl.textContent = '₹' + (totalBeforeDiscountPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (discountValEl) discountValEl.value = (discountPaise / 100).toFixed(2);
+    if (taxEl) taxEl.value = (taxPaise / 100).toFixed(2);
+    if (advanceValEl) advanceValEl.value = (advancePaise / 100).toFixed(2);
+    if (remainingValEl) remainingValEl.textContent = '₹ ' + (remainingPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const remBadgeActive = document.getElementById('optic-rem-badge');
     if (remBadgeActive) {
       if (remainingPaise === 0) {
@@ -6277,10 +6277,24 @@
               order_number: res.orderNumber || res.invoiceNumber,
               customer_name: clientPayload.name,
               customer_phone: clientPayload.phone || null,
+              customer_city: clientPayload.city || null,
+              customer_age: clientPayload.age || null,
               payment_method: state.posPaymode,
               subtotal: subtotalPaiseSnapshot / 100,
               grand_total: res.totalPayableINR,
+              total_payable_inr: res.totalPayableINR,
               total_payable_paise: Math.round(res.totalPayableINR * 100),
+              discount_inr: discountINR,
+              discount_paise: Math.round(discountINR * 100),
+              advance_paid_inr: advanceINR,
+              advance_paid_paise: Math.round(advanceINR * 100),
+              second_payment_inr: secondAmountINR,
+              second_payment_paise: Math.round(secondAmountINR * 100),
+              third_payment_inr: thirdAmountINR,
+              third_payment_paise: Math.round(thirdAmountINR * 100),
+              outstanding_inr: Math.max(0, res.totalPayableINR - (advanceINR + secondAmountINR + thirdAmountINR)),
+              outstanding_paise: Math.round(Math.max(0, res.totalPayableINR - (advanceINR + secondAmountINR + thirdAmountINR)) * 100),
+              pickup_time: pickupTime,
               items: cartSnapshot,
               prescriptions: rxListSnapshot,
               prescription: rxSnapshot,

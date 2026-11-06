@@ -1967,7 +1967,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     calculatedSubtotalPaise = subtotalPaise;
 
     const previousDuePaise = req.body.previousDueINR !== undefined ? Math.round(Number(req.body.previousDueINR) * 100) : (req.body.previous_due_paise ? parseInt(req.body.previous_due_paise, 10) : 0);
-    const advancePaise = req.body.advanceINR !== undefined ? Math.round(Number(req.body.advanceINR) * 100) : (req.body.advance_paise ? parseInt(req.body.advance_paise, 10) : 0);
+    let advancePaise = req.body.advanceINR !== undefined ? Math.round(Number(req.body.advanceINR) * 100) : (req.body.advance_paise ? parseInt(req.body.advance_paise, 10) : 0);
     const secondPaymentPaise = req.body.secondAmountINR !== undefined ? Math.round(Number(req.body.secondAmountINR) * 100) : (req.body.second_payment_paise ? parseInt(req.body.second_payment_paise, 10) : 0);
     const thirdPaymentPaise = req.body.thirdAmountINR !== undefined ? Math.round(Number(req.body.thirdAmountINR) * 100) : (req.body.third_payment_paise ? parseInt(req.body.third_payment_paise, 10) : 0);
     const pickupTime = req.body.pickupTime || req.body.pickup_time || null;
