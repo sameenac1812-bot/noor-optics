@@ -850,7 +850,7 @@
           const custPhone = o.customer_phone || '-';
           const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
           const outstandingINR = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - ((o.amount_paid_paise || 0) / 100)));
-          const isDue = (o.payment_status !== 'VERIFIED') && (outstandingINR > 0);
+          const isDue = (outstandingINR > 0) || (o.payment_status === 'PARTIAL');
           const hasRx = !!o.prescription_id || !!o.prescription_number || (Array.isArray(o.prescriptions) && o.prescriptions.length > 0);
           const rxCount = (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) ? o.prescriptions.length : (hasRx ? 1 : 0);
           const itemsSummary = (o.items && o.items.length)
@@ -934,6 +934,11 @@
           ? o.items.map(i => `${escapeHtml(i.product_name)} (${i.quantity})`).join(', ')
           : 'Optical Frame';
 
+        const totalPayableRow = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
+        const amountPaidRow = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
+        const outstandingRow = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayableRow - amountPaidRow));
+        const isDueRow = (outstandingRow > 0) || (o.payment_status === 'PARTIAL');
+
         const paymentClass = o.payment_status === 'VERIFIED' ? 'status-verified' : (o.payment_status === 'REFUNDED' ? 'status-cancelled' : 'status-awaiting');
         const orderClass = o.status === 'CONFIRMED' || o.status === 'DELIVERED' ? 'status-verified' : (o.status === 'CANCELLED' || o.status === 'REFUNDED' ? 'status-cancelled' : 'status-pending');
 
@@ -966,7 +971,10 @@
             <td>${formatINR(o.discount_paise || (o.discount_inr || 0) * 100, true)}</td>
             <td><strong>${formatINR(o.total_payable_paise || o.total_payable_inr * 100, true)}</strong></td>
             <td>
-              <span class="badge-status ${paymentClass}">${escapeHtml(o.payment_status)}</span>
+              ${isDueRow
+                ? `<span class="badge-status" style="background:#FEF2F2; color:#DC2626; border:1px solid #FECACA; font-weight:800;">₹${outstandingRow.toLocaleString('en-IN')} DUE</span>`
+                : `<span class="badge-status ${paymentClass}">${escapeHtml(o.payment_status)}</span>`
+              }
               <div style="font-size:0.68rem; color:#6B7280; margin-top:2px;">${escapeHtml(o.payment_method || 'CASH')}</div>
             </td>
             <td><span class="badge-status ${orderClass}">${escapeHtml(o.status)}</span></td>
@@ -979,6 +987,7 @@
                   </div>
                 ` : ''}
                 <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                  ${isDueRow ? `<button class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800;" onclick="event.stopPropagation(); openCollectPaymentModal('${o.id}')" title="Collect Remaining Balance">💳 Collect</button>` : ''}
                   <button class="btn-table-action" onclick="viewOrderDetails('${o.id}')" title="View Full Details">View</button>
                   <button class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="event.stopPropagation(); downloadInvoicePDF('${o.id}', '${escapeHtml(o.order_number)}')" title="Download Tax Invoice PDF">📄 Invoice</button>
                   <button class="btn-table-action" onclick="instantPrintReceipt('${o.id}', true)" title="Instant Spool Receipt">🖨️ Receipt</button>

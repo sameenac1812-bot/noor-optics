@@ -609,9 +609,15 @@ async function syncSupabaseOrders(db) {
       let paymentStatus = 'AWAITING_VERIFICATION';
 
       if (isPos) {
-        // In-store POS counter orders are confirmed and verified immediately
-        isPaid = true;
-        paymentStatus = 'VERIFIED';
+        // In-store POS counter orders: check if partial/due or verified
+        const coStatus = String(co.payment_status || '').toUpperCase();
+        if (coStatus === 'PARTIAL' || (co.outstanding_paise && co.outstanding_paise > 0) || (co.outstanding && co.outstanding > 0)) {
+          isPaid = false;
+          paymentStatus = 'PARTIAL';
+        } else {
+          isPaid = true;
+          paymentStatus = 'VERIFIED';
+        }
       } else {
         // Website orders strictly land in AWAITING_VERIFICATION (Verify UPI queue)
         // until shop owner clicks Accept / Approve in Admin
@@ -626,8 +632,12 @@ async function syncSupabaseOrders(db) {
           isPaid = false;
         }
       }
-      const amountPaidPaise = isPaid ? grandTotalPaise : 0;
-      const outstandingPaise = isPaid ? 0 : grandTotalPaise;
+      const rawCloudPaid = (co.amount_paid_paise != null) ? co.amount_paid_paise : ((co.amount_paid != null) ? Math.round(Number(co.amount_paid) * 100) : (co.advance_paid_paise != null ? co.advance_paid_paise : null));
+      const amountPaidPaise = rawCloudPaid != null ? rawCloudPaid : (isPaid ? grandTotalPaise : 0);
+      const outstandingPaise = Math.max(0, grandTotalPaise - amountPaidPaise);
+      if (outstandingPaise > 0 && isPos) {
+        paymentStatus = 'PARTIAL';
+      }
 
       // Extract UTR if present in notes or co
       let resolvedUtr = co.claimed_upi_ref || co.claimedUpiRef || co.utr || null;
@@ -669,28 +679,24 @@ async function syncSupabaseOrders(db) {
         if (!existing.customer_id && customerId) {
           db.prepare('UPDATE orders SET customer_id = ? WHERE id = ?').run(customerId, existing.id);
         }
-        // Local SQLite is the master authority for staff payment verification:
-        // NEVER overwrite local AWAITING_VERIFICATION or REJECTED unless Supabase has an explicit VERIFIED flag.
+        // Local SQLite is the master authority for staff payment verification, installments, and outstanding balances!
         let finalPaymentStatus = existing.payment_status || paymentStatus;
         let finalAmountPaid = existing.amount_paid_paise !== undefined ? existing.amount_paid_paise : amountPaidPaise;
         let finalOutstanding = existing.outstanding_paise !== undefined ? existing.outstanding_paise : outstandingPaise;
 
-        if (isPos) {
+        // If order already has an outstanding balance, it is strictly PARTIAL - NEVER mark as fully paid/0 due!
+        if (finalOutstanding > 0) {
+          finalPaymentStatus = 'PARTIAL';
+        } else if (isCloudVerified && !isPos) {
           finalPaymentStatus = 'VERIFIED';
           finalAmountPaid = grandTotalPaise;
           finalOutstanding = 0;
-        } else if (isCloudVerified) {
-          finalPaymentStatus = 'VERIFIED';
-          finalAmountPaid = grandTotalPaise;
-          finalOutstanding = 0;
-        } else if (isCloudRejected) {
+        } else if (isCloudRejected && !isPos) {
           finalPaymentStatus = 'REJECTED';
           finalAmountPaid = 0;
           finalOutstanding = grandTotalPaise;
-        } else {
-          finalPaymentStatus = 'AWAITING_VERIFICATION';
-          finalAmountPaid = 0;
-          finalOutstanding = grandTotalPaise;
+        } else if (isPos && finalOutstanding === 0) {
+          finalPaymentStatus = 'VERIFIED';
         }
 
         db.prepare(`
@@ -699,21 +705,15 @@ async function syncSupabaseOrders(db) {
           WHERE id = ?
         `).run(channel, finalPaymentStatus, finalAmountPaid, finalOutstanding, existing.id);
 
-        // Ensure payments record exists and is synced
+        // Ensure payments record exists without destroying existing multi-stage payments
         try {
-          const payRecordStatus = finalPaymentStatus === 'VERIFIED' ? 'VERIFIED' : (finalPaymentStatus === 'REJECTED' ? 'REJECTED' : 'PENDING_VERIFICATION');
+          const payRecordStatus = finalPaymentStatus === 'VERIFIED' ? 'VERIFIED' : (finalPaymentStatus === 'REJECTED' ? 'REJECTED' : (finalPaymentStatus === 'PARTIAL' ? 'VERIFIED' : 'PENDING_VERIFICATION'));
           const existingPay = db.prepare('SELECT id FROM payments WHERE order_id = ?').get(existing.id);
           if (!existingPay) {
             db.prepare(`
               INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes)
               VALUES (?, ?, ?, ?, ?, ?, ?)
-            `).run('pay-' + existing.id, existing.id, co.payment_method || (isPos ? 'CASH' : 'UPI_GPAY'), grandTotalPaise, payRecordStatus, resolvedUtr, `Synced Payment (${finalPaymentStatus})`);
-          } else {
-            db.prepare(`
-              UPDATE payments
-              SET status = ?, amount_paise = ?, claimed_upi_ref = COALESCE(?, claimed_upi_ref)
-              WHERE id = ?
-            `).run(payRecordStatus, finalPaymentStatus === 'VERIFIED' ? grandTotalPaise : 0, resolvedUtr, existingPay.id);
+            `).run('pay-' + existing.id, existing.id, co.payment_method || (isPos ? 'CASH' : 'UPI_GPAY'), finalAmountPaid, payRecordStatus, resolvedUtr, `Synced Payment (${finalPaymentStatus})`);
           }
         } catch (_) {}
 
