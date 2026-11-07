@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     pos-daemon/pos-daemon.ps1 – Native Windows PowerShell POS Print Engine
     Zero-dependency thermal print daemon for Windows 10/11.
@@ -902,23 +902,36 @@ function Poll-CloudPrintQueue {
                             }
                         }
                     } elseif ($job.type -eq "receipt") {
-                        $order = if ($job.order) { $job.order } else { $job }
+                        $order = if ($job.order) { $job.order } elseif ($job.items -and $job.items[0] -and $job.items[0].order) { $job.items[0].order } else { $null }
+                        if (-not $order -or (-not $order.order_number -and -not $order.order_ref)) {
+                            Write-DaemonLog "[Cloud Queue] Discarding malformed or dummy receipt job #$jobId" "INFO"
+                            continue
+                        }
                         $ref = if ($order.order_number) { [string]$order.order_number } else { [string]$order.order_ref }
-                        if ($ref -and -not $livePrintedOrders.Contains($ref)) {
-                            Write-DaemonLog "[Cloud Queue] 🖨️ Printing Bill #$ref..." "INFO"
-                            try {
-                                $bytes = Format-ReceiptBytes $order
-                                if ($bytes -and $bytes.Length -gt 0) {
-                                    $ok = Spool-Bytes $bytes "Bill-$ref"
-                                    if ($ok) {
-                                        $livePrintedOrders.Add($ref) | Out-Null
-                                        Save-PrintedOrdersState
-                                        Write-DaemonLog "[Cloud Queue] ✅ SUCCESS: Bill #$ref printed to $($Config.printerName)!" "INFO"
-                                    }
+                        $orderIdStr = if ($order.id) { [string]$order.id } else { "" }
+                        $alreadyDone = $livePrintedOrders.Contains($ref) -or ($orderIdStr -and $livePrintedOrders.Contains($orderIdStr)) -or ($History.ContainsKey($ref)) -or ($orderIdStr -and $History.ContainsKey($orderIdStr))
+                        if ($alreadyDone) {
+                            Write-DaemonLog "[Cloud Queue] Order #$ref already printed. Skipping duplicate." "INFO"
+                            continue
+                        }
+                        Write-DaemonLog "[Cloud Queue] 🖨️ Printing Bill #$ref..." "INFO"
+                        try {
+                            $bytes = Format-ReceiptBytes $order
+                            if ($bytes -and $bytes.Length -gt 0) {
+                                $ok = Spool-Bytes $bytes "Bill-$ref"
+                                if ($ok) {
+                                    $livePrintedOrders.Add($ref) | Out-Null
+                                    if ($orderIdStr) { $livePrintedOrders.Add($orderIdStr) | Out-Null }
+                                    $nowIso = (Get-Date).ToString("o")
+                                    $History[$ref] = $nowIso
+                                    if ($orderIdStr) { $History[$orderIdStr] = $nowIso }
+                                    Save-PrintedOrdersState
+                                    Save-History
+                                    Write-DaemonLog "[Cloud Queue] ✅ SUCCESS: Bill #$ref printed to $($Config.printerName)!" "INFO"
                                 }
-                            } catch {
-                                Write-DaemonLog "[Cloud Queue] Error printing bill: $_" "WARN"
                             }
+                        } catch {
+                            Write-DaemonLog "[Cloud Queue] Error printing bill: $_" "WARN"
                         }
                     }
                 }

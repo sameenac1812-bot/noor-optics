@@ -1235,7 +1235,7 @@ router.get('/customers/:id/due', authenticateToken, (req, res) => {
   const clientPhone = client ? (client.phone ? client.phone.trim() : null) : (cleanPhone ? customerId : null);
 
   const unpaidOrders = db.prepare(`
-    SELECT id, order_number, token_number, total_payable_paise, amount_paid_paise, outstanding_paise, created_at, customer_name, customer_phone, customer_city, customer_age
+    SELECT id, order_number, token_number, total_payable_paise, amount_paid_paise, outstanding_paise, created_at, customer_name, customer_phone, city AS customer_city, customer_age
     FROM orders
     WHERE ((? IS NOT NULL AND customer_id = ?) 
        OR (? IS NOT NULL AND (customer_phone = ? OR REPLACE(REPLACE(REPLACE(customer_phone, ' ', ''), '-', ''), '+', '') LIKE ?)))
@@ -1254,7 +1254,7 @@ router.get('/customers/:id/due', authenticateToken, (req, res) => {
   const totalDueINR = totalDuePaise / 100;
 
   const latestOrder = unpaidOrders[0] || (clientPhone ? db.prepare(`
-    SELECT customer_name, customer_phone, customer_city, customer_age 
+    SELECT customer_name, customer_phone, city AS customer_city, customer_age 
     FROM orders 
     WHERE customer_phone = ? OR REPLACE(REPLACE(REPLACE(customer_phone, ' ', ''), '-', ''), '+', '') LIKE ?
     ORDER BY created_at DESC LIMIT 1

@@ -1038,13 +1038,6 @@ async function pushOrderToSupabase(orderPayload) {
 
     if (res.ok) {
       console.log(`[SupabaseSync] Order ${orderRef} (${isPosOrder ? 'instore' : 'website'}) successfully pushed to Supabase cloud.`);
-      // Also register into SYS-PRINT-QUEUE so any connected printer daemon gets it immediately via cloud
-      if (isPosOrder || payStatus === 'VERIFIED') {
-        pushPrintJobToCloudQueue({
-          type: 'receipt',
-          order: baseOrderBody
-        }).catch(() => {});
-      }
       // If it is a website order, guarantee its print job is held until staff approves UPI payment
       if (!isPosOrder && payStatus !== 'VERIFIED') {
         try {
@@ -1771,9 +1764,10 @@ async function pushPrintJobToCloudQueue(jobPayload) {
     }
 
     const newJob = {
-      id: 'stk_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      id: (jobPayload.type === 'receipt' ? 'rcp_' : 'stk_') + Date.now() + '_' + Math.floor(Math.random() * 1000),
       type: jobPayload.type || 'qr_sticker',
-      items: jobPayload.items || [jobPayload],
+      order: jobPayload.order || null,
+      items: jobPayload.items || (jobPayload.order ? jobPayload.order.items : [jobPayload]),
       created_at: new Date().toISOString()
     };
     jobs.push(newJob);

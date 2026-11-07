@@ -402,7 +402,7 @@ async function format25InchEscPosQrSticker(item) {
 // ── Format Complete 2.5-Inch Thermal Receipt (Matches Reference Image Exactly) ──
 function format25InchEscPosReceipt(rawOrder) {
   const order = rawOrder.order || rawOrder;
-  const COLS = config.columns || PAPER_WIDTH_COLS || 32;
+  const COLS = (config && config.columns) || (typeof PAPER_WIDTH_COLS !== 'undefined' ? PAPER_WIDTH_COLS : 32);
   const chunks = [];
 
   const writeBytes = (arr) => chunks.push(Buffer.from(arr));
@@ -639,6 +639,17 @@ function format25InchEscPosReceipt(rawOrder) {
   // 12. Dashed line
   writeText(divider);
 
+  // Special website prescription preferences
+  if (order.prescription_pref === 'zero-power') {
+    writeText(center('ZERO-POWER (PLANO) LENSES'));
+    writeText(center('Blue-Cut Anti-Glare'));
+    writeText(divider);
+  } else if (order.prescription_pref === 'call-optometrist') {
+    writeText(center('OPTOMETRIST CALL REQUIRED'));
+    if (order.customer_phone) writeText(center(String(order.customer_phone)));
+    writeText(divider);
+  }
+
   // 13. Prescriptions Block (Loop over ALL attached prescriptions)
   let allRxList = [];
   if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
@@ -708,7 +719,7 @@ function format25InchEscPosReceipt(rawOrder) {
   }
 
   // 16. Centered UPI ID directly underneath QR
-  const upiId = config.storeUpiId || config.upiId || UPI_ID || '9182341567@mairtel';
+  const upiId = (config && (config.storeUpiId || config.upiId)) || (typeof UPI_ID !== 'undefined' ? UPI_ID : '9182341567@mairtel');
   writeText('\n' + upiId + '\n\n\n');
 
   // 17. Clean tear feed & paper cut
@@ -723,7 +734,14 @@ async function printLiveOrder(order, source = 'Live') {
   const orderRef = String(order.order_number || order.order_ref || order.id || 'ORDER').trim();
 
   // Deduplicate live orders across sessions (allow explicit manual reprint)
-  if (source !== 'reprint' && (printedOrdersSet.has(orderRef) || (order.id && printedOrdersSet.has(String(order.id))))) {
+  const isDuplicate = source !== 'reprint' && (
+    printedOrdersSet.has(orderRef) ||
+    (order.id && printedOrdersSet.has(String(order.id))) ||
+    (order.order_number && printedOrdersSet.has(String(order.order_number))) ||
+    (order.order_ref && printedOrdersSet.has(String(order.order_ref)))
+  );
+
+  if (isDuplicate) {
     console.log(`[Live Print] Order #${orderRef} was already printed. Skipping duplicate.`);
     return { success: true, alreadyPrinted: true };
   }
@@ -735,6 +753,8 @@ async function printLiveOrder(order, source = 'Live') {
     if (result.success) {
       printedOrdersSet.add(orderRef);
       if (order.id) printedOrdersSet.add(String(order.id));
+      if (order.order_number) printedOrdersSet.add(String(order.order_number));
+      if (order.order_ref) printedOrdersSet.add(String(order.order_ref));
       savePrintedState();
       console.log(`[Live Print] ✅ SUCCESS: Bill #${orderRef} printed to '${config.printerName}'!`);
       return { success: true, orderNumber: orderRef };
@@ -813,7 +833,22 @@ async function pollCloudPrintQueue() {
             processedJobIds.add(jobIdStr);
             savePrintedState();
           } else if (job.type === 'receipt') {
-            const order = job.order || job;
+            const order = job.order || (job.items && job.items[0] && job.items[0].order) || null;
+            if (!order || typeof order !== 'object' || (!order.order_number && !order.order_ref && !order.items)) {
+              console.log(`[Cloud Queue] Discarding malformed or invalid receipt job #${jobIdStr}`);
+              processedJobIds.add(jobIdStr);
+              savePrintedState();
+              continue;
+            }
+
+            const ref = String(order.order_number || order.order_ref || order.id || '').trim();
+            if (printedOrdersSet.has(ref) || (order.id && printedOrdersSet.has(String(order.id))) || (order.order_number && printedOrdersSet.has(String(order.order_number))) || (order.order_ref && printedOrdersSet.has(String(order.order_ref)))) {
+              console.log(`[Cloud Queue] Order #${ref} already printed. Skipping duplicate.`);
+              processedJobIds.add(jobIdStr);
+              savePrintedState();
+              continue;
+            }
+
             const resPrint = await printLiveOrder(order, 'cloud_queue');
             if (resPrint.success) {
               processedJobIds.add(jobIdStr);
@@ -852,7 +887,7 @@ async function pollRecentUnprintedOrders() {
         for (const order of orders.reverse()) {
           const ref = String(order.order_number || order.order_ref || order.id || '').trim();
           if (!ref) continue;
-          if (printedOrdersSet.has(ref) || (order.id && printedOrdersSet.has(String(order.id)))) continue;
+          if (printedOrdersSet.has(ref) || (order.id && printedOrdersSet.has(String(order.id))) || (order.order_number && printedOrdersSet.has(String(order.order_number))) || (order.order_ref && printedOrdersSet.has(String(order.order_ref)))) continue;
 
           const isWebsite = order.source === 'website' || order.channel === 'WEBSITE';
           const isAwaitingUpi = order.payment_status === 'AWAITING_VERIFICATION' || order.status === 'PENDING_VERIFICATION';

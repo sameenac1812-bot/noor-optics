@@ -315,7 +315,7 @@ async function runAllTests() {
     ];
 
     const receiptText = format58mmTextReceipt(mockOrder, mockItems);
-    assert.ok(receiptText.includes('TOKEN #7'), 'Receipt must feature large Token #7');
+    assert.ok(receiptText.includes('INV: 7'), 'Receipt must feature short invoice ID');
     assert.ok(receiptText.includes('NOOR OPTIC'), 'Receipt must display brand name');
     assert.ok(receiptText.includes('Kyoto Havana Classic'), 'Receipt must display item name');
 
