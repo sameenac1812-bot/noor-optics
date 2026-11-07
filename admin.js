@@ -8894,29 +8894,41 @@
     init();
   }
 
-})();
-
   // ── Multi-Stage Payment Collection System ──────────────────────────────────
-  window.openCollectPaymentModal = async function (orderId) {
-    let order = (state.ordersCache || []).find(o => o.id === orderId);
-    if (!order || !order.payments) {
-      try {
-        const resp = await apiFetch(`/api/orders/${orderId}`);
-        const fetchedOrder = resp?.order || resp;
-        if (fetchedOrder && fetchedOrder.id) {
-          order = { ...(order || {}), ...fetchedOrder, payments: resp.payments || fetchedOrder.payments || [] };
-        }
-      } catch (_) {}
+  function renderPaymentHistoryIntoModal(order, paymentsList, cpHistoryBox, cpHistoryList) {
+    if (!cpHistoryBox || !cpHistoryList) return;
+    let historyItems = [];
+    if (Array.isArray(paymentsList) && paymentsList.length > 0) {
+      historyItems = paymentsList.map((p, idx) => ({
+        label: p.payment_stage || (idx === 0 ? 'Advance' : (idx === 1 ? '2nd Payment' : 'Installment')),
+        amount: p.amount_inr != null ? p.amount_inr : ((p.amount_paise || 0) / 100),
+        date: p.created_at ? formatDateTime(p.created_at) : '',
+        method: p.payment_method || 'CASH'
+      }));
+    } else {
+      const paidINR = (order.amount_paid_inr != null) ? order.amount_paid_inr : ((order.amount_paid_paise || 0) / 100);
+      const adv = (order.advance_paid_inr != null) ? order.advance_paid_inr : (order.advance_paid_paise ? order.advance_paid_paise / 100 : Math.max(0, paidINR - (order.second_payment_inr || 0) - (order.third_payment_inr || 0)));
+      const sec = (order.second_payment_inr != null) ? order.second_payment_inr : ((order.second_payment_paise || 0) / 100);
+      const thd = (order.third_payment_inr != null) ? order.third_payment_inr : ((order.third_payment_paise || 0) / 100);
+      if (adv > 0) historyItems.push({ label: 'Advance Payment', amount: adv, date: formatDateTime(order.created_at), method: 'CASH' });
+      if (sec > 0) historyItems.push({ label: '2nd Payment', amount: sec, date: formatDateTime(order.second_payment_date || order.updated_at), method: 'CASH' });
+      if (thd > 0) historyItems.push({ label: '3rd Payment', amount: thd, date: formatDateTime(order.third_payment_date || order.updated_at), method: 'CASH' });
     }
 
-    if (!order) {
-      showToast('Order not found.', 'error');
-      return;
+    if (historyItems.length > 0) {
+      cpHistoryList.innerHTML = historyItems.map((h, i) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#FFFFFF; padding:5px 8px; border-radius:4px; border:1px solid #E2E8F0;">
+          <span style="font-weight:600; color:#334155;">#${i + 1} ${escapeHtml(h.label)} <span style="font-size:0.7rem; color:#64748B;">(${escapeHtml(h.method)})</span></span>
+          <span style="font-weight:700; color:#16A34A;">+₹ ${h.amount.toLocaleString('en-IN')} <span style="font-weight:400; font-size:0.68rem; color:#94A3B8;">${h.date}</span></span>
+        </div>
+      `).join('');
+      cpHistoryBox.style.display = 'block';
+    } else {
+      cpHistoryBox.style.display = 'none';
     }
+  }
 
-    const modal = document.getElementById('modal-collect-payment');
-    if (!modal) return;
-
+  function populateAndOpenCollectModal(order, modal) {
     const cpOrderId = document.getElementById('cp-order-id');
     const cpCustName = document.getElementById('cp-customer-name');
     const cpOrderInv = document.getElementById('cp-order-inv');
@@ -8943,37 +8955,8 @@
     if (cpPaidSofar) cpPaidSofar.textContent = '₹ ' + paidINR.toLocaleString('en-IN');
     if (cpRemainingDue) cpRemainingDue.textContent = '₹ ' + remainingINR.toLocaleString('en-IN');
 
-    // 1. Render payment history list
-    if (cpHistoryBox && cpHistoryList) {
-      let historyItems = [];
-      if (Array.isArray(order.payments) && order.payments.length > 0) {
-        historyItems = order.payments.map((p, idx) => ({
-          label: p.payment_stage || (idx === 0 ? 'Advance' : (idx === 1 ? '2nd Payment' : 'Installment')),
-          amount: p.amount_inr != null ? p.amount_inr : ((p.amount_paise || 0) / 100),
-          date: p.created_at ? formatDateTime(p.created_at) : '',
-          method: p.payment_method || 'CASH'
-        }));
-      } else {
-        const adv = (order.advance_paid_inr != null) ? order.advance_paid_inr : (order.advance_paid_paise ? order.advance_paid_paise / 100 : Math.max(0, paidINR - (order.second_payment_inr || 0) - (order.third_payment_inr || 0)));
-        const sec = (order.second_payment_inr != null) ? order.second_payment_inr : ((order.second_payment_paise || 0) / 100);
-        const thd = (order.third_payment_inr != null) ? order.third_payment_inr : ((order.third_payment_paise || 0) / 100);
-        if (adv > 0) historyItems.push({ label: 'Advance Payment', amount: adv, date: formatDateTime(order.created_at), method: 'CASH' });
-        if (sec > 0) historyItems.push({ label: '2nd Payment', amount: sec, date: formatDateTime(order.second_payment_date || order.updated_at), method: 'CASH' });
-        if (thd > 0) historyItems.push({ label: '3rd Payment', amount: thd, date: formatDateTime(order.third_payment_date || order.updated_at), method: 'CASH' });
-      }
-
-      if (historyItems.length > 0) {
-        cpHistoryList.innerHTML = historyItems.map((h, i) => `
-          <div style="display:flex; justify-content:space-between; align-items:center; background:#FFFFFF; padding:5px 8px; border-radius:4px; border:1px solid #E2E8F0;">
-            <span style="font-weight:600; color:#334155;">#${i + 1} ${escapeHtml(h.label)} <span style="font-size:0.7rem; color:#64748B;">(${escapeHtml(h.method)})</span></span>
-            <span style="font-weight:700; color:#16A34A;">+₹ ${h.amount.toLocaleString('en-IN')} <span style="font-weight:400; font-size:0.68rem; color:#94A3B8;">${h.date}</span></span>
-          </div>
-        `).join('');
-        cpHistoryBox.style.display = 'block';
-      } else {
-        cpHistoryBox.style.display = 'none';
-      }
-    }
+    // 1. Initial render of payment history
+    renderPaymentHistoryIntoModal(order, order.payments, cpHistoryBox, cpHistoryList);
 
     // 2. Auto-detect next stage
     const secPaise = order.second_payment_paise || (order.second_payment_inr ? order.second_payment_inr * 100 : 0);
@@ -9015,9 +8998,64 @@
       };
     }
 
+    // Allow backdrop click to dismiss
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        modal.classList.remove('open');
+        document.body.classList.remove('modal-open');
+      }
+    };
+
+    // Open modal immediately without delay
     modal.classList.add('open');
     document.body.classList.add('modal-open');
+
+    // 5. Asynchronously fetch full detailed payments list if not already present
+    if (!order.payments || order.payments.length === 0) {
+      apiFetch(`/api/orders/${order.id}`).then(resp => {
+        if (resp && resp.payments) {
+          order.payments = resp.payments;
+          renderPaymentHistoryIntoModal(order, resp.payments, cpHistoryBox, cpHistoryList);
+        }
+      }).catch(() => {});
+    }
+  }
+
+  const openCollectPaymentModal = function (orderId) {
+    if (!orderId) {
+      showToast('No order reference provided.', 'error');
+      return;
+    }
+
+    const modal = document.getElementById('modal-collect-payment');
+    if (!modal) {
+      console.error('Modal #modal-collect-payment not found in DOM');
+      return;
+    }
+
+    let order = (state.ordersCache || []).find(o => o.id === orderId || o.order_number === orderId);
+    if (order) {
+      // Open immediately with cached order data
+      populateAndOpenCollectModal(order, modal);
+    } else {
+      // Fetch order from server if not found in local cache
+      showToast('Loading order details...', 'info');
+      apiFetch(`/api/orders/${orderId}`)
+        .then(resp => {
+          const fetchedOrder = resp?.order || resp;
+          if (fetchedOrder && fetchedOrder.id) {
+            fetchedOrder.payments = resp.payments || fetchedOrder.payments || [];
+            populateAndOpenCollectModal(fetchedOrder, modal);
+          } else {
+            showToast('Order not found.', 'error');
+          }
+        })
+        .catch(err => {
+          showToast('Could not load order details: ' + err.message, 'error');
+        });
+    }
   };
+  window.openCollectPaymentModal = openCollectPaymentModal;
 
   window.handleCollectPaymentSubmit = async function (e) {
     if (e) e.preventDefault();
@@ -9111,3 +9149,7 @@
       }
     }
   };
+
+  window.state = state;
+
+})();
