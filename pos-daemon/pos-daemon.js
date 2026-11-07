@@ -552,32 +552,35 @@ function format25InchEscPosReceipt(rawOrder) {
   // 5. Dashed line
   writeText(divider);
 
-  // 6. Name, Phone, City, Age, and Pick Up Date & Time under City
+  // 6. Name, Phone, City, Age
   const custName = String(order.customer_name || 'Walk-in Client').slice(0, 24);
   const custPhone = String(order.customer_phone || '-').slice(0, 20);
   const city = String(order.city || order.client_city || order.customer_city || 'Hyderabad').slice(0, 14);
   const age = (order.customer_age || order.client_age || order.age) ? String(order.customer_age || order.client_age || order.age) : '--';
-
-  let pDate = '--';
-  let pTime = '--';
-  const pickupRaw = order.pickup_time || order.pickupTime || order.pick_up_time || order.pickup_date;
-  if (pickupRaw) {
-    pDate = formatDateOnly(pickupRaw);
-    pTime = formatTimeOnly(pickupRaw);
-  }
 
   writeText(`Name: ${custName}\n`);
   if (custPhone && custPhone !== '-') {
     writeText(`Phone: ${custPhone}\n`);
   }
   writeText(row(`City: ${city}`, `Age: ${age}`));
-  if (pickupRaw && pDate !== '--') {
-    writeText(row('Pick Up Date:', pDate));
-    if (pTime !== '--') {
-      writeText(row('Pick Up Time:', pTime));
-    }
-  } else {
-    writeText(row('Pick Up Date:', '--'));
+
+  // ONLY print Delivery Date on website orders (never on in-store POS bills)
+  function isWebOrder(o) {
+    if (!o) return false;
+    if (o.source === 'website' || o.source === 'WEBSITE') return true;
+    if (o.source === 'instore' || o.source === 'pos' || o.source === 'INSTORE') return false;
+    const ref = String(o.order_number || o.order_ref || o.orderNumber || o.token_number || o.id || '').toUpperCase();
+    if (ref.includes('-POS-') || ref.includes('POS')) return false;
+    if (ref.includes('-WEB-') || ref.includes('-ONL-') || ref.includes('ONLINE') || ref.includes('WEB')) return true;
+    if (o.channel === 'ONLINE' || o.channel === 'WEBSITE') return true;
+    if (o.channel === 'POS' || o.channel === 'IN-STORE') return false;
+    return false;
+  }
+
+  if (isWebOrder(order)) {
+    const deliveryRaw = order.delivery_date || order.deliveryDate || order.pickup_time || order.pickupTime || order.pick_up_time;
+    const dDate = deliveryRaw ? formatDateOnly(deliveryRaw) : '--';
+    writeText(row('Delivery Date:', dDate));
   }
 
   // 7. Dashed line
@@ -636,24 +639,13 @@ function format25InchEscPosReceipt(rawOrder) {
   writeText(finRow('Discount:', discount > 0 ? discount : 0));
   writeText(finRow('Advance:', advance));
   writeText(finRow('2nd Amount:', second > 0 ? second : ''));
-  if (second > 0) {
-    const sDate = formatDateTime(order.second_payment_date || order.updated_at || Date.now());
-    writeText(sDate.padStart(COLS) + '\n');
-  }
   writeText(finRow('3rd Amount:', third > 0 ? third : ''));
-  if (third > 0) {
-    const tDate = formatDateTime(order.third_payment_date || order.updated_at || Date.now());
-    writeText(tDate.padStart(COLS) + '\n');
-  }
   if (Array.isArray(order.payments) && order.payments.length > 3) {
     for (let pi = 3; pi < order.payments.length; pi++) {
       const p = order.payments[pi];
       const pAmt = p.amount_inr != null ? Number(p.amount_inr) : (p.amount_paise ? Number(p.amount_paise) / 100 : 0);
       if (pAmt > 0) {
         writeText(finRow(`${pi + 1}th Amount:`, pAmt));
-        if (p.created_at) {
-          writeText(formatDateTime(p.created_at).padStart(COLS) + '\n');
-        }
       }
     }
   }

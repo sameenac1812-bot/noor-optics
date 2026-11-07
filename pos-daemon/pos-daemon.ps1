@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     pos-daemon/pos-daemon.ps1 – Native Windows PowerShell POS Print Engine
     Zero-dependency thermal print daemon for Windows 10/11.
@@ -597,13 +597,16 @@ function Format-ReceiptBytes($order) {
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Phone: $custPhone`n"))
     }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "City: $city" "Age: $age")))
-    if ($pickupRaw -and $pDate -ne "--") {
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Pick Up Date:" $pDate)))
-        if ($pTime -ne "--") {
-            $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Pick Up Time:" $pTime)))
-        }
-    } else {
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Pick Up Date:" "--")))
+    $isWebOrder = $false
+    if ($order.source -eq "website" -or $order.source -eq "WEBSITE") { $isWebOrder = $true }
+    elseif ($order.channel -eq "ONLINE" -or $order.channel -eq "WEBSITE") { $isWebOrder = $true }
+    else {
+        $rawRefUpper = [string]$(if ($order.order_number) { $order.order_number } elseif ($order.id) { $order.id } else { "" }).ToUpper()
+        if ($rawRefUpper -match "-WEB-" -or $rawRefUpper -match "ONLINE") { $isWebOrder = $true }
+    }
+    if ($isWebOrder) {
+        $delDate = if ($pickupRaw -and $pDate -ne "--") { $pDate } else { "--" }
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Delivery Date:" $delDate)))
     }
 
     # 7. Dashed line
@@ -685,21 +688,7 @@ function Format-ReceiptBytes($order) {
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Discount:" $discount)))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Advance:" $advance)))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "2nd Amount:" $(if ($second -gt 0) { $second } else { "" }))))
-    if ($second -gt 0) {
-        $sDate = (Get-Date).ToString("dd MMM yyyy hh:mm tt")
-        if ($order.second_payment_date) {
-            try { $sDate = ([DateTime]::Parse($order.second_payment_date)).ToString("dd MMM yyyy hh:mm tt") } catch {}
-        }
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($sDate.PadLeft($COLS) + "`n"))
-    }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "3rd Amount:" $(if ($third -gt 0) { $third } else { "" }))))
-    if ($third -gt 0) {
-        $tDate = (Get-Date).ToString("dd MMM yyyy hh:mm tt")
-        if ($order.third_payment_date) {
-            try { $tDate = ([DateTime]::Parse($order.third_payment_date)).ToString("dd MMM yyyy hh:mm tt") } catch {}
-        }
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($tDate.PadLeft($COLS) + "`n"))
-    }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Remaining:" $remaining)))
     if ($remaining -eq 0) {

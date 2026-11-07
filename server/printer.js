@@ -25,6 +25,18 @@ function formatINR(paise) {
   });
 }
 
+function isWebsiteOrder(o) {
+  if (!o) return false;
+  if (o.source === 'website' || o.source === 'WEBSITE') return true;
+  if (o.source === 'instore' || o.source === 'pos' || o.source === 'INSTORE') return false;
+  const ref = String(o.order_number || o.order_ref || o.orderNumber || o.token_number || o.id || '').toUpperCase();
+  if (ref.includes('-POS-') || ref.includes('POS')) return false;
+  if (ref.includes('-WEB-') || ref.includes('-ONL-') || ref.includes('ONLINE') || ref.includes('WEB')) return true;
+  if (o.channel === 'ONLINE' || o.channel === 'WEBSITE') return true;
+  if (o.channel === 'POS' || o.channel === 'IN-STORE') return false;
+  return false;
+}
+
 /**
  * Generate 2.5-inch (58mm) formatted plain text receipt matching Image reference layout
  */
@@ -163,13 +175,12 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
     lines.push(`Phone: ${custPhone}`);
   }
   lines.push(row(`City: ${city}`, `Age: ${age}`));
-  if (pickupRaw && pDate !== '--') {
-    lines.push(row('Pick Up Date:', pDate));
-    if (pTime !== '--') {
-      lines.push(row('Pick Up Time:', pTime));
-    }
-  } else {
-    lines.push(row('Pick Up Date:', '--'));
+
+  // ONLY print Delivery Date on website orders (never on in-store POS bills)
+  if (isWebsiteOrder(order)) {
+    const deliveryRaw = order.delivery_date || order.deliveryDate || order.pickup_time || order.pickupTime || order.pick_up_time;
+    const dDate = deliveryRaw ? formatDateOnly(deliveryRaw) : '--';
+    lines.push(row('Delivery Date:', dDate));
   }
 
   // 7. Dashed line
@@ -227,24 +238,13 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
   lines.push(finRow('Discount:', discount));
   lines.push(finRow('Advance:', advance));
   lines.push(finRow('2nd Amount:', second > 0 ? second : ''));
-  if (second > 0) {
-    const sDate = formatDateTime(order.second_payment_date || order.updated_at || Date.now());
-    lines.push(sDate.padStart(COLS));
-  }
   lines.push(finRow('3rd Amount:', third > 0 ? third : ''));
-  if (third > 0) {
-    const tDate = formatDateTime(order.third_payment_date || order.updated_at || Date.now());
-    lines.push(tDate.padStart(COLS));
-  }
   if (Array.isArray(order.payments) && order.payments.length > 3) {
     for (let pi = 3; pi < order.payments.length; pi++) {
       const p = order.payments[pi];
       const pAmt = p.amount_inr != null ? Number(p.amount_inr) : (p.amount_paise ? Number(p.amount_paise) / 100 : 0);
       if (pAmt > 0) {
         lines.push(finRow(`${pi + 1}th Amount:`, pAmt));
-        if (p.created_at) {
-          lines.push(formatDateTime(p.created_at).padStart(COLS));
-        }
       }
     }
   }
@@ -583,10 +583,9 @@ function generate58mmHTML(order, items = [], settings = {}) {
     <div>Name: ${custName}</div>
     ${custPhone && custPhone !== '-' ? `<div>Phone: ${custPhone}</div>` : ''}
     <div class="flex-row"><span>City: ${city}</span><span>Age: ${age}</span></div>
-    ${(pickupRaw && pDate !== '--') ? `
-      <div class="flex-row"><span>Pick Up Date:</span><span>${pDate}</span></div>
-      ${pTime !== '--' ? `<div class="flex-row"><span>Pick Up Time:</span><span>${pTime}</span></div>` : ''}
-    ` : `<div class="flex-row"><span>Pick Up Date:</span><span>--</span></div>`}
+    ${isWebsiteOrder(order) ? `
+      <div class="flex-row"><span>Delivery Date:</span><span>${(pickupRaw && pDate !== '--') ? pDate : '--'}</span></div>
+    ` : ''}
   </div>
 
   <div class="dash">--------------------------------</div>
@@ -613,9 +612,7 @@ function generate58mmHTML(order, items = [], settings = {}) {
     <div class="fin-line"><span class="fin-lbl">Discount:</span><span class="fin-val">${formatNum(discount)}</span></div>
     <div class="fin-line"><span class="fin-lbl">Advance:</span><span class="fin-val">${formatNum(advance)}</span></div>
     <div class="fin-line"><span class="fin-lbl">2nd Amount:</span><span class="fin-val">${second > 0 ? formatNum(second) : ''}</span></div>
-    ${second > 0 ? `<div class="sub-date">${secondDate}</div>` : ''}
     <div class="fin-line"><span class="fin-lbl">3rd Amount:</span><span class="fin-val">${third > 0 ? formatNum(third) : ''}</span></div>
-    ${third > 0 ? `<div class="sub-date">${thirdDate}</div>` : ''}
     <div class="dash" style="width:100%;">--------------------------------</div>
     <div class="fin-line bold"><span class="fin-lbl">Remaining:</span><span class="fin-val">${formatNum(remaining)}</span></div>
     ${remaining === 0 ? `<div class="center bold" style="margin-top:4px;">*** PAID IN FULL ***</div>` : ''}
