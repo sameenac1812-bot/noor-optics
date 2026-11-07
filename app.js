@@ -1119,7 +1119,7 @@
     const address = (addressInput?.value || '').trim();
     const city = (cityInput?.value || '').trim();
     const pin = (pinInput?.value || '').trim();
-    const rxChoice = document.querySelector('input[name="checkout-rx"]:checked')?.value || 'call-optometrist';
+    const rxChoice = document.querySelector('input[name="checkout-rx"]:checked')?.value || 'enter-rx';
     const payChoice = document.querySelector('input[name="checkout-pay"]:checked')?.value || 'upi';
 
     if (!name) {
@@ -1252,6 +1252,7 @@
         prescription_pref: rxChoice,
         prescription: prescriptionData,
         channel: 'WEBSITE',
+        channel_code: 1,
         source: 'website',
         idempotency_key: `idem-web-${orderId}-${Date.now()}`,
         payment_method: payChoice,
@@ -1266,6 +1267,7 @@
       // 1. Submit to Unified Backend and Cloud Supabase in parallel for lightning-fast checkout
       const onlinePayload = {
         channel: 'WEBSITE',
+        channel_code: 1,
         source: 'website',
         idempotency_key: orderData.idempotency_key,
         customerName: name,
@@ -1340,7 +1342,7 @@
             </div>
             <div class="receipt-detail-item">
               <span class="receipt-item-label">Prescription</span>
-              <span class="receipt-item-val">${rxChoice === 'call-optometrist' ? 'Optometrist Verification Call' : 'Zero-Power Blue-Cut'}</span>
+              <span class="receipt-item-val">${rxChoice === 'enter-rx' ? 'Optical Prescription Attached' : 'Zero-Power Blue-Cut'}</span>
             </div>
             <div class="receipt-detail-item">
               <span class="receipt-item-label">Payment</span>

@@ -689,7 +689,28 @@ function format25InchEscPosReceipt(rawOrder) {
   }
   if (allRxList.length === 0) {
     const fallbackRx = order.prescription || order.client_prescription || order.newPrescription;
-    if (fallbackRx) allRxList.push(fallbackRx);
+    if (fallbackRx) {
+      if (typeof fallbackRx === 'string' && fallbackRx.trim().startsWith('{')) {
+        try { allRxList.push(JSON.parse(fallbackRx)); } catch (_) { allRxList.push(fallbackRx); }
+      } else {
+        allRxList.push(fallbackRx);
+      }
+    }
+  }
+
+  // Robust fallback: Check if order object itself has diopter fields (od_sph, os_sph, etc.)
+  if (allRxList.length === 0 && (order.od_sph != null || order.os_sph != null || order.odSph != null || order.osSph != null || order.prescription_id != null)) {
+    allRxList.push({
+      prescription_number: order.prescription_number || order.prescription_id || 'RX-ATTACHED',
+      od_sph: order.od_sph || order.odSph,
+      od_cyl: order.od_cyl || order.odCyl,
+      od_axis: order.od_axis != null ? order.od_axis : order.odAxis,
+      os_sph: order.os_sph || order.osSph,
+      os_cyl: order.os_cyl || order.osCyl,
+      os_axis: order.os_axis != null ? order.os_axis : order.osAxis,
+      addition: order.addition || order.add,
+      ipd_distance: order.ipd_distance || order.pd
+    });
   }
 
   allRxList = allRxList.filter(rx => {
@@ -908,9 +929,16 @@ async function pollRecentUnprintedOrders() {
           if (!ref) continue;
           if (printedOrdersSet.has(ref) || (order.id && printedOrdersSet.has(String(order.id))) || (order.order_number && printedOrdersSet.has(String(order.order_number))) || (order.order_ref && printedOrdersSet.has(String(order.order_ref)))) continue;
 
-          const isWebsite = order.source === 'website' || order.channel === 'WEBSITE';
-          const isAwaitingUpi = order.payment_status === 'AWAITING_VERIFICATION' || order.status === 'PENDING_VERIFICATION';
-          if (isWebsite && isAwaitingUpi) continue;
+          const isWebsite = order.channel_code === 1 ||
+            String(order.channel || '').toUpperCase() === 'WEBSITE' ||
+            String(order.channel || '').toUpperCase() === 'ONLINE' ||
+            String(order.source || '').toLowerCase() === 'website' ||
+            ref.includes('-WEB-') ||
+            ref.includes('-ONL-');
+          if (isWebsite) {
+            const isVerified = String(order.payment_status || '').toUpperCase() === 'VERIFIED';
+            if (!isVerified) continue;
+          }
 
           console.log(`[Order Sync] Found unprinted order #${ref}. Printing now...`);
           await printLiveOrder(order, 'cloud_sync');
@@ -977,12 +1005,20 @@ function connectRealtimeWebSocket() {
             return;
           }
 
-          // 2. WEBSITE UNVERIFIED ORDERS: Hold print until cashier approves payment
-          const isWebsite = record.source === 'website' || record.channel === 'WEBSITE';
-          const isAwaitingUpi = record.payment_status === 'AWAITING_VERIFICATION' || record.status === 'PENDING_VERIFICATION';
-          if (isWebsite && isAwaitingUpi) {
-            console.log(`[Realtime] Website order #${orderRef} received (Awaiting staff UPI verification).`);
-            return;
+          // 2. WEBSITE ORDERS: Hold print until cashier approves payment in Admin
+          const isWebsite = record.channel_code === 1 ||
+            String(record.channel || '').toUpperCase() === 'WEBSITE' ||
+            String(record.channel || '').toUpperCase() === 'ONLINE' ||
+            String(record.source || '').toLowerCase() === 'website' ||
+            orderRef.includes('-WEB-') ||
+            orderRef.includes('-ONL-');
+
+          if (isWebsite) {
+            const isVerified = String(record.payment_status || '').toUpperCase() === 'VERIFIED';
+            if (!isVerified) {
+              console.log(`[Realtime] Website order #${orderRef} held (Awaiting staff UPI approval).`);
+              return;
+            }
           }
 
           // 3. PRINT LIVE VERIFIED / CONFIRMED / IN-STORE ORDERS IMMEDIATELY!

@@ -622,18 +622,20 @@
   // ── Authoritative Channel Resolver (100% Guaranteed In-Store vs Website Segregation) ──
   function getOrderChannel(o) {
     if (!o) return 'POS';
-    // STRICT SOURCE RESOLVER (Authoritative database-level dual pipeline separation)
+    // 1. Strict Channel Code (1 = Website, 2 = POS)
+    if (o.channel_code === 1 || o.channel_code === '1') return 'WEBSITE';
+    if (o.channel_code === 2 || o.channel_code === '2') return 'POS';
+    // 2. Strict Source Resolver
     if (o.source === 'website' || o.source === 'WEBSITE') return 'WEBSITE';
     if (o.source === 'instore' || o.source === 'pos' || o.source === 'INSTORE') return 'POS';
     const ref = String(o.order_number || o.order_ref || o.orderNumber || o.invoiceNumber || o.id || '').toUpperCase();
-    if (ref.includes('-POS-') || ref.includes('POS')) return 'POS';
     if (ref.includes('-WEB-') || ref.includes('-ONL-') || ref.includes('ONLINE')) return 'WEBSITE';
-    if (o.channel === 'POS' || o.channel === 'IN-STORE') return 'POS';
+    if (ref.includes('-POS-') || ref.includes('POS')) return 'POS';
     if (o.channel === 'ONLINE' || o.channel === 'WEBSITE') return 'WEBSITE';
+    if (o.channel === 'POS' || o.channel === 'IN-STORE') return 'POS';
     if (Array.isArray(o.items) && o.items[0]?.channel) {
       return (o.items[0].channel === 'POS' || o.items[0].channel === 'IN-STORE') ? 'POS' : 'WEBSITE';
     }
-    if (o.delivery_address && /pos|boutique|flagship|store|rethibowli|counter|in-store/i.test(o.delivery_address)) return 'POS';
     return 'WEBSITE';
   }
 
@@ -857,8 +859,8 @@
             ? o.items.map(i => escapeHtml(i.product_name) + (i.quantity > 1 ? ` ×${i.quantity}` : '')).join(', ')
             : 'Frame Order';
           const channelBadge = orderChan === 'POS'
-            ? `<span class="badge-channel-pos">🏪 In-Store</span>`
-            : `<span class="badge-channel-web">🌐 Website</span>`;
+            ? `<span class="badge-channel-pos" style="background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0; font-size:0.68rem; font-weight:800; padding:1px 6px; border-radius:4px;">🏪 In-Store [Code 2]</span>`
+            : `<span class="badge-channel-web" style="background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE; font-size:0.68rem; font-weight:800; padding:1px 6px; border-radius:4px;">🌐 Website [Code 1]</span>`;
 
           return `
             <div class="optic-saved-bill-card" onclick="viewOrderDetails('${o.id}')">
@@ -905,13 +907,13 @@
                 </div>
               </div>
               ${o.payment_status === 'AWAITING_VERIFICATION' ? `
-                <div style="background:#FFFBEB; border-top:1px dashed #FDE68A; padding:6px 12px; display:flex; align-items:center; justify-content:space-between; font-size:0.75rem;">
-                  <span style="color:#92400E; font-weight:700;">
-                    UTR: <code style="font-family:monospace; font-weight:800; font-size:0.82rem; background:#FEF3C7; padding:2px 4px; border-radius:3px;">${escapeHtml(o.claimed_upi_ref || (o.notes && o.notes.includes('UPI Ref:') ? o.notes.split('UPI Ref:')[1].replace(')', '').trim() : 'Submitted'))}</code>
+                <div style="background:#FEF3C7; border-top:1.5px solid #F59E0B; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; font-size:0.78rem; border-radius:0 0 8px 8px;">
+                  <span style="color:#78350F; font-weight:800; display:flex; align-items:center; gap:6px;">
+                    📱 Claimed UTR: <code style="font-family:monospace; font-weight:900; font-size:0.92rem; background:#FFFBEB; color:#92400E; padding:3px 8px; border-radius:4px; border:1px solid #FCD34D; user-select:all;">${escapeHtml(o.claimed_upi_ref || (o.notes && o.notes.includes('UPI Ref:') ? o.notes.split('UPI Ref:')[1].replace(')', '').trim() : 'Submitted'))}</code>
                   </span>
                   <div style="display:flex; gap:6px;">
-                    <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:700; padding:3px 8px; font-size:0.72rem;" onclick="event.stopPropagation(); confirmUpiPayment('${o.id}', '${o.payment_id || ''}')">✓ Approve</button>
-                    <button type="button" class="btn-table-action" style="background:#DC2626; color:#FFF; font-weight:700; padding:3px 8px; font-size:0.72rem;" onclick="event.stopPropagation(); rejectUpiPayment('${o.id}', '${o.payment_id || ''}')">✗ Reject</button>
+                    <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800; padding:4px 10px; font-size:0.75rem; border-radius:5px;" onclick="event.stopPropagation(); confirmUpiPayment('${o.id}', '${o.payment_id || ''}')">✓ Approve</button>
+                    <button type="button" class="btn-table-action" style="background:#DC2626; color:#FFF; font-weight:700; padding:4px 10px; font-size:0.75rem; border-radius:5px;" onclick="event.stopPropagation(); rejectUpiPayment('${o.id}', '${o.payment_id || ''}')">✗ Reject</button>
                   </div>
                 </div>
               ` : ''}
@@ -975,6 +977,13 @@
                 ? `<span class="badge-status" style="background:#FEF2F2; color:#DC2626; border:1px solid #FECACA; font-weight:800;">₹${outstandingRow.toLocaleString('en-IN')} DUE</span>`
                 : `<span class="badge-status ${paymentClass}">${escapeHtml(o.payment_status)}</span>`
               }
+              ${(o.claimed_upi_ref || (o.notes && o.notes.includes('UPI Ref:'))) ? `
+                <div style="margin-top:3px;">
+                  <span style="font-family:monospace; font-weight:800; font-size:0.75rem; background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; padding:1px 5px; border-radius:4px; display:inline-block;" title="Claimed UPI Reference">
+                    UTR: ${escapeHtml(o.claimed_upi_ref || o.notes.split('UPI Ref:')[1].replace(')', '').trim())}
+                  </span>
+                </div>
+              ` : ''}
               <div style="font-size:0.68rem; color:#6B7280; margin-top:2px;">${escapeHtml(o.payment_method || 'CASH')}</div>
             </td>
             <td><span class="badge-status ${orderClass}">${escapeHtml(o.status)}</span></td>

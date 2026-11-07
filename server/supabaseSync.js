@@ -583,21 +583,21 @@ async function syncSupabaseOrders(db) {
         orderDate = orderDate + 'Z';
       }
 
-      // Detect whether order is In-Store POS or Website (100% Authoritative Segregation)
+      // Detect whether order is In-Store POS (Code 2) or Website (Code 1) (100% Authoritative Segregation)
       const ref = String(co.order_ref || '');
       let isPos = false;
-      if (ref.includes('-POS-')) {
-        isPos = true;
-      } else if (ref.includes('-WEB-') || ref.includes('-ONL-')) {
+      if (co.channel_code === 1 || co.source === 'website' || co.channel === 'WEBSITE' || co.channel === 'ONLINE' || ref.includes('-WEB-') || ref.includes('-ONL-')) {
         isPos = false;
+      } else if (co.channel_code === 2 || co.source === 'instore' || co.source === 'pos' || co.channel === 'POS' || ref.includes('-POS-')) {
+        isPos = true;
       } else if (Array.isArray(co.items) && co.items[0]?.channel) {
         isPos = (co.items[0].channel === 'POS' || co.items[0].channel === 'IN-STORE');
-      } else if (co.delivery_address && /pos|boutique|flagship|store|rethibowli|counter|in-store/i.test(co.delivery_address)) {
-        isPos = true;
-      } else if (co.channel && (co.channel === 'POS' || co.channel === 'IN-STORE')) {
-        isPos = true;
+      } else {
+        isPos = false; // Default to website if ambiguous, NEVER auto-convert to in-store POS
       }
       const channel = isPos ? 'POS' : 'WEBSITE';
+      const channelCode = isPos ? 2 : 1;
+      const source = isPos ? 'instore' : 'website';
 
       // Detect payment status and amount paid
       // In-store POS cash orders are paid at counter immediately.
@@ -632,11 +632,25 @@ async function syncSupabaseOrders(db) {
           isPaid = false;
         }
       }
-      const rawCloudPaid = (co.amount_paid_paise != null) ? co.amount_paid_paise : ((co.amount_paid != null) ? Math.round(Number(co.amount_paid) * 100) : (co.advance_paid_paise != null ? co.advance_paid_paise : null));
-      const amountPaidPaise = rawCloudPaid != null ? rawCloudPaid : (isPaid ? grandTotalPaise : 0);
-      const outstandingPaise = Math.max(0, grandTotalPaise - amountPaidPaise);
-      if (outstandingPaise > 0 && isPos) {
-        paymentStatus = 'PARTIAL';
+
+      let amountPaidPaise;
+      let outstandingPaise;
+      if (isPos) {
+        const rawCloudPaid = (co.amount_paid_paise != null) ? co.amount_paid_paise : ((co.amount_paid != null) ? Math.round(Number(co.amount_paid) * 100) : (co.advance_paid_paise != null ? co.advance_paid_paise : null));
+        amountPaidPaise = rawCloudPaid != null ? rawCloudPaid : (isPaid ? grandTotalPaise : 0);
+        outstandingPaise = Math.max(0, grandTotalPaise - amountPaidPaise);
+        if (outstandingPaise > 0) {
+          paymentStatus = 'PARTIAL';
+        }
+      } else {
+        // Website orders have ZERO advance payment option. Always 100% full payment.
+        if (paymentStatus === 'VERIFIED') {
+          amountPaidPaise = grandTotalPaise;
+          outstandingPaise = 0;
+        } else {
+          amountPaidPaise = 0;
+          outstandingPaise = grandTotalPaise;
+        }
       }
 
       // Extract UTR if present in notes or co
@@ -684,26 +698,34 @@ async function syncSupabaseOrders(db) {
         let finalAmountPaid = existing.amount_paid_paise !== undefined ? existing.amount_paid_paise : amountPaidPaise;
         let finalOutstanding = existing.outstanding_paise !== undefined ? existing.outstanding_paise : outstandingPaise;
 
-        // If order already has an outstanding balance, it is strictly PARTIAL - NEVER mark as fully paid/0 due!
-        if (finalOutstanding > 0) {
-          finalPaymentStatus = 'PARTIAL';
-        } else if (isCloudVerified && !isPos) {
-          finalPaymentStatus = 'VERIFIED';
-          finalAmountPaid = grandTotalPaise;
-          finalOutstanding = 0;
-        } else if (isCloudRejected && !isPos) {
-          finalPaymentStatus = 'REJECTED';
-          finalAmountPaid = 0;
-          finalOutstanding = grandTotalPaise;
-        } else if (isPos && finalOutstanding === 0) {
-          finalPaymentStatus = 'VERIFIED';
+        if (isPos) {
+          if (finalOutstanding > 0) {
+            finalPaymentStatus = 'PARTIAL';
+          } else {
+            finalPaymentStatus = 'VERIFIED';
+          }
+        } else {
+          // Website orders: NEVER mark as PARTIAL! Zero advance payment option.
+          if (isCloudRejected) {
+            finalPaymentStatus = 'REJECTED';
+            finalAmountPaid = 0;
+            finalOutstanding = grandTotalPaise;
+          } else if (isCloudVerified || finalPaymentStatus === 'VERIFIED') {
+            finalPaymentStatus = 'VERIFIED';
+            finalAmountPaid = grandTotalPaise;
+            finalOutstanding = 0;
+          } else {
+            finalPaymentStatus = 'AWAITING_VERIFICATION';
+            finalAmountPaid = 0;
+            finalOutstanding = grandTotalPaise;
+          }
         }
 
         db.prepare(`
           UPDATE orders
-          SET channel = ?, payment_status = ?, amount_paid_paise = ?, outstanding_paise = ?
+          SET channel = ?, channel_code = ?, source = ?, payment_status = ?, amount_paid_paise = ?, outstanding_paise = ?, claimed_upi_ref = COALESCE(claimed_upi_ref, ?)
           WHERE id = ?
-        `).run(channel, finalPaymentStatus, finalAmountPaid, finalOutstanding, existing.id);
+        `).run(channel, channelCode, source, finalPaymentStatus, finalAmountPaid, finalOutstanding, resolvedUtr, existing.id);
 
         // Ensure payments record exists without destroying existing multi-stage payments
         try {
@@ -725,21 +747,21 @@ async function syncSupabaseOrders(db) {
 
       db.prepare(`
         INSERT INTO orders (
-          id, order_number, token_number, channel, customer_id, customer_name, customer_phone,
+          id, order_number, token_number, channel, channel_code, source, customer_id, customer_name, customer_phone,
           customer_email, delivery_address, city, pin_code, prescription_pref,
           status, payment_status, subtotal_paise, tax_paise, total_payable_paise,
-          amount_paid_paise, outstanding_paise, notes, created_at, updated_at
+          amount_paid_paise, outstanding_paise, claimed_upi_ref, notes, created_at, updated_at
         ) VALUES (
-          ?, ?, 1, ?, ?, ?, ?,
+          ?, ?, 1, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?,
           'CONFIRMED', ?, ?, ?, ?,
-          ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?
         )
       `).run(
-        orderId, co.order_ref, channel, customerId, name, phone,
+        orderId, co.order_ref, channel, channelCode, source, customerId, name, phone,
         co.customer_email || null, co.delivery_address || null, co.city || null, co.pin_code || null,
         co.prescription_pref || 'Standard', paymentStatus, subtotalPaise, taxPaise, grandTotalPaise,
-        amountPaidPaise, outstandingPaise, isPos ? 'In-Store POS Bill (Synced)' : 'Online Website Order (Synced)', orderDate, orderDate
+        amountPaidPaise, outstandingPaise, resolvedUtr, isPos ? 'In-Store POS Bill (Synced)' : 'Online Website Order (Synced)', orderDate, orderDate
       );
 
       // Parse and insert items
@@ -784,7 +806,7 @@ async function syncSupabaseOrders(db) {
         });
       }
 
-      // 3. Extract & Sync Prescription record if present in items or Supabase prescriptions table
+      // 3. Extract & Sync Prescription record if present in items, order payload, or Supabase prescriptions table
       let attachedRx = null;
       if (Array.isArray(items)) {
         for (const it of items) {
@@ -793,6 +815,25 @@ async function syncSupabaseOrders(db) {
             break;
           }
         }
+      }
+      if (!attachedRx && (co.prescription || co.prescriptions)) {
+        attachedRx = co.prescription || (Array.isArray(co.prescriptions) ? co.prescriptions[0] : null);
+        if (typeof attachedRx === 'string') {
+          try { attachedRx = JSON.parse(attachedRx); } catch (_) {}
+        }
+      }
+      if (!attachedRx && (co.od_sph != null || co.os_sph != null || co.odSph != null || co.osSph != null)) {
+        attachedRx = {
+          prescription_number: co.prescription_number || ('RX-' + co.order_ref),
+          od_sph: co.od_sph || co.odSph,
+          od_cyl: co.od_cyl || co.odCyl,
+          od_axis: co.od_axis != null ? co.od_axis : co.odAxis,
+          os_sph: co.os_sph || co.osSph,
+          os_cyl: co.os_cyl || co.osCyl,
+          os_axis: co.os_axis != null ? co.os_axis : co.osAxis,
+          addition: co.addition || co.add,
+          ipd_distance: co.ipd_distance || co.pd
+        };
       }
       if (!attachedRx && phone) {
         try {
@@ -808,7 +849,7 @@ async function syncSupabaseOrders(db) {
         } catch (_) {}
       }
 
-      if (attachedRx && (attachedRx.od_sph != null || attachedRx.os_sph != null || attachedRx.odSph != null)) {
+      if (attachedRx && (attachedRx.od_sph != null || attachedRx.os_sph != null || attachedRx.odSph != null || attachedRx.osSph != null)) {
         const localRxId = attachedRx.id || ('rx-cld-' + co.order_ref.toLowerCase().replace(/[^a-z0-9]/g, '-'));
         const rxNum = attachedRx.prescription_number || ('RX-' + co.order_ref);
         const existingRx = db.prepare('SELECT id FROM prescriptions WHERE id = ? OR prescription_number = ?').get(localRxId, rxNum);
@@ -833,7 +874,7 @@ async function syncSupabaseOrders(db) {
             orderDate, orderDate
           );
         }
-        db.prepare('UPDATE orders SET prescription_id = ? WHERE id = ?').run(localRxId, orderId);
+        db.prepare('UPDATE orders SET prescription_id = ?, prescriptions_json = ? WHERE id = ?').run(localRxId, JSON.stringify([attachedRx]), orderId);
         console.log(`[SupabaseSync] Linked prescription ${rxNum} to order ${co.order_ref}`);
       }
 
@@ -948,8 +989,13 @@ async function pushOrderToSupabase(orderPayload) {
     }
 
     const orderRef = String(orderPayload.orderNumber || orderPayload.order_ref || ('NOOR-' + Date.now())).trim();
-    const isPosOrder = orderPayload.channel === 'POS' || orderRef.includes('-POS-') || (orderPayload.deliveryAddress && /pos|boutique|flagship|store|rethibowli|counter|in-store/i.test(orderPayload.deliveryAddress));
+    const isPosOrder = orderPayload.channel_code === 2 ||
+      orderPayload.channel === 'POS' ||
+      orderPayload.source === 'instore' ||
+      orderRef.includes('-POS-');
     const resolvedChannel = isPosOrder ? 'POS' : 'WEBSITE';
+    const resolvedChannelCode = isPosOrder ? 2 : 1;
+    const resolvedSource = isPosOrder ? 'instore' : 'website';
 
     itemsToPush = itemsToPush.map(it => ({ ...it, channel: resolvedChannel }));
     const custName = String(orderPayload.customerName || orderPayload.customer_name || 'Walk-in Client').trim();
@@ -968,7 +1014,11 @@ async function pushOrderToSupabase(orderPayload) {
     const baseOrderBody = {
       order_ref: orderRef,
       order_number: orderRef,
-      source: isPosOrder ? 'instore' : 'website',
+      channel: resolvedChannel,
+      channel_code: resolvedChannelCode,
+      source: resolvedSource,
+      claimed_upi_ref: orderPayload.claimedUpiRef || orderPayload.claimed_upi_ref || null,
+      prescriptions: orderPayload.prescriptions || (orderPayload.prescription ? [orderPayload.prescription] : []),
       customer_name: custName,
       customer_email: custEmail,
       customer_phone: cleanPhone,

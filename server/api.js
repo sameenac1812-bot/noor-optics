@@ -2026,14 +2026,14 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     const nowIso = new Date().toISOString();
     db.prepare(`
       INSERT INTO orders (
-        id, order_number, token_number, channel, customer_id, customer_name,
+        id, order_number, token_number, channel, channel_code, source, customer_id, customer_name,
         customer_phone, customer_email, prescription_id, prescriptions_json, status, payment_status, subtotal_paise,
         discount_paise, discount_reason, tax_paise, total_payable_paise,
         amount_paid_paise, outstanding_paise, staff_user_id, notes,
         advance_paid_paise, second_payment_paise, third_payment_paise, previous_due_paise, pickup_time,
         created_at, updated_at
       ) VALUES (
-        ?, ?, ?, 'POS', ?, ?,
+        ?, ?, ?, 'POS', 2, 'instore', ?, ?,
         ?, ?, ?, ?, 'CONFIRMED', ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?, ?,
@@ -2167,6 +2167,8 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     pushOrderToSupabase({
       orderNumber,
       channel: 'POS',
+      channel_code: 2,
+      source: 'instore',
       deliveryAddress: 'In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad',
       city: 'Hyderabad',
       pinCode: '500028',
@@ -2580,25 +2582,39 @@ router.post('/orders/online', (req, res) => {
       createdPrescriptionId = finalPrescriptionId;
     }
 
+    const effectiveRx = createdPrescriptionId ? db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(createdPrescriptionId) : (prescription || null);
+    const finalPrescriptionsJson = (createdPrescriptionId && effectiveRx) ? JSON.stringify([{
+      id: createdPrescriptionId,
+      prescription_number: effectiveRx.prescription_number || 'RX-ATTACHED',
+      od_sph: effectiveRx.od_sph || effectiveRx.odSph || '0.00',
+      od_cyl: effectiveRx.od_cyl || effectiveRx.odCyl || '0.00',
+      od_axis: effectiveRx.od_axis !== undefined ? effectiveRx.od_axis : effectiveRx.odAxis,
+      os_sph: effectiveRx.os_sph || effectiveRx.osSph || '0.00',
+      os_cyl: effectiveRx.os_cyl || effectiveRx.osCyl || '0.00',
+      os_axis: effectiveRx.os_axis !== undefined ? effectiveRx.os_axis : effectiveRx.osAxis,
+      addition: effectiveRx.addition || effectiveRx.add || null,
+      ipd_distance: effectiveRx.ipd_distance || effectiveRx.pd || null
+    }]) : null;
+
     const nowIso = new Date().toISOString();
     db.prepare(`
       INSERT INTO orders (
-        id, order_number, token_number, channel, customer_id, customer_name, customer_phone,
-        customer_email, customer_age, delivery_address, city, pin_code, prescription_pref, prescription_id,
+        id, order_number, token_number, channel, channel_code, source, customer_id, customer_name, customer_phone,
+        customer_email, customer_age, delivery_address, city, pin_code, prescription_pref, prescription_id, prescriptions_json,
         status, payment_status, subtotal_paise, tax_paise, total_payable_paise,
-        amount_paid_paise, outstanding_paise, notes, created_at, updated_at
+        amount_paid_paise, outstanding_paise, claimed_upi_ref, notes, created_at, updated_at
       ) VALUES (
-        ?, ?, ?, 'ONLINE', ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, 'WEBSITE', 1, 'website', ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?,
         'CONFIRMED', 'AWAITING_VERIFICATION', ?, ?, ?,
-        0, ?, ?, ?, ?
+        0, ?, ?, ?, ?, ?
       )
     `).run(
       orderId, orderNumber, tokenNumber, customerId, customerName, customerPhone || null,
       customerEmail || null, finalAge, deliveryAddress || null, city || 'Bengaluru', pinCode || null,
-      prescriptionPref || (finalPrescriptionId ? 'RX Attached' : 'call-optometrist'), finalPrescriptionId,
+      prescriptionPref || (finalPrescriptionId ? 'RX Attached' : 'zero-power'), finalPrescriptionId, finalPrescriptionsJson,
       subtotalPaise, taxPaise, totalPayablePaise,
-      totalPayablePaise, resolvedUpiRef ? `Online Storefront Order (UPI Ref: ${resolvedUpiRef})` : 'Online Storefront Order', nowIso, nowIso
+      totalPayablePaise, resolvedUpiRef, resolvedUpiRef ? `Online Storefront Order (UPI Ref: ${resolvedUpiRef})` : 'Online Storefront Order', nowIso, nowIso
     );
 
     const insertItem = db.prepare(`
@@ -2658,6 +2674,10 @@ router.post('/orders/online', (req, res) => {
     pushOrderToSupabase({
       orderNumber,
       channel: 'WEBSITE',
+      channel_code: 1,
+      source: 'website',
+      claimed_upi_ref: resolvedUpiRef,
+      claimedUpiRef: resolvedUpiRef,
       customerName,
       customerPhone,
       customerEmail,
@@ -2692,6 +2712,7 @@ router.post('/orders/online', (req, res) => {
       })),
       prescriptionId: createdPrescriptionId,
       prescription: effectiveRx,
+      prescriptions: effectiveRx ? [effectiveRx] : [],
       od_sph: effectiveRx?.od_sph || effectiveRx?.odSph || null,
       od_cyl: effectiveRx?.od_cyl || effectiveRx?.odCyl || null,
       od_axis: effectiveRx?.od_axis !== undefined ? effectiveRx?.od_axis : effectiveRx?.odAxis,
@@ -2760,7 +2781,7 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
         pr.notes as rx_notes,
         pr.image_url as rx_image_url,
         pay.id as payment_id,
-        pay.claimed_upi_ref,
+        COALESCE(o.claimed_upi_ref, pay.claimed_upi_ref) as claimed_upi_ref,
         pay.status as payment_record_status
       FROM orders o
       LEFT JOIN users u ON o.staff_user_id = u.id

@@ -4,7 +4,7 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "test": "node tests/system.test.js && node tests/client_prescription_verification.test.js && node tests/inventory_and_qr_resolution.test.js && node tests/dual_pipeline_and_print_queue.test.js && node tests/website_upi_approval_pipeline.test.js && node tests/prescription_and_qr_daemon_printing.test.js && node tests/dual_channel_order_and_qr_spooler.test.js && node tests/manual_items_and_multistage_payment.test.js && node tests/multi_rx_checkout_and_printing.test.js",
+    "test": "node tests/system.test.js && node tests/client_prescription_verification.test.js && node tests/inventory_and_qr_resolution.test.js && node tests/dual_pipeline_and_print_queue.test.js && node tests/website_upi_approval_pipeline.test.js && node tests/prescription_and_qr_daemon_printing.test.js && node tests/dual_channel_order_and_qr_spooler.test.js && node tests/manual_items_and_multistage_payment.test.js && node tests/multi_rx_checkout_and_printing.test.js && node tests/website_orders_and_channel_separation.test.js",
     "start": "node server.js",
     "seed": "node server/seed.js"
   },

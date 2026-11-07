@@ -520,6 +520,9 @@ function initializeDatabase() {
     if (!orderCols.includes('third_payment_paise')) db.exec('ALTER TABLE orders ADD COLUMN third_payment_paise INTEGER DEFAULT 0;');
     if (!orderCols.includes('previous_due_paise')) db.exec('ALTER TABLE orders ADD COLUMN previous_due_paise INTEGER DEFAULT 0;');
     if (!orderCols.includes('pickup_time')) db.exec('ALTER TABLE orders ADD COLUMN pickup_time TEXT;');
+    if (!orderCols.includes('channel_code')) db.exec('ALTER TABLE orders ADD COLUMN channel_code INTEGER DEFAULT 2;');
+    if (!orderCols.includes('source')) db.exec("ALTER TABLE orders ADD COLUMN source TEXT DEFAULT 'instore';");
+    if (!orderCols.includes('claimed_upi_ref')) db.exec('ALTER TABLE orders ADD COLUMN claimed_upi_ref TEXT;');
 
     const payCols = db.pragma('table_info(payments)').map(c => c.name);
     if (!payCols.includes('payment_stage')) db.exec("ALTER TABLE payments ADD COLUMN payment_stage TEXT DEFAULT 'advance';");
