@@ -716,8 +716,8 @@ function format25InchEscPosReceipt(rawOrder) {
       const osAxis = getRxVal(['os_axis', 'osAxis']);
       const addition = getRxVal(['addition', 'add']);
 
-      const rxDate = formatDateOnly(rx.prescription_date || rx.created_at || order.created_at || Date.now());
-      writeText(row(`RX# ${rxNo}`, rxDate));
+      // Prescription block without date per user specification
+      writeText(`RX# ${rxNo}\n`);
       writeText(' '.repeat(11) + 'SPH'.padStart(7) + 'CYL'.padStart(7) + 'AXIS'.padStart(7) + '\n');
       writeText('OD Right'.padEnd(11) + fmtDio(odSph).padStart(7) + fmtDio(odCyl).padStart(7) + fmtAx(odAxis).padStart(7) + '\n');
       writeText('OS Left'.padEnd(11) + fmtDio(osSph).padStart(7) + fmtDio(osCyl).padStart(7) + fmtAx(osAxis).padStart(7) + '\n');

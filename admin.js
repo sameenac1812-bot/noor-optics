@@ -9103,7 +9103,9 @@
       }
 
       // Re-render orders tab in real-time
-      renderOrders();
+      if (typeof renderOrdersTable === 'function') {
+        renderOrdersTable();
+      }
 
       // Print updated receipt to POS thermal printer
       if (shouldPrint && typeof instantPrintReceipt === 'function') {
@@ -9151,5 +9153,7 @@
   };
 
   window.state = state;
+  window.renderOrdersTable = renderOrdersTable;
+  window.renderOrders = renderOrdersTable;
 
 })();
