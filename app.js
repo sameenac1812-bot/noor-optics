@@ -403,16 +403,13 @@
                  id="img-${product.id}">
           </div>
           <div class="card-content">
-            <div class="card-header-row">
-              <div class="card-title-group">
-                <h3 class="card-name" data-action="quickview" data-id="${product.id}">${product.name}</h3>
-                <span class="card-meta">${product.collection} · ${product.material}</span>
-              </div>
-            </div>
+            <div class="card-brand-tag">${escapeHtml(product.brand || 'Noor Optics')}</div>
+            <h3 class="card-name" data-action="quickview" data-id="${product.id}">${product.name}</h3>
+            <div class="card-size-tag">${product.fit || 'Regular'} · ${product.shape || 'Optical'} · ${product.material || 'Acetate'}</div>
             <div class="card-price-row">
               <span class="card-price">${formatINR(product.price)}</span>
               ${product.originalPrice ? `<span class="card-price-strike">${formatINR(product.originalPrice)}</span>` : ''}
-              ${discountPercent ? `<span class="card-discount-badge">Save ${discountPercent}%</span>` : ''}
+              ${discountPercent ? `<span class="card-discount-badge">${discountPercent}% OFF</span>` : ''}
             </div>
             <div class="card-swatches">
               ${swatchesHtml}
@@ -638,13 +635,20 @@
   }
 
   function updateWishlistBadge() {
-    if (!DOM.wishlistCountBadge) return;
     const count = state.wishlist.size;
-    DOM.wishlistCountBadge.textContent = count;
-    if (count > 0) {
-      DOM.wishlistCountBadge.classList.remove('empty');
-    } else {
-      DOM.wishlistCountBadge.classList.add('empty');
+    if (DOM.wishlistCountBadge) {
+      DOM.wishlistCountBadge.textContent = count;
+      if (count > 0) {
+        DOM.wishlistCountBadge.classList.remove('empty');
+      } else {
+        DOM.wishlistCountBadge.classList.add('empty');
+      }
+    }
+    const bottomWish = document.getElementById('bottom-wishlist-badge');
+    if (bottomWish) {
+      bottomWish.textContent = count;
+      if (count > 0) bottomWish.classList.remove('empty');
+      else bottomWish.classList.add('empty');
     }
   }
 
@@ -760,13 +764,20 @@
   }
 
   function updateBagBadge() {
-    if (!DOM.bagCountBadge) return;
     const totalCount = state.cart.reduce((sum, item) => sum + item.quantity, 0);
-    DOM.bagCountBadge.textContent = totalCount;
-    if (totalCount > 0) {
-      DOM.bagCountBadge.classList.remove('empty');
-    } else {
-      DOM.bagCountBadge.classList.add('empty');
+    if (DOM.bagCountBadge) {
+      DOM.bagCountBadge.textContent = totalCount;
+      if (totalCount > 0) {
+        DOM.bagCountBadge.classList.remove('empty');
+      } else {
+        DOM.bagCountBadge.classList.add('empty');
+      }
+    }
+    const bottomBag = document.getElementById('bottom-bag-badge');
+    if (bottomBag) {
+      bottomBag.textContent = totalCount;
+      if (totalCount > 0) bottomBag.classList.remove('empty');
+      else bottomBag.classList.add('empty');
     }
   }
 

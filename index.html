@@ -155,7 +155,7 @@
         <input type="text"
                class="search-main-input"
                id="search-main-input"
-               placeholder="Search frame name, shape (Round, Rectangular), material, or color..."
+               placeholder="What are you looking for?"
                aria-label="Search eyeglasses catalog" />
         <button class="search-clear-btn" id="search-clear-btn" aria-label="Clear Search Input">&times;</button>
       </div>
@@ -273,6 +273,59 @@
           <button type="button" class="lk-brand-pill" data-brand="Dolce & Gabbana" onclick="selectBrand('Dolce & Gabbana')">D&amp;G</button>
           <button type="button" class="lk-brand-pill" data-brand="Burberry" onclick="selectBrand('Burberry')">Burberry</button>
         </div>
+      </div>
+
+      <!-- 4. Lenskart-Style Promo VIP Banner -->
+      <div class="lk-promo-banner-wrap">
+        <div class="lk-promo-banner">
+          <div class="lk-promo-badge">✨ NOOR GOLD SELECTION</div>
+          <h3 class="lk-promo-title">Handcrafted Luxury Frames + Free Blue-Light Lenses</h3>
+          <p class="lk-promo-sub">Zero-Power &amp; Single Vision Included • Japanese Titanium &amp; Italian Bio-Acetate</p>
+          <div class="lk-promo-pills">
+            <button type="button" class="lk-promo-pill-btn active" onclick="selectVisualCategory('Eyeglasses', 'all')">👓 Explore Eyeglasses</button>
+            <button type="button" class="lk-promo-pill-btn" onclick="selectVisualCategory('Sunglasses', 'all')">🕶️ Sunglasses Collection</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Lenskart-Style Shop by Frame Shape Horizontal Scroll Row -->
+      <div class="lk-shape-section">
+        <div class="lk-section-header">
+          <div class="lk-title-group">
+            <h2 class="lk-section-title">Shop by Frame Shape</h2>
+          </div>
+          <button type="button" class="lk-link-viewall" onclick="document.querySelector('.shape-pill[data-shape=\'all\']')?.click()">All Shapes</button>
+        </div>
+        <nav class="shape-pills-nav" id="shape-pills-nav" aria-label="Filter by Frame Shape">
+          <button type="button" class="shape-pill active" data-shape="all">
+            <span class="shape-glyph">👓</span>
+            <span class="shape-label">All</span>
+          </button>
+          <button type="button" class="shape-pill" data-shape="Rectangular">
+            <span class="shape-glyph">▭</span>
+            <span class="shape-label">Rectangle</span>
+          </button>
+          <button type="button" class="shape-pill" data-shape="Round">
+            <span class="shape-glyph">◯</span>
+            <span class="shape-label">Round</span>
+          </button>
+          <button type="button" class="shape-pill" data-shape="Square">
+            <span class="shape-glyph">□</span>
+            <span class="shape-label">Square</span>
+          </button>
+          <button type="button" class="shape-pill" data-shape="Geometric">
+            <span class="shape-glyph">⬡</span>
+            <span class="shape-label">Geometric</span>
+          </button>
+          <button type="button" class="shape-pill" data-shape="Aviator">
+            <span class="shape-glyph">🕶️</span>
+            <span class="shape-label">Aviator</span>
+          </button>
+          <button type="button" class="shape-pill" data-shape="Cat-Eye">
+            <span class="shape-glyph">◈</span>
+            <span class="shape-label">Cat-Eye</span>
+          </button>
+        </nav>
       </div>
 
     </div>
@@ -893,6 +946,42 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <!-- LENSKART-STYLE TRUST GUARANTEE STRIP                            -->
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <section class="lk-trust-strip" aria-label="Noor Optics Guarantees">
+    <div class="lk-trust-container">
+      <div class="lk-trust-item">
+        <div class="lk-trust-icon">🚚</div>
+        <div class="lk-trust-info">
+          <strong>Free Express Delivery</strong>
+          <span>Complimentary on orders &gt; ₹1,999</span>
+        </div>
+      </div>
+      <div class="lk-trust-item">
+        <div class="lk-trust-icon">🛡️</div>
+        <div class="lk-trust-info">
+          <strong>2-Year Warranty</strong>
+          <span>100% Genuine Handcrafted Eyewear</span>
+        </div>
+      </div>
+      <div class="lk-trust-item">
+        <div class="lk-trust-icon">👓</div>
+        <div class="lk-trust-info">
+          <strong>Free Blue-Cut Lenses</strong>
+          <span>Zero-power anti-reflective included</span>
+        </div>
+      </div>
+      <div class="lk-trust-item">
+        <div class="lk-trust-icon">💳</div>
+        <div class="lk-trust-info">
+          <strong>100% Secure Payment</strong>
+          <span>Instant UPI, GPay, Cards &amp; Store Pickup</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Scandinavian Luxury Footer -->
   <footer class="store-footer">
     <div class="footer-container">
@@ -950,6 +1039,52 @@
       </div>
     </div>
   </footer>
+
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <!-- LENSKART-STYLE MOBILE FIXED BOTTOM NAVIGATION BAR                -->
+  <!-- ═════════════════════════════════════════════════════════════════ -->
+  <nav class="lk-mobile-bottom-nav" id="lk-mobile-bottom-nav" aria-label="Mobile Navigation">
+    <button type="button" class="lk-nav-tab active" id="tab-nav-home" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Home">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+      <span>Home</span>
+    </button>
+    <button type="button" class="lk-nav-tab" id="tab-nav-eyeglasses" onclick="selectVisualCategory('Eyeglasses', 'all')" aria-label="Eyeglasses">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="6" cy="12" r="4"/><circle cx="18" cy="12" r="4"/><line x1="10" y1="12" x2="14" y2="12"/>
+      </svg>
+      <span>Eyeglasses</span>
+    </button>
+    <button type="button" class="lk-nav-tab" id="tab-nav-sunglasses" onclick="selectVisualCategory('Sunglasses', 'all')" aria-label="Sunglasses">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 10a4 4 0 0 0 8 0v-1H3v1zm10 -1v1a4 4 0 0 0 8 0v-1h-8z"/>
+        <line x1="11" y1="9" x2="13" y2="9"/>
+      </svg>
+      <span>Sunglasses</span>
+    </button>
+    <button type="button" class="lk-nav-tab" id="tab-nav-wishlist" onclick="document.getElementById('btn-wishlist-toggle')?.click()" aria-label="Wishlist">
+      <div class="lk-tab-icon-wrap">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+        <span class="lk-bottom-badge empty" id="bottom-wishlist-badge">0</span>
+      </div>
+      <span>Wishlist</span>
+    </button>
+    <button type="button" class="lk-nav-tab" id="tab-nav-bag" onclick="document.getElementById('btn-bag-toggle')?.click()" aria-label="Bag">
+      <div class="lk-tab-icon-wrap">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <path d="M16 10a4 4 0 01-8 0"/>
+        </svg>
+        <span class="lk-bottom-badge empty" id="bottom-bag-badge">0</span>
+      </div>
+      <span>Bag</span>
+    </button>
+  </nav>
 
   <!-- Scripts -->
   <script src="/vendor/qrcode.min.js?v=11.1.0"></script>
