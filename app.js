@@ -1238,21 +1238,58 @@
         delivery_address: deliveryAddressWithUtr,
         city: city,
         pin_code: pin,
-        items: state.cart.map(item => ({
-          id: item.id,
-          name: item.name,
-          brand: item.brand || 'Noor Optics',
-          model: item.model || item.name,
-          shape: item.shape || 'Optical',
-          color: item.color,
-          size: item.fit || 'Regular',
-          lens: item.lensName,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-          subtotal: item.unitPrice * item.quantity,
-          claimed_upi_ref: utrVal || null,
-          utr: utrVal || null
-        })),
+        items: (() => {
+          const expandedItems = [];
+          state.cart.forEach(item => {
+            const hasSpecialLens = item.lensPrice && item.lensPrice > 0;
+            const framePrice = (hasSpecialLens && item.basePrice) ? item.basePrice : item.unitPrice;
+
+            // 1. Frame entry
+            expandedItems.push({
+              id: item.id,
+              name: item.name,
+              brand: item.brand || 'Noor Optics',
+              model: item.model || item.name,
+              shape: item.shape || 'Optical',
+              color: item.color,
+              size: item.fit || 'Regular',
+              lens: item.lensName,
+              lensName: item.lensName,
+              lens_name: item.lensName,
+              quantity: item.quantity,
+              unit_price: framePrice,
+              unitPrice: framePrice,
+              subtotal: framePrice * item.quantity,
+              claimed_upi_ref: utrVal || null,
+              utr: utrVal || null
+            });
+
+            // 2. Special Lens entry (added just like a frame entry in the bill when cost increases)
+            if (hasSpecialLens) {
+              expandedItems.push({
+                id: `lens-${item.id}`,
+                name: `${item.lensName} (Lens Package)`,
+                product_name: `${item.lensName} (Lens Package)`,
+                brand: 'Noor Precision Lenses',
+                model: item.lensName,
+                shape: 'Lens',
+                color: 'Clear AR',
+                size: item.fit || 'Custom Fit',
+                lens: item.lensName,
+                lensName: item.lensName,
+                lens_name: item.lensName,
+                isLensItem: true,
+                quantity: item.quantity,
+                unit_price: item.lensPrice,
+                unitPrice: item.lensPrice,
+                subtotal: item.lensPrice * item.quantity,
+                claimed_upi_ref: utrVal || null,
+                utr: utrVal || null
+              });
+            }
+          });
+          return expandedItems;
+        })(),
         prescription_pref: rxChoice,
         prescription: prescriptionData,
         channel: 'WEBSITE',
@@ -1291,18 +1328,7 @@
         claimed_upi_ref: utrVal || null,
         utr: utrVal || null,
         upiScreenshot: state.uploadedUpiScreenshot || null,
-        items: state.cart.map(item => ({
-          id: item.id,
-          name: item.name,
-          brand: item.brand || 'Noor Optics',
-          model: item.model || item.name,
-          shape: item.shape || 'Optical',
-          color: item.color,
-          size: item.fit || 'Regular',
-          lensName: item.lensName,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice
-        }))
+        items: orderData.items
       };
 
       // 1. Submit to Unified Backend (persists authoritatively to Database and Supabase Cloud)

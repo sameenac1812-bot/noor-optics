@@ -894,7 +894,15 @@
           const rxCount = (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) ? o.prescriptions.length : (hasRx ? 1 : 0);
           const utrCard = getOrderUtr(o);
           const itemsSummary = (o.items && o.items.length)
-            ? o.items.map(i => escapeHtml(i.product_name) + (i.quantity > 1 ? ` ×${i.quantity}` : '')).join(', ')
+            ? o.items.map(i => {
+                let name = escapeHtml(i.product_name || 'Frame');
+                if (i.quantity > 1) name += ` ×${i.quantity}`;
+                const lName = i.lens_name || i.lensName || i.lens;
+                if (lName && !name.toLowerCase().includes('lens package') && lName !== 'Blue-Light Filter' && !lName.toLowerCase().includes('standard demo')) {
+                  name += ` + [${escapeHtml(lName)}]`;
+                }
+                return name;
+              }).join(', ')
             : 'Frame Order';
           const channelBadge = orderChan === 'POS'
             ? `<span class="badge-channel-pos" style="background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0; font-size:0.68rem; font-weight:800; padding:1px 6px; border-radius:4px;">🏪 In-Store [Code 2]</span>`
@@ -1396,7 +1404,33 @@
     subEl.textContent = `Channel: ${getOrderChannel(order) === 'POS' ? 'In-Store POS' : 'Website Online'} • ${formatDateTime(order.created_at)}`;
 
     // Items list with complete frame specifications
-    const items = order.items || [];
+    const items = (order.items || []).slice();
+
+    // Auto-synthesize lens item if order subtotal exceeds items total and lens item is not already separated
+    const itemsTotalPaise = items.reduce((sum, it) => sum + (it.subtotal_paise || (it.unit_price_paise ? it.unit_price_paise * (it.quantity || 1) : 0)), 0);
+    const subtotalPaise = order.subtotal_paise || order.total_payable_paise || 0;
+    const hasLensItem = items.some(it => (it.product_name && it.product_name.includes('(Lens Package)')) || it.isLensItem || it.is_lens_item);
+
+    if (subtotalPaise > itemsTotalPaise && !hasLensItem) {
+      const diffPaise = subtotalPaise - itemsTotalPaise;
+      const attachedLens = items.find(it => it.lens_name || it.lensName || it.lens || it.lens_package_name);
+      const lName = (attachedLens && (attachedLens.lens_name || attachedLens.lensName || attachedLens.lens || attachedLens.lens_package_name)) || '1.60 High-Index Anti-Reflective';
+      items.push({
+        id: 'synth-lens-' + order.id,
+        product_name: `${lName} (Lens Package)`,
+        brand: 'Noor Precision Lenses',
+        model: lName,
+        variant_name: 'Custom Optical Glazing',
+        sku: 'LENS-PKG',
+        lens_name: lName,
+        quantity: 1,
+        unit_price_paise: diffPaise,
+        subtotal_paise: diffPaise,
+        unit_price_inr: diffPaise / 100,
+        subtotal_inr: diffPaise / 100
+      });
+    }
+
     const itemsRows = items.map(i => {
       const specBits = [];
       if (i.brand) specBits.push(`Brand: <strong>${escapeHtml(i.brand)}</strong>`);
@@ -1404,7 +1438,11 @@
       if (i.shape) specBits.push(`Shape: ${escapeHtml(i.shape)}`);
       if (i.color || i.variant_name) specBits.push(`Color: ${escapeHtml(i.color || i.variant_name)}`);
       if (i.size) specBits.push(`Size: ${escapeHtml(i.size)}`);
-      if (i.lens_package_name) specBits.push(`Lens: ${escapeHtml(i.lens_package_name)}`);
+      
+      const lensName = i.lens_name || i.lensName || i.lens || i.lens_package_name;
+      if (lensName && !String(i.product_name || '').includes('(Lens Package)')) {
+        specBits.push(`Lens: <span style="color:#0284C7; font-weight:800; background:#E0F2FE; padding:1px 6px; border-radius:4px; border:1px solid #BAE6FD;">👓 ${escapeHtml(lensName)}</span>`);
+      }
       if (i.sku) specBits.push(`SKU: <code style="font-size:0.72rem; background:#F1F5F9; padding:2px 4px; border-radius:4px;">${escapeHtml(i.sku)}</code>`);
       if (i.product_id) specBits.push(`ID: <span style="font-size:0.7rem; color:#94A3B8;">${escapeHtml(i.product_id)}</span>`);
 

@@ -616,6 +616,21 @@ function format25InchEscPosReceipt(rawOrder) {
   const grandTotal = Number(order.total_payable_inr || (order.total_payable_paise ? order.total_payable_paise / 100 : order.grand_total || order.total || 0));
   const discount = Number(order.discount_inr || (order.discount_paise ? order.discount_paise / 100 : order.discount || 0));
 
+  const SPECIAL_LENS_RATES = {
+    '1.60 High-Index Anti-Reflective': 699,
+    'Digital Free-Form Progressive': 1499,
+    'Adaptive Photochromic Transition': 1199,
+    'High-Index': 699,
+    'Progressive': 1499,
+    'Photochromic': 1199
+  };
+
+  const expandedReceiptItems = [];
+  const hasExistingLensItem = items.some(it => {
+    const n = String(it.product_name || it.name || '').toLowerCase();
+    return n.includes('(lens package)') || it.isLensItem || it.is_lens_item;
+  });
+
   items.forEach(item => {
     const name = String(item.product_name || item.name || item.model || 'Frame');
     const qty = parseInt(item.quantity || 1, 10);
@@ -627,6 +642,39 @@ function format25InchEscPosReceipt(rawOrder) {
       : (item.subtotal_paise != null) ? Number(item.subtotal_paise) / 100
       : (item.lineTotalINR != null) ? Number(item.lineTotalINR)
       : (unitPrice * qty);
+
+    const lName = item.lens_name || item.lensName || item.lens;
+    const specialRate = (lName && SPECIAL_LENS_RATES[lName]) || 0;
+
+    if (!hasExistingLensItem && specialRate > 0 && unitPrice > specialRate) {
+      const frameRate = unitPrice - specialRate;
+      expandedReceiptItems.push({
+        product_name: name,
+        quantity: qty,
+        unit_price_inr: frameRate,
+        subtotal_inr: frameRate * qty
+      });
+      expandedReceiptItems.push({
+        product_name: `${lName} (Lens Package)`,
+        quantity: qty,
+        unit_price_inr: specialRate,
+        subtotal_inr: specialRate * qty
+      });
+    } else {
+      expandedReceiptItems.push({
+        product_name: name,
+        quantity: qty,
+        unit_price_inr: unitPrice,
+        subtotal_inr: lineTotal
+      });
+    }
+  });
+
+  expandedReceiptItems.forEach(item => {
+    const name = String(item.product_name || 'Frame');
+    const qty = parseInt(item.quantity || 1, 10);
+    const unitPrice = item.unit_price_inr || 0;
+    const lineTotal = item.subtotal_inr || (unitPrice * qty);
 
     const colsStr = ' ' + String(qty).padStart(3) + ' ' + formatNum(unitPrice).padStart(5) + ' ' + formatNum(lineTotal).padStart(6) + '\n';
 

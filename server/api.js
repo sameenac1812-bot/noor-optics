@@ -2405,6 +2405,37 @@ router.post('/orders/online', (req, res) => {
     preparedItems.length = 0;
 
     for (const item of items) {
+      const isLens = Boolean(item.isLensItem || item.is_lens_item || (item.name && item.name.includes('(Lens Package)')));
+
+      if (isLens) {
+        const qty = parseInt(item.quantity || 1, 10);
+        const unitPrice = item.unitPrice ? Math.round(Number(item.unitPrice) * 100)
+          : (item.unit_price ? Math.round(Number(item.unit_price) * 100)
+          : (item.unit_price_paise || 69900));
+        const lineSubtotal = unitPrice * qty;
+        subtotalPaise += lineSubtotal;
+
+        preparedItems.push({
+          id: 'oit-onl-lens-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+          order_id: orderId,
+          variant_id: null,
+          product_name: item.name,
+          variant_name: 'Custom Optical Glazing',
+          sku: item.sku || 'LENS-PKG',
+          brand: 'Precision Optics',
+          model: item.name,
+          shape: 'Lens',
+          color: 'Clear AR',
+          size: item.size || 'Custom Fit',
+          lens_name: item.name,
+          unit_price_paise: unitPrice,
+          purchase_cost_paise: 25000,
+          quantity: qty,
+          subtotal_paise: lineSubtotal
+        });
+        continue;
+      }
+
       // Find variant or fallback by product ID
       let variant = null;
       if (item.variantId) {
@@ -2420,8 +2451,9 @@ router.post('/orders/online', (req, res) => {
           SELECT pv.*, p.name as prod_name, p.brand, p.shape, p.fit, p.selling_price_paise, p.purchase_cost_paise
           FROM product_variants pv
           JOIN products p ON pv.product_id = p.id
-          WHERE p.id = ? LIMIT 1
-        `).get(item.id);
+          WHERE pv.id = ? OR pv.product_id = ? OR p.id = ?
+          LIMIT 1
+        `).get(item.id, item.id, item.id);
       }
       if (!variant && (item.variantId || item.id)) {
         const testId = String(item.variantId || item.id);
@@ -2445,7 +2477,7 @@ router.post('/orders/online', (req, res) => {
       }
 
       const qty = parseInt(item.quantity || 1, 10);
-      const unitPrice = item.unitPrice ? Math.round(Number(item.unitPrice) * 100) : (variant ? variant.selling_price_paise : 349900);
+      const unitPrice = item.unitPrice ? Math.round(Number(item.unitPrice) * 100) : (item.unit_price ? Math.round(Number(item.unit_price) * 100) : (variant ? variant.selling_price_paise : 349900));
       const lineSubtotal = unitPrice * qty;
       subtotalPaise += lineSubtotal;
 

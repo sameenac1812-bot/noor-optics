@@ -783,28 +783,116 @@ async function syncSupabaseOrders(db) {
         try { items = JSON.parse(items); } catch(e) { items = []; }
       }
       if (Array.isArray(items)) {
+        // Known special lens package prices (in paise)
+        const SPECIAL_LENS_PRICES = {
+          '1.60 High-Index Anti-Reflective': 69900,
+          'Digital Free-Form Progressive': 149900,
+          'Adaptive Photochromic Transition': 119900
+        };
+
+        const hasSeparateLensItem = items.some(it => it.isLensItem || it.is_lens_item || (it.name && it.name.includes('(Lens Package)')));
+
         items.forEach((item, idx) => {
+          const isLens = Boolean(item.isLensItem || item.is_lens_item || (item.name && item.name.includes('(Lens Package)')));
+
+          if (isLens) {
+            const itemQty = parseInt(item.quantity || 1, 10);
+            const unitPrice = item.unitPricePaise ? Number(item.unitPricePaise)
+              : (item.unit_price_paise ? Number(item.unit_price_paise)
+              : (item.unitPrice ? Math.round(Number(item.unitPrice) * 100)
+              : (item.unit_price ? Math.round(Number(item.unit_price) * 100) : 69900)));
+            const itemSubtotal = unitPrice * itemQty;
+
+            db.prepare(`
+              INSERT INTO order_items (
+                id, order_id, variant_id, product_name, variant_name, sku, lens_name, unit_price_paise, purchase_cost_paise, quantity, subtotal_paise
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              'oit-' + orderId + '-lens-' + idx, orderId, null,
+              item.name, 'Custom Optical Glazing', 'LENS-PKG',
+              item.lensName || item.lens || item.name,
+              unitPrice, 25000, itemQty, itemSubtotal
+            );
+            return;
+          }
+
           let variantId = item.variantId || item.id;
-          const varInfo = (variantId ? db.prepare(`
-            SELECT pv.id, pv.color_name, pv.sku, p.name as product_name, p.selling_price_paise, p.purchase_cost_paise
-            FROM product_variants pv
-            JOIN products p ON pv.product_id = p.id
-            WHERE pv.id = ?
-          `).get(variantId) : null) || db.prepare(`
-            SELECT pv.id, pv.color_name, pv.sku, p.name as product_name, p.selling_price_paise, p.purchase_cost_paise
-            FROM product_variants pv
-            JOIN products p ON pv.product_id = p.id
-            LIMIT 1
-          `).get();
+          let varInfo = null;
+          if (variantId) {
+            varInfo = db.prepare(`
+              SELECT pv.id, pv.color_name, pv.sku, p.name as product_name, p.selling_price_paise, p.purchase_cost_paise
+              FROM product_variants pv
+              JOIN products p ON pv.product_id = p.id
+              WHERE pv.id = ? OR pv.product_id = ? OR p.id = ?
+              LIMIT 1
+            `).get(variantId, variantId, variantId);
+          }
+          if (!varInfo && item.name) {
+            varInfo = db.prepare(`
+              SELECT pv.id, pv.color_name, pv.sku, p.name as product_name, p.selling_price_paise, p.purchase_cost_paise
+              FROM product_variants pv
+              JOIN products p ON pv.product_id = p.id
+              WHERE p.name = ? OR p.name LIKE ?
+              LIMIT 1
+            `).get(item.name, `%${item.name}%`);
+          }
+          if (!varInfo) {
+            varInfo = db.prepare(`
+              SELECT pv.id, pv.color_name, pv.sku, p.name as product_name, p.selling_price_paise, p.purchase_cost_paise
+              FROM product_variants pv
+              JOIN products p ON pv.product_id = p.id
+              LIMIT 1
+            `).get();
+          }
 
           const resolvedVarId = varInfo ? varInfo.id : (variantId || 'var-noor-01-1');
           const prodName = item.name || (varInfo ? varInfo.product_name : 'Noor Optical Frame');
           const varColor = item.color || item.variant_name || (varInfo ? varInfo.color_name : 'Standard');
           const varSku = item.sku || (varInfo ? varInfo.sku : 'NOOR-FRAME');
-          const unitPrice = item.unitPricePaise ? Number(item.unitPricePaise) : (item.unitPrice ? Math.round(Number(item.unitPrice) * 100) : (varInfo ? varInfo.selling_price_paise : grandTotalPaise));
           const purchaseCost = varInfo ? varInfo.purchase_cost_paise : 145000;
           const itemQty = parseInt(item.quantity || 1, 10);
-          const itemSubtotal = unitPrice * itemQty;
+
+          const selectedLensName = item.lensName || item.lens || 'Blue-Light Filter';
+          const specialLensPrice = SPECIAL_LENS_PRICES[selectedLensName] || 0;
+
+          // If cost increased due to special lens and lens was NOT already sent as a separate item, split them cleanly!
+          if (!hasSeparateLensItem && specialLensPrice > 0) {
+            const frameBasePrice = varInfo ? varInfo.selling_price_paise : Math.max(0, grandTotalPaise - specialLensPrice);
+            const frameSubtotal = frameBasePrice * itemQty;
+            const lensSubtotal = specialLensPrice * itemQty;
+
+            // 1. Frame Entry
+            db.prepare(`
+              INSERT INTO order_items (
+                id, order_id, variant_id, product_name, variant_name, sku, lens_name, unit_price_paise, purchase_cost_paise, quantity, subtotal_paise
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              'oit-' + orderId + '-' + idx, orderId, resolvedVarId,
+              prodName, varColor, varSku,
+              selectedLensName,
+              frameBasePrice, purchaseCost, itemQty, frameSubtotal
+            );
+
+            // 2. Special Lens Entry (just like a frame entry in the bill)
+            db.prepare(`
+              INSERT INTO order_items (
+                id, order_id, variant_id, product_name, variant_name, sku, lens_name, unit_price_paise, purchase_cost_paise, quantity, subtotal_paise
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              'oit-' + orderId + '-lens-' + idx, orderId, null,
+              `${selectedLensName} (Lens Package)`, 'Custom Optical Glazing', 'LENS-PKG',
+              selectedLensName,
+              specialLensPrice, 25000, itemQty, lensSubtotal
+            );
+            return;
+          }
+
+          const rawPrice = item.unitPricePaise ? Number(item.unitPricePaise)
+            : (item.unit_price_paise ? Number(item.unit_price_paise)
+            : (item.unitPrice ? Math.round(Number(item.unitPrice) * 100)
+            : (item.unit_price ? Math.round(Number(item.unit_price) * 100)
+            : (varInfo ? varInfo.selling_price_paise : grandTotalPaise))));
+          const itemSubtotal = rawPrice * itemQty;
 
           db.prepare(`
             INSERT INTO order_items (
@@ -813,8 +901,8 @@ async function syncSupabaseOrders(db) {
           `).run(
             'oit-' + orderId + '-' + idx, orderId, resolvedVarId,
             prodName, varColor, varSku,
-            item.lensName || item.lens || 'Blue-Light Filter',
-            unitPrice, purchaseCost, itemQty, itemSubtotal
+            selectedLensName,
+            rawPrice, purchaseCost, itemQty, itemSubtotal
           );
         });
       }
