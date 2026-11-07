@@ -639,6 +639,42 @@
     return 'WEBSITE';
   }
 
+  // ── Authoritative UTR Resolver (Finds customer's entered UPI Reference across all structures) ──
+  function getOrderUtr(o) {
+    if (!o) return null;
+    const direct = o.claimed_upi_ref || o.claimedUpiRef || o.utr || o.claimed_utr;
+    if (direct && String(direct).trim() && String(direct).trim().toLowerCase() !== 'submitted') {
+      return String(direct).trim();
+    }
+    if (Array.isArray(o.items) && o.items.length > 0) {
+      for (const it of o.items) {
+        if (it && (it.claimed_upi_ref || it.utr)) {
+          const val = String(it.claimed_upi_ref || it.utr).trim();
+          if (val && val.toLowerCase() !== 'submitted') return val;
+        }
+      }
+    }
+    if (o.notes && o.notes.includes('UPI Ref:')) {
+      const part = o.notes.split('UPI Ref:')[1];
+      if (part) {
+        const cleaned = part.replace(/[)\]]/g, '').trim();
+        if (cleaned && cleaned.toLowerCase() !== 'submitted') return cleaned;
+      }
+    }
+    if (o.notes && o.notes.includes('UTR:')) {
+      const part = o.notes.split('UTR:')[1];
+      if (part) {
+        const cleaned = part.replace(/[)\]]/g, '').trim();
+        if (cleaned && cleaned.toLowerCase() !== 'submitted') return cleaned;
+      }
+    }
+    if (o.delivery_address && o.delivery_address.includes('UTR:')) {
+      const m = o.delivery_address.match(/UTR:\s*([A-Za-z0-9_-]+)/i);
+      if (m && m[1]) return m[1].trim();
+    }
+    return null;
+  }
+
   function renderDashboardRecentOrders(orders) {
     const tbody = document.getElementById('dash-recent-orders-body');
     if (!tbody) return;
@@ -855,6 +891,7 @@
           const isDue = (outstandingINR > 0) || (o.payment_status === 'PARTIAL');
           const hasRx = !!o.prescription_id || !!o.prescription_number || (Array.isArray(o.prescriptions) && o.prescriptions.length > 0);
           const rxCount = (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) ? o.prescriptions.length : (hasRx ? 1 : 0);
+          const utrCard = getOrderUtr(o);
           const itemsSummary = (o.items && o.items.length)
             ? o.items.map(i => escapeHtml(i.product_name) + (i.quantity > 1 ? ` ×${i.quantity}` : '')).join(', ')
             : 'Frame Order';
@@ -906,14 +943,17 @@
                   <button type="button" class="optic-dots-btn" onclick="openBillActionSheet('${o.id}', event)" title="Manage bill options">•••</button>
                 </div>
               </div>
-              ${o.payment_status === 'AWAITING_VERIFICATION' ? `
+              ${(o.payment_status === 'AWAITING_VERIFICATION' || utrCard) ? `
                 <div style="background:#FEF3C7; border-top:1.5px solid #F59E0B; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; font-size:0.78rem; border-radius:0 0 8px 8px;">
                   <span style="color:#78350F; font-weight:800; display:flex; align-items:center; gap:6px;">
-                    📱 Claimed UTR: <code style="font-family:monospace; font-weight:900; font-size:0.92rem; background:#FFFBEB; color:#92400E; padding:3px 8px; border-radius:4px; border:1px solid #FCD34D; user-select:all;">${escapeHtml(o.claimed_upi_ref || (o.notes && o.notes.includes('UPI Ref:') ? o.notes.split('UPI Ref:')[1].replace(')', '').trim() : 'Submitted'))}</code>
+                    📱 Claimed UTR: <code style="font-family:monospace; font-weight:900; font-size:0.92rem; background:#FFFBEB; color:#92400E; padding:3px 8px; border-radius:4px; border:1px solid #FCD34D; user-select:all;">${escapeHtml(utrCard || 'Awaiting Customer Entry')}</code>
+                    ${utrCard ? `<button type="button" class="btn-table-action" style="font-size:0.7rem; padding:2px 6px; background:#FFFFFF; border:1px solid #CBD5E1;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${escapeHtml(utrCard)}'); showToast('UTR copied!', 'success');">📋 Copy</button>` : ''}
                   </span>
                   <div style="display:flex; gap:6px;">
-                    <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800; padding:4px 10px; font-size:0.75rem; border-radius:5px;" onclick="event.stopPropagation(); confirmUpiPayment('${o.id}', '${o.payment_id || ''}')">✓ Approve</button>
-                    <button type="button" class="btn-table-action" style="background:#DC2626; color:#FFF; font-weight:700; padding:4px 10px; font-size:0.75rem; border-radius:5px;" onclick="event.stopPropagation(); rejectUpiPayment('${o.id}', '${o.payment_id || ''}')">✗ Reject</button>
+                    ${o.payment_status === 'AWAITING_VERIFICATION' ? `
+                      <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800; padding:4px 10px; font-size:0.75rem; border-radius:5px;" onclick="event.stopPropagation(); confirmUpiPayment('${o.id}', '${o.payment_id || ''}')">✓ Approve</button>
+                      <button type="button" class="btn-table-action" style="background:#DC2626; color:#FFF; font-weight:700; padding:4px 10px; font-size:0.75rem; border-radius:5px;" onclick="event.stopPropagation(); rejectUpiPayment('${o.id}', '${o.payment_id || ''}')">✗ Reject</button>
+                    ` : '<span style="color:#16A34A; font-weight:800; font-size:0.75rem;">✓ Verified</span>'}
                   </div>
                 </div>
               ` : ''}
@@ -977,13 +1017,16 @@
                 ? `<span class="badge-status" style="background:#FEF2F2; color:#DC2626; border:1px solid #FECACA; font-weight:800;">₹${outstandingRow.toLocaleString('en-IN')} DUE</span>`
                 : `<span class="badge-status ${paymentClass}">${escapeHtml(o.payment_status)}</span>`
               }
-              ${(o.claimed_upi_ref || (o.notes && o.notes.includes('UPI Ref:'))) ? `
-                <div style="margin-top:3px;">
-                  <span style="font-family:monospace; font-weight:800; font-size:0.75rem; background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; padding:1px 5px; border-radius:4px; display:inline-block;" title="Claimed UPI Reference">
-                    UTR: ${escapeHtml(o.claimed_upi_ref || o.notes.split('UPI Ref:')[1].replace(')', '').trim())}
-                  </span>
-                </div>
-              ` : ''}
+              ${(() => {
+                const utr = getOrderUtr(o);
+                return utr ? `
+                  <div style="margin-top:3px;">
+                    <span style="font-family:monospace; font-weight:800; font-size:0.75rem; background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; padding:1px 5px; border-radius:4px; display:inline-block;" title="Claimed UPI Reference">
+                      UTR: ${escapeHtml(utr)}
+                    </span>
+                  </div>
+                ` : '';
+              })()}
               <div style="font-size:0.68rem; color:#6B7280; margin-top:2px;">${escapeHtml(o.payment_method || 'CASH')}</div>
             </td>
             <td><span class="badge-status ${orderClass}">${escapeHtml(o.status)}</span></td>
@@ -1276,7 +1319,7 @@
 
       // 5. Instantly print approved customer bill to POS thermal printer
       if (typeof instantPrintReceipt === 'function') {
-        instantPrintReceipt(orderId).catch(() => {});
+        instantPrintReceipt(orderId, true, order, 'staff_approved').catch(() => {});
       } else {
         fetch('http://127.0.0.1:5001/api/wakeup', { method: 'POST' }).catch(() => {});
       }
@@ -1379,15 +1422,17 @@
       `;
     }).join('');
 
+    const modalUtr = getOrderUtr(order);
+
     contentEl.innerHTML = `
-      ${(order.claimed_upi_ref || (order.notes && order.notes.includes('UPI Ref:')) || order.payment_status === 'AWAITING_VERIFICATION') ? `
+      ${(modalUtr || order.payment_status === 'AWAITING_VERIFICATION') ? `
         <div style="background:#FFFBEB; border:1.5px solid #F59E0B; border-radius:8px; padding:14px 16px; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
           <div>
-            <div style="font-size:0.75rem; font-weight:800; color:#92400E; text-transform:uppercase; letter-spacing:0.04em;">⚠️ UPI Payment Verification Pending</div>
+            <div style="font-size:0.75rem; font-weight:800; color:#92400E; text-transform:uppercase; letter-spacing:0.04em;">${order.payment_status === 'AWAITING_VERIFICATION' ? '⚠️ UPI Payment Verification Pending' : '✓ Verified UPI Payment'}</div>
             <div style="font-size:1.1rem; font-weight:800; color:#78350F; margin-top:3px; display:flex; align-items:center; gap:8px;">
               <span>Claimed UTR:</span>
-              <span style="font-family:monospace; background:#FEF3C7; padding:2px 8px; border-radius:4px; border:1px solid #FDE68A; user-select:all;">${escapeHtml(order.claimed_upi_ref || (order.notes && order.notes.includes('UPI Ref:') ? order.notes.split('UPI Ref:')[1].replace(')', '').trim() : 'Submitted'))}</span>
-              <button type="button" class="btn-table-action" style="font-size:0.72rem; padding:2px 8px; background:#FFFFFF; border:1px solid #CBD5E1;" onclick="navigator.clipboard.writeText('${escapeHtml(order.claimed_upi_ref || (order.notes && order.notes.includes('UPI Ref:') ? order.notes.split('UPI Ref:')[1].replace(')', '').trim() : ''))}'); showToast('UTR copied to clipboard!', 'success');">📋 Copy UTR</button>
+              <span style="font-family:monospace; background:#FEF3C7; padding:2px 8px; border-radius:4px; border:1px solid #FDE68A; user-select:all;">${escapeHtml(modalUtr || 'No UTR entered by client')}</span>
+              ${modalUtr ? `<button type="button" class="btn-table-action" style="font-size:0.72rem; padding:2px 8px; background:#FFFFFF; border:1px solid #CBD5E1;" onclick="navigator.clipboard.writeText('${escapeHtml(modalUtr)}'); showToast('UTR copied to clipboard!', 'success');">📋 Copy UTR</button>` : ''}
             </div>
             <div style="font-size:0.78rem; color:#A16207; margin-top:4px;">
               Check your bank SMS / Airtel app for <strong>₹${((order.total_payable_paise || 0)/100).toLocaleString('en-IN')}</strong> from ${escapeHtml(order.customer_name || 'Client')}.
@@ -1398,7 +1443,7 @@
               <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800; padding:6px 14px; font-size:0.85rem;" onclick="confirmUpiPayment('${order.id}', '${order.payment_id || ''}')">✓ Approve & Mark Paid</button>
               <button type="button" class="btn-table-action" style="background:#DC2626; color:#FFF; font-weight:700; padding:6px 14px; font-size:0.85rem;" onclick="rejectUpiPayment('${order.id}', '${order.payment_id || ''}')">✗ Reject</button>
             </div>
-          ` : ''}
+          ` : '<span style="color:#16A34A; font-weight:800; font-size:0.85rem;">✓ Payment Verified</span>'}
         </div>
       ` : ''}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem; background:#FAFAFC; padding:1.25rem; border-radius:6px; border:1px solid #E5E7EB;">
@@ -8047,7 +8092,7 @@
   };
 
   // ── Dispatch Print Signal to POS Portable Daemon (Port 5001) ─────────────
-  window.instantPrintReceipt = async function (orderId, manualReprint = false, directOrder = null) {
+  window.instantPrintReceipt = async function (orderId, manualReprint = false, directOrder = null, printSource = 'staff_approved') {
     if (!orderId && !directOrder) return;
 
     let order = directOrder || state.ordersCache.find(o => o.id === orderId || o.order_number === orderId);
@@ -8086,7 +8131,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           order: order,
-          manualReprint: Boolean(manualReprint)
+          manualReprint: Boolean(manualReprint),
+          source: printSource || (manualReprint ? 'reprint' : 'staff_approved')
         }),
         signal: AbortSignal.timeout(6000)
       });
@@ -8114,6 +8160,8 @@
             id: 'job-receipt-' + (order.order_number || order.id) + '-' + Date.now(),
             type: 'receipt',
             order: order,
+            approved: true,
+            source: 'staff_approved',
             created_at: new Date().toISOString()
           });
           await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {

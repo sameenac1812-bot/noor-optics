@@ -655,6 +655,13 @@ function format25InchEscPosReceipt(rawOrder) {
     writeText(center('*** PAID IN FULL ***\n'));
   }
 
+  // Display Customer's Entered UPI UTR Reference if present (For website orders)
+  const utrNum = order.claimed_upi_ref || order.claimedUpiRef || order.utr || order.claimed_utr || (order.notes && order.notes.includes('UPI Ref:') ? order.notes.split('UPI Ref:')[1].replace(')', '').trim() : null);
+  if (utrNum) {
+    writeText(divider);
+    writeText(row('UPI Ref / UTR:', utrNum));
+  }
+
   // 12. Dashed line
   writeText(divider);
 
@@ -773,8 +780,8 @@ async function printLiveOrder(order, source = 'Live') {
   if (!order) return { success: false, error: 'No order provided' };
   const orderRef = String(order.order_number || order.order_ref || order.id || 'ORDER').trim();
 
-  // Deduplicate live orders across sessions (allow explicit manual reprint)
-  const isDuplicate = source !== 'reprint' && (
+  // Deduplicate live orders across sessions (allow explicit manual reprint or staff approval)
+  const isDuplicate = source !== 'reprint' && source !== 'staff_approved' && (
     printedOrdersSet.has(orderRef) ||
     (order.id && printedOrdersSet.has(String(order.id))) ||
     (order.order_number && printedOrdersSet.has(String(order.order_number))) ||
@@ -784,6 +791,23 @@ async function printLiveOrder(order, source = 'Live') {
   if (isDuplicate) {
     console.log(`[Live Print] Order #${orderRef} was already printed. Skipping duplicate.`);
     return { success: true, alreadyPrinted: true };
+  }
+
+  // ── STRICT GATEWAY: Website orders MUST NEVER auto-print! ──────────────────
+  // Website orders print ONLY on explicit staff approval in Admin Dashboard!
+  const isWebsite = order.channel_code === 1 ||
+    String(order.channel || '').toUpperCase() === 'WEBSITE' ||
+    String(order.channel || '').toUpperCase() === 'ONLINE' ||
+    String(order.source || '').toLowerCase() === 'website' ||
+    orderRef.includes('-WEB-') ||
+    orderRef.includes('-ONL-');
+
+  if (isWebsite) {
+    const isExplicitStaffPrint = source === 'staff_approved' || source === 'reprint' || source === 'manual';
+    if (!isExplicitStaffPrint) {
+      console.log(`[Live Print] ⏸️ BLOCKED: Website order #${orderRef} (${source}) held. Website orders print ONLY on explicit staff approval in Admin Dashboard.`);
+      return { success: false, held: true, error: 'Website order held pending staff approval' };
+    }
   }
 
   console.log(`[Live Print] 🖨️ Printing Order #${orderRef} (${source})...`);
@@ -889,7 +913,21 @@ async function pollCloudPrintQueue() {
               continue;
             }
 
-            const resPrint = await printLiveOrder(order, 'cloud_queue');
+            const isWebQueue = order.channel_code === 1 ||
+              String(order.channel || '').toUpperCase() === 'WEBSITE' ||
+              String(order.channel || '').toUpperCase() === 'ONLINE' ||
+              String(order.source || '').toLowerCase() === 'website' ||
+              ref.includes('-WEB-') ||
+              ref.includes('-ONL-');
+
+            // Website orders in cloud queue print only if approved or explicitly sent by staff
+            if (isWebQueue && !job.approved && job.source !== 'staff_approved' && job.source !== 'reprint') {
+              console.log(`[Cloud Queue] Skipping unapproved website order #${ref}`);
+              continue;
+            }
+
+            const queueSource = (job.source === 'staff_approved' || job.approved) ? 'staff_approved' : 'cloud_queue';
+            const resPrint = await printLiveOrder(order, queueSource);
             if (resPrint.success) {
               processedJobIds.add(jobIdStr);
               savePrintedState();
@@ -935,9 +973,11 @@ async function pollRecentUnprintedOrders() {
             String(order.source || '').toLowerCase() === 'website' ||
             ref.includes('-WEB-') ||
             ref.includes('-ONL-');
+
+          // Strict isolation: Website orders NEVER print via background recent poller!
+          // They print ONLY upon owner clicking Approve UPI in Admin Dashboard.
           if (isWebsite) {
-            const isVerified = String(order.payment_status || '').toUpperCase() === 'VERIFIED';
-            if (!isVerified) continue;
+            continue;
           }
 
           console.log(`[Order Sync] Found unprinted order #${ref}. Printing now...`);
@@ -1014,11 +1054,19 @@ function connectRealtimeWebSocket() {
             orderRef.includes('-ONL-');
 
           if (isWebsite) {
+            // New orders placed online must NEVER auto-print on creation
+            if (String(eventType).toUpperCase() === 'INSERT') {
+              console.log(`[Realtime] Website order #${orderRef} received & held (Waiting for cashier to approve payment).`);
+              return;
+            }
             const isVerified = String(record.payment_status || '').toUpperCase() === 'VERIFIED';
             if (!isVerified) {
               console.log(`[Realtime] Website order #${orderRef} held (Awaiting staff UPI approval).`);
               return;
             }
+            // If verified on update, print with staff_approved source
+            printLiveOrder(record, 'staff_approved');
+            return;
           }
 
           // 3. PRINT LIVE VERIFIED / CONFIRMED / IN-STORE ORDERS IMMEDIATELY!
@@ -1077,7 +1125,8 @@ const server = http.createServer(async (req, res) => {
         const payload = JSON.parse(body || '{}');
         const order = payload.order || payload;
         const manualReprint = Boolean(payload.manualReprint);
-        const result = await printLiveOrder(order, manualReprint ? 'reprint' : 'local_pos');
+        const source = payload.source || (manualReprint ? 'reprint' : 'staff_approved');
+        const result = await printLiveOrder(order, source);
         res.writeHead(result.success ? 200 : 500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
       } catch (err) {

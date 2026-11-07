@@ -653,10 +653,17 @@ async function syncSupabaseOrders(db) {
         }
       }
 
-      // Extract UTR if present in notes or co
-      let resolvedUtr = co.claimed_upi_ref || co.claimedUpiRef || co.utr || null;
+      // Extract UTR if present in notes, items, delivery address, or co
+      let resolvedUtr = co.claimed_upi_ref || co.claimedUpiRef || co.utr || co.claimed_utr || null;
+      if (!resolvedUtr && Array.isArray(co.items) && co.items.length > 0) {
+        resolvedUtr = co.items[0].claimed_upi_ref || co.items[0].utr || null;
+      }
       if (!resolvedUtr && co.notes && co.notes.includes('UPI Ref:')) {
-        resolvedUtr = co.notes.split('UPI Ref:')[1].replace(')', '').trim();
+        resolvedUtr = co.notes.split('UPI Ref:')[1].replace(/[)\]]/g, '').trim();
+      }
+      if (!resolvedUtr && co.delivery_address && co.delivery_address.includes('UTR:')) {
+        const m = co.delivery_address.match(/UTR:\s*([A-Za-z0-9_-]+)/i);
+        if (m) resolvedUtr = m[1].trim();
       }
 
       // Resolve or create customer record
@@ -997,27 +1004,34 @@ async function pushOrderToSupabase(orderPayload) {
     const resolvedChannelCode = isPosOrder ? 2 : 1;
     const resolvedSource = isPosOrder ? 'instore' : 'website';
 
-    itemsToPush = itemsToPush.map(it => ({ ...it, channel: resolvedChannel }));
+    const resolvedUtr = orderPayload.claimedUpiRef || orderPayload.claimed_upi_ref || orderPayload.utr || null;
+    itemsToPush = itemsToPush.map(it => ({
+      ...it,
+      channel: resolvedChannel,
+      claimed_upi_ref: resolvedUtr || it.claimed_upi_ref || null,
+      utr: resolvedUtr || it.utr || null
+    }));
     const custName = String(orderPayload.customerName || orderPayload.customer_name || 'Walk-in Client').trim();
     const rawPhone = orderPayload.customerPhone || orderPayload.customer_phone || '';
     const cleanPhone = String(rawPhone).trim() || '9999999999';
     const custEmail = String(orderPayload.customerEmail || orderPayload.customer_email || `${cleanPhone.replace(/[^0-9]/g, '') || 'client'}@nooroptics.in`).trim();
-    const address = String(orderPayload.deliveryAddress || orderPayload.delivery_address || 'In-Store Purchase - Noor Optic, Pillar No. 45, Rethibowli, Hyderabad').trim();
+    let address = String(orderPayload.deliveryAddress || orderPayload.delivery_address || 'In-Store Purchase - Noor Optic, Pillar No. 45, Rethibowli, Hyderabad').trim();
+    if (resolvedUtr && !address.includes('UTR:')) {
+      address += ` · (UPI UTR: ${resolvedUtr})`;
+    }
     const city = String(orderPayload.city || 'Hyderabad').trim();
     const pin = String(orderPayload.pinCode || orderPayload.pin_code || '500028').trim();
     const rxPref = String(orderPayload.prescriptionPref || orderPayload.prescription_pref || ((orderPayload.prescriptionId || orderPayload.od_sph || orderPayload.prescription?.od_sph) ? 'RX Attached' : 'Standard')).trim();
     const payMethod = String(orderPayload.paymentMethod || orderPayload.payment_method || 'CASH').toUpperCase();
     const payStatus = String(orderPayload.paymentStatus || orderPayload.payment_status || (payMethod === 'CASH' ? 'VERIFIED' : 'AWAITING_VERIFICATION'));
+    const orderStatus = isPosOrder ? 'confirmed' : (payStatus === 'VERIFIED' ? 'confirmed' : 'PENDING_VERIFICATION');
     const subtotal = Number(orderPayload.subtotalINR || (orderPayload.subtotalPaise ? orderPayload.subtotalPaise / 100 : orderPayload.totalPayableINR || orderPayload.grandTotalINR || orderPayload.grand_total || 0));
     const grandTotal = Number(orderPayload.grandTotalINR || (orderPayload.totalPayablePaise ? orderPayload.totalPayablePaise / 100 : orderPayload.grand_total || subtotal));
 
     const baseOrderBody = {
       order_ref: orderRef,
       order_number: orderRef,
-      channel: resolvedChannel,
-      channel_code: resolvedChannelCode,
       source: resolvedSource,
-      claimed_upi_ref: orderPayload.claimedUpiRef || orderPayload.claimed_upi_ref || null,
       prescriptions: orderPayload.prescriptions || (orderPayload.prescription ? [orderPayload.prescription] : []),
       customer_name: custName,
       customer_email: custEmail,
@@ -1035,7 +1049,7 @@ async function pushOrderToSupabase(orderPayload) {
       subtotal: subtotal,
       shipping_fee: 0,
       grand_total: grandTotal,
-      status: isPosOrder ? 'confirmed' : (payStatus === 'VERIFIED' ? 'confirmed' : 'PENDING_VERIFICATION')
+      status: orderStatus
     };
 
     let res = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
@@ -1065,10 +1079,11 @@ async function pushOrderToSupabase(orderPayload) {
           items: itemsToPush,
           prescription_pref: rxPref,
           payment_method: payMethod,
+          payment_status: payStatus,
           subtotal: subtotal,
           shipping_fee: 0,
           grand_total: grandTotal,
-          status: 'confirmed'
+          status: orderStatus
         };
         res = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
           method: 'POST',

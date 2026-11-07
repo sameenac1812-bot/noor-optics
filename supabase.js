@@ -92,53 +92,7 @@
       const grandTotal = Number(orderData.grand_total || subtotal);
       const cleanPhone = String(orderData.customer_phone || '').trim() || '9999999999';
       const idemKey = orderData.idempotency_key || generateIdempotencyKey('website', cleanPhone, grandTotal);
-
-      // 1. Primary: Use dedicated secure DB function create_website_order()
-      const { data: rpcData, error: rpcErr } = await supabaseClient.rpc('create_website_order', {
-        p_customer_name: String(orderData.customer_name || 'Website Client').trim(),
-        p_customer_phone: cleanPhone,
-        p_customer_email: orderData.customer_email ? String(orderData.customer_email).trim() : null,
-        p_delivery_address: orderData.delivery_address ? String(orderData.delivery_address).trim() : 'Online Storefront Delivery',
-        p_city: String(orderData.city || 'Hyderabad').trim(),
-        p_pin_code: String(orderData.pin_code || '500028').trim(),
-        p_items: Array.isArray(orderData.items) ? orderData.items : [],
-        p_prescription_pref: String(orderData.prescription_pref || 'Standard').trim(),
-        p_payment_method: String(orderData.payment_method || 'UPI').toUpperCase(),
-        p_subtotal: subtotal,
-        p_shipping_fee: shipping,
-        p_grand_total: grandTotal,
-        p_prescription: rxData,
-        p_customer_age: orderData.customer_age ? parseInt(orderData.customer_age, 10) : null,
-        p_idempotency_key: idemKey
-      });
-
-      if (!rpcErr && rpcData) {
-        console.log('✓ Website order created securely via create_website_order():', rpcData);
-        // Guarantee website orders strictly enter AWAITING_VERIFICATION and receipt print job stays on_hold
-        if (rpcData.id) {
-          try {
-            await supabaseClient.from('orders').update({
-              payment_status: 'AWAITING_VERIFICATION',
-              status: 'PENDING_VERIFICATION'
-            }).eq('id', rpcData.id);
-            await supabaseClient.from('print_jobs').update({
-              status: 'uncertain',
-              last_error: 'Held pending staff UPI payment verification'
-            }).eq('order_id', rpcData.id);
-          } catch (patchErr) {
-            console.warn('Post-RPC order verification patch note:', patchErr?.message);
-          }
-        }
-        rpcData.payment_status = 'AWAITING_VERIFICATION';
-        rpcData.status = 'PENDING_VERIFICATION';
-        return { success: true, cloud: true, data: rpcData, orderNumber: rpcData.order_number || rpcData.order_ref };
-      }
-
-      // 2. Transitional Fallback if RPC is not yet loaded in database
-      if (rpcErr) {
-        console.warn('create_website_order RPC note (falling back to direct insert):', rpcErr.message);
-      }
-
+      const utrVal = orderData.claimed_upi_ref || orderData.claimedUpiRef || orderData.utr || null;
       const orderRef = String(orderData.order_ref || ('NOOR-WEB-' + Date.now())).trim();
 
       // Upsert prescription record if provided
@@ -170,19 +124,29 @@
       }
 
       let itemsWithRx = Array.isArray(orderData.items) ? [...orderData.items] : [];
-      if (rxData && itemsWithRx.length > 0) {
-        itemsWithRx[0] = { ...itemsWithRx[0], prescription: rxData, rx: rxData };
+      itemsWithRx = itemsWithRx.map((item, idx) => ({
+        ...item,
+        channel: 'WEBSITE',
+        claimed_upi_ref: utrVal || item.claimed_upi_ref || null,
+        utr: utrVal || item.utr || null,
+        prescription: (idx === 0 && rxData) ? rxData : item.prescription
+      }));
+
+      let deliveryAddress = String(orderData.delivery_address || 'Online Storefront Delivery').trim();
+      if (utrVal && !deliveryAddress.includes('UTR:')) {
+        deliveryAddress += ` · (UPI UTR: ${utrVal})`;
       }
 
+      // 1. Direct Clean Insert: Strictly enforces AWAITING_VERIFICATION and PENDING_VERIFICATION
       const insertPayload = {
         order_ref: orderRef,
         order_number: orderRef,
-        source: 'website', // Immutable source
+        source: 'website', // Immutable website channel
         customer_name: String(orderData.customer_name || 'Website Client').trim(),
         customer_email: String(orderData.customer_email || `${cleanPhone}@nooroptics.in`).trim(),
         customer_phone: cleanPhone,
         customer_age: orderData.customer_age ? parseInt(orderData.customer_age, 10) : null,
-        delivery_address: String(orderData.delivery_address || 'Online Storefront Delivery').trim(),
+        delivery_address: deliveryAddress,
         city: String(orderData.city || 'Hyderabad').trim(),
         pin_code: String(orderData.pin_code || '500028').trim(),
         items: itemsWithRx,
@@ -197,20 +161,85 @@
         idempotency_key: idemKey
       };
 
-      // Try with source column first, or fallback without if schema not yet migrated
-      let { data: insData, error: insErr } = await supabaseClient
-        .from('orders')
-        .insert([insertPayload])
-        .select();
+      let insData = null;
+      let insErr = null;
 
-      if (insErr && insErr.message && insErr.message.includes("'source'")) {
-        delete insertPayload.source;
-        delete insertPayload.order_number;
-        delete insertPayload.idempotency_key;
-        delete insertPayload.customer_age;
-        const retry = await supabaseClient.from('orders').insert([insertPayload]).select();
-        insData = retry.data;
-        insErr = retry.error;
+      try {
+        const directRes = await supabaseClient
+          .from('orders')
+          .insert([insertPayload])
+          .select();
+        insData = directRes.data;
+        insErr = directRes.error;
+
+        if (insErr && insErr.message && (insErr.message.includes("'source'") || insErr.message.includes("'order_number'"))) {
+          delete insertPayload.source;
+          delete insertPayload.order_number;
+          delete insertPayload.idempotency_key;
+          delete insertPayload.customer_age;
+          const retry = await supabaseClient.from('orders').insert([insertPayload]).select();
+          insData = retry.data;
+          insErr = retry.error;
+        }
+      } catch (insertEx) {
+        insErr = insertEx;
+      }
+
+      if (!insErr && insData && insData.length > 0) {
+        const created = insData[0];
+        console.log('✓ Website order created cleanly in Supabase cloud (Awaiting Verification):', created.order_ref);
+        if (created.id) {
+          try {
+            await supabaseClient.from('print_jobs').upsert([{
+              order_id: created.id,
+              print_type: 'receipt',
+              printer_id: 'POS-80',
+              status: 'uncertain',
+              last_error: 'Held pending staff UPI payment verification',
+              attempt_count: 0
+            }], { onConflict: 'order_id,print_type' });
+          } catch (_) {}
+        }
+        return { success: true, cloud: true, data: created, orderNumber: created.order_number || created.order_ref };
+      }
+
+      // 2. Secondary Fallback via RPC (if direct insert was blocked)
+      console.warn('Direct insert note, trying create_website_order RPC:', insErr?.message);
+      const { data: rpcData, error: rpcErr } = await supabaseClient.rpc('create_website_order', {
+        p_customer_name: String(orderData.customer_name || 'Website Client').trim(),
+        p_customer_phone: cleanPhone,
+        p_customer_email: orderData.customer_email ? String(orderData.customer_email).trim() : null,
+        p_delivery_address: deliveryAddress,
+        p_city: String(orderData.city || 'Hyderabad').trim(),
+        p_pin_code: String(orderData.pin_code || '500028').trim(),
+        p_items: itemsWithRx,
+        p_prescription_pref: String(orderData.prescription_pref || 'Standard').trim(),
+        p_payment_method: String(orderData.payment_method || 'UPI').toUpperCase(),
+        p_subtotal: subtotal,
+        p_shipping_fee: shipping,
+        p_grand_total: grandTotal,
+        p_prescription: rxData,
+        p_customer_age: orderData.customer_age ? parseInt(orderData.customer_age, 10) : null,
+        p_idempotency_key: idemKey
+      });
+
+      if (!rpcErr && rpcData) {
+        console.log('✓ Website order created via RPC fallback:', rpcData);
+        if (rpcData.id) {
+          try {
+            await supabaseClient.from('orders').update({
+              payment_status: 'AWAITING_VERIFICATION',
+              status: 'PENDING_VERIFICATION'
+            }).eq('id', rpcData.id);
+            await supabaseClient.from('print_jobs').update({
+              status: 'uncertain',
+              last_error: 'Held pending staff UPI payment verification'
+            }).eq('order_id', rpcData.id);
+          } catch (_) {}
+        }
+        rpcData.payment_status = 'AWAITING_VERIFICATION';
+        rpcData.status = 'PENDING_VERIFICATION';
+        return { success: true, cloud: true, data: rpcData, orderNumber: rpcData.order_number || rpcData.order_ref };
       }
 
       if (insErr) {

@@ -1227,13 +1227,15 @@
       const orderId = `NOOR-WEB-${datePart}-${timePart}-${randPart}`;
       const dateStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
+      const deliveryAddressWithUtr = (utrVal && !address.includes('UTR:')) ? `${address} · (UPI UTR: ${utrVal})` : address;
+
       const orderData = {
         order_ref: orderId,
         customer_name: name,
         customer_age: age,
         customer_email: email,
         customer_phone: phone,
-        delivery_address: address,
+        delivery_address: deliveryAddressWithUtr,
         city: city,
         pin_code: pin,
         items: state.cart.map(item => ({
@@ -1247,13 +1249,18 @@
           lens: item.lensName,
           quantity: item.quantity,
           unit_price: item.unitPrice,
-          subtotal: item.unitPrice * item.quantity
+          subtotal: item.unitPrice * item.quantity,
+          claimed_upi_ref: utrVal || null,
+          utr: utrVal || null
         })),
         prescription_pref: rxChoice,
         prescription: prescriptionData,
         channel: 'WEBSITE',
         channel_code: 1,
         source: 'website',
+        claimed_upi_ref: utrVal || null,
+        claimedUpiRef: utrVal || null,
+        utr: utrVal || null,
         idempotency_key: `idem-web-${orderId}-${Date.now()}`,
         payment_method: payChoice,
         subtotal: subtotal,
@@ -1274,13 +1281,15 @@
         customerAge: age,
         customerEmail: email,
         customerPhone: phone,
-        deliveryAddress: address,
+        deliveryAddress: deliveryAddressWithUtr,
         city: city,
         pinCode: pin,
         prescriptionPref: rxChoice,
         prescription: prescriptionData,
         paymentMethod: payChoice === 'upi' ? 'UPI_GPAY' : (payChoice === 'card' ? 'CARD' : 'CASH'),
         claimedUpiRef: utrVal || null,
+        claimed_upi_ref: utrVal || null,
+        utr: utrVal || null,
         upiScreenshot: state.uploadedUpiScreenshot || null,
         items: state.cart.map(item => ({
           id: item.id,
