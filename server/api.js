@@ -2010,11 +2010,9 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     }
     const outstandingPaise = Math.max(0, totalPayablePaise - amountPaidPaise);
 
+    // In-store POS counter orders are NEVER AWAITING_VERIFICATION (they are handled at the shop counter)
     let paymentStatus = 'VERIFIED';
-    if (paymentMethod === 'UPI_GPAY' && !req.body.isVerifiedAtCounter) {
-      paymentStatus = 'AWAITING_VERIFICATION';
-      amountPaidPaise = 0;
-    } else if (outstandingPaise === 0) {
+    if (outstandingPaise === 0) {
       paymentStatus = 'VERIFIED';
     } else if (amountPaidPaise > 0) {
       paymentStatus = 'PARTIAL';

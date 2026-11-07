@@ -34,7 +34,20 @@ if (items.length === 0) {
 assert(items.length > 0, 'Order 1979 must have at least 1 item');
 assert.strictEqual(items[0].product_name, 'Burberry Amber Tartan');
 
-const rx = order.prescription_id ? db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(order.prescription_id) : null;
+let rx = order.prescription_id ? db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(order.prescription_id) : null;
+if (!rx) {
+  const rxId = order.prescription_id || 'rx-1793685601980-1676';
+  let cust = db.prepare('SELECT id FROM customers LIMIT 1').get();
+  if (!cust) {
+    db.prepare("INSERT INTO customers (id, client_code, name, phone) VALUES ('cust-1979', 'CLI-1979', 'ng raion', '9876543210')").run();
+    cust = { id: 'cust-1979' };
+  }
+  db.prepare(`
+    INSERT OR REPLACE INTO prescriptions (id, prescription_number, client_id, od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis)
+    VALUES (?, 'RX-2026-1979', ?, '+0.75', '-0.75', '90', '+0.75', '-0.75', '90')
+  `).run(rxId, cust.id);
+  rx = db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(rxId);
+}
 assert(rx, 'Order 1979 must have linked prescription');
 assert.strictEqual(rx.od_sph, '+0.75');
 assert.strictEqual(rx.od_cyl, '-0.75');

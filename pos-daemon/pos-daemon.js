@@ -58,6 +58,19 @@ function savePrintedState() {
 }
 loadPrintedState();
 
+// ── Strict Channel Classifier (NOOR-POS- = Code 2 Instore, NOOR-WEB- = Code 1 Website) ──
+function isWebsiteOrder(order) {
+  if (!order) return false;
+  const ref = String(order.order_number || order.order_ref || order.id || '').toUpperCase();
+  if (ref.includes('-POS-') || ref.startsWith('ORD-POS-') || order.channel_code === 2 || String(order.channel || '').toUpperCase() === 'POS' || String(order.source || '').toLowerCase() === 'instore') {
+    return false;
+  }
+  if (ref.includes('-WEB-') || ref.includes('-ONL-') || ref.startsWith('ORD-WEB-') || order.channel_code === 1 || String(order.channel || '').toUpperCase() === 'WEBSITE' || String(order.channel || '').toUpperCase() === 'ONLINE' || String(order.source || '').toLowerCase() === 'website') {
+    return true;
+  }
+  return false;
+}
+
 // ── Paper Width & UPI Configuration (Tweakable) ──────────────────────────────
 const PAPER_WIDTH_COLS = 32; // Characters per line for 2.5-inch thermal paper (e.g. 32, 40, 48)
 const UPI_ID = '9182341567@mairtel'; // Shop UPI ID for payment QR code & receipt text
@@ -410,6 +423,18 @@ function format25InchEscPosReceipt(rawOrder) {
 
   const divider = '-'.repeat(COLS) + '\n';
 
+  function isWebsiteOrder(o) {
+    if (!o) return false;
+    const ref = String(o.order_number || o.order_ref || o.id || '').toUpperCase();
+    if (ref.includes('-POS-') || ref.startsWith('ORD-POS-') || o.channel_code === 2 || String(o.channel || '').toUpperCase() === 'POS' || String(o.source || '').toLowerCase() === 'instore') {
+      return false;
+    }
+    if (ref.includes('-WEB-') || ref.includes('-ONL-') || ref.startsWith('ORD-WEB-') || o.channel_code === 1 || String(o.channel || '').toUpperCase() === 'WEBSITE' || String(o.channel || '').toUpperCase() === 'ONLINE' || String(o.source || '').toLowerCase() === 'website') {
+      return true;
+    }
+    return false;
+  }
+
   function center(text) {
     const s = String(text || '').trim();
     if (s.length >= COLS) return s.slice(0, COLS) + '\n';
@@ -565,19 +590,7 @@ function format25InchEscPosReceipt(rawOrder) {
   writeText(row(`City: ${city}`, `Age: ${age}`));
 
   // ONLY print Delivery Date on website orders (never on in-store POS bills)
-  function isWebOrder(o) {
-    if (!o) return false;
-    if (o.source === 'website' || o.source === 'WEBSITE') return true;
-    if (o.source === 'instore' || o.source === 'pos' || o.source === 'INSTORE') return false;
-    const ref = String(o.order_number || o.order_ref || o.orderNumber || o.token_number || o.id || '').toUpperCase();
-    if (ref.includes('-POS-') || ref.includes('POS')) return false;
-    if (ref.includes('-WEB-') || ref.includes('-ONL-') || ref.includes('ONLINE') || ref.includes('WEB')) return true;
-    if (o.channel === 'ONLINE' || o.channel === 'WEBSITE') return true;
-    if (o.channel === 'POS' || o.channel === 'IN-STORE') return false;
-    return false;
-  }
-
-  if (isWebOrder(order)) {
+  if (isWebsiteOrder(order)) {
     const deliveryRaw = order.delivery_date || order.deliveryDate || order.pickup_time || order.pickupTime || order.pick_up_time;
     const dDate = deliveryRaw ? formatDateOnly(deliveryRaw) : '--';
     writeText(row('Delivery Date:', dDate));
@@ -680,6 +693,11 @@ function format25InchEscPosReceipt(rawOrder) {
   let allRxList = [];
   if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
     allRxList = order.prescriptions.filter(Boolean);
+  } else if (typeof order.prescriptions === 'string' && order.prescriptions.trim().startsWith('[')) {
+    try {
+      const p = JSON.parse(order.prescriptions);
+      if (Array.isArray(p) && p.length > 0) allRxList = p;
+    } catch (_) {}
   } else if (order.prescriptions_json) {
     try {
       const p = JSON.parse(order.prescriptions_json);
@@ -689,8 +707,15 @@ function format25InchEscPosReceipt(rawOrder) {
   if (allRxList.length === 0) {
     const rawItems = Array.isArray(order.items) ? order.items : [];
     for (const it of rawItems) {
-      if (it && (it.prescription || it.rx)) {
-        allRxList.push(it.prescription || it.rx);
+      if (it) {
+        const itemRx = it.prescription || it.rx;
+        if (itemRx) {
+          if (typeof itemRx === 'string' && itemRx.trim().startsWith('{')) {
+            try { allRxList.push(JSON.parse(itemRx)); } catch (_) { allRxList.push(itemRx); }
+          } else {
+            allRxList.push(itemRx);
+          }
+        }
       }
     }
   }
@@ -795,12 +820,7 @@ async function printLiveOrder(order, source = 'Live') {
 
   // ── STRICT GATEWAY: Website orders MUST NEVER auto-print! ──────────────────
   // Website orders print ONLY on explicit staff approval in Admin Dashboard!
-  const isWebsite = order.channel_code === 1 ||
-    String(order.channel || '').toUpperCase() === 'WEBSITE' ||
-    String(order.channel || '').toUpperCase() === 'ONLINE' ||
-    String(order.source || '').toLowerCase() === 'website' ||
-    orderRef.includes('-WEB-') ||
-    orderRef.includes('-ONL-');
+  const isWebsite = isWebsiteOrder(order);
 
   if (isWebsite) {
     const isExplicitStaffPrint = source === 'staff_approved' || source === 'reprint' || source === 'manual';
@@ -913,12 +933,7 @@ async function pollCloudPrintQueue() {
               continue;
             }
 
-            const isWebQueue = order.channel_code === 1 ||
-              String(order.channel || '').toUpperCase() === 'WEBSITE' ||
-              String(order.channel || '').toUpperCase() === 'ONLINE' ||
-              String(order.source || '').toLowerCase() === 'website' ||
-              ref.includes('-WEB-') ||
-              ref.includes('-ONL-');
+            const isWebQueue = isWebsiteOrder(order);
 
             // Website orders in cloud queue print only if approved or explicitly sent by staff
             if (isWebQueue && !job.approved && job.source !== 'staff_approved' && job.source !== 'reprint') {
@@ -967,12 +982,7 @@ async function pollRecentUnprintedOrders() {
           if (!ref) continue;
           if (printedOrdersSet.has(ref) || (order.id && printedOrdersSet.has(String(order.id))) || (order.order_number && printedOrdersSet.has(String(order.order_number))) || (order.order_ref && printedOrdersSet.has(String(order.order_ref)))) continue;
 
-          const isWebsite = order.channel_code === 1 ||
-            String(order.channel || '').toUpperCase() === 'WEBSITE' ||
-            String(order.channel || '').toUpperCase() === 'ONLINE' ||
-            String(order.source || '').toLowerCase() === 'website' ||
-            ref.includes('-WEB-') ||
-            ref.includes('-ONL-');
+          const isWebsite = isWebsiteOrder(order);
 
           // Strict isolation: Website orders NEVER print via background recent poller!
           // They print ONLY upon owner clicking Approve UPI in Admin Dashboard.
@@ -1047,12 +1057,7 @@ function connectRealtimeWebSocket() {
 
           // 2. WEBSITE ORDERS: Completely held on Realtime.
           // Website orders print ONLY when cashier explicitly clicks "✓ Approve" in Admin Dashboard!
-          const isWebsite = record.channel_code === 1 ||
-            String(record.channel || '').toUpperCase() === 'WEBSITE' ||
-            String(record.channel || '').toUpperCase() === 'ONLINE' ||
-            String(record.source || '').toLowerCase() === 'website' ||
-            orderRef.includes('-WEB-') ||
-            orderRef.includes('-ONL-');
+          const isWebsite = isWebsiteOrder(record);
 
           if (isWebsite) {
             console.log(`[Realtime] Website order #${orderRef} (${eventType}) received. Held for staff approval.`);

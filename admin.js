@@ -622,17 +622,18 @@
   // ── Authoritative Channel Resolver (100% Guaranteed In-Store vs Website Segregation) ──
   function getOrderChannel(o) {
     if (!o) return 'POS';
-    // 1. Strict Channel Code (1 = Website, 2 = POS)
-    if (o.channel_code === 1 || o.channel_code === '1') return 'WEBSITE';
-    if (o.channel_code === 2 || o.channel_code === '2') return 'POS';
-    // 2. Strict Source Resolver
-    if (o.source === 'website' || o.source === 'WEBSITE') return 'WEBSITE';
-    if (o.source === 'instore' || o.source === 'pos' || o.source === 'INSTORE') return 'POS';
+    // 1. Strict Order Number / Ref Prefix (The unshakeable source of truth)
     const ref = String(o.order_number || o.order_ref || o.orderNumber || o.invoiceNumber || o.id || '').toUpperCase();
-    if (ref.includes('-WEB-') || ref.includes('-ONL-') || ref.includes('ONLINE')) return 'WEBSITE';
-    if (ref.includes('-POS-') || ref.includes('POS')) return 'POS';
-    if (o.channel === 'ONLINE' || o.channel === 'WEBSITE') return 'WEBSITE';
+    if (ref.includes('-POS-') || ref.startsWith('ORD-POS-') || ref.includes('POS-')) return 'POS';
+    if (ref.includes('-WEB-') || ref.includes('-ONL-') || ref.startsWith('ORD-WEB-') || ref.includes('ONLINE')) return 'WEBSITE';
+    // 2. Strict Channel Code (1 = Website, 2 = POS)
+    if (o.channel_code === 2 || o.channel_code === '2') return 'POS';
+    if (o.channel_code === 1 || o.channel_code === '1') return 'WEBSITE';
+    // 3. Strict Source Resolver
+    if (o.source === 'instore' || o.source === 'pos' || o.source === 'INSTORE') return 'POS';
+    if (o.source === 'website' || o.source === 'WEBSITE') return 'WEBSITE';
     if (o.channel === 'POS' || o.channel === 'IN-STORE') return 'POS';
+    if (o.channel === 'ONLINE' || o.channel === 'WEBSITE') return 'WEBSITE';
     if (Array.isArray(o.items) && o.items[0]?.channel) {
       return (o.items[0].channel === 'POS' || o.items[0].channel === 'IN-STORE') ? 'POS' : 'WEBSITE';
     }
@@ -930,7 +931,7 @@
                       )
                     }
                   </div>
-                  ${(isDue && outstandingINR > 0) ? `
+                  ${(orderChan === 'POS' && isDue && outstandingINR > 0) ? `
                     <div style="margin-top:4px;">
                       <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800; padding:3px 8px; font-size:0.72rem; border-radius:5px;" onclick="event.stopPropagation(); openCollectPaymentModal('${o.id}')">💳 Collect</button>
                     </div>
@@ -1039,7 +1040,7 @@
                   </div>
                 ` : ''}
                 <div style="display:flex; gap:4px; flex-wrap:wrap;">
-                  ${isDueRow ? `<button class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800;" onclick="event.stopPropagation(); openCollectPaymentModal('${o.id}')" title="Collect Remaining Balance">💳 Collect</button>` : ''}
+                  ${(getOrderChannel(o) === 'POS' && isDueRow) ? `<button class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800;" onclick="event.stopPropagation(); openCollectPaymentModal('${o.id}')" title="Collect Remaining Balance">💳 Collect</button>` : ''}
                   <button class="btn-table-action" onclick="viewOrderDetails('${o.id}')" title="View Full Details">View</button>
                   <button class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="event.stopPropagation(); downloadInvoicePDF('${o.id}', '${escapeHtml(o.order_number)}')" title="Download Tax Invoice PDF">📄 Invoice</button>
                   <button class="btn-table-action" onclick="instantPrintReceipt('${o.id}', true)" title="Instant Spool Receipt">🖨️ Receipt</button>
@@ -1723,7 +1724,7 @@
     // Dynamic actions based on order status and channel
     actionsEl.innerHTML = `
       <button type="button" class="btn-header-action" data-close-modal>Close</button>
-      ${((order.outstanding_inr != null ? order.outstanding_inr : order.outstanding_paise) > 0) ? `
+      ${(getOrderChannel(order) === 'POS' && ((order.outstanding_inr != null ? order.outstanding_inr : order.outstanding_paise) > 0)) ? `
         <button type="button" class="btn-header-action" style="background:#16A34A; color:#FFF; font-weight:800;" onclick="openCollectPaymentModal('${order.id}')">💳 Collect Payment</button>
       ` : ''}
       ${order.payment_status === 'AWAITING_VERIFICATION' ? `

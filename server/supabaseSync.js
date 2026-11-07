@@ -584,12 +584,13 @@ async function syncSupabaseOrders(db) {
       }
 
       // Detect whether order is In-Store POS (Code 2) or Website (Code 1) (100% Authoritative Segregation)
-      const ref = String(co.order_ref || '');
+      // The prefix NOOR-POS- vs NOOR-WEB- is the absolute, unshakeable source of truth.
+      const ref = String(co.order_number || co.order_ref || co.id || '').toUpperCase();
       let isPos = false;
-      if (co.channel_code === 1 || co.source === 'website' || co.channel === 'WEBSITE' || co.channel === 'ONLINE' || ref.includes('-WEB-') || ref.includes('-ONL-')) {
-        isPos = false;
-      } else if (co.channel_code === 2 || co.source === 'instore' || co.source === 'pos' || co.channel === 'POS' || ref.includes('-POS-')) {
+      if (ref.includes('-POS-') || ref.startsWith('ORD-POS-') || co.channel_code === 2 || co.channel === 'POS' || co.source === 'instore' || co.source === 'pos') {
         isPos = true;
+      } else if (ref.includes('-WEB-') || ref.includes('-ONL-') || ref.startsWith('ORD-WEB-') || co.channel_code === 1 || co.channel === 'WEBSITE' || co.channel === 'ONLINE' || co.source === 'website') {
+        isPos = false;
       } else if (Array.isArray(co.items) && co.items[0]?.channel) {
         isPos = (co.items[0].channel === 'POS' || co.items[0].channel === 'IN-STORE');
       } else {
@@ -600,8 +601,8 @@ async function syncSupabaseOrders(db) {
       const source = isPos ? 'instore' : 'website';
 
       // Detect payment status and amount paid
-      // In-store POS cash orders are paid at counter immediately.
-      // Website orders (UPI / NetBanking / COD) require staff verification before being marked PAID.
+      // In-store POS orders are counter transactions (NEVER AWAITING_VERIFICATION).
+      // Website orders (UPI) require staff verification before being marked PAID.
       const isCloudVerified = cloudVerifiedOrders.has(co.order_ref) || (co.id && cloudVerifiedOrders.has(co.id));
       const isCloudRejected = cloudRejectedOrders.has(co.order_ref) || (co.id && cloudRejectedOrders.has(co.id));
 
@@ -609,11 +610,14 @@ async function syncSupabaseOrders(db) {
       let paymentStatus = 'AWAITING_VERIFICATION';
 
       if (isPos) {
-        // In-store POS counter orders: check if partial/due or verified
+        // In-store POS counter orders: check if partial/due or verified (NEVER AWAITING_VERIFICATION)
         const coStatus = String(co.payment_status || '').toUpperCase();
         if (coStatus === 'PARTIAL' || (co.outstanding_paise && co.outstanding_paise > 0) || (co.outstanding && co.outstanding > 0)) {
           isPaid = false;
           paymentStatus = 'PARTIAL';
+        } else if (coStatus === 'PENDING' && (co.amount_paid_paise === 0 || co.amount_paid === 0)) {
+          isPaid = false;
+          paymentStatus = 'PENDING';
         } else {
           isPaid = true;
           paymentStatus = 'VERIFIED';
@@ -706,8 +710,10 @@ async function syncSupabaseOrders(db) {
         let finalOutstanding = existing.outstanding_paise !== undefined ? existing.outstanding_paise : outstandingPaise;
 
         if (isPos) {
-          if (finalOutstanding > 0) {
+          if (finalOutstanding > 0 && finalAmountPaid > 0) {
             finalPaymentStatus = 'PARTIAL';
+          } else if (finalOutstanding > 0 && finalAmountPaid === 0) {
+            finalPaymentStatus = 'PENDING';
           } else {
             finalPaymentStatus = 'VERIFIED';
           }
@@ -996,10 +1002,10 @@ async function pushOrderToSupabase(orderPayload) {
     }
 
     const orderRef = String(orderPayload.orderNumber || orderPayload.order_ref || ('NOOR-' + Date.now())).trim();
-    const isPosOrder = orderPayload.channel_code === 2 ||
+    const isPosOrder = orderRef.includes('-POS-') ||
+      orderPayload.channel_code === 2 ||
       orderPayload.channel === 'POS' ||
-      orderPayload.source === 'instore' ||
-      orderRef.includes('-POS-');
+      orderPayload.source === 'instore';
     const resolvedChannel = isPosOrder ? 'POS' : 'WEBSITE';
     const resolvedChannelCode = isPosOrder ? 2 : 1;
     const resolvedSource = isPosOrder ? 'instore' : 'website';
@@ -1023,7 +1029,11 @@ async function pushOrderToSupabase(orderPayload) {
     const pin = String(orderPayload.pinCode || orderPayload.pin_code || '500028').trim();
     const rxPref = String(orderPayload.prescriptionPref || orderPayload.prescription_pref || ((orderPayload.prescriptionId || orderPayload.od_sph || orderPayload.prescription?.od_sph) ? 'RX Attached' : 'Standard')).trim();
     const payMethod = String(orderPayload.paymentMethod || orderPayload.payment_method || 'CASH').toUpperCase();
-    const payStatus = String(orderPayload.paymentStatus || orderPayload.payment_status || (payMethod === 'CASH' ? 'VERIFIED' : 'AWAITING_VERIFICATION'));
+    let payStatus = String(orderPayload.paymentStatus || orderPayload.payment_status || (payMethod === 'CASH' ? 'VERIFIED' : 'AWAITING_VERIFICATION'));
+    if (isPosOrder) {
+      const outPaise = orderPayload.outstandingPaise !== undefined ? orderPayload.outstandingPaise : (orderPayload.outstanding_paise || (orderPayload.outstandingINR ? Math.round(orderPayload.outstandingINR * 100) : 0));
+      payStatus = (outPaise > 0) ? 'PARTIAL' : 'VERIFIED';
+    }
     const orderStatus = isPosOrder ? 'confirmed' : (payStatus === 'VERIFIED' ? 'confirmed' : 'PENDING_VERIFICATION');
     const subtotal = Number(orderPayload.subtotalINR || (orderPayload.subtotalPaise ? orderPayload.subtotalPaise / 100 : orderPayload.totalPayableINR || orderPayload.grandTotalINR || orderPayload.grand_total || 0));
     const grandTotal = Number(orderPayload.grandTotalINR || (orderPayload.totalPayablePaise ? orderPayload.totalPayablePaise / 100 : orderPayload.grand_total || subtotal));
@@ -1031,6 +1041,8 @@ async function pushOrderToSupabase(orderPayload) {
     const baseOrderBody = {
       order_ref: orderRef,
       order_number: orderRef,
+      channel: resolvedChannel,
+      channel_code: resolvedChannelCode,
       source: resolvedSource,
       prescriptions: orderPayload.prescriptions || (orderPayload.prescription ? [orderPayload.prescription] : []),
       customer_name: custName,
