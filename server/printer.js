@@ -31,7 +31,7 @@ function formatINR(paise) {
 function format58mmTextReceipt(order, items = [], settings = {}) {
   const COLS = parseInt(settings.printer_columns, 10) || PAPER_WIDTH_COLS;
   const storeName = 'NOOR OPTIC';
-  const storeAddress = settings.store_address || 'Pillar No: 45, Beside HP Petrol Pump, Opposite Subhan Bakery, Rethibowli, Gudimalkapur, Hyderabad, Telangana 500028';
+  const storeAddress = settings.store_address || 'Pillar No. 45, Rethibowli';
   const storePhone = settings.store_phone || '+91 98765 43210';
   const activeUpiId = settings.store_upi_id || UPI_ID;
 
@@ -133,7 +133,11 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
   lines.push(divider);
 
   // 4. Invoice no (left) and date + time (right)
-  const invNo = String(order.token_number ? ('TOKEN #' + order.token_number) : (order.order_number || 'NOOR-INV'));
+  let shortRef = String(order.token_number || order.order_number || order.order_ref || order.id || '4866');
+  if (shortRef.includes('-')) {
+    shortRef = shortRef.split('-').pop();
+  }
+  const invNo = 'INV: ' + shortRef;
   const dateStr = formatDateTime(order.created_at || Date.now());
   lines.push(row(invNo, dateStr));
 
@@ -296,7 +300,7 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
  */
 function generate58mmHTML(order, items = [], settings = {}) {
   const storeName = 'NOOR OPTIC';
-  const storeAddress = settings.store_address || 'Pillar No: 45, Beside HP Petrol Pump, Opposite Subhan Bakery, Rethibowli, Gudimalkapur, Hyderabad, Telangana 500028';
+  const storeAddress = settings.store_address || 'Pillar No. 45, Rethibowli';
   const storePhone = settings.store_phone || '+91 98765 43210';
   const widthMm = settings.printer_nominal_width_mm || PAPER_WIDTH_MM;
   const activeUpiId = settings.store_upi_id || UPI_ID;
@@ -667,40 +671,10 @@ async function processPrintJob(jobId) {
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(job.order_id);
   const settings = getStoreSettings();
 
-  db.prepare("UPDATE print_jobs SET status = 'PRINTING', attempts = attempts + 1 WHERE id = ?").run(jobId);
+  db.prepare("UPDATE print_jobs SET status = 'COMPLETED', completed_at = datetime('now') WHERE id = ?").run(jobId);
 
-  return new Promise((resolve, reject) => {
-    // Generate ESC/POS text representation
-    const textData = format58mmTextReceipt(order, items, settings);
-    const tempFile = path.join(__dirname, '..', 'data', `receipt_${jobId}.txt`);
-    fs.writeFileSync(tempFile, textData, 'utf8');
-
-    // Call PowerShell spooler to send raw bytes to printer
-    const psScript = path.join(__dirname, '..', '_legacy_pos', 'print-order.ps1');
-    const printerName = settings.printer_windows_name || 'POS-80';
-
-    if (fs.existsSync(psScript)) {
-      const cmd = `powershell.exe -ExecutionPolicy Bypass -File "${psScript}" -OrderFile "${tempFile}" -PrinterName "${printerName}"`;
-      exec(cmd, (error, stdout, stderr) => {
-        // Clean up temp file
-        try { fs.unlinkSync(tempFile); } catch (e) {}
-
-        if (error) {
-          const errMsg = stderr || error.message;
-          db.prepare("UPDATE print_jobs SET status = 'FAILED', last_error = ? WHERE id = ?").run(errMsg.substring(0, 250), jobId);
-          return resolve({ success: false, reason: errMsg, browserFallback: true });
-        }
-
-        db.prepare("UPDATE print_jobs SET status = 'COMPLETED', completed_at = datetime('now') WHERE id = ?").run(jobId);
-        resolve({ success: true, stdout });
-      });
-    } else {
-      // Clean up temp file
-      try { fs.unlinkSync(tempFile); } catch (e) {}
-      db.prepare("UPDATE print_jobs SET status = 'COMPLETED', completed_at = datetime('now'), last_error = 'Spooler script absent, browser print ready' WHERE id = ?").run(jobId);
-      resolve({ success: true, browserFallback: true });
-    }
-  });
+  // Return success without double-spooling; pos-daemon directly handles all physical hardware printing
+  return Promise.resolve({ success: true, handledByDaemon: true });
 }
 
 /**

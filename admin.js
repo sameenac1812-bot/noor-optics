@@ -5403,7 +5403,96 @@
     clockEl.textContent = now.toLocaleDateString('en-GB', opts).replace(/,/g, '');
   }
 
+  // ── Render Attached Prescriptions Summary (Immediate Real-time Rendering) ──
+  function renderPosAttachedPrescriptions() {
+    const rxListContainer = document.getElementById('pos-rx-attached-list');
+    const rxCountBadge = document.getElementById('pos-rx-count-badge');
+    const fallbackBadge = document.getElementById('pos-rx-attached-badge');
+
+    // Ensure state.posPrescriptions is an array
+    if (!Array.isArray(state.posPrescriptions)) {
+      state.posPrescriptions = [];
+      if (state.posDraftPrescription || state.posSelectedPrescription) {
+        state.posPrescriptions.push(state.posDraftPrescription || state.posSelectedPrescription);
+      }
+    }
+
+    const rxList = state.posPrescriptions;
+
+    if (rxCountBadge) {
+      if (rxList.length > 0) {
+        rxCountBadge.style.display = 'inline-block';
+        rxCountBadge.textContent = rxList.length === 1 ? '1 Rx' : `${rxList.length} Rx Added`;
+      } else {
+        rxCountBadge.style.display = 'none';
+      }
+    }
+
+    if (rxListContainer) {
+      if (rxList.length === 0) {
+        rxListContainer.innerHTML = '';
+        if (fallbackBadge) fallbackBadge.style.display = 'none';
+      } else {
+        rxListContainer.innerHTML = rxList.map((rx, idx) => {
+          const odSph = rx.od_sph != null ? rx.od_sph : (rx.odSph != null ? rx.odSph : '0.00');
+          const odCyl = rx.od_cyl != null ? rx.od_cyl : (rx.odCyl != null ? rx.odCyl : '—');
+          const odAxis = (rx.od_axis != null || rx.odAxis != null) ? ((rx.od_axis != null ? rx.od_axis : rx.odAxis) + '°') : '—';
+          const osSph = rx.os_sph != null ? rx.os_sph : (rx.osSph != null ? rx.osSph : '0.00');
+          const osCyl = rx.os_cyl != null ? rx.os_cyl : (rx.osCyl != null ? rx.osCyl : '—');
+          const osAxis = (rx.os_axis != null || rx.osAxis != null) ? ((rx.os_axis != null ? rx.os_axis : rx.osAxis) + '°') : '—';
+          const add = rx.addition || rx.add;
+          const pd = rx.ipd_distance || rx.ipdDistance;
+          const rxLabel = rx.prescription_number || `Prescription #${idx + 1}`;
+
+          return `
+            <div class="optic-attached-rx-card" style="margin-bottom:6px;">
+              <div class="optic-rx-badge-top">
+                <span class="optic-rx-badge-num">🩺 ${escapeHtml(rxLabel)}${rxList.length > 1 ? ` (Rx ${idx+1})` : ''}</span>
+                <button type="button" class="btn-rx-remove" onclick="removePosAttachedRx(${idx})" title="Remove this prescription">&times;</button>
+              </div>
+              <div class="optic-rx-mini-table">
+                <table style="width:100%; font-size:0.72rem; border-collapse:collapse; margin-top:4px;">
+                  <thead>
+                    <tr style="color:#94A3B8; text-align:left; border-bottom:1px solid rgba(255,255,255,0.15);">
+                      <th style="padding:2px 4px;">EYE</th>
+                      <th style="padding:2px 4px;">SPH</th>
+                      <th style="padding:2px 4px;">CYL</th>
+                      <th style="padding:2px 4px;">AXIS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style="padding:3px 4px; font-weight:700; color:#BAE6FD;">OD (Right)</td>
+                      <td style="padding:3px 4px;">${odSph}</td>
+                      <td style="padding:3px 4px;">${odCyl}</td>
+                      <td style="padding:3px 4px;">${odAxis}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:3px 4px; font-weight:700; color:#BAE6FD;">OS (Left)</td>
+                      <td style="padding:3px 4px;">${osSph}</td>
+                      <td style="padding:3px 4px;">${osCyl}</td>
+                      <td style="padding:3px 4px;">${osAxis}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                ${(add || pd) ? `
+                  <div style="font-size:0.68rem; color:#BAE6FD; margin-top:4px; padding-top:2px; border-top:1px dashed rgba(255,255,255,0.15);">
+                    ${add ? `ADD: <strong>${escapeHtml(add)}</strong> ` : ''}
+                    ${pd ? `• IPD: <strong>${escapeHtml(pd)} mm</strong>` : ''}
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+  }
+
   function updatePosCartUI() {
+    // 1. ALWAYS render attached prescriptions immediately (zero lag, independent of cart items)
+    renderPosAttachedPrescriptions();
+
     const listEl = document.getElementById('pos-cart-items-list');
     const countEl = document.getElementById('pos-cart-count');
     const subtotalEl = document.getElementById('pos-subtotal-val');
@@ -5508,90 +5597,6 @@
     }
     if (grandTotalEl) grandTotalEl.value = (grandTotalPaise / 100).toFixed(2);
     if (btnCheckout) btnCheckout.disabled = false;
-
-    // ── Update Attached Prescriptions Summary (Supports Multiple Rx) ────────
-    const rxListContainer = document.getElementById('pos-rx-attached-list');
-    const rxCountBadge = document.getElementById('pos-rx-count-badge');
-    const fallbackBadge = document.getElementById('pos-rx-attached-badge');
-
-    // Ensure state.posPrescriptions is an array
-    if (!Array.isArray(state.posPrescriptions)) {
-      state.posPrescriptions = [];
-      if (state.posDraftPrescription || state.posSelectedPrescription) {
-        state.posPrescriptions.push(state.posDraftPrescription || state.posSelectedPrescription);
-      }
-    }
-
-    const rxList = state.posPrescriptions;
-
-    if (rxCountBadge) {
-      if (rxList.length > 0) {
-        rxCountBadge.style.display = 'inline-block';
-        rxCountBadge.textContent = rxList.length === 1 ? '1 Rx' : `${rxList.length} Rx Added`;
-      } else {
-        rxCountBadge.style.display = 'none';
-      }
-    }
-
-    if (rxListContainer) {
-      if (rxList.length === 0) {
-        rxListContainer.innerHTML = '';
-        if (fallbackBadge) fallbackBadge.style.display = 'none';
-      } else {
-        rxListContainer.innerHTML = rxList.map((rx, idx) => {
-          const odSph = rx.od_sph != null ? rx.od_sph : (rx.odSph != null ? rx.odSph : '0.00');
-          const odCyl = rx.od_cyl != null ? rx.od_cyl : (rx.odCyl != null ? rx.odCyl : '—');
-          const odAxis = (rx.od_axis != null || rx.odAxis != null) ? ((rx.od_axis != null ? rx.od_axis : rx.odAxis) + '°') : '—';
-          const osSph = rx.os_sph != null ? rx.os_sph : (rx.osSph != null ? rx.osSph : '0.00');
-          const osCyl = rx.os_cyl != null ? rx.os_cyl : (rx.osCyl != null ? rx.osCyl : '—');
-          const osAxis = (rx.os_axis != null || rx.osAxis != null) ? ((rx.os_axis != null ? rx.os_axis : rx.osAxis) + '°') : '—';
-          const add = rx.addition || rx.add;
-          const pd = rx.ipd_distance || rx.ipdDistance;
-          const rxLabel = rx.prescription_number || `Prescription #${idx + 1}`;
-
-          return `
-            <div class="optic-attached-rx-card" style="margin-bottom:6px;">
-              <div class="optic-rx-badge-top">
-                <span class="optic-rx-badge-num">🩺 ${escapeHtml(rxLabel)}${rxList.length > 1 ? ` (Rx ${idx+1})` : ''}</span>
-                <button type="button" class="btn-rx-remove" onclick="removePosAttachedRx(${idx})" title="Remove this prescription">&times;</button>
-              </div>
-              <div class="optic-rx-mini-table">
-                <table style="width:100%; font-size:0.72rem; border-collapse:collapse; margin-top:4px;">
-                  <thead>
-                    <tr style="color:#94A3B8; text-align:left; border-bottom:1px solid rgba(255,255,255,0.15);">
-                      <th style="padding:2px 4px;">EYE</th>
-                      <th style="padding:2px 4px;">SPH</th>
-                      <th style="padding:2px 4px;">CYL</th>
-                      <th style="padding:2px 4px;">AXIS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td style="padding:3px 4px; font-weight:700; color:#BAE6FD;">OD (Right)</td>
-                      <td style="padding:3px 4px;">${odSph}</td>
-                      <td style="padding:3px 4px;">${odCyl}</td>
-                      <td style="padding:3px 4px;">${odAxis}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding:3px 4px; font-weight:700; color:#BAE6FD;">OS (Left)</td>
-                      <td style="padding:3px 4px;">${osSph}</td>
-                      <td style="padding:3px 4px;">${osCyl}</td>
-                      <td style="padding:3px 4px;">${osAxis}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                ${(add || pd) ? `
-                  <div style="font-size:0.68rem; color:#BAE6FD; margin-top:4px; padding-top:2px; border-top:1px dashed rgba(255,255,255,0.15);">
-                    ${add ? `ADD: <strong>${escapeHtml(add)}</strong> ` : ''}
-                    ${pd ? `• IPD: <strong>${escapeHtml(pd)} mm</strong>` : ''}
-                  </div>
-                ` : ''}
-              </div>
-            </div>
-          `;
-        }).join('');
-      }
-    }
 
     // Dynamic UPI QR if UPI_GPAY is selected
     if (state.posPaymode === 'UPI_GPAY') {
@@ -6011,6 +6016,7 @@
       const pPk = document.getElementById('pos-pickup-time'); if (pPk) pPk.value = '';
       const mNm = document.getElementById('pos-manual-item-name'); if (mNm) mNm.value = '';
       const mPr = document.getElementById('pos-manual-item-price'); if (mPr) mPr.value = '';
+      const dueAlert = document.getElementById('pos-customer-due-alert'); if (dueAlert) dueAlert.style.display = 'none';
 
       const tokenDisplay = document.getElementById('pos-token-display');
       if (tokenDisplay) {
@@ -6079,10 +6085,18 @@
             const dueRes = await apiFetch(`/api/customers/${clientId}/due`);
             const dueINR = dueRes.total_due_inr || 0;
             if (prevDueInput) prevDueInput.value = dueINR;
-            updatePosCartUI();
+            const dueAlert = document.getElementById('pos-customer-due-alert');
+            const dueText = document.getElementById('pos-customer-due-text');
             if (dueINR > 0) {
-              showToast(`Found ₹${dueINR.toLocaleString('en-IN')} previous unpaid due for client.`, 'info');
+              if (dueAlert && dueText) {
+                dueAlert.style.display = 'flex';
+                dueText.textContent = `⚠️ Pending Balance: ₹${dueINR.toLocaleString('en-IN')} from ${dueRes.orders ? dueRes.orders.length : 1} past bill(s)!`;
+              }
+              updatePosCartUI();
+              showToast(`Found ₹${dueINR.toLocaleString('en-IN')} previous unpaid due for client.`, 'warning');
             } else {
+              if (dueAlert) dueAlert.style.display = 'none';
+              updatePosCartUI();
               showToast('No previous unpaid dues found for this client.', 'info');
             }
           } catch (e) {
@@ -6091,6 +6105,86 @@
         } else {
           showToast('Please select or type a registered customer phone number first.', 'info');
         }
+      });
+    }
+
+    // Automatic Phone-Number Client & Due Balance Detection
+    const inlinePhoneInput = document.getElementById('pos-inline-phone');
+    if (inlinePhoneInput) {
+      let phoneDebounceTimer = null;
+      inlinePhoneInput.addEventListener('input', () => {
+        clearTimeout(phoneDebounceTimer);
+        const rawPhone = inlinePhoneInput.value.trim();
+        const cleanDigits = rawPhone.replace(/\D/g, '');
+
+        if (cleanDigits.length < 5) {
+          const dueAlert = document.getElementById('pos-customer-due-alert');
+          if (dueAlert) dueAlert.style.display = 'none';
+          return;
+        }
+
+        phoneDebounceTimer = setTimeout(async () => {
+          try {
+            const dueRes = await apiFetch(`/api/customers/${encodeURIComponent(rawPhone)}/due`);
+            const dueAlert = document.getElementById('pos-customer-due-alert');
+            const dueText = document.getElementById('pos-customer-due-text');
+            const prevDueEl = document.getElementById('pos-prev-due-amount');
+            const inlineName = document.getElementById('pos-inline-name');
+            const inlineCity = document.getElementById('pos-inline-city');
+            const inlineAge = document.getElementById('pos-inline-age');
+
+            // Auto-fill client details if found
+            if (dueRes.clientName && inlineName && (!inlineName.value.trim() || inlineName.value === 'Walk-in Customer')) {
+              inlineName.value = dueRes.clientName;
+            }
+            if (dueRes.clientCity && inlineCity && !inlineCity.value.trim()) {
+              inlineCity.value = dueRes.clientCity;
+            }
+            if (dueRes.clientAge && inlineAge && !inlineAge.value.trim()) {
+              inlineAge.value = dueRes.clientAge;
+            }
+
+            if (dueRes.clientId) {
+              state.posSelectedClient = {
+                id: dueRes.clientId,
+                name: dueRes.clientName || inlineName?.value,
+                phone: dueRes.clientPhone || rawPhone,
+                city: dueRes.clientCity || inlineCity?.value,
+                age: dueRes.clientAge || inlineAge?.value
+              };
+
+              // Auto-attach latest prescription if not already attached
+              if ((!state.posPrescriptions || state.posPrescriptions.length === 0) && !state.posDraftPrescription) {
+                try {
+                  const rxListRes = await apiFetch(`/api/customers/${dueRes.clientId}/prescriptions`);
+                  const rxList = Array.isArray(rxListRes) ? rxListRes : (rxListRes?.prescriptions || []);
+                  if (rxList.length > 0) {
+                    if (!Array.isArray(state.posPrescriptions)) state.posPrescriptions = [];
+                    state.posPrescriptions.push(rxList[0]);
+                    state.posDraftPrescription = rxList[0];
+                    renderPosAttachedPrescriptions();
+                    showToast(`Attached latest Rx (${rxList[0].prescription_number || 'Rx'}) for ${dueRes.clientName}`, 'info');
+                  }
+                } catch (_) {}
+              }
+            }
+
+            const dueINR = dueRes.total_due_inr || dueRes.totalDueINR || 0;
+            if (dueINR > 0) {
+              if (prevDueEl) prevDueEl.value = dueINR;
+              if (dueAlert && dueText) {
+                dueAlert.style.display = 'flex';
+                dueText.textContent = `⚠️ Pending Balance: ₹${dueINR.toLocaleString('en-IN')} from ${dueRes.orders ? dueRes.orders.length : 1} past bill(s)!`;
+              }
+              updatePosCartUI();
+              showToast(`Customer has ₹${dueINR.toLocaleString('en-IN')} pending balance from past bill(s)!`, 'warning');
+            } else {
+              if (dueAlert) dueAlert.style.display = 'none';
+            }
+          } catch (e) {
+            // Quiet fail if not found yet
+          }
+        }, 350);
       });
     }
 
@@ -7934,6 +8028,9 @@
     }
 
     // Ensure prescription is attached if linked
+    if (!order.prescriptions && order.prescriptions_json) {
+      try { order.prescriptions = JSON.parse(order.prescriptions_json); } catch (_) {}
+    }
     if (!order.od_sph && order.prescription) {
       Object.assign(order, order.prescription);
     }

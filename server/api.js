@@ -1219,28 +1219,53 @@ router.get('/customers/:id', authenticateToken, (req, res) => {
 
 // ── GET /api/customers/:id/due (Quick check for previous unpaid dues) ────────
 router.get('/customers/:id/due', authenticateToken, (req, res) => {
-  const customerId = req.params.id;
-  const client = db.prepare('SELECT * FROM customers WHERE id = ? OR client_code = ? OR phone = ?').get(customerId, customerId, customerId);
-  if (!client) {
-    return res.json({ totalDueINR: 0, orders: [] });
-  }
+  const customerId = (req.params.id || '').trim();
+  const cleanPhone = customerId.replace(/\D/g, '');
+  const phoneTail10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
 
-  const clientPhone = client.phone ? client.phone.trim() : null;
+  let client = db.prepare(`
+    SELECT * FROM customers 
+    WHERE id = ? 
+       OR client_code = ? 
+       OR phone = ? 
+       OR REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ?
+    LIMIT 1
+  `).get(customerId, customerId, customerId, phoneTail10 ? ('%' + phoneTail10) : '%' + customerId);
+
+  const clientPhone = client ? (client.phone ? client.phone.trim() : null) : (cleanPhone ? customerId : null);
+
   const unpaidOrders = db.prepare(`
-    SELECT id, order_number, total_payable_paise, amount_paid_paise, outstanding_paise, created_at
+    SELECT id, order_number, token_number, total_payable_paise, amount_paid_paise, outstanding_paise, created_at, customer_name, customer_phone, customer_city, customer_age
     FROM orders
-    WHERE (customer_id = ? OR (? IS NOT NULL AND customer_phone = ?))
+    WHERE ((? IS NOT NULL AND customer_id = ?) 
+       OR (? IS NOT NULL AND (customer_phone = ? OR REPLACE(REPLACE(REPLACE(customer_phone, ' ', ''), '-', ''), '+', '') LIKE ?)))
       AND outstanding_paise > 0
       AND status != 'CANCELLED'
     ORDER BY created_at DESC
-  `).all(client.id, clientPhone, clientPhone);
+  `).all(
+    client ? client.id : null, 
+    client ? client.id : null, 
+    clientPhone, 
+    clientPhone, 
+    phoneTail10 ? ('%' + phoneTail10) : '%' + customerId
+  );
 
   const totalDuePaise = unpaidOrders.reduce((sum, o) => sum + (o.outstanding_paise || 0), 0);
   const totalDueINR = totalDuePaise / 100;
+
+  const latestOrder = unpaidOrders[0] || (clientPhone ? db.prepare(`
+    SELECT customer_name, customer_phone, customer_city, customer_age 
+    FROM orders 
+    WHERE customer_phone = ? OR REPLACE(REPLACE(REPLACE(customer_phone, ' ', ''), '-', ''), '+', '') LIKE ?
+    ORDER BY created_at DESC LIMIT 1
+  `).get(clientPhone, phoneTail10 ? ('%' + phoneTail10) : '%' + customerId) : null);
+
   res.json({
-    clientId: client.id,
-    clientName: client.name,
-    clientPhone: client.phone,
+    clientId: client ? client.id : null,
+    clientName: client ? client.name : (latestOrder ? latestOrder.customer_name : null),
+    clientPhone: client ? client.phone : (latestOrder ? latestOrder.customer_phone : clientPhone),
+    clientCity: client ? client.city : (latestOrder ? latestOrder.customer_city : null),
+    clientAge: client ? client.age : (latestOrder ? latestOrder.customer_age : null),
     totalDueINR,
     total_due_inr: totalDueINR,
     total_due_paise: totalDuePaise,

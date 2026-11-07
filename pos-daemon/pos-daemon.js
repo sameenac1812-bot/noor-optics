@@ -58,6 +58,10 @@ function savePrintedState() {
 }
 loadPrintedState();
 
+// ── Paper Width & UPI Configuration (Tweakable) ──────────────────────────────
+const PAPER_WIDTH_COLS = 32; // Characters per line for 2.5-inch thermal paper (e.g. 32, 40, 48)
+const UPI_ID = '9182341567@mairtel'; // Shop UPI ID for payment QR code & receipt text
+
 // ── Configuration ─────────────────────────────────────────────────────────────
 let config = {
   port: 5001,
@@ -65,8 +69,9 @@ let config = {
   paperWidthInch: 2.5,
   columns: 32,
   storeName: 'NOOR OPTIC',
-  storeAddress: 'Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028',
+  storeAddress: 'Pillar No. 45, Rethibowli',
   storePhone: '+91 98765 43210',
+  upiId: '9182341567@mairtel',
   supabaseUrl: 'https://czajxtgwsxbrrymrhauz.supabase.co',
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk'
 };
@@ -394,28 +399,120 @@ async function format25InchEscPosQrSticker(item) {
   return Buffer.concat([header, slicedRaster, footer]);
 }
 
-// ── Format Complete 2.5-Inch Thermal Receipt ──────────────────────────────────
+// ── Format Complete 2.5-Inch Thermal Receipt (Matches Reference Image Exactly) ──
 function format25InchEscPosReceipt(rawOrder) {
   const order = rawOrder.order || rawOrder;
-  const COLS = config.columns || 32;
+  const COLS = config.columns || PAPER_WIDTH_COLS || 32;
   const chunks = [];
 
   const writeBytes = (arr) => chunks.push(Buffer.from(arr));
   const writeText = (str) => chunks.push(Buffer.from(str, 'ascii'));
 
   const divider = '-'.repeat(COLS) + '\n';
-  const doubleDivider = '='.repeat(COLS) + '\n';
 
-  function formatINR(val) {
-    const n = Math.round(Number(val) || 0);
-    return 'Rs.' + n.toLocaleString('en-IN');
+  function center(text) {
+    const s = String(text || '').trim();
+    if (s.length >= COLS) return s.slice(0, COLS) + '\n';
+    const pad = Math.max(0, Math.floor((COLS - s.length) / 2));
+    return ' '.repeat(pad) + s + '\n';
   }
 
   function row(left, right) {
     const l = String(left || '');
     const r = String(right || '');
+    if (l.length + r.length >= COLS) {
+      return l + '\n' + r.padStart(COLS) + '\n';
+    }
     const spaces = Math.max(1, COLS - l.length - r.length);
     return l + ' '.repeat(spaces) + r + '\n';
+  }
+
+  function wrapTextLines(text, width) {
+    const words = String(text || '').trim().split(/\s+/);
+    const lines = [];
+    let cur = '';
+    words.forEach(w => {
+      if ((cur ? cur + ' ' + w : w).length <= width) {
+        cur = cur ? cur + ' ' + w : w;
+      } else {
+        if (cur) lines.push(cur);
+        cur = w;
+      }
+    });
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  function formatNum(val) {
+    const n = Math.round(Number(val) || 0);
+    return n.toLocaleString('en-IN');
+  }
+
+  function formatDateTime(d) {
+    if (!d) return '';
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return String(d);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const day = String(dt.getDate()).padStart(2, '0');
+      const mon = months[dt.getMonth()];
+      const year = dt.getFullYear();
+      let hours = dt.getHours();
+      const mins = String(dt.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${day} ${mon} ${year} ${String(hours).padStart(2, '0')}:${mins} ${ampm}`;
+    } catch (_) {
+      return String(d);
+    }
+  }
+
+  function formatDateOnly(d) {
+    if (!d) return '';
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return String(d);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${String(dt.getDate()).padStart(2, '0')} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
+    } catch (_) {
+      return String(d);
+    }
+  }
+
+  function formatTimeOnly(d) {
+    if (!d) return '';
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return String(d);
+      let hours = dt.getHours();
+      const mins = String(dt.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${String(hours).padStart(2, '0')}:${mins} ${ampm}`;
+    } catch (_) {
+      return String(d);
+    }
+  }
+
+  function finRow(lbl, val) {
+    const l = String(lbl);
+    const v = (val !== null && val !== undefined && val !== '') ? formatNum(val) : '';
+    const line = l.padStart(16) + '  ' + v.padStart(8);
+    return line.padStart(COLS) + '\n';
+  }
+
+  function fmtDio(val) {
+    if (val === undefined || val === null || val === '' || val === '--' || val === '---') return '--';
+    const n = Number(val);
+    if (isNaN(n)) return String(val).slice(0, 6);
+    if (n === 0) return '0.00';
+    const sign = n > 0 ? '+' : '';
+    return sign + n.toFixed(2);
+  }
+
+  function fmtAx(val) {
+    if (val === undefined || val === null || val === '' || val === '--' || val === '---') return '--';
+    return String(val).slice(0, 6);
   }
 
   // 1. Initialize Printer
@@ -428,233 +525,193 @@ function format25InchEscPosReceipt(rawOrder) {
     writeBytes(logoRasterBuffer);
   }
 
-  // Store Brand Header
+  // Shop Header (NOOR OPTIC centered, bold, double size)
   writeBytes([0x1B, 0x61, 0x01]); // Center
   writeBytes([0x1B, 0x45, 0x01]); // Bold ON
   writeBytes([0x1D, 0x21, 0x11]); // Double width & height
   writeText(`${config.storeName || 'NOOR OPTIC'}\n`);
   writeBytes([0x1D, 0x21, 0x00]); // Normal
   writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
-  writeText('Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028\n');
-  writeText(`Ph: ${config.storePhone || '+91 98765 43210'}\n`);
-  writeText(doubleDivider);
 
-  // In-Store vs Website Order Channel Banner
-  const orderRefStr = String(order.order_number || order.order_ref || order.id || '');
-  const isPos = orderRefStr.includes('-POS-') ||
-    order.channel === 'POS' ||
-    order.source === 'instore' ||
-    (order.delivery_address && /pos|boutique|flagship|store|counter|rethibowli|walk-in/i.test(order.delivery_address));
+  const storeAddress = config.storeAddress || 'Pillar No. 45, Rethibowli';
+  const addrLines = wrapTextLines(storeAddress, COLS);
+  addrLines.forEach(al => writeText(center(al)));
+  writeText(center(`Ph: ${config.storePhone || '+91 98765 43210'}`));
 
-  const channelLabel = isPos ? '[IN-STORE POS]' : '[WEBSITE ORDER]';
-  const channelBanner = isPos ? '*** IN-STORE BOUTIQUE SALE ***' : '*** ONLINE STOREFRONT ORDER ***';
-
-  writeBytes([0x1B, 0x61, 0x01]); // Center
-  writeBytes([0x1B, 0x45, 0x01]); // Bold ON
-  writeText(`${channelBanner}\n`);
-  writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
-  writeText(doubleDivider);
-
-  // 3. Invoice & Token Header
+  // 3. Dashed line
   writeBytes([0x1B, 0x61, 0x00]); // Left align
-  const token = order.token_number || order.token || 1;
-  writeText(row(`TOKEN #${token}`, channelLabel));
-  writeText(row('Invoice:', order.order_number || order.order_ref || 'NOOR-INV'));
-  const dateStr = order.created_at ? new Date(order.created_at).toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
-  }) : new Date().toLocaleString('en-IN');
-  writeText(row('Date:', dateStr));
   writeText(divider);
 
-  // 4. Customer Information
-  const custName = order.customer_name || 'Walk-in Client';
-  const custPhone = order.customer_phone || '-';
-  writeText(`Client: ${custName.slice(0, COLS - 8)}\n`);
-  if (custPhone !== '-') writeText(`Phone:  ${custPhone}\n`);
+  // 4. Short Invoice No (left) & Date + Time (right)
+  const rawRef = String(order.token_number || order.order_number || order.order_ref || order.id || '4866');
+  const shortRef = rawRef.includes('-') ? rawRef.split('-').pop() : (rawRef.length > 6 ? rawRef.slice(-4) : rawRef);
+  const invNo = 'INV: ' + shortRef;
+  const dateStr = formatDateTime(order.created_at || Date.now());
+  writeText(row(invNo, dateStr));
+
+  // 5. Dashed line
   writeText(divider);
 
-  // 5. Itemized Table
-  writeText(row('ITEM / SPEC', 'QTY  AMOUNT'));
+  // 6. Name, Phone, City, Age (left) | Pick Up Date + Time (right)
+  const custName = String(order.customer_name || 'Walk-in Client').slice(0, 18);
+  const custPhone = String(order.customer_phone || '-').slice(0, 18);
+  const city = String(order.city || order.client_city || order.customer_city || 'Hyderabad').slice(0, 10);
+  const age = order.customer_age || order.client_age || order.age || '--';
+
+  let pDate = '--';
+  let pTime = '--';
+  if (order.pickup_time) {
+    pDate = formatDateOnly(order.pickup_time);
+    pTime = formatTimeOnly(order.pickup_time);
+  }
+
+  writeText(row(`Name: ${custName}`, 'Pick Up Date'));
+  writeText(row(`Phone: ${custPhone}`, pDate));
+  writeText(row(`City: ${city} Age: ${age}`, pTime));
+
+  // 7. Dashed line
   writeText(divider);
 
+  // 8. Table header: ITEM | QTY | RATE | TOTAL, then dashed line
+  const itemColW = Math.max(10, COLS - 17);
+  writeText('ITEM'.padEnd(itemColW) + ' ' + 'QTY'.padStart(3) + ' ' + 'RATE'.padStart(5) + ' ' + 'TOTAL'.padStart(6) + '\n');
+  writeText(divider);
+
+  // 9. Item rows (item name on left, QTY / RATE / TOTAL right-aligned) - NO SKU LINE!
   let items = order.items;
   if (typeof items === 'string') {
     try { items = JSON.parse(items); } catch (_) { items = []; }
   }
-  if (!Array.isArray(items)) items = [];
+  if (!Array.isArray(items) || items.length === 0) {
+    items = [{ product_name: 'Optical Frame', quantity: 1, unit_price_paise: order.total_payable_paise || 0 }];
+  }
 
   const grandTotal = Number(order.total_payable_inr || (order.total_payable_paise ? order.total_payable_paise / 100 : order.grand_total || order.total || 0));
   const discount = Number(order.discount_inr || (order.discount_paise ? order.discount_paise / 100 : order.discount || 0));
 
-  if (items.length === 0) {
-    writeText(row('Optical Frame', '1  ' + formatINR(grandTotal)));
-  } else {
-    items.forEach(item => {
-      const name = item.product_name || item.name || item.model || 'Frame';
-      const sku = item.sku || '';
-      const color = item.variant_name || item.color || '';
-      const qty = parseInt(item.quantity || 1, 10);
-      const unitPrice = (item.unit_price_inr != null) ? Number(item.unit_price_inr)
-        : (item.unit_price_paise != null) ? Number(item.unit_price_paise) / 100
-        : (item.priceINR != null) ? Number(item.priceINR)
-        : (item.unit_price != null) ? Number(item.unit_price) : 0;
+  items.forEach(item => {
+    const name = String(item.product_name || item.name || item.model || 'Frame');
+    const qty = parseInt(item.quantity || 1, 10);
+    const unitPrice = (item.unit_price_inr != null) ? Number(item.unit_price_inr)
+      : (item.unit_price_paise != null) ? Number(item.unit_price_paise) / 100
+      : (item.priceINR != null) ? Number(item.priceINR)
+      : (item.unit_price != null) ? Number(item.unit_price) : 0;
+    const lineTotal = (item.subtotal_inr != null) ? Number(item.subtotal_inr)
+      : (item.subtotal_paise != null) ? Number(item.subtotal_paise) / 100
+      : (item.lineTotalINR != null) ? Number(item.lineTotalINR)
+      : (unitPrice * qty);
 
-      let lineTotal = (item.subtotal_inr != null) ? Number(item.subtotal_inr)
-        : (item.subtotal_paise != null) ? Number(item.subtotal_paise) / 100
-        : (item.lineTotalINR != null) ? Number(item.lineTotalINR)
-        : (unitPrice * qty);
+    const colsStr = ' ' + String(qty).padStart(3) + ' ' + formatNum(unitPrice).padStart(5) + ' ' + formatNum(lineTotal).padStart(6) + '\n';
 
-      if (lineTotal === 0 && grandTotal > 0 && items.length === 1) lineTotal = grandTotal;
+    if (name.length <= itemColW) {
+      writeText(name.padEnd(itemColW) + colsStr);
+    } else {
+      writeText(name + '\n');
+      writeText(' '.repeat(itemColW) + colsStr);
+    }
+  });
 
-      writeText(row(name.slice(0, 18), `${qty}  ${formatINR(lineTotal)}`));
-      if (sku && sku !== name) writeText(` SKU:   ${sku.slice(0, COLS - 8)}\n`);
-      if (color && color !== 'Standard') writeText(` Color: ${color.slice(0, COLS - 8)}\n`);
-      if (item.lens || (item.lens_name && !/standard/i.test(item.lens_name))) {
-        writeText(` Lens:  ${(item.lens || item.lens_name).slice(0, COLS - 8)}\n`);
+  // 10. Dashed line
+  writeText(divider);
+
+  // 11. Right-aligned Financial Layout (Image 3 format)
+  const advance = Number(order.advance_paid_inr || (order.advance_paid_paise ? order.advance_paid_paise / 100 : (order.amount_paid_inr != null ? order.amount_paid_inr : (order.amount_paid_paise ? order.amount_paid_paise / 100 : 0))));
+  const second = Number(order.second_payment_inr || (order.second_payment_paise ? order.second_payment_paise / 100 : 0));
+  const third = Number(order.third_payment_inr || (order.third_payment_paise ? order.third_payment_paise / 100 : 0));
+  const remaining = Number(order.outstanding_inr != null ? order.outstanding_inr : (order.outstanding_paise != null ? order.outstanding_paise / 100 : Math.max(0, grandTotal - (advance + second + third))));
+
+  writeText(finRow('Total:', grandTotal));
+  writeText(finRow('Discount:', discount > 0 ? discount : 0));
+  writeText(finRow('Advance:', advance));
+  writeText(finRow('2nd Amount:', second > 0 ? second : ''));
+  if (second > 0) {
+    const sDate = formatDateTime(order.second_payment_date || order.updated_at || Date.now());
+    writeText(sDate.padStart(COLS) + '\n');
+  }
+  writeText(finRow('3rd Amount:', third > 0 ? third : ''));
+  if (third > 0) {
+    const tDate = formatDateTime(order.third_payment_date || order.updated_at || Date.now());
+    writeText(tDate.padStart(COLS) + '\n');
+  }
+  writeText(divider);
+  writeText(finRow('Remaining:', remaining));
+
+  // 12. Dashed line
+  writeText(divider);
+
+  // 13. Prescriptions Block (Loop over ALL attached prescriptions)
+  let allRxList = [];
+  if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
+    allRxList = order.prescriptions.filter(Boolean);
+  } else if (order.prescriptions_json) {
+    try {
+      const p = JSON.parse(order.prescriptions_json);
+      if (Array.isArray(p) && p.length > 0) allRxList = p;
+    } catch (_) {}
+  }
+  if (allRxList.length === 0) {
+    const rawItems = Array.isArray(order.items) ? order.items : [];
+    for (const it of rawItems) {
+      if (it && (it.prescription || it.rx)) {
+        allRxList.push(it.prescription || it.rx);
       }
+    }
+  }
+  if (allRxList.length === 0) {
+    const fallbackRx = order.prescription || order.client_prescription || order.newPrescription;
+    if (fallbackRx) allRxList.push(fallbackRx);
+  }
+
+  allRxList = allRxList.filter(rx => {
+    if (!rx) return false;
+    return rx.od_sph != null || rx.odSph != null || rx.os_sph != null || rx.osSph != null || rx.addition != null || rx.add != null || rx.od_cyl != null || rx.odCyl != null || rx.prescription_number;
+  });
+
+  if (allRxList.length > 0) {
+    allRxList.forEach((rx, idx) => {
+      const getRxVal = (keys) => {
+        for (const k of keys) {
+          if (rx && rx[k] !== undefined && rx[k] !== null && String(rx[k]).trim() !== '' && String(rx[k]).trim() !== '---') return rx[k];
+          if (order && order[k] !== undefined && order[k] !== null && String(order[k]).trim() !== '' && String(order[k]).trim() !== '---') return order[k];
+        }
+        return null;
+      };
+
+      const rxNo = getRxVal(['prescription_number', 'prescriptionNumber', 'prescription_id', 'id']) || (order.prescription_number || (idx + 1));
+      const odSph = getRxVal(['od_sph', 'odSph']);
+      const odCyl = getRxVal(['od_cyl', 'odCyl']);
+      const odAxis = getRxVal(['od_axis', 'odAxis']);
+      const osSph = getRxVal(['os_sph', 'osSph']);
+      const osCyl = getRxVal(['os_cyl', 'osCyl']);
+      const osAxis = getRxVal(['os_axis', 'osAxis']);
+      const addition = getRxVal(['addition', 'add']);
+
+      const rxDate = formatDateOnly(rx.prescription_date || rx.created_at || order.created_at || Date.now());
+      writeText(row(`RX# ${rxNo}`, rxDate));
+      writeText(' '.repeat(11) + 'SPH'.padStart(7) + 'CYL'.padStart(7) + 'AXIS'.padStart(7) + '\n');
+      writeText('OD Right'.padEnd(11) + fmtDio(odSph).padStart(7) + fmtDio(odCyl).padStart(7) + fmtAx(odAxis).padStart(7) + '\n');
+      writeText('OS Left'.padEnd(11) + fmtDio(osSph).padStart(7) + fmtDio(osCyl).padStart(7) + fmtAx(osAxis).padStart(7) + '\n');
+      if (addition && addition !== '--' && addition !== '---') {
+        writeText('Addition'.padEnd(11) + fmtDio(addition).padStart(7) + '\n');
+      }
+      writeText(divider);
     });
   }
-  writeText(divider);
 
-  // 6. Financial Breakdown
-  let subtotal = Number(order.subtotal_inr || (order.subtotal_paise ? order.subtotal_paise / 100 : (order.subtotal != null ? order.subtotal : 0)));
-  if (subtotal === 0 && grandTotal > 0) subtotal = grandTotal + discount;
-  const amountPaid = Number(order.amount_paid_inr || (order.amount_paid_paise ? order.amount_paid_paise / 100 : grandTotal));
-  const balance = Math.max(0, grandTotal - amountPaid);
-  const payMethod = (order.payment_method || (isPos ? 'CASH' : 'ONLINE')).toUpperCase();
+  // 14. "Thanks for Shopping" (centered)
+  writeBytes([0x1B, 0x61, 0x01]); // Center
+  writeText('Thanks for Shopping\n\n');
 
-  writeText(row('Subtotal:', formatINR(subtotal)));
-  if (discount > 0) writeText(row('Discount:', '-' + formatINR(discount)));
-  writeText(doubleDivider);
-
-  writeBytes([0x1B, 0x45, 0x01]); // Bold ON
-  writeText(row('GRAND TOTAL:', formatINR(grandTotal)));
-  writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
-
-  writeText(row(`Payment [${payMethod}]:`, formatINR(amountPaid)));
-  if (balance > 0) {
-    writeBytes([0x1B, 0x45, 0x01]);
-    writeText(row('Balance Due:', formatINR(balance)));
-    writeBytes([0x1B, 0x45, 0x00]);
-  } else {
-    writeText(row('Balance Due:', 'Rs.0 (PAID)'));
-  }
-  writeText(divider);
-
-  // 7. Client Prescription (Rx) Section (100% Reliable Dual-Pipeline Extraction)
-  let embeddedRx = null;
-  const itemList = Array.isArray(order.items) ? order.items : (Array.isArray(rawOrder.items) ? rawOrder.items : []);
-  if (itemList.length > 0) {
-    for (const it of itemList) {
-      if (it && (it.prescription || it.rx)) {
-        embeddedRx = it.prescription || it.rx;
-        break;
-      }
-    }
-  }
-
-  const rx = embeddedRx || order.prescription || rawOrder.prescription || order.client_prescription || order.newPrescription || order;
-  const getRxField = (keys) => {
-    for (const k of keys) {
-      if (rx && rx[k] !== undefined && rx[k] !== null && String(rx[k]).trim() !== '' && String(rx[k]).trim() !== '---') return rx[k];
-      if (order && order[k] !== undefined && order[k] !== null && String(order[k]).trim() !== '' && String(order[k]).trim() !== '---') return order[k];
-      if (rawOrder && rawOrder[k] !== undefined && rawOrder[k] !== null && String(rawOrder[k]).trim() !== '' && String(rawOrder[k]).trim() !== '---') return rawOrder[k];
-    }
-    return null;
-  };
-
-  const odSphVal = getRxField(['od_sph', 'odSph']);
-  const odCylVal = getRxField(['od_cyl', 'odCyl']);
-  const odAxisVal = getRxField(['od_axis', 'odAxis']);
-  const osSphVal = getRxField(['os_sph', 'osSph']);
-  const osCylVal = getRxField(['os_cyl', 'osCyl']);
-  const osAxisVal = getRxField(['os_axis', 'osAxis']);
-  const addVal = getRxField(['addition', 'add']);
-  const pdVal = getRxField(['ipd_distance', 'ipdDistance', 'pd']);
-  const docVal = getRxField(['checked_by', 'checkedBy', 'rx_checked_by']);
-  const prescriberVal = getRxField(['prescriber_details', 'prescriberDetails', 'clinic']);
-  const rxNotesVal = getRxField(['notes', 'rx_notes']);
-
-  const hasAnyRxValue = odSphVal !== null || odCylVal !== null || odAxisVal !== null ||
-    osSphVal !== null || osCylVal !== null || osAxisVal !== null ||
-    addVal !== null || pdVal !== null;
-
-  const pref = String(order.prescription_pref || rawOrder.prescription_pref || '').toLowerCase();
-  const isZeroPower = /zero|plano|blue[- ]?cut|screen/i.test(pref);
-  const isCallOptometrist = /call|optometrist|consult/i.test(pref);
-  const isManualRx = /enter[- ]?rx|manual/i.test(pref);
-  const rxExplicitlyMentioned = Boolean(order.prescription_id || order.prescription_number || (rx && rx.prescription_number) || isManualRx || /rx/i.test(pref));
-
-  if (hasAnyRxValue) {
-    writeBytes([0x1B, 0x61, 0x01]); // Center
-    writeBytes([0x1B, 0x45, 0x01]); // Bold ON
-    writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
-    writeBytes([0x1B, 0x45, 0x00]); // Bold OFF
-    writeBytes([0x1B, 0x61, 0x00]); // Left
-
-    function fmtRx(val) {
-      if (val === undefined || val === null || val === '' || val === '---') return '  --- ';
-      const n = Number(val);
-      if (isNaN(n)) return String(val).padStart(6);
-      if (n === 0) return '  0.00';
-      const sign = n > 0 ? '+' : '-';
-      return sign + Math.abs(n).toFixed(2);
-    }
-    function fmtAx(val) {
-      if (val === undefined || val === null || val === '' || val === '---') return '---';
-      return String(val).padStart(3);
-    }
-
-    writeText('Eye    SPH    CYL   AXIS   ADD  \n');
-    writeText(`OD   ${fmtRx(odSphVal)}  ${fmtRx(odCylVal)}   ${fmtAx(odAxisVal)}  ${fmtRx(addVal)}\n`);
-    writeText(`OS   ${fmtRx(osSphVal)}  ${fmtRx(osCylVal)}   ${fmtAx(osAxisVal)}  ${fmtRx(addVal)}\n`);
-
-    if (pdVal) writeText(`Distance PD: ${pdVal} mm\n`);
-    if (docVal) writeText(`Optometrist: ${docVal}\n`);
-    if (prescriberVal) writeText(`Prescriber:  ${prescriberVal.slice(0, COLS - 13)}\n`);
-    if (rxNotesVal && !/in-store/i.test(rxNotesVal)) writeText(`Rx Notes:    ${rxNotesVal.slice(0, COLS - 13)}\n`);
-    writeText(divider);
-  } else if (isZeroPower) {
-    writeBytes([0x1B, 0x61, 0x01]);
-    writeBytes([0x1B, 0x45, 0x01]);
-    writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
-    writeBytes([0x1B, 0x45, 0x00]);
-    writeText('ZERO-POWER (PLANO) LENSES\n');
-    writeText('Blue-Cut Anti-Glare Computer Vision\n');
-    writeText(divider);
-  } else if (isCallOptometrist) {
-    writeBytes([0x1B, 0x61, 0x01]);
-    writeBytes([0x1B, 0x45, 0x01]);
-    writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
-    writeBytes([0x1B, 0x45, 0x00]);
-    writeText('OPTOMETRIST CALL REQUIRED\n');
-    if (custPhone !== '-') writeText(`Call Client: ${custPhone}\n`);
-    writeText(divider);
-  } else if (rxExplicitlyMentioned) {
-    writeBytes([0x1B, 0x61, 0x01]);
-    writeBytes([0x1B, 0x45, 0x01]);
-    writeText('--- CLIENT PRESCRIPTION (RX) ---\n');
-    writeBytes([0x1B, 0x45, 0x00]);
-    writeText('PRESCRIPTION PENDING VERIFICATION\n');
-    writeText(divider);
-  }
-
-  // 8. UPI Payment QR Code (Centered)
+  // 15. Centered UPI Payment QR Code
   if (paymentQrRasterBuffer && paymentQrRasterBuffer.length > 0) {
-    writeBytes([0x1B, 0x61, 0x01]);
-    writeBytes([0x1B, 0x45, 0x01]);
-    writeText('SCAN & PAY VIA UPI\n');
-    writeBytes([0x1B, 0x45, 0x00]);
     writeBytes(paymentQrRasterBuffer);
   }
 
-  // 9. Store Footer
-  writeBytes([0x1B, 0x61, 0x01]); // Center
-  writeText('\nThank you for choosing Noor Optics!\n');
-  writeText('Luxury Frames & Precision Eyecare\n');
-  writeText('Instagram: @nooroptics\n\n\n\n');
+  // 16. Centered UPI ID directly underneath QR
+  const upiId = config.storeUpiId || config.upiId || UPI_ID || '9182341567@mairtel';
+  writeText('\n' + upiId + '\n\n\n');
 
-  // Cut Paper
+  // 17. Clean tear feed & paper cut
   writeBytes([0x1D, 0x56, 0x41, 0x03]); // Full cut
 
   return Buffer.concat(chunks);
@@ -665,8 +722,8 @@ async function printLiveOrder(order, source = 'Live') {
   if (!order) return { success: false, error: 'No order provided' };
   const orderRef = String(order.order_number || order.order_ref || order.id || 'ORDER').trim();
 
-  // Deduplicate live orders across sessions (allow explicit manual reprint or local_pos)
-  if (source !== 'reprint' && source !== 'local_pos' && (printedOrdersSet.has(orderRef) || (order.id && printedOrdersSet.has(String(order.id))))) {
+  // Deduplicate live orders across sessions (allow explicit manual reprint)
+  if (source !== 'reprint' && (printedOrdersSet.has(orderRef) || (order.id && printedOrdersSet.has(String(order.id))))) {
     console.log(`[Live Print] Order #${orderRef} was already printed. Skipping duplicate.`);
     return { success: true, alreadyPrinted: true };
   }
@@ -812,34 +869,11 @@ async function pollRecentUnprintedOrders() {
   }
 }
 
-// ── Hot-Update Engine (Self-Healing Without File Swapping) ────────────────────
+// ── Hot-Update Engine (Protected Local Daemon) ──────────────────────────────
 let isCheckingUpdate = false;
 async function checkDaemonUpdates() {
-  if (isCheckingUpdate) return;
-  isCheckingUpdate = true;
-  const urlsToCheck = [
-    config.backendUrl ? `${config.backendUrl.replace(/\/$/, '')}/pos-daemon/pos-daemon.js` : null,
-    'http://localhost:3000/pos-daemon/pos-daemon.js',
-    'http://127.0.0.1:3000/pos-daemon/pos-daemon.js'
-  ].filter(Boolean);
-
-  for (const updateUrl of urlsToCheck) {
-    try {
-      const res = await fetch(updateUrl, { signal: AbortSignal.timeout(3000) });
-      if (res.ok) {
-        const remoteCode = await res.text();
-        const currentCode = fs.readFileSync(__filename, 'utf8');
-        if (remoteCode && remoteCode.length > 10000 && remoteCode.includes('DAEMON_VERSION') && remoteCode !== currentCode) {
-          console.log(`[Auto-Update] 🚀 New daemon version detected from ${updateUrl}! Applying hot update...`);
-          fs.writeFileSync(__filename, remoteCode, 'utf8');
-          console.log('[Auto-Update] ✅ File updated! Restarting process cleanly via watchdog...');
-          process.exit(0);
-        }
-        break;
-      }
-    } catch (_) {}
-  }
-  isCheckingUpdate = false;
+  // Automatic file overwrite disabled to protect custom in-store bill formatting
+  return;
 }
 
 // ── Supabase Realtime Live WebSocket ─────────────────────────────────────────

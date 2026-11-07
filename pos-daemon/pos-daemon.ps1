@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     pos-daemon/pos-daemon.ps1 – Native Windows PowerShell POS Print Engine
     Zero-dependency thermal print daemon for Windows 10/11.
@@ -544,7 +544,7 @@ function Format-ReceiptBytes($order) {
     $bw.Write([byte[]]@(0x1D, 0x21, 0x00)) # Normal
     $bw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
 
-    $storeAddress = if ($Config.storeAddress) { $Config.storeAddress } else { "Pillar No: 45, Beside HP Petrol Pump, Opposite Subhan Bakery, Rethibowli, Gudimalkapur, Hyderabad, Telangana 500028" }
+    $storeAddress = if ($Config.storeAddress) { $Config.storeAddress } else { "Pillar No. 45, Rethibowli" }
     $addrLines = Wrap-Lines $storeAddress $COLS
     foreach ($al in $addrLines) {
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Center-Text $al)))
@@ -557,7 +557,9 @@ function Format-ReceiptBytes($order) {
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
     # 4. Invoice no (left) and date + time (right)
-    $invNo = [string]$(if ($order.token_number) { "TOKEN #$($order.token_number)" } elseif ($order.order_number) { $order.order_number } elseif ($order.order_ref) { $order.order_ref } elseif ($order.id) { $order.id } else { "NOOR-INV" })
+    $rawRef = [string]$(if ($order.token_number) { $order.token_number } elseif ($order.order_number) { $order.order_number } elseif ($order.order_ref) { $order.order_ref } elseif ($order.id) { $order.id } else { "4866" })
+    $shortRef = if ($rawRef.Contains("-")) { ($rawRef -split "-")[-1] } elseif ($rawRef.Length -gt 6) { $rawRef.Substring($rawRef.Length - 4) } else { $rawRef }
+    $invNo = "INV: $shortRef"
     $dateObj = Get-Date
     if ($order.created_at) {
         try { $dateObj = [DateTime]::Parse($order.created_at) } catch {}
