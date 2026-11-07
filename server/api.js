@@ -2270,9 +2270,20 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
 
   let stageCol = 'second_payment_paise';
   let stageLabel = '2nd Payment';
-  if (stage === 'third_payment' || (order.second_payment_paise > 0 && stage !== 'second_payment')) {
+  let paymentStageCode = 'second_payment';
+
+  if (!order.second_payment_paise || order.second_payment_paise === 0) {
+    stageCol = 'second_payment_paise';
+    stageLabel = (newOutstanding === 0) ? '2nd Payment (Settled)' : '2nd Payment';
+    paymentStageCode = 'second_payment';
+  } else if (!order.third_payment_paise || order.third_payment_paise === 0) {
     stageCol = 'third_payment_paise';
-    stageLabel = '3rd Payment';
+    stageLabel = (newOutstanding === 0) ? '3rd Payment (Settled)' : '3rd Payment';
+    paymentStageCode = 'third_payment';
+  } else {
+    stageCol = 'third_payment_paise';
+    stageLabel = (newOutstanding === 0) ? 'Final Settlement' : 'Installment Payment';
+    paymentStageCode = 'installment';
   }
 
   db.transaction(() => {
@@ -2287,11 +2298,11 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     `).run(newAmountPaid, newOutstanding, newPaymentStatus, paymentPaise, order.id);
 
     // Record in payments table
-    const payId = 'pay-' + Date.now();
+    const payId = 'pay-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
     db.prepare(`
       INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes, payment_stage, created_at)
       VALUES (?, ?, ?, ?, 'VERIFIED', ?, ?, ?, datetime('now'))
-    `).run(payId, order.id, paymentMethod, paymentPaise, claimedUpiRef || null, notes || stageLabel, stageCol === 'third_payment_paise' ? 'third_payment' : 'second_payment');
+    `).run(payId, order.id, paymentMethod, paymentPaise, claimedUpiRef || null, notes || stageLabel, paymentStageCode);
 
     // Update customer total spent
     if (order.customer_id) {
@@ -2301,39 +2312,10 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
         WHERE id = ?
       `).run(paymentPaise, order.customer_id);
     }
-
-    // Queue thermal installment receipt print job
-    try {
-      const printJobId = 'pj-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
-      const receiptPayload = {
-        id: order.id,
-        order_number: order.order_number,
-        token_number: order.token_number,
-        channel: 'POS',
-        customer_name: order.customer_name,
-        customer_phone: order.customer_phone,
-        items: [{
-          name: `Installment Payment (${stageLabel})`,
-          product_name: `Installment Payment (${stageLabel})`,
-          quantity: 1,
-          unit_price_inr: paymentPaise / 100,
-          subtotal_inr: paymentPaise / 100
-        }],
-        total_payable_inr: currentTotal / 100,
-        amount_paid_inr: newAmountPaid / 100,
-        outstanding_inr: newOutstanding / 100,
-        payment_method: paymentMethod,
-        notes: `Installment Collected: Rs.${(paymentPaise / 100).toLocaleString('en-IN')} via ${paymentMethod}. Balance Remaining: Rs.${(newOutstanding / 100).toLocaleString('en-IN')}`,
-        created_at: new Date().toISOString()
-      };
-      db.prepare(`
-        INSERT INTO print_jobs (id, order_id, job_type, printer_name, status, payload_json, created_at, updated_at)
-        VALUES (?, ?, 'receipt', 'POS-80', 'queued', ?, datetime('now'), datetime('now'))
-      `).run(printJobId, order.id, JSON.stringify(receiptPayload));
-    } catch (_) {}
   })();
 
   const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+  const orderItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
   const allPayments = db.prepare('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at ASC').all(order.id).map(p => ({
     ...p,
     amount_inr: (p.amount_paise || 0) / 100
@@ -2353,19 +2335,30 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     thirdPaymentINR: (updatedOrder.third_payment_paise || 0) / 100
   }).catch(() => {});
 
+  const orderPayload = {
+    ...updatedOrder,
+    items: orderItems.map(i => ({
+      ...i,
+      unit_price_inr: (i.unit_price_paise || 0) / 100,
+      subtotal_inr: (i.subtotal_paise || 0) / 100
+    })),
+    payments: allPayments,
+    total_payable_inr: currentTotal / 100,
+    amount_paid_inr: newAmountPaid / 100,
+    outstanding_inr: newOutstanding / 100,
+    advance_paid_inr: (updatedOrder.advance_paid_paise || Math.max(0, updatedOrder.amount_paid_paise - (updatedOrder.second_payment_paise || 0) - (updatedOrder.third_payment_paise || 0))) / 100,
+    second_payment_inr: (updatedOrder.second_payment_paise || 0) / 100,
+    third_payment_inr: (updatedOrder.third_payment_paise || 0) / 100,
+    payment_status: newPaymentStatus
+  };
+
   res.json({
     success: true,
     message: `Payment of Rs.${(paymentPaise / 100).toLocaleString('en-IN')} recorded successfully!`,
     remaining_due_inr: newOutstanding / 100,
     remaining_due_paise: newOutstanding,
     amount_paid_inr: newAmountPaid / 100,
-    order: {
-      ...updatedOrder,
-      amount_paid_inr: newAmountPaid / 100,
-      outstanding_inr: newOutstanding / 100,
-      total_payable_inr: currentTotal / 100,
-      payments: allPayments
-    }
+    order: orderPayload
   });
 });
 

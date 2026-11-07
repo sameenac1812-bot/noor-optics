@@ -144,22 +144,33 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
   // 5. Dashed line
   lines.push(divider);
 
-  // 6. Name, Phone, City, Age (left) | Pick Up Date + time (right)
-  const custName = String(order.customer_name || 'Walk-in Client').slice(0, 18);
-  const custPhone = String(order.customer_phone || '-').slice(0, 18);
-  const city = String(order.city || order.client_city || order.customer_city || 'Hyderabad').slice(0, 10);
-  const age = order.customer_age || order.client_age || order.age || '--';
+  // 6. Name, Phone, City, Age, and Pick Up Date & Time under City
+  const custName = String(order.customer_name || 'Walk-in Client').slice(0, 24);
+  const custPhone = String(order.customer_phone || '-').slice(0, 20);
+  const city = String(order.city || order.client_city || order.customer_city || 'Hyderabad').slice(0, 14);
+  const age = (order.customer_age || order.client_age || order.age) ? String(order.customer_age || order.client_age || order.age) : '--';
 
   let pDate = '--';
   let pTime = '--';
-  if (order.pickup_time) {
-    pDate = formatDateOnly(order.pickup_time);
-    pTime = formatTimeOnly(order.pickup_time);
+  const pickupRaw = order.pickup_time || order.pickupTime || order.pick_up_time || order.pickup_date;
+  if (pickupRaw) {
+    pDate = formatDateOnly(pickupRaw);
+    pTime = formatTimeOnly(pickupRaw);
   }
 
-  lines.push(row(`Name: ${custName}`, 'Pick Up Date'));
-  lines.push(row(`Phone: ${custPhone}`, pDate));
-  lines.push(row(`City: ${city} Age: ${age}`, pTime));
+  lines.push(`Name: ${custName}`);
+  if (custPhone && custPhone !== '-') {
+    lines.push(`Phone: ${custPhone}`);
+  }
+  lines.push(row(`City: ${city}`, `Age: ${age}`));
+  if (pickupRaw && pDate !== '--') {
+    lines.push(row('Pick Up Date:', pDate));
+    if (pTime !== '--') {
+      lines.push(row('Pick Up Time:', pTime));
+    }
+  } else {
+    lines.push(row('Pick Up Date:', '--'));
+  }
 
   // 7. Dashed line
   lines.push(divider);
@@ -199,9 +210,10 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
   // 11. Right-aligned: Total, Discount, Advance, 2nd Amount (with its date/time in small text below), 3rd Amount, dashed line, Remaining
   const grandTotal = Number(order.total_payable_inr || (order.total_payable_paise ? order.total_payable_paise / 100 : order.grand_total || order.total || 0));
   const discount = Number(order.discount_inr || (order.discount_paise ? order.discount_paise / 100 : 0));
-  const advance = Number(order.advance_paid_inr || (order.advance_paid_paise ? order.advance_paid_paise / 100 : (order.amount_paid_inr != null ? order.amount_paid_inr : (order.amount_paid_paise ? order.amount_paid_paise / 100 : 0))));
   const second = Number(order.second_payment_inr || (order.second_payment_paise ? order.second_payment_paise / 100 : 0));
   const third = Number(order.third_payment_inr || (order.third_payment_paise ? order.third_payment_paise / 100 : 0));
+  const totalPaid = Number(order.amount_paid_inr != null ? order.amount_paid_inr : (order.amount_paid_paise ? order.amount_paid_paise / 100 : 0));
+  const advance = Number(order.advance_paid_inr != null ? order.advance_paid_inr : (order.advance_paid_paise ? order.advance_paid_paise / 100 : Math.max(0, totalPaid - second - third)));
   const remaining = Number(order.outstanding_inr != null ? order.outstanding_inr : (order.outstanding_paise != null ? order.outstanding_paise / 100 : Math.max(0, grandTotal - (advance + second + third))));
 
   function finRow(lbl, val) {
@@ -220,8 +232,27 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
     lines.push(sDate.padStart(COLS));
   }
   lines.push(finRow('3rd Amount:', third > 0 ? third : ''));
+  if (third > 0) {
+    const tDate = formatDateTime(order.third_payment_date || order.updated_at || Date.now());
+    lines.push(tDate.padStart(COLS));
+  }
+  if (Array.isArray(order.payments) && order.payments.length > 3) {
+    for (let pi = 3; pi < order.payments.length; pi++) {
+      const p = order.payments[pi];
+      const pAmt = p.amount_inr != null ? Number(p.amount_inr) : (p.amount_paise ? Number(p.amount_paise) / 100 : 0);
+      if (pAmt > 0) {
+        lines.push(finRow(`${pi + 1}th Amount:`, pAmt));
+        if (p.created_at) {
+          lines.push(formatDateTime(p.created_at).padStart(COLS));
+        }
+      }
+    }
+  }
   lines.push(divider);
   lines.push(finRow('Remaining:', remaining));
+  if (remaining === 0) {
+    lines.push(center('*** PAID IN FULL ***'));
+  }
 
   // 12. Dashed line
   lines.push(divider);
@@ -366,9 +397,10 @@ function generate58mmHTML(order, items = [], settings = {}) {
 
   let pDate = '--';
   let pTime = '--';
-  if (order.pickup_time) {
-    pDate = formatDateOnly(order.pickup_time);
-    pTime = formatTimeOnly(order.pickup_time);
+  const pickupRaw = order.pickup_time || order.pickupTime || order.pick_up_time || order.pickup_date;
+  if (pickupRaw) {
+    pDate = formatDateOnly(pickupRaw);
+    pTime = formatTimeOnly(pickupRaw);
   }
 
   const itemList = Array.isArray(items) && items.length > 0 ? items : (Array.isArray(order.items) ? order.items : [{ product_name: 'Optical Frame', quantity: 1, unit_price_paise: order.total_payable_paise || 0 }]);
@@ -401,6 +433,7 @@ function generate58mmHTML(order, items = [], settings = {}) {
   const third = Number(order.third_payment_inr || (order.third_payment_paise ? order.third_payment_paise / 100 : 0));
   const remaining = Number(order.outstanding_inr != null ? order.outstanding_inr : (order.outstanding_paise != null ? order.outstanding_paise / 100 : Math.max(0, grandTotal - (advance + second + third))));
   const secondDate = second > 0 ? formatDateTime(order.second_payment_date || order.updated_at || Date.now()) : '';
+  const thirdDate = third > 0 ? formatDateTime(order.third_payment_date || order.updated_at || Date.now()) : '';
 
   let allRxList = [];
   if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
@@ -546,17 +579,14 @@ function generate58mmHTML(order, items = [], settings = {}) {
   </div>
 
   <div class="dash">--------------------------------</div>
-  <div class="cust-box">
-    <div>
-      <div>Name: ${custName}</div>
-      <div>Phone: ${custPhone}</div>
-      <div>City: ${city} Age: ${age}</div>
-    </div>
-    <div class="col-right">
-      <div>Pick Up Date</div>
-      <div>${pDate}</div>
-      <div>${pTime}</div>
-    </div>
+  <div class="cust-box" style="flex-direction:column; gap:2px;">
+    <div>Name: ${custName}</div>
+    ${custPhone && custPhone !== '-' ? `<div>Phone: ${custPhone}</div>` : ''}
+    <div class="flex-row"><span>City: ${city}</span><span>Age: ${age}</span></div>
+    ${(pickupRaw && pDate !== '--') ? `
+      <div class="flex-row"><span>Pick Up Date:</span><span>${pDate}</span></div>
+      ${pTime !== '--' ? `<div class="flex-row"><span>Pick Up Time:</span><span>${pTime}</span></div>` : ''}
+    ` : `<div class="flex-row"><span>Pick Up Date:</span><span>--</span></div>`}
   </div>
 
   <div class="dash">--------------------------------</div>
@@ -585,8 +615,10 @@ function generate58mmHTML(order, items = [], settings = {}) {
     <div class="fin-line"><span class="fin-lbl">2nd Amount:</span><span class="fin-val">${second > 0 ? formatNum(second) : ''}</span></div>
     ${second > 0 ? `<div class="sub-date">${secondDate}</div>` : ''}
     <div class="fin-line"><span class="fin-lbl">3rd Amount:</span><span class="fin-val">${third > 0 ? formatNum(third) : ''}</span></div>
+    ${third > 0 ? `<div class="sub-date">${thirdDate}</div>` : ''}
     <div class="dash" style="width:100%;">--------------------------------</div>
     <div class="fin-line bold"><span class="fin-lbl">Remaining:</span><span class="fin-val">${formatNum(remaining)}</span></div>
+    ${remaining === 0 ? `<div class="center bold" style="margin-top:4px;">*** PAID IN FULL ***</div>` : ''}
   </div>
 
   <div class="dash">--------------------------------</div>

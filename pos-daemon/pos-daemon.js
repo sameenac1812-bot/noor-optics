@@ -552,22 +552,33 @@ function format25InchEscPosReceipt(rawOrder) {
   // 5. Dashed line
   writeText(divider);
 
-  // 6. Name, Phone, City, Age (left) | Pick Up Date + Time (right)
-  const custName = String(order.customer_name || 'Walk-in Client').slice(0, 18);
-  const custPhone = String(order.customer_phone || '-').slice(0, 18);
-  const city = String(order.city || order.client_city || order.customer_city || 'Hyderabad').slice(0, 10);
-  const age = order.customer_age || order.client_age || order.age || '--';
+  // 6. Name, Phone, City, Age, and Pick Up Date & Time under City
+  const custName = String(order.customer_name || 'Walk-in Client').slice(0, 24);
+  const custPhone = String(order.customer_phone || '-').slice(0, 20);
+  const city = String(order.city || order.client_city || order.customer_city || 'Hyderabad').slice(0, 14);
+  const age = (order.customer_age || order.client_age || order.age) ? String(order.customer_age || order.client_age || order.age) : '--';
 
   let pDate = '--';
   let pTime = '--';
-  if (order.pickup_time) {
-    pDate = formatDateOnly(order.pickup_time);
-    pTime = formatTimeOnly(order.pickup_time);
+  const pickupRaw = order.pickup_time || order.pickupTime || order.pick_up_time || order.pickup_date;
+  if (pickupRaw) {
+    pDate = formatDateOnly(pickupRaw);
+    pTime = formatTimeOnly(pickupRaw);
   }
 
-  writeText(row(`Name: ${custName}`, 'Pick Up Date'));
-  writeText(row(`Phone: ${custPhone}`, pDate));
-  writeText(row(`City: ${city} Age: ${age}`, pTime));
+  writeText(`Name: ${custName}\n`);
+  if (custPhone && custPhone !== '-') {
+    writeText(`Phone: ${custPhone}\n`);
+  }
+  writeText(row(`City: ${city}`, `Age: ${age}`));
+  if (pickupRaw && pDate !== '--') {
+    writeText(row('Pick Up Date:', pDate));
+    if (pTime !== '--') {
+      writeText(row('Pick Up Time:', pTime));
+    }
+  } else {
+    writeText(row('Pick Up Date:', '--'));
+  }
 
   // 7. Dashed line
   writeText(divider);
@@ -615,9 +626,10 @@ function format25InchEscPosReceipt(rawOrder) {
   writeText(divider);
 
   // 11. Right-aligned Financial Layout (Image 3 format)
-  const advance = Number(order.advance_paid_inr || (order.advance_paid_paise ? order.advance_paid_paise / 100 : (order.amount_paid_inr != null ? order.amount_paid_inr : (order.amount_paid_paise ? order.amount_paid_paise / 100 : 0))));
   const second = Number(order.second_payment_inr || (order.second_payment_paise ? order.second_payment_paise / 100 : 0));
   const third = Number(order.third_payment_inr || (order.third_payment_paise ? order.third_payment_paise / 100 : 0));
+  const totalPaid = Number(order.amount_paid_inr != null ? order.amount_paid_inr : (order.amount_paid_paise ? order.amount_paid_paise / 100 : 0));
+  const advance = Number(order.advance_paid_inr != null ? order.advance_paid_inr : (order.advance_paid_paise ? order.advance_paid_paise / 100 : Math.max(0, totalPaid - second - third)));
   const remaining = Number(order.outstanding_inr != null ? order.outstanding_inr : (order.outstanding_paise != null ? order.outstanding_paise / 100 : Math.max(0, grandTotal - (advance + second + third))));
 
   writeText(finRow('Total:', grandTotal));
@@ -633,8 +645,23 @@ function format25InchEscPosReceipt(rawOrder) {
     const tDate = formatDateTime(order.third_payment_date || order.updated_at || Date.now());
     writeText(tDate.padStart(COLS) + '\n');
   }
+  if (Array.isArray(order.payments) && order.payments.length > 3) {
+    for (let pi = 3; pi < order.payments.length; pi++) {
+      const p = order.payments[pi];
+      const pAmt = p.amount_inr != null ? Number(p.amount_inr) : (p.amount_paise ? Number(p.amount_paise) / 100 : 0);
+      if (pAmt > 0) {
+        writeText(finRow(`${pi + 1}th Amount:`, pAmt));
+        if (p.created_at) {
+          writeText(formatDateTime(p.created_at).padStart(COLS) + '\n');
+        }
+      }
+    }
+  }
   writeText(divider);
   writeText(finRow('Remaining:', remaining));
+  if (remaining === 0) {
+    writeText(center('*** PAID IN FULL ***\n'));
+  }
 
   // 12. Dashed line
   writeText(divider);

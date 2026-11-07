@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     pos-daemon/pos-daemon.ps1 – Native Windows PowerShell POS Print Engine
     Zero-dependency thermal print daemon for Windows 10/11.
@@ -570,30 +570,41 @@ function Format-ReceiptBytes($order) {
     # 5. Dashed line
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
-    # 6. Name, Phone, City, Age (left) | Pick Up Date + time (right)
+    # 6. Name, Phone, City, Age, and Pick Up Date & Time under City
     $custName = [string]$(if ($order.customer_name) { $order.customer_name } else { "Walk-in Client" })
-    if ($custName.Length -gt 18) { $custName = $custName.Substring(0, 18) }
+    if ($custName.Length -gt 24) { $custName = $custName.Substring(0, 24) }
     $custPhone = [string]$(if ($order.customer_phone) { $order.customer_phone } else { "-" })
-    if ($custPhone.Length -gt 18) { $custPhone = $custPhone.Substring(0, 18) }
+    if ($custPhone.Length -gt 20) { $custPhone = $custPhone.Substring(0, 20) }
     $city = [string]$(if ($order.city) { $order.city } elseif ($order.client_city) { $order.client_city } elseif ($order.customer_city) { $order.customer_city } else { "Hyderabad" })
-    if ($city.Length -gt 10) { $city = $city.Substring(0, 10) }
+    if ($city.Length -gt 14) { $city = $city.Substring(0, 14) }
     $age = [string]$(if ($order.customer_age) { $order.customer_age } elseif ($order.client_age) { $order.client_age } elseif ($order.age) { $order.age } else { "--" })
 
     $pDate = "--"
     $pTime = "--"
-    if ($order.pickup_time) {
+    $pickupRaw = if ($order.pickup_time) { $order.pickup_time } elseif ($order.pickupTime) { $order.pickupTime } else { $null }
+    if ($pickupRaw) {
         try {
-            $pDt = [DateTime]::Parse($order.pickup_time)
+            $pDt = [DateTime]::Parse($pickupRaw)
             $pDate = $pDt.ToString("dd MMM yyyy")
             $pTime = $pDt.ToString("hh:mm tt")
         } catch {
-            $pDate = [string]$order.pickup_time
+            $pDate = [string]$pickupRaw
         }
     }
 
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Name: $custName" "Pick Up Date")))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Phone: $custPhone" $pDate)))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "City: $city Age: $age" $pTime)))
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Name: $custName`n"))
+    if ($custPhone -and $custPhone -ne "-") {
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Phone: $custPhone`n"))
+    }
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "City: $city" "Age: $age")))
+    if ($pickupRaw -and $pDate -ne "--") {
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Pick Up Date:" $pDate)))
+        if ($pTime -ne "--") {
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Pick Up Time:" $pTime)))
+        }
+    } else {
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Pick Up Date:" "--")))
+    }
 
     # 7. Dashed line
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
@@ -647,17 +658,18 @@ function Format-ReceiptBytes($order) {
     $discount = if ($order.discount_inr) { [double]$order.discount_inr } `
                 elseif ($order.discount_paise) { [double]$order.discount_paise / 100 } `
                 else { 0.0 }
-    $advance = if ($order.advance_paid_inr) { [double]$order.advance_paid_inr } `
-               elseif ($order.advance_paid_paise) { [double]$order.advance_paid_paise / 100 } `
-               elseif ($order.amount_paid_inr -ne $null) { [double]$order.amount_paid_inr } `
-               elseif ($order.amount_paid_paise) { [double]$order.amount_paid_paise / 100 } `
-               else { 0.0 }
     $second = if ($order.second_payment_inr) { [double]$order.second_payment_inr } `
               elseif ($order.second_payment_paise) { [double]$order.second_payment_paise / 100 } `
               else { 0.0 }
     $third = if ($order.third_payment_inr) { [double]$order.third_payment_inr } `
              elseif ($order.third_payment_paise) { [double]$order.third_payment_paise / 100 } `
              else { 0.0 }
+    $totalPaid = if ($order.amount_paid_inr -ne $null) { [double]$order.amount_paid_inr } `
+                 elseif ($order.amount_paid_paise) { [double]$order.amount_paid_paise / 100 } `
+                 else { 0.0 }
+    $advance = if ($order.advance_paid_inr) { [double]$order.advance_paid_inr } `
+               elseif ($order.advance_paid_paise) { [double]$order.advance_paid_paise / 100 } `
+               else { [Math]::Max(0.0, $totalPaid - $second - $third) }
     $remaining = if ($order.outstanding_inr -ne $null) { [double]$order.outstanding_inr } `
                  elseif ($order.outstanding_paise -ne $null) { [double]$order.outstanding_paise / 100 } `
                  else { [Math]::Max(0.0, $grandTotal - ($advance + $second + $third)) }
@@ -681,8 +693,18 @@ function Format-ReceiptBytes($order) {
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes($sDate.PadLeft($COLS) + "`n"))
     }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "3rd Amount:" $(if ($third -gt 0) { $third } else { "" }))))
+    if ($third -gt 0) {
+        $tDate = (Get-Date).ToString("dd MMM yyyy hh:mm tt")
+        if ($order.third_payment_date) {
+            try { $tDate = ([DateTime]::Parse($order.third_payment_date)).ToString("dd MMM yyyy hh:mm tt") } catch {}
+        }
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($tDate.PadLeft($COLS) + "`n"))
+    }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Remaining:" $remaining)))
+    if ($remaining -eq 0) {
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Center-Text "*** PAID IN FULL ***`n")))
+    }
 
     # 12. Dashed line
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))

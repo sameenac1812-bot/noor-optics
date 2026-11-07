@@ -1158,7 +1158,8 @@
               </div>
               <div id="pos-customer-due-alert" style="display:none; margin-top:8px; padding:8px 12px; background:#FEF2F2; border:1px solid #FCA5A5; border-radius:8px; color:#B91C1C; font-size:0.75rem; font-weight:700; align-items:center; gap:8px;">
                 <span style="font-size:1rem;">⚠️</span>
-                <span id="pos-customer-due-text">Customer has pending balance</span>
+                <span id="pos-customer-due-text" style="flex:1;">Customer has pending balance</span>
+                <button type="button" class="btn-table-action" id="btn-pos-collect-due-direct" style="background:#16A34A; color:#FFF; font-weight:800; font-size:0.72rem; padding:4px 10px; border-radius:6px; border:none; cursor:pointer; white-space:nowrap;">💳 Collect Due</button>
               </div>
             </div>
 
@@ -2803,27 +2804,38 @@
             </div>
           </div>
 
+          <!-- Payment History Breakdown (Advance, 2nd, 3rd, etc.) -->
+          <div id="cp-history-box" style="margin-bottom:1rem; display:none; background:#F1F5F9; border:1px solid #E2E8F0; border-radius:8px; padding:10px 12px;">
+            <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:#64748B; margin-bottom:6px;">Payment History</div>
+            <div id="cp-history-list" style="display:flex; flex-direction:column; gap:4px; font-size:0.8rem;"></div>
+          </div>
+
           <!-- Payment Stage Selection -->
           <div class="form-group" style="margin-bottom:1rem;">
-            <label style="font-weight:700; font-size:0.82rem; color:#334155; margin-bottom:6px; display:block;">Payment Stage <span style="color:#EF4444;">*</span></label>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-              <label style="display:flex; align-items:center; gap:8px; background:#F1F5F9; border:1.5px solid #CBD5E1; padding:10px; border-radius:6px; cursor:pointer; font-size:0.83rem; font-weight:600;">
-                <input type="radio" name="cp-stage" value="second_payment" id="cp-stage-2nd" checked />
-                <span>2nd Payment (1st installment)</span>
-              </label>
-              <label style="display:flex; align-items:center; gap:8px; background:#F1F5F9; border:1.5px solid #CBD5E1; padding:10px; border-radius:6px; cursor:pointer; font-size:0.83rem; font-weight:600;">
-                <input type="radio" name="cp-stage" value="third_payment" id="cp-stage-3rd" />
-                <span>3rd Payment (Final balance)</span>
-              </label>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <label style="font-weight:700; font-size:0.82rem; color:#334155; margin:0;">Payment Stage <span style="color:#EF4444;">*</span></label>
+              <span id="cp-stage-badge" style="background:#EFF6FF; color:#1D4ED8; font-size:0.72rem; font-weight:700; padding:2px 6px; border-radius:4px;">Auto-detected</span>
             </div>
+            <select id="cp-stage-select" class="form-control" style="font-weight:600; font-size:0.85rem;">
+              <option value="second_payment">2nd Payment (1st installment)</option>
+              <option value="third_payment">3rd Payment (2nd installment)</option>
+              <option value="installment">Installment Payment (Ongoing due)</option>
+              <option value="settlement">Final Settlement (Clear remaining balance)</option>
+            </select>
           </div>
 
           <!-- Amount to Collect -->
           <div class="form-group" style="margin-bottom:1rem;">
-            <label style="font-weight:700; font-size:0.82rem; color:#334155; margin-bottom:6px; display:block;">Amount to Collect (₹) <span style="color:#EF4444;">*</span></label>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <label style="font-weight:700; font-size:0.82rem; color:#334155; margin:0;">Amount to Collect (₹) <span style="color:#EF4444;">*</span></label>
+              <button type="button" id="btn-cp-pay-full" style="background:#EFF6FF; border:1px solid #BFDBFE; color:#1D4ED8; font-weight:700; font-size:0.72rem; padding:2px 8px; border-radius:4px; cursor:pointer;">⚡ Pay Full Due</button>
+            </div>
             <div style="position:relative;">
               <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); font-weight:700; color:#64748B;">₹</span>
               <input type="number" id="cp-amount-inr" class="form-control" style="padding-left:28px; font-size:1.15rem; font-weight:700;" min="1" step="1" required />
+            </div>
+            <div id="cp-live-due-preview" style="font-size:0.8rem; font-weight:700; color:#64748B; margin-top:6px;">
+              New Balance: <span style="color:#B91C1C;">₹0</span>
             </div>
           </div>
 
@@ -2841,6 +2853,14 @@
           <div class="form-group" style="margin-bottom:0.5rem;">
             <label style="font-weight:700; font-size:0.82rem; color:#334155; margin-bottom:6px; display:block;">Payment Note (Optional)</label>
             <input type="text" id="cp-notes" class="form-control" placeholder="e.g. Received at pickup / balance cleared" />
+          </div>
+
+          <!-- Immediate Thermal Reprint Checkbox -->
+          <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #E2E8F0;">
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.82rem; font-weight:700; color:#334155; cursor:pointer;">
+              <input type="checkbox" id="cp-print-receipt" checked style="width:16px; height:16px; accent-color:#16A34A;" />
+              <span>🖨️ Print updated bill to POS thermal printer</span>
+            </label>
           </div>
         </div>
 
