@@ -1045,7 +1045,8 @@ function connectRealtimeWebSocket() {
             return;
           }
 
-          // 2. WEBSITE ORDERS: Hold print until cashier approves payment in Admin
+          // 2. WEBSITE ORDERS: Completely held on Realtime.
+          // Website orders print ONLY when cashier explicitly clicks "✓ Approve" in Admin Dashboard!
           const isWebsite = record.channel_code === 1 ||
             String(record.channel || '').toUpperCase() === 'WEBSITE' ||
             String(record.channel || '').toUpperCase() === 'ONLINE' ||
@@ -1054,18 +1055,7 @@ function connectRealtimeWebSocket() {
             orderRef.includes('-ONL-');
 
           if (isWebsite) {
-            // New orders placed online must NEVER auto-print on creation
-            if (String(eventType).toUpperCase() === 'INSERT') {
-              console.log(`[Realtime] Website order #${orderRef} received & held (Waiting for cashier to approve payment).`);
-              return;
-            }
-            const isVerified = String(record.payment_status || '').toUpperCase() === 'VERIFIED';
-            if (!isVerified) {
-              console.log(`[Realtime] Website order #${orderRef} held (Awaiting staff UPI approval).`);
-              return;
-            }
-            // If verified on update, print with staff_approved source
-            printLiveOrder(record, 'staff_approved');
+            console.log(`[Realtime] Website order #${orderRef} (${eventType}) received. Held for staff approval.`);
             return;
           }
 
@@ -1292,6 +1282,14 @@ if (require.main === module) {
     } else {
       console.error('[Daemon] Server error:', err.message);
     }
+  });
+
+  process.on('uncaughtException', err => {
+    console.error('[Daemon Crash Guard] Uncaught exception:', err?.message || err);
+  });
+
+  process.on('unhandledRejection', reason => {
+    console.error('[Daemon Crash Guard] Unhandled rejection:', reason);
   });
 }
 
