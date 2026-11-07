@@ -117,8 +117,8 @@ const posGate = testPrintGate(inStoreOrder, 'local_pos');
 assert.strictEqual(posGate.success, true, 'In-store POS sale prints immediately at counter');
 console.log('  ✓ [PASS] In-store POS sale prints immediately at counter');
 
-// ── 3. UTR Display in ESC/POS Thermal Receipt ────────────────────────────────
-console.log('\n--- 3. ESC/POS Thermal Receipt UTR Rendering ---');
+// ── 3. Clean Website Thermal Receipt Formatting ─────────────────────────────
+console.log('\n--- 3. Clean Website Thermal Receipt Formatting ---');
 
 const receiptBinary = format25InchEscPosReceipt({
   ...websiteOrder,
@@ -126,9 +126,19 @@ const receiptBinary = format25InchEscPosReceipt({
 });
 const receiptText = receiptBinary.toString('ascii');
 
-assert(receiptText.includes('987654321098'), 'Thermal receipt must contain the customer 12-digit UTR');
-assert(receiptText.includes('UPI Ref / UTR:'), 'Thermal receipt must contain "UPI Ref / UTR:" label');
-console.log('  ✓ [PASS] ESC/POS receipt prints customer UTR number (987654321098)');
+// UTR number removed from printed bill per user instruction
+assert(!receiptText.includes('UPI Ref / UTR:'), 'Thermal receipt must NOT print "UPI Ref / UTR:" label');
+assert(!receiptText.includes('987654321098'), 'Thermal receipt must NOT print customer UTR number on paper bill');
+
+// Advance, 2nd amount, discount, and remaining removed from website order bill print
+assert(!receiptText.includes('Advance:'), 'Website order bill print must NOT contain Advance:');
+assert(!receiptText.includes('2nd Amount:'), 'Website order bill print must NOT contain 2nd Amount:');
+assert(!receiptText.includes('Remaining:'), 'Website order bill print must NOT contain Remaining:');
+assert(receiptText.includes('*** PAID IN FULL ***'), 'Website order bill print must state *** PAID IN FULL ***');
+
+// Zero power fallback when no prescription added
+assert(receiptText.includes('RX: Zero Power'), 'Receipt must state "RX: Zero Power" when no prescription added');
+console.log('  ✓ [PASS] Website receipt removes UTR, advance/2nd amount/discount, and shows "RX: Zero Power"');
 
 // ── 4. Admin UTR Resolver Helper ─────────────────────────────────────────────
 console.log('\n--- 4. Admin UTR Multi-Structure Extraction ---');

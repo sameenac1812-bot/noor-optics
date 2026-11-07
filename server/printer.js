@@ -37,6 +37,26 @@ function isWebsiteOrder(o) {
   return false;
 }
 
+function hasMeaningfulDiopters(rx) {
+  if (!rx) return false;
+  const fields = [
+    rx.od_sph, rx.odSph, rx.od_cyl, rx.odCyl, rx.od_axis, rx.odAxis,
+    rx.os_sph, rx.osSph, rx.os_cyl, rx.osCyl, rx.os_axis, rx.osAxis,
+    rx.addition, rx.add
+  ];
+  for (const val of fields) {
+    if (val === undefined || val === null) continue;
+    const str = String(val).trim();
+    if (str === '' || str === '--' || str === '---' || str === '0' || str === '0.0' || str === '0.00' || str === '+0.00' || str === '-0.00') {
+      continue;
+    }
+    const num = parseFloat(str);
+    if (!isNaN(num) && num !== 0) return true;
+    if (isNaN(num) && str.length > 0) return true;
+  }
+  return false;
+}
+
 /**
  * Generate 2.5-inch (58mm) formatted plain text receipt matching Image reference layout
  */
@@ -234,24 +254,34 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
     return line.padStart(COLS);
   }
 
-  lines.push(finRow('Total:', grandTotal));
-  lines.push(finRow('Discount:', discount));
-  lines.push(finRow('Advance:', advance));
-  lines.push(finRow('2nd Amount:', second > 0 ? second : ''));
-  lines.push(finRow('3rd Amount:', third > 0 ? third : ''));
-  if (Array.isArray(order.payments) && order.payments.length > 3) {
-    for (let pi = 3; pi < order.payments.length; pi++) {
-      const p = order.payments[pi];
-      const pAmt = p.amount_inr != null ? Number(p.amount_inr) : (p.amount_paise ? Number(p.amount_paise) / 100 : 0);
-      if (pAmt > 0) {
-        lines.push(finRow(`${pi + 1}th Amount:`, pAmt));
+  const isWeb = isWebsiteOrder(order);
+
+  if (isWeb) {
+    // Website orders: Clean single total & Paid in full
+    lines.push(finRow('Total:', grandTotal));
+    lines.push(divider);
+    lines.push(center('*** PAID IN FULL ***'));
+  } else {
+    // In-store POS counter orders: full installment breakdown
+    lines.push(finRow('Total:', grandTotal));
+    lines.push(finRow('Discount:', discount));
+    lines.push(finRow('Advance:', advance));
+    lines.push(finRow('2nd Amount:', second > 0 ? second : ''));
+    lines.push(finRow('3rd Amount:', third > 0 ? third : ''));
+    if (Array.isArray(order.payments) && order.payments.length > 3) {
+      for (let pi = 3; pi < order.payments.length; pi++) {
+        const p = order.payments[pi];
+        const pAmt = p.amount_inr != null ? Number(p.amount_inr) : (p.amount_paise ? Number(p.amount_paise) / 100 : 0);
+        if (pAmt > 0) {
+          lines.push(finRow(`${pi + 1}th Amount:`, pAmt));
+        }
       }
     }
-  }
-  lines.push(divider);
-  lines.push(finRow('Remaining:', remaining));
-  if (remaining === 0) {
-    lines.push(center('*** PAID IN FULL ***'));
+    lines.push(divider);
+    lines.push(finRow('Remaining:', remaining));
+    if (remaining === 0) {
+      lines.push(center('*** PAID IN FULL ***'));
+    }
   }
 
   // 12. Dashed line
@@ -286,30 +316,40 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
     return String(val).slice(0, 6);
   }
 
-  allRxList.forEach((rx, idx) => {
-    const getRxVal = (keys) => {
-      for (const k of keys) {
-        if (rx && rx[k] !== undefined && rx[k] !== null && String(rx[k]).trim() !== '' && String(rx[k]).trim() !== '---') return rx[k];
-        if (order && order[k] !== undefined && order[k] !== null && String(order[k]).trim() !== '' && String(order[k]).trim() !== '---') return order[k];
+  const validRxList = allRxList.filter(hasMeaningfulDiopters);
+
+  if (validRxList.length > 0) {
+    allRxList.forEach((rx, idx) => {
+      if (!hasMeaningfulDiopters(rx)) return;
+      const getRxVal = (keys) => {
+        for (const k of keys) {
+          if (rx && rx[k] !== undefined && rx[k] !== null && String(rx[k]).trim() !== '' && String(rx[k]).trim() !== '---') return rx[k];
+          if (order && order[k] !== undefined && order[k] !== null && String(order[k]).trim() !== '' && String(order[k]).trim() !== '---') return order[k];
+        }
+        return null;
+      };
+
+      const rxNo = getRxVal(['prescription_number', 'prescriptionNumber', 'prescription_id', 'id']) || (order.prescription_number || (idx + 1));
+      const odSph = getRxVal(['od_sph', 'odSph']);
+      const odCyl = getRxVal(['od_cyl', 'odCyl']);
+      const odAxis = getRxVal(['od_axis', 'odAxis']);
+      const osSph = getRxVal(['os_sph', 'osSph']);
+      const osCyl = getRxVal(['os_cyl', 'osCyl']);
+      const osAxis = getRxVal(['os_axis', 'osAxis']);
+      const addition = getRxVal(['addition', 'add']);
+
+      lines.push(`RX# ${rxNo}`);
+      lines.push(' '.repeat(11) + 'SPH'.padStart(7) + 'CYL'.padStart(7) + 'AXIS'.padStart(7));
+      lines.push('OD Right'.padEnd(11) + fmtDio(odSph).padStart(7) + fmtDio(odCyl).padStart(7) + fmtAx(odAxis).padStart(7));
+      lines.push('OS Left'.padEnd(11) + fmtDio(osSph).padStart(7) + fmtDio(osCyl).padStart(7) + fmtAx(osAxis).padStart(7));
+      if (addition && addition !== '--' && addition !== '---') {
+        lines.push('Addition'.padEnd(11) + fmtDio(addition).padStart(7));
       }
-      return null;
-    };
-
-    const rxNo = getRxVal(['prescription_number', 'prescriptionNumber', 'prescription_id', 'id']) || (order.prescription_number || (idx + 1));
-    const odSph = getRxVal(['od_sph', 'odSph']);
-    const odCyl = getRxVal(['od_cyl', 'odCyl']);
-    const odAxis = getRxVal(['od_axis', 'odAxis']);
-    const osSph = getRxVal(['os_sph', 'osSph']);
-    const osCyl = getRxVal(['os_cyl', 'osCyl']);
-    const osAxis = getRxVal(['os_axis', 'osAxis']);
-    const addition = getRxVal(['addition', 'add']);
-
-    lines.push(`RX# ${rxNo}`);
-    lines.push(' '.repeat(11) + 'SPH'.padStart(7) + 'CYL'.padStart(7) + 'AXIS'.padStart(7));
-    lines.push('OD Right'.padEnd(11) + fmtDio(odSph).padStart(7) + fmtDio(odCyl).padStart(7) + fmtAx(odAxis).padStart(7));
-    lines.push('OS Left'.padEnd(11) + fmtDio(osSph).padStart(7) + fmtDio(osCyl).padStart(7) + fmtAx(osAxis).padStart(7));
-    lines.push('Addition'.padEnd(11) + fmtDio(addition).padStart(7));
-  });
+    });
+  } else {
+    // If no prescription added: "if no prescribtion added dont print prescribtion (just say zero power )"
+    lines.push(center('RX: Zero Power'));
+  }
 
   // 14. Dashed line
   lines.push(divider);
@@ -463,7 +503,9 @@ function generate58mmHTML(order, items = [], settings = {}) {
     return String(val).slice(0, 6);
   }
 
-  const rxHtml = allRxList.map((rx, idx) => {
+  const validRxList = allRxList.filter(hasMeaningfulDiopters);
+
+  const rxHtml = validRxList.length > 0 ? validRxList.map((rx, idx) => {
     const getRxVal = (keys) => {
       for (const k of keys) {
         if (rx && rx[k] !== undefined && rx[k] !== null && String(rx[k]).trim() !== '' && String(rx[k]).trim() !== '---') return rx[k];
@@ -514,7 +556,7 @@ function generate58mmHTML(order, items = [], settings = {}) {
         </tbody>
       </table>
     `;
-  }).join('<div class="dash">--------------------------------</div>');
+  }).join('<div class="dash">--------------------------------</div>') : `<div class="center bold" style="margin:4px 0;">RX: Zero Power</div>`;
 
   return `<!DOCTYPE html>
 <html>
@@ -608,14 +650,20 @@ function generate58mmHTML(order, items = [], settings = {}) {
 
   <div class="dash">--------------------------------</div>
   <div class="fin-box">
-    <div class="fin-line"><span class="fin-lbl">Total:</span><span class="fin-val">${formatNum(grandTotal)}</span></div>
-    <div class="fin-line"><span class="fin-lbl">Discount:</span><span class="fin-val">${formatNum(discount)}</span></div>
-    <div class="fin-line"><span class="fin-lbl">Advance:</span><span class="fin-val">${formatNum(advance)}</span></div>
-    <div class="fin-line"><span class="fin-lbl">2nd Amount:</span><span class="fin-val">${second > 0 ? formatNum(second) : ''}</span></div>
-    <div class="fin-line"><span class="fin-lbl">3rd Amount:</span><span class="fin-val">${third > 0 ? formatNum(third) : ''}</span></div>
-    <div class="dash" style="width:100%;">--------------------------------</div>
-    <div class="fin-line bold"><span class="fin-lbl">Remaining:</span><span class="fin-val">${formatNum(remaining)}</span></div>
-    ${remaining === 0 ? `<div class="center bold" style="margin-top:4px;">*** PAID IN FULL ***</div>` : ''}
+    ${isWebsiteOrder(order) ? `
+      <div class="fin-line bold"><span class="fin-lbl">Total:</span><span class="fin-val">${formatNum(grandTotal)}</span></div>
+      <div class="dash" style="width:100%;">--------------------------------</div>
+      <div class="center bold" style="margin-top:4px;">*** PAID IN FULL ***</div>
+    ` : `
+      <div class="fin-line"><span class="fin-lbl">Total:</span><span class="fin-val">${formatNum(grandTotal)}</span></div>
+      <div class="fin-line"><span class="fin-lbl">Discount:</span><span class="fin-val">${formatNum(discount)}</span></div>
+      <div class="fin-line"><span class="fin-lbl">Advance:</span><span class="fin-val">${formatNum(advance)}</span></div>
+      <div class="fin-line"><span class="fin-lbl">2nd Amount:</span><span class="fin-val">${second > 0 ? formatNum(second) : ''}</span></div>
+      <div class="fin-line"><span class="fin-lbl">3rd Amount:</span><span class="fin-val">${third > 0 ? formatNum(third) : ''}</span></div>
+      <div class="dash" style="width:100%;">--------------------------------</div>
+      <div class="fin-line bold"><span class="fin-lbl">Remaining:</span><span class="fin-val">${formatNum(remaining)}</span></div>
+      ${remaining === 0 ? `<div class="center bold" style="margin-top:4px;">*** PAID IN FULL ***</div>` : ''}
+    `}
   </div>
 
   <div class="dash">--------------------------------</div>

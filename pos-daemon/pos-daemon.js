@@ -689,38 +689,42 @@ function format25InchEscPosReceipt(rawOrder) {
   // 10. Dashed line
   writeText(divider);
 
-  // 11. Right-aligned Financial Layout (Image 3 format)
-  const second = Number(order.second_payment_inr || (order.second_payment_paise ? order.second_payment_paise / 100 : 0));
-  const third = Number(order.third_payment_inr || (order.third_payment_paise ? order.third_payment_paise / 100 : 0));
-  const totalPaid = Number(order.amount_paid_inr != null ? order.amount_paid_inr : (order.amount_paid_paise ? order.amount_paid_paise / 100 : 0));
-  const advance = Number(order.advance_paid_inr != null ? order.advance_paid_inr : (order.advance_paid_paise ? order.advance_paid_paise / 100 : Math.max(0, totalPaid - second - third)));
-  const remaining = Number(order.outstanding_inr != null ? order.outstanding_inr : (order.outstanding_paise != null ? order.outstanding_paise / 100 : Math.max(0, grandTotal - (advance + second + third))));
+  // 11. Right-aligned Financial Layout (Website: Total & Paid in Full only; In-Store POS: multi-stage breakdown)
+  const isWeb = isWebsiteOrder(order);
 
-  writeText(finRow('Total:', grandTotal));
-  writeText(finRow('Discount:', discount > 0 ? discount : 0));
-  writeText(finRow('Advance:', advance));
-  writeText(finRow('2nd Amount:', second > 0 ? second : ''));
-  writeText(finRow('3rd Amount:', third > 0 ? third : ''));
-  if (Array.isArray(order.payments) && order.payments.length > 3) {
-    for (let pi = 3; pi < order.payments.length; pi++) {
-      const p = order.payments[pi];
-      const pAmt = p.amount_inr != null ? Number(p.amount_inr) : (p.amount_paise ? Number(p.amount_paise) / 100 : 0);
-      if (pAmt > 0) {
-        writeText(finRow(`${pi + 1}th Amount:`, pAmt));
+  if (isWeb) {
+    // Website orders: paid in full via online checkout.
+    // User instruction: remove discount, advance, 2nd amount, and all, even utr number.
+    writeText(finRow('Total:', grandTotal));
+    writeText(divider);
+    writeText(center('*** PAID IN FULL ***\n'));
+  } else {
+    // In-store POS counter orders: full multi-stage installment breakdown
+    const second = Number(order.second_payment_inr || (order.second_payment_paise ? order.second_payment_paise / 100 : 0));
+    const third = Number(order.third_payment_inr || (order.third_payment_paise ? order.third_payment_paise / 100 : 0));
+    const totalPaid = Number(order.amount_paid_inr != null ? order.amount_paid_inr : (order.amount_paid_paise ? order.amount_paid_paise / 100 : 0));
+    const advance = Number(order.advance_paid_inr != null ? order.advance_paid_inr : (order.advance_paid_paise ? order.advance_paid_paise / 100 : Math.max(0, totalPaid - second - third)));
+    const remaining = Number(order.outstanding_inr != null ? order.outstanding_inr : (order.outstanding_paise != null ? order.outstanding_paise / 100 : Math.max(0, grandTotal - (advance + second + third))));
+
+    writeText(finRow('Total:', grandTotal));
+    writeText(finRow('Discount:', discount > 0 ? discount : 0));
+    writeText(finRow('Advance:', advance));
+    writeText(finRow('2nd Amount:', second > 0 ? second : ''));
+    writeText(finRow('3rd Amount:', third > 0 ? third : ''));
+    if (Array.isArray(order.payments) && order.payments.length > 3) {
+      for (let pi = 3; pi < order.payments.length; pi++) {
+        const p = order.payments[pi];
+        const pAmt = p.amount_inr != null ? Number(p.amount_inr) : (p.amount_paise ? Number(p.amount_paise) / 100 : 0);
+        if (pAmt > 0) {
+          writeText(finRow(`${pi + 1}th Amount:`, pAmt));
+        }
       }
     }
-  }
-  writeText(divider);
-  writeText(finRow('Remaining:', remaining));
-  if (remaining === 0) {
-    writeText(center('*** PAID IN FULL ***\n'));
-  }
-
-  // Display Customer's Entered UPI UTR Reference if present (For website orders)
-  const utrNum = order.claimed_upi_ref || order.claimedUpiRef || order.utr || order.claimed_utr || (order.notes && order.notes.includes('UPI Ref:') ? order.notes.split('UPI Ref:')[1].replace(')', '').trim() : null);
-  if (utrNum) {
     writeText(divider);
-    writeText(row('UPI Ref / UTR:', utrNum));
+    writeText(finRow('Remaining:', remaining));
+    if (remaining === 0) {
+      writeText(center('*** PAID IN FULL ***\n'));
+    }
   }
 
   // 12. Dashed line
@@ -728,12 +732,13 @@ function format25InchEscPosReceipt(rawOrder) {
 
   // Special website prescription preferences
   if (order.prescription_pref === 'zero-power') {
-    writeText(center('ZERO-POWER (PLANO) LENSES'));
-    writeText(center('Blue-Cut Anti-Glare'));
+    writeText(center('ZERO-POWER (PLANO) LENSES\n'));
+    writeText(center('RX: Zero Power\n'));
+    writeText(center('Blue-Cut Anti-Glare\n'));
     writeText(divider);
   } else if (order.prescription_pref === 'call-optometrist') {
-    writeText(center('OPTOMETRIST CALL REQUIRED'));
-    if (order.customer_phone) writeText(center(String(order.customer_phone)));
+    writeText(center('OPTOMETRIST CALL REQUIRED\n'));
+    if (order.customer_phone) writeText(center(String(order.customer_phone) + '\n'));
     writeText(divider);
   }
 
@@ -793,13 +798,31 @@ function format25InchEscPosReceipt(rawOrder) {
     });
   }
 
-  allRxList = allRxList.filter(rx => {
+  function hasMeaningfulDiopters(rx) {
     if (!rx) return false;
-    return rx.od_sph != null || rx.odSph != null || rx.os_sph != null || rx.osSph != null || rx.addition != null || rx.add != null || rx.od_cyl != null || rx.odCyl != null || rx.prescription_number;
-  });
+    const fields = [
+      rx.od_sph, rx.odSph, rx.od_cyl, rx.odCyl, rx.od_axis, rx.odAxis,
+      rx.os_sph, rx.osSph, rx.os_cyl, rx.osCyl, rx.os_axis, rx.osAxis,
+      rx.addition, rx.add
+    ];
+    for (const val of fields) {
+      if (val === undefined || val === null) continue;
+      const str = String(val).trim();
+      if (str === '' || str === '--' || str === '---' || str === '0' || str === '0.0' || str === '0.00' || str === '+0.00' || str === '-0.00') {
+        continue;
+      }
+      const num = parseFloat(str);
+      if (!isNaN(num) && num !== 0) return true;
+      if (isNaN(num) && str.length > 0) return true;
+    }
+    return false;
+  }
 
-  if (allRxList.length > 0) {
+  const validRxList = allRxList.filter(hasMeaningfulDiopters);
+
+  if (validRxList.length > 0) {
     allRxList.forEach((rx, idx) => {
+      if (!hasMeaningfulDiopters(rx)) return;
       const getRxVal = (keys) => {
         for (const k of keys) {
           if (rx && rx[k] !== undefined && rx[k] !== null && String(rx[k]).trim() !== '' && String(rx[k]).trim() !== '---') return rx[k];
@@ -827,6 +850,12 @@ function format25InchEscPosReceipt(rawOrder) {
       }
       writeText(divider);
     });
+  } else {
+    // If no prescription added: "if no prescribtion added dont print prescribtion (just say zero power )"
+    if (order.prescription_pref !== 'zero-power') {
+      writeText(center('RX: Zero Power\n'));
+      writeText(divider);
+    }
   }
 
   // 14. "Thanks for Shopping" (centered)
