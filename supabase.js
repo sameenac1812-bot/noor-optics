@@ -194,10 +194,30 @@
               order_id: created.id,
               print_type: 'receipt',
               printer_id: 'POS-80',
-              status: 'uncertain',
-              last_error: 'Held pending staff UPI payment verification',
+              status: 'queued',
+              last_error: null,
               attempt_count: 0
             }], { onConflict: 'order_id,print_type' });
+          } catch (_) {}
+
+          // Cloud Spool Queue: Push job so the POS printer laptop prints it immediately!
+          try {
+            const qRes = await supabaseClient.from('customers').select('notes').eq('client_code', 'SYS-PRINT-QUEUE');
+            let currentJobs = [];
+            if (qRes && qRes.data && qRes.data[0] && qRes.data[0].notes) {
+              try { currentJobs = JSON.parse(qRes.data[0].notes).jobs || []; } catch(_) {}
+            }
+            currentJobs.push({
+              id: 'job-receipt-' + (created.order_ref || created.id) + '-' + Date.now(),
+              type: 'receipt',
+              order: created,
+              approved: true,
+              source: 'website_placed',
+              created_at: new Date().toISOString()
+            });
+            await supabaseClient.from('customers').update({
+              notes: JSON.stringify({ jobs: currentJobs })
+            }).eq('client_code', 'SYS-PRINT-QUEUE');
           } catch (_) {}
         }
         return { success: true, cloud: true, data: created, orderNumber: created.order_number || created.order_ref };
@@ -232,9 +252,26 @@
               status: 'PENDING_VERIFICATION'
             }).eq('id', rpcData.id);
             await supabaseClient.from('print_jobs').update({
-              status: 'uncertain',
-              last_error: 'Held pending staff UPI payment verification'
+              status: 'queued',
+              last_error: null
             }).eq('order_id', rpcData.id);
+
+            const qRes = await supabaseClient.from('customers').select('notes').eq('client_code', 'SYS-PRINT-QUEUE');
+            let currentJobs = [];
+            if (qRes && qRes.data && qRes.data[0] && qRes.data[0].notes) {
+              try { currentJobs = JSON.parse(qRes.data[0].notes).jobs || []; } catch(_) {}
+            }
+            currentJobs.push({
+              id: 'job-receipt-' + (rpcData.order_ref || rpcData.id) + '-' + Date.now(),
+              type: 'receipt',
+              order: rpcData,
+              approved: true,
+              source: 'website_placed',
+              created_at: new Date().toISOString()
+            });
+            await supabaseClient.from('customers').update({
+              notes: JSON.stringify({ jobs: currentJobs })
+            }).eq('client_code', 'SYS-PRINT-QUEUE');
           } catch (_) {}
         }
         rpcData.payment_status = 'AWAITING_VERIFICATION';
@@ -797,8 +834,15 @@
   }
 
   // ── 9. Fetch Products Catalog from Supabase ────────────────────────────────
-  async function fetchCatalogFromSupabase() {
+  let _cachedCatalog = null;
+  let _cachedCatalogTime = 0;
+  const CATALOG_CACHE_TTL = 30000; // 30s in-memory cache to eliminate cloud latency & lag
+
+  async function fetchCatalogFromSupabase(force = false) {
     if (!supabaseClient) return null;
+    if (!force && _cachedCatalog && (Date.now() - _cachedCatalogTime < CATALOG_CACHE_TTL)) {
+      return _cachedCatalog;
+    }
 
     try {
       // 1. Try querying products table
@@ -830,7 +874,7 @@
 
       if (list.length === 0) return null;
 
-      return list.map(p => ({
+      const mapped = list.map(p => ({
         id: p.id,
         sku: p.sku || p.id,
         name: p.name,
@@ -848,6 +892,10 @@
         dimensions: p.dimensions || {},
         description: p.description || ''
       }));
+
+      _cachedCatalog = mapped;
+      _cachedCatalogTime = Date.now();
+      return mapped;
     } catch (err) {
       console.warn('fetchCatalogFromSupabase error:', err.message);
       return null;
@@ -886,6 +934,7 @@
         console.error('Supabase save product error:', error);
         return { success: false, error: error.message };
       }
+      _cachedCatalog = null;
       return { success: true, product: prodRow };
     } catch (err) {
       return { success: false, error: err.message };
@@ -896,6 +945,7 @@
     if (!supabaseClient || !productId) return { success: false };
 
     try {
+      _cachedCatalog = null;
       await supabaseClient.from('products').update({ is_active: false }).eq('id', productId);
       const { error } = await supabaseClient.from('products').delete().eq('id', productId);
       if (error) return { success: false, error: error.message };

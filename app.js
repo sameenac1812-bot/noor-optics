@@ -219,13 +219,22 @@
       });
     }
 
-    // Gender Filter ('Men', 'Women', 'Kids', 'all')
+    // Gender Filter ('Men', 'Women', 'Kids', 'Unisex', 'all')
     if (state.filters.gender && state.filters.gender !== 'all') {
       const g = state.filters.gender.toLowerCase();
       list = list.filter(item => {
         const itemGender = (item.gender || 'Unisex').toLowerCase();
         if (g === 'kids') return itemGender === 'kids' || itemGender === 'unisex';
-        return itemGender === g || itemGender === 'unisex';
+        if (g === 'men') return itemGender === 'men' || itemGender === 'unisex';
+        if (g === 'women') return itemGender === 'women' || itemGender === 'unisex';
+        if (g === 'unisex') return itemGender === 'unisex';
+        return itemGender === g;
+      });
+      // Sort exact gender matches to the top
+      list.sort((a, b) => {
+        const aExact = (a.gender || '').toLowerCase() === g ? 1 : 0;
+        const bExact = (b.gender || '').toLowerCase() === g ? 1 : 0;
+        return bExact - aExact;
       });
     }
 
@@ -257,7 +266,15 @@
 
     // 2. Shape Filter
     if (state.filters.shape !== 'all') {
-      list = list.filter(item => item.shape.toLowerCase() === state.filters.shape.toLowerCase());
+      const fs = state.filters.shape.toLowerCase();
+      list = list.filter(item => {
+        if (!item.shape) return false;
+        const ishape = item.shape.toLowerCase();
+        if (fs === 'geometric') return ishape.includes('geom') || ishape.includes('hex');
+        if (fs === 'rectangular' || fs === 'rectangle') return ishape.includes('rect');
+        if (fs === 'browline') return ishape.includes('brow') || ishape.includes('club');
+        return ishape.includes(fs) || fs.includes(ishape);
+      });
     }
 
     // 3. Material Filter
@@ -265,9 +282,22 @@
       list = list.filter(item => item.material.toLowerCase().includes(state.filters.material.toLowerCase()));
     }
 
-    // 4. Fit Filter
-    if (state.filters.fit !== 'all') {
-      list = list.filter(item => item.fit.toLowerCase() === state.filters.fit.toLowerCase());
+    // 4. Fit Filter (Supports Small/Narrow, Medium/Regular, Large/Wide)
+    if (state.filters.fit && state.filters.fit !== 'all') {
+      const f = state.filters.fit.toLowerCase();
+      list = list.filter(item => {
+        const ifit = (item.fit || 'Regular').toLowerCase();
+        if (f === 'small' || f === 'narrow') {
+          return ifit.includes('narrow') || ifit.includes('small') || ifit === 's';
+        }
+        if (f === 'medium' || f === 'regular') {
+          return ifit.includes('regular') || ifit.includes('medium') || ifit === 'm';
+        }
+        if (f === 'large' || f === 'wide') {
+          return ifit.includes('wide') || ifit.includes('large') || ifit === 'l';
+        }
+        return ifit.includes(f) || f.includes(ifit);
+      });
     }
 
     // 5. Color Filter
@@ -383,45 +413,42 @@
       `).join('');
 
       html += `
-        <article class="product-card" data-product-id="${product.id}">
-          <div class="card-media" data-action="quickview" data-id="${product.id}">
-            ${badgeHtml}
-            <button class="card-wishlist-btn ${isWishlisted ? 'active' : ''}"
+        <article class="pcard product-card" data-product-id="${product.id}">
+          <div class="pic card-media" data-action="quickview" data-id="${product.id}">
+            ${discountPercent ? `<span class="tag">${discountPercent}% off</span>` : (badgeHtml || '')}
+            <button class="fav card-wishlist-btn ${isWishlisted ? 'active' : ''}"
                     data-action="wishlist"
                     data-id="${product.id}"
                     aria-label="${isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist'}">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-              </svg>
+              <svg width="20" height="20" stroke="var(--navy)" fill="${isWishlisted ? 'var(--navy)' : 'none'}" stroke-width="1.9"><use href="#i-heart"/></svg>
             </button>
             <img class="card-img"
                  src="${formatProductImage(product.image)}"
                  alt="${product.name} - ${product.shape} Eyeglasses"
                  loading="lazy"
+                 width="158"
+                 height="118"
                  decoding="async"
                  onerror="this.onerror=null; this.src='/images/frames/frame_01.jpg';"
                  id="img-${product.id}">
           </div>
-          <div class="card-content">
-            <div class="card-brand-tag">${escapeHtml(product.brand || 'Noor Optics')}</div>
-            <h3 class="card-name" data-action="quickview" data-id="${product.id}">${product.name}</h3>
-            <div class="card-size-tag">${product.fit || 'Regular'} · ${product.shape || 'Optical'} · ${product.material || 'Acetate'}</div>
-            <div class="card-price-row">
-              <span class="card-price">${formatINR(product.price)}</span>
-              ${product.originalPrice ? `<span class="card-price-strike">${formatINR(product.originalPrice)}</span>` : ''}
-              ${discountPercent ? `<span class="card-discount-badge">${discountPercent}% OFF</span>` : ''}
+          <div class="info card-content">
+            <div class="brand card-brand-tag">
+              <span>${escapeHtml(product.brand || 'Noor Optics')}</span>
+              <span class="card-gender-badge ${(product.gender || 'unisex').toLowerCase()}">${escapeHtml(product.gender || 'Unisex')}</span>
             </div>
-            <div class="card-swatches">
+            <div class="name card-name" data-action="quickview" data-id="${product.id}">${product.name}</div>
+            <div class="price card-price-row">
+              <span class="card-price">${formatINR((product.price && product.price > 0) ? product.price : 1199)}</span>
+              ${product.originalPrice ? `<s class="card-price-strike">${formatINR(product.originalPrice)}</s>` : ''}
+              ${discountPercent ? `<em class="card-discount-badge">${discountPercent}% off</em>` : ''}
+            </div>
+            <div class="card-swatches" style="margin: 4px 0;">
               ${swatchesHtml}
             </div>
             <div class="card-bottom-actions">
-              <button class="btn-card-addbag" data-action="addbag" data-id="${product.id}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-                  <line x1="3" y1="6" x2="21" y2="6"/>
-                  <path d="M16 10a4 4 0 01-8 0"/>
-                </svg>
-                Add to Bag
+              <button class="btn btn-primary btn-block btn-card-addbag" data-action="addbag" data-id="${product.id}" style="height:38px;font-size:13px;margin:4px 0 0;">
+                + Add to Bag
               </button>
             </div>
           </div>
@@ -525,6 +552,30 @@
 
   // ── Sync Visual Category & Brand Showcase UI ─────────────────────────────────
   function syncVisualShowcaseUI() {
+    // Sync Gender Showcase Cards
+    document.querySelectorAll('.gender-card').forEach(card => {
+      const g = (card.getAttribute('data-gender') || '').toLowerCase();
+      const activeG = (state.filters.gender || 'all').toLowerCase();
+      card.classList.toggle('active', g === activeG);
+    });
+
+    // Sync Top Category & Gender Chips
+    document.querySelectorAll('.chips .chip').forEach(chip => {
+      const cat = chip.getAttribute('data-cat');
+      const gen = chip.getAttribute('data-gender');
+      let isActive = false;
+      if (cat === 'all' && (!gen || gen === 'all')) {
+        isActive = (state.filters.category === 'all' && state.filters.gender === 'all' && state.filters.priceRange !== 'under-3500');
+      } else if (gen === 'sale') {
+        isActive = (state.filters.priceRange === 'under-3500');
+      } else if (gen) {
+        isActive = (state.filters.gender && state.filters.gender.toLowerCase() === gen.toLowerCase());
+      } else if (cat) {
+        isActive = (state.filters.category && state.filters.category.toLowerCase() === cat.toLowerCase());
+      }
+      chip.classList.toggle('active', isActive);
+    });
+
     document.querySelectorAll('.lk-cat-card').forEach(card => {
       const cardCat = card.getAttribute('data-cat');
       const cardGender = card.getAttribute('data-gender');
@@ -559,6 +610,16 @@
   // ── Sync Filter Drawer Checkboxes & Radio UI ───────────────────────────────
   function syncFilterDrawerUI() {
     if (!DOM.filterDrawer) return;
+
+    // Radio Gender
+    DOM.filterDrawer.querySelectorAll('input[name="filter-gender"]').forEach(radio => {
+      radio.checked = (radio.value.toLowerCase() === (state.filters.gender || 'all').toLowerCase());
+    });
+
+    // Radio Category
+    DOM.filterDrawer.querySelectorAll('input[name="filter-category"]').forEach(radio => {
+      radio.checked = (radio.value.toLowerCase() === (state.filters.category || 'all').toLowerCase());
+    });
 
     // Radio Shape
     DOM.filterDrawer.querySelectorAll('input[name="filter-shape"]').forEach(radio => {
@@ -948,7 +1009,7 @@
             <h2 class="quickview-title">${product.name}</h2>
           </div>
           <div class="quickview-price-wrap">
-            <span class="quickview-price" id="qv-calculated-price">${formatINR(product.price)}</span>
+            <span class="quickview-price" id="qv-calculated-price">${formatINR((product.price && product.price > 0) ? product.price : 1199)}</span>
             ${product.originalPrice ? `<span class="card-price-strike">${formatINR(product.originalPrice)}</span>` : ''}
           </div>
           <p class="quickview-desc">${product.description}</p>
@@ -1021,7 +1082,8 @@
 
   function updateQuickViewPrice(product) {
     const lensPkg = (window.LENS_PACKAGES || []).find(l => l.id === state.selectedLensPackageId) || { price: 0 };
-    const calculated = product.price + lensPkg.price;
+    const basePrice = (product.price && product.price > 0) ? product.price : 1199;
+    const calculated = basePrice + lensPkg.price;
     const priceElem = document.getElementById('qv-calculated-price');
     if (priceElem) priceElem.textContent = formatINR(calculated);
   }
@@ -2230,9 +2292,9 @@
     // Fetch live inventory items so newly added frames appear immediately on the webpage
     loadLiveCatalog();
 
-    // Auto-refresh catalog on tab focus and periodic background sync (every 5 seconds)
+    // Auto-refresh catalog on tab focus and periodic background sync (every 60 seconds)
     window.addEventListener('focus', loadLiveCatalog);
-    setInterval(loadLiveCatalog, 5000);
+    setInterval(loadLiveCatalog, 60000);
   }
 
   // Run on DOM Ready

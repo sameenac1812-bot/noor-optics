@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     pos-daemon/pos-daemon.ps1 – Native Windows PowerShell POS Print Engine
     Zero-dependency thermal print daemon for Windows 10/11.
@@ -571,9 +571,9 @@ function Format-ReceiptBytes($order) {
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
 
     # 6. Name, Phone, City, Age, and Pick Up Date & Time under City
-    $custName = [string]$(if ($order.customer_name) { $order.customer_name } else { "Walk-in Client" })
+    $custName = [string]$(if ($order.customer_name) { $order.customer_name } elseif ($order.customerName) { $order.customerName } elseif ($order.name) { $order.name } elseif ($order.patient_name) { $order.patient_name } elseif ($order.client_name) { $order.client_name } elseif ($order.customer -and $order.customer.name) { $order.customer.name } else { "Walk-in Client" })
     if ($custName.Length -gt 24) { $custName = $custName.Substring(0, 24) }
-    $custPhone = [string]$(if ($order.customer_phone) { $order.customer_phone } else { "-" })
+    $custPhone = [string]$(if ($order.customer_phone) { $order.customer_phone } elseif ($order.customerPhone) { $order.customerPhone } elseif ($order.phone) { $order.phone } elseif ($order.phone_number) { $order.phone_number } else { "-" })
     if ($custPhone.Length -gt 20) { $custPhone = $custPhone.Substring(0, 20) }
     $city = [string]$(if ($order.city) { $order.city } elseif ($order.client_city) { $order.client_city } elseif ($order.customer_city) { $order.customer_city } else { "Hyderabad" })
     if ($city.Length -gt 14) { $city = $city.Substring(0, 14) }
@@ -713,10 +713,26 @@ function Format-ReceiptBytes($order) {
         } catch {}
     }
     if ($allRxList.Count -eq 0) {
+        if ($order.items) {
+            foreach ($it in $order.items) {
+                if ($it) {
+                    $itemRx = if ($it.prescription) { $it.prescription } elseif ($it.rx) { $it.rx } else { $null }
+                    if ($itemRx) {
+                        if ($itemRx -is [string] -and $itemRx.Trim().StartsWith("{")) {
+                            try { $allRxList += ($itemRx | ConvertFrom-Json) } catch { $allRxList += $itemRx }
+                        } else {
+                            $allRxList += $itemRx
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if ($allRxList.Count -eq 0) {
         if ($order.prescription) { $allRxList += $order.prescription }
         elseif ($order.client_prescription) { $allRxList += $order.client_prescription }
         elseif ($order.newPrescription) { $allRxList += $order.newPrescription }
-        else { $allRxList += $order }
+        elseif ($order.od_sph -ne $null -or $order.os_sph -ne $null) { $allRxList += $order }
     }
 
     function Format-DiopterVal($val) {
@@ -738,37 +754,62 @@ function Format-ReceiptBytes($order) {
         return $str
     }
 
-    $rxIdx = 0
-    foreach ($rx in $allRxList) {
-        $rxIdx++
-        $getRxVal = {
-            param($keys)
-            foreach ($k in $keys) {
-                if ($rx -and $rx.$k -ne $null -and [string]$rx.$k -ne "" -and [string]$rx.$k -ne "---") { return $rx.$k }
-                if ($order -and $order.$k -ne $null -and [string]$order.$k -ne "" -and [string]$order.$k -ne "---") { return $order.$k }
+    function Test-MeaningfulDiopters($rx) {
+        if (-not $rx) { return $false }
+        $fields = @($rx.od_sph, $rx.odSph, $rx.od_cyl, $rx.odCyl, $rx.od_axis, $rx.odAxis, $rx.os_sph, $rx.osSph, $rx.os_cyl, $rx.osCyl, $rx.os_axis, $rx.osAxis, $rx.addition, $rx.add)
+        foreach ($v in $fields) {
+            if ($v -ne $null) {
+                $str = [string]$v
+                $trimmed = $str.Trim()
+                if ($trimmed -ne "" -and $trimmed -ne "--" -and $trimmed -ne "---" -and $trimmed -ne "0" -and $trimmed -ne "0.0" -and $trimmed -ne "0.00" -and $trimmed -ne "+0.00" -and $trimmed -ne "-0.00") {
+                    return $true
+                }
             }
-            return $null
         }
-
-        $rxNo = & $getRxVal @('prescription_number', 'prescriptionNumber', 'prescription_id', 'id')
-        if (-not $rxNo) { $rxNo = $(if ($order.prescription_number) { $order.prescription_number } else { $rxIdx }) }
-        $odSph = & $getRxVal @('od_sph', 'odSph')
-        $odCyl = & $getRxVal @('od_cyl', 'odCyl')
-        $odAxis = & $getRxVal @('od_axis', 'odAxis')
-        $osSph = & $getRxVal @('os_sph', 'osSph')
-        $osCyl = & $getRxVal @('os_cyl', 'osCyl')
-        $osAxis = & $getRxVal @('os_axis', 'osAxis')
-        $addition = & $getRxVal @('addition', 'add')
-
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("RX# $rxNo`n"))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((" " * 11) + "SPH".PadLeft(7) + "CYL".PadLeft(7) + "AXIS".PadLeft(7) + "`n"))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OD Right".PadRight(11) + (Format-DiopterVal $odSph).PadLeft(7) + (Format-DiopterVal $odCyl).PadLeft(7) + (Format-AxisVal $odAxis).PadLeft(7) + "`n"))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OS Left".PadRight(11) + (Format-DiopterVal $osSph).PadLeft(7) + (Format-DiopterVal $osCyl).PadLeft(7) + (Format-AxisVal $osAxis).PadLeft(7) + "`n"))
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Addition".PadRight(11) + (Format-DiopterVal $addition).PadLeft(7) + "`n"))
+        return $false
     }
 
-    # 14. Dashed line
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
+    $validRxList = @()
+    foreach ($r in $allRxList) {
+        if (Test-MeaningfulDiopters $r) { $validRxList += $r }
+    }
+
+    if ($validRxList.Count -gt 0) {
+        $rxIdx = 0
+        foreach ($rx in $validRxList) {
+            $rxIdx++
+            $getRxVal = {
+                param($keys)
+                foreach ($k in $keys) {
+                    if ($rx -and $rx.$k -ne $null -and [string]$rx.$k -ne "" -and [string]$rx.$k -ne "---") { return $rx.$k }
+                    if ($order -and $order.$k -ne $null -and [string]$order.$k -ne "" -and [string]$order.$k -ne "---") { return $order.$k }
+                }
+                return $null
+            }
+
+            $rxNo = & $getRxVal @('prescription_number', 'prescriptionNumber', 'prescription_id', 'id')
+            if (-not $rxNo) { $rxNo = $(if ($order.prescription_number) { $order.prescription_number } else { $rxIdx }) }
+            $odSph = & $getRxVal @('od_sph', 'odSph')
+            $odCyl = & $getRxVal @('od_cyl', 'odCyl')
+            $odAxis = & $getRxVal @('od_axis', 'odAxis')
+            $osSph = & $getRxVal @('os_sph', 'osSph')
+            $osCyl = & $getRxVal @('os_cyl', 'osCyl')
+            $osAxis = & $getRxVal @('os_axis', 'osAxis')
+            $addition = & $getRxVal @('addition', 'add')
+
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("RX# $rxNo`n"))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes((" " * 11) + "SPH".PadLeft(7) + "CYL".PadLeft(7) + "AXIS".PadLeft(7) + "`n"))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OD Right".PadRight(11) + (Format-DiopterVal $odSph).PadLeft(7) + (Format-DiopterVal $odCyl).PadLeft(7) + (Format-AxisVal $odAxis).PadLeft(7) + "`n"))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("OS Left".PadRight(11) + (Format-DiopterVal $osSph).PadLeft(7) + (Format-DiopterVal $osCyl).PadLeft(7) + (Format-AxisVal $osAxis).PadLeft(7) + "`n"))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Addition".PadRight(11) + (Format-DiopterVal $addition).PadLeft(7) + "`n"))
+        }
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
+    } else {
+        if ($order.prescription_pref -ne "zero-power") {
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Center-Text "RX: Zero Power`n")))
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
+        }
+    }
 
     # 15. "Thanks for Shopping" (centered)
     $bw.Write([byte[]]@(0x1B, 0x61, 0x01)) # Center
@@ -914,14 +955,15 @@ function Poll-CloudPrintQueue {
                         }
                     } elseif ($job.type -eq "receipt") {
                         $order = if ($job.order) { $job.order } elseif ($job.items -and $job.items[0] -and $job.items[0].order) { $job.items[0].order } else { $null }
-                        if (-not $order -or (-not $order.order_number -and -not $order.order_ref)) {
+                        if (-not $order -or (-not $order.order_number -and -not $order.order_ref -and -not $order.id)) {
                             Write-DaemonLog "[Cloud Queue] Discarding malformed or dummy receipt job #$jobId" "INFO"
                             continue
                         }
-                        $ref = if ($order.order_number) { [string]$order.order_number } else { [string]$order.order_ref }
+                        $ref = if ($order.order_number) { [string]$order.order_number } elseif ($order.order_ref) { [string]$order.order_ref } elseif ($order.id) { [string]$order.id } else { "BILL" }
                         $orderIdStr = if ($order.id) { [string]$order.id } else { "" }
+                        $isExplicit = ($job.approved -eq $true -or $job.source -eq "staff_approved" -or $job.source -eq "reprint" -or $job.source -eq "website_placed" -or $job.source -eq "instore_checkout")
                         $alreadyDone = $livePrintedOrders.Contains($ref) -or ($orderIdStr -and $livePrintedOrders.Contains($orderIdStr)) -or ($History.ContainsKey($ref)) -or ($orderIdStr -and $History.ContainsKey($orderIdStr))
-                        if ($alreadyDone) {
+                        if (-not $isExplicit -and $alreadyDone) {
                             Write-DaemonLog "[Cloud Queue] Order #$ref already printed. Skipping duplicate." "INFO"
                             continue
                         }
@@ -953,6 +995,7 @@ function Poll-CloudPrintQueue {
     }
 }
 
+$firstCloudPollDone = $false
 function Poll-LiveCloudOrders {
     if (-not $Config.supabaseUrl -or -not $Config.supabaseAnonKey) { return }
     try {
@@ -961,17 +1004,24 @@ function Poll-LiveCloudOrders {
             "Authorization" = "Bearer " + $Config.supabaseAnonKey
         }
         $since = [DateTime]::UtcNow.AddMinutes(-30).ToString("yyyy-MM-ddTHH:mm:ssZ")
-        $url = $Config.supabaseUrl + "/rest/v1/orders?status=eq.confirmed&created_at=gte." + $since + "&order=created_at.asc&limit=10"
+        $url = $Config.supabaseUrl + "/rest/v1/orders?created_at=gte." + $since + "&order=created_at.desc&limit=15"
         $orders = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 5 -ErrorAction SilentlyContinue
         if ($orders -and $orders.Count -gt 0) {
-            foreach ($ord in $orders) {
-                $ref = if ($ord.order_number) { [string]$ord.order_number } else { [string]$ord.order_ref }
-                if (-not $ref -or $livePrintedOrders.Contains($ref)) { continue }
+            # On startup: acknowledge existing orders so no missed/old orders are printed!
+            if (-not $script:firstCloudPollDone) {
+                $script:firstCloudPollDone = $true
+                foreach ($ord in $orders) {
+                    $ref = if ($ord.order_number) { [string]$ord.order_number } elseif ($ord.order_ref) { [string]$ord.order_ref } else { [string]$ord.id }
+                    if ($ref) { $livePrintedOrders.Add($ref) | Out-Null }
+                }
+                Write-DaemonLog "[Cloud Sync] Initialized. Acknowledged $($orders.Count) existing orders (zero backlog replay). Listening for new live orders!" "INFO"
+                return
+            }
 
-                # Wait for staff approval if website UPI order
-                $isWeb = ($ord.source -eq "website" -or $ord.channel -eq "WEBSITE")
-                $isAwaiting = ($ord.payment_status -eq "AWAITING_VERIFICATION" -or $ord.status -eq "PENDING_VERIFICATION")
-                if ($isWeb -and $isAwaiting) { continue }
+            # Subsequent live polls: print every newly placed or verified order!
+            foreach ($ord in $orders) {
+                $ref = if ($ord.order_number) { [string]$ord.order_number } elseif ($ord.order_ref) { [string]$ord.order_ref } else { [string]$ord.id }
+                if (-not $ref -or $livePrintedOrders.Contains($ref)) { continue }
 
                 Write-DaemonLog "[Live Cloud] Printing Live Order #$ref..." "INFO"
                 $bytes = Format-ReceiptBytes $ord

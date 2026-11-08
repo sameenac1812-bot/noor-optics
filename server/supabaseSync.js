@@ -13,8 +13,15 @@ let isSyncing = false;
 let lastProductSyncTime = 0;
 const PRODUCT_SYNC_CACHE_MS = 15000;
 
+let lastOrderSyncTime = 0;
+const ORDER_SYNC_CACHE_MS = 8000;
+
 function invalidateProductSyncCache() {
   lastProductSyncTime = 0;
+}
+
+function invalidateOrderSyncCache() {
+  lastOrderSyncTime = 0;
 }
 
 /**
@@ -27,7 +34,8 @@ async function fetchCloudOrderTombstones() {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-      }
+      },
+      signal: AbortSignal.timeout(5000)
     });
     if (!res.ok) return { orders: new Set(), purgedBefore: null };
     const list = await res.json();
@@ -66,7 +74,8 @@ async function fetchCloudOrderPayments() {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-      }
+      },
+      signal: AbortSignal.timeout(5000)
     });
     if (!res.ok) return { verified: new Set(), rejected: new Set(), details: {} };
     const list = await res.json();
@@ -515,8 +524,11 @@ async function pushAllDeletedOrdersToCloudTombstone(orderRefs = []) {
 /**
  * Sync orders from Supabase cloud into local SQLite database
  */
-async function syncSupabaseOrders(db) {
+async function syncSupabaseOrders(db, force = false) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || isSyncing) return;
+  const now = Date.now();
+  if (!force && (now - lastOrderSyncTime < ORDER_SYNC_CACHE_MS)) return;
+  lastOrderSyncTime = now;
   isSyncing = true;
 
   try {
@@ -539,12 +551,13 @@ async function syncSupabaseOrders(db) {
       } catch(e) {}
     }
 
-    // 2. Fetch orders from Supabase
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc`, {
+    // 2. Fetch orders from Supabase (capped to most recent 100 for instant snappy responsiveness)
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc&limit=100`, {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-      }
+      },
+      signal: AbortSignal.timeout(6000)
     });
 
     if (!res.ok) {
@@ -1203,6 +1216,67 @@ async function pushOrderToSupabase(orderPayload) {
 
     if (res.ok) {
       console.log(`[SupabaseSync] Order ${orderRef} (${isPosOrder ? 'instore' : 'website'}) successfully pushed to Supabase cloud.`);
+      
+      // Auto-dispatch in-store POS bill to SYS-PRINT-QUEUE so the dedicated printer laptop prints it instantly!
+      try {
+        const qRes = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE&select=notes`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        if (qRes.ok) {
+          const qList = await qRes.json();
+          let currentJobs = [];
+          if (qList[0]?.notes) {
+            try { currentJobs = JSON.parse(qList[0].notes).jobs || []; } catch(_) {}
+          }
+          currentJobs.push({
+            id: 'job-receipt-' + orderRef + '-' + Date.now(),
+            type: 'receipt',
+            order: {
+              ...baseOrderBody,
+              ...orderPayload,
+              order_number: orderRef,
+              order_ref: orderRef,
+              id: orderPayload.id || orderRef,
+              customer_name: custName,
+              customer_phone: cleanPhone,
+              items: itemsToPush,
+              prescriptions: orderPayload.prescriptions || (orderPayload.prescription ? [orderPayload.prescription] : []),
+              prescription: orderPayload.prescription || null,
+              od_sph: orderPayload.od_sph != null ? orderPayload.od_sph : (orderPayload.prescription?.od_sph != null ? orderPayload.prescription.od_sph : null),
+              od_cyl: orderPayload.od_cyl != null ? orderPayload.od_cyl : (orderPayload.prescription?.od_cyl != null ? orderPayload.prescription.od_cyl : null),
+              od_axis: orderPayload.od_axis != null ? orderPayload.od_axis : (orderPayload.prescription?.od_axis != null ? orderPayload.prescription.od_axis : null),
+              os_sph: orderPayload.os_sph != null ? orderPayload.os_sph : (orderPayload.prescription?.os_sph != null ? orderPayload.prescription.os_sph : null),
+              os_cyl: orderPayload.os_cyl != null ? orderPayload.os_cyl : (orderPayload.prescription?.os_cyl != null ? orderPayload.prescription.os_cyl : null),
+              os_axis: orderPayload.os_axis != null ? orderPayload.os_axis : (orderPayload.prescription?.os_axis != null ? orderPayload.prescription.os_axis : null),
+              addition: orderPayload.addition != null ? orderPayload.addition : (orderPayload.prescription?.addition != null ? orderPayload.prescription.addition : null),
+              ipd_distance: orderPayload.ipd_distance != null ? orderPayload.ipd_distance : (orderPayload.prescription?.ipd_distance != null ? orderPayload.prescription.ipd_distance : null),
+              advance_paid_inr: orderPayload.advancePaidINR != null ? orderPayload.advancePaidINR : (orderPayload.advance_paid_inr || 0),
+              second_payment_inr: orderPayload.secondPaymentINR != null ? orderPayload.secondPaymentINR : (orderPayload.second_payment_inr || 0),
+              third_payment_inr: orderPayload.thirdPaymentINR != null ? orderPayload.thirdPaymentINR : (orderPayload.third_payment_inr || 0),
+              outstanding_inr: orderPayload.outstandingINR != null ? orderPayload.outstandingINR : (orderPayload.outstanding_inr || 0),
+              discount_inr: orderPayload.discountINR != null ? orderPayload.discountINR : (orderPayload.discount_inr || 0),
+              subtotal: subtotal,
+              grand_total: grandTotal
+            },
+            approved: true,
+            source: isPosOrder ? 'instore_checkout' : 'staff_approved',
+            created_at: new Date().toISOString()
+          });
+          await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({ notes: JSON.stringify({ jobs: currentJobs }) })
+          });
+          console.log(`[SupabaseSync] In-store bill #${orderRef} dispatched to SYS-PRINT-QUEUE for POS printer hardware.`);
+        }
+      } catch (qErr) {
+        console.warn('[SupabaseSync] In-store SYS-PRINT-QUEUE note:', qErr.message);
+      }
       // If it is a website order, guarantee its print job is held until staff approves UPI payment
       if (!isPosOrder && payStatus !== 'VERIFIED') {
         try {
@@ -1933,19 +2007,13 @@ async function pushPrintJobToCloudQueue(jobPayload) {
       type: jobPayload.type || 'qr_sticker',
       order: jobPayload.order || null,
       items: jobPayload.items || (jobPayload.order ? jobPayload.order.items : [jobPayload]),
+      approved: jobPayload.approved !== undefined ? Boolean(jobPayload.approved) : true,
+      source: jobPayload.source || (jobPayload.type === 'receipt' ? 'staff_approved' : 'cloud_queue'),
       created_at: new Date().toISOString()
     };
     jobs.push(newJob);
 
-    if (jobs.length > 25) jobs = jobs.slice(-25);
-
-    const payload = {
-      id: 'sys-print-queue-global',
-      client_code: 'SYS-PRINT-QUEUE',
-      name: 'System Print Queue',
-      city: 'Bengaluru',
-      notes: JSON.stringify({ jobs })
-    };
+    if (jobs.length > 30) jobs = jobs.slice(-30);
 
     if (recordExists) {
       await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
@@ -1956,7 +2024,7 @@ async function pushPrintJobToCloudQueue(jobPayload) {
           'Content-Type': 'application/json',
           'Prefer': 'return=minimal'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ notes: JSON.stringify({ jobs }) })
       });
     } else {
       await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
@@ -1967,7 +2035,13 @@ async function pushPrintJobToCloudQueue(jobPayload) {
           'Content-Type': 'application/json',
           'Prefer': 'return=minimal'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          id: 'sys-print-queue-global',
+          client_code: 'SYS-PRINT-QUEUE',
+          name: 'System Print Spooler Queue',
+          city: 'Bengaluru',
+          notes: JSON.stringify({ jobs })
+        })
       });
     }
     return { success: true, jobId: newJob.id };
@@ -1996,6 +2070,7 @@ function startBackgroundSync(db, intervalMs = 10000) {
 
 module.exports = {
   syncSupabaseOrders,
+  invalidateOrderSyncCache,
   syncSupabaseCustomers,
   syncSupabaseProducts,
   invalidateProductSyncCache,

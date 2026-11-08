@@ -42,3 +42,4 @@ console.log(db.prepare(`SELECT id, product_name, lens_name, unit_price_paise, su
 
 const diffs = db.prepare(`SELECT o.id, o.order_number, o.subtotal_paise, SUM(oi.subtotal_paise) as items_sum FROM orders o JOIN order_items oi ON o.id = oi.order_id GROUP BY o.id HAVING o.subtotal_paise != items_sum`).all();
 console.log('Remaining mismatches:', diffs);
+

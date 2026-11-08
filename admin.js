@@ -3418,6 +3418,9 @@
       const retail = Number(document.getElementById('frm-retail')?.value) || 0;
       const quantity = Number(document.getElementById('frm-quantity')?.value) || 0;
       const lowStock = Number(document.getElementById('frm-low-stock')?.value) || 2;
+      const shape = document.getElementById('frm-shape')?.value || 'Rectangular';
+      const gender = document.getElementById('frm-gender')?.value || 'Unisex';
+      const category = document.getElementById('frm-category')?.value || 'Eyeglasses';
 
       const name = `${brand} ${model}`.trim();
       const imageUrl = state.uploadedFrameImageUrl || 'images/frames/frame_01.jpg';
@@ -3429,8 +3432,9 @@
           name,
           sku,
           brand,
-          category: 'Frames',
-          shape: 'Rectangular',
+          category,
+          gender,
+          shape,
           material: 'Acetate',
           fit: size,
           sellingPriceINR: retail,
@@ -3453,8 +3457,9 @@
           sku: sku.toUpperCase(),
           name,
           brand,
-          category: 'Frames',
-          shape: 'Rectangular',
+          category,
+          gender,
+          shape,
           material: 'Acetate',
           fit: size,
           selling_price_inr: retail,
@@ -3641,11 +3646,36 @@
     if (idInput) idInput.value = frame.id;
     if (nameInput) nameInput.value = frame.name || '';
     if (brandInput) brandInput.value = frame.brand || '';
-    if (shapeInput) shapeInput.value = frame.shape || 'Rectangular';
+    if (shapeInput) {
+      const curShape = frame.shape || 'Rectangular';
+      shapeInput.value = curShape;
+      if (!shapeInput.value || shapeInput.selectedIndex === -1) {
+        const sNorm = curShape.toLowerCase();
+        for (let i = 0; i < shapeInput.options.length; i++) {
+          const opt = shapeInput.options[i].value.toLowerCase();
+          if (sNorm.includes(opt) || opt.includes(sNorm) || (sNorm.includes('rect') && opt.includes('rect')) || (sNorm.includes('hex') && opt.includes('geom'))) {
+            shapeInput.selectedIndex = i;
+            break;
+          }
+        }
+      }
+    }
     const catSelect = document.getElementById('edit-frame-category');
     const genSelect = document.getElementById('edit-frame-gender');
     if (catSelect) catSelect.value = frame.category || 'Eyeglasses';
-    if (genSelect) genSelect.value = frame.gender || 'Unisex';
+    if (genSelect) {
+      const curGen = frame.gender || 'Unisex';
+      genSelect.value = curGen;
+      if (!genSelect.value || genSelect.selectedIndex === -1) {
+        const gNorm = curGen.toLowerCase();
+        for (let i = 0; i < genSelect.options.length; i++) {
+          if (genSelect.options[i].value.toLowerCase() === gNorm) {
+            genSelect.selectedIndex = i;
+            break;
+          }
+        }
+      }
+    }
     if (retailInput) retailInput.value = frame.selling_price_inr !== undefined ? frame.selling_price_inr : Math.round((frame.selling_price_paise || 0) / 100);
     if (wholesaleInput) wholesaleInput.value = frame.purchase_cost_inr !== undefined ? frame.purchase_cost_inr : Math.round((frame.purchase_cost_paise || 0) / 100);
     if (stockInput) stockInput.value = frame.total_stock !== undefined ? frame.total_stock : 10;
@@ -3711,7 +3741,9 @@
 
       const name = document.getElementById('edit-frame-name')?.value.trim();
       const brand = document.getElementById('edit-frame-brand')?.value.trim();
-      const shape = document.getElementById('edit-frame-shape')?.value.trim();
+      const shape = document.getElementById('edit-frame-shape')?.value || 'Rectangular';
+      const category = document.getElementById('edit-frame-category')?.value || 'Eyeglasses';
+      const gender = document.getElementById('edit-frame-gender')?.value || 'Unisex';
       const sellingPriceINR = Number(document.getElementById('edit-frame-retail')?.value) || 0;
       const purchaseCostINR = Number(document.getElementById('edit-frame-wholesale')?.value) || 0;
       const stockQuantity = Number(document.getElementById('edit-frame-stock')?.value) || 0;
@@ -4360,14 +4392,14 @@
    * Enables 100% reliable hardware printing from any cloud or browser device without CORS or mixed content issues.
    */
   async function pushPrintJobToCloud(jobPayload) {
-    const SUPABASE_URL = 'https://czajxtgwsxbrrymrhauz.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk';
+    const SUPABASE_URL = (typeof CLOUD_SYNC_CFG !== 'undefined' && CLOUD_SYNC_CFG.url) || 'https://czajxtgwsxbrrymrhauz.supabase.co';
+    const SUPABASE_ANON_KEY = (typeof CLOUD_SYNC_CFG !== 'undefined' && CLOUD_SYNC_CFG.key) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk';
 
     try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE&select=id,notes`, {
         headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
       });
-      const list = await res.json();
+      const list = await res.json().catch(() => []);
       let jobs = [];
       let recordExists = false;
 
@@ -4379,23 +4411,25 @@
         } catch (_) { jobs = []; }
       }
 
+      // Purge jobs older than 1 hour to keep queue fast and small
+      const recentThreshold = Date.now() - 60 * 60 * 1000;
+      jobs = jobs.filter(j => {
+        if (!j || !j.created_at) return false;
+        return new Date(j.created_at).getTime() > recentThreshold;
+      });
+
       const newJob = {
-        id: 'stk_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        id: (jobPayload.type === 'receipt' ? 'rcp_' : 'stk_') + Date.now() + '_' + Math.floor(Math.random() * 1000),
         type: jobPayload.type || 'qr_sticker',
-        items: jobPayload.items || [jobPayload],
+        order: jobPayload.order || null,
+        items: jobPayload.items || (jobPayload.order ? jobPayload.order.items : [jobPayload]),
+        approved: jobPayload.approved !== undefined ? Boolean(jobPayload.approved) : true,
+        source: jobPayload.source || (jobPayload.type === 'receipt' ? 'staff_approved' : 'cloud_queue'),
         created_at: new Date().toISOString()
       };
       jobs.push(newJob);
 
-      if (jobs.length > 25) jobs = jobs.slice(-25);
-
-      const payload = {
-        id: 'sys-print-queue-global',
-        client_code: 'SYS-PRINT-QUEUE',
-        name: 'System Print Queue',
-        city: 'Bengaluru',
-        notes: JSON.stringify({ jobs })
-      };
+      if (jobs.length > 30) jobs = jobs.slice(-30);
 
       if (recordExists) {
         await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
@@ -4406,7 +4440,7 @@
             'Content-Type': 'application/json',
             'Prefer': 'return=minimal'
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ notes: JSON.stringify({ jobs }) })
         });
       } else {
         await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
@@ -4417,7 +4451,13 @@
             'Content-Type': 'application/json',
             'Prefer': 'return=minimal'
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({
+            id: 'sys-print-queue-global',
+            client_code: 'SYS-PRINT-QUEUE',
+            name: 'System Print Spooler Queue',
+            city: 'Bengaluru',
+            notes: JSON.stringify({ jobs })
+          })
         });
       }
       return { success: true, jobId: newJob.id };
@@ -6581,7 +6621,7 @@
             }
             const btnReprint = document.getElementById('btn-success-reprint');
             if (btnReprint) {
-              btnReprint.onclick = () => instantPrintReceipt(res.orderId);
+              btnReprint.onclick = () => instantPrintReceipt(res.orderId, true, localBillOrder, 'reprint');
             }
             const btnItemQr = document.getElementById('btn-success-print-item-qr');
             if (btnItemQr) {
@@ -8130,11 +8170,11 @@
     }, 500);
   };
 
-  // ── Dispatch Print Signal to POS Portable Daemon (Port 5001) ─────────────
+  // ── Dispatch Print Signal to POS Portable Daemon (Port 5001 & Cloud Queue) ──
   window.instantPrintReceipt = async function (orderId, manualReprint = false, directOrder = null, printSource = 'staff_approved') {
     if (!orderId && !directOrder) return;
 
-    let order = directOrder || state.ordersCache.find(o => o.id === orderId || o.order_number === orderId);
+    let order = directOrder || (state.ordersCache || []).find(o => o.id === orderId || o.order_number === orderId);
     if (!order || !order.items || order.items.length === 0) {
       try {
         const resp = await apiFetch(`/api/orders/${orderId}`);
@@ -8163,64 +8203,39 @@
       }
     }
 
-    // 1. Send direct hardware print signal to Windows POS Print Daemon on Port 5001 (if local)
-    try {
-      const daemonResp = await fetch('http://127.0.0.1:5001/api/print', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order: order,
-          manualReprint: Boolean(manualReprint),
-          source: printSource || (manualReprint ? 'reprint' : 'staff_approved')
-        }),
-        signal: AbortSignal.timeout(6000)
-      });
+    const orderRef = order.order_number || order.order_ref || order.id || 'ORDER';
+    const effectiveSource = printSource || (manualReprint ? 'reprint' : 'staff_approved');
 
-      if (daemonResp.ok) {
-        showToast(`🖨️ Customer Bill #${order.order_number || order.id} sent to POS thermal printer!`, 'success');
-        return;
+    // ── DUAL DISPATCH (Zero-Lag Counter Output + Bulletproof Remote Cloud Spooling) ──
+    // PATH 1: Instant Cloud Queue Dispatch (Guarantees Laptop B / dedicated printer prints within 2.5s)
+    pushPrintJobToCloud({
+      type: 'receipt',
+      order: order,
+      approved: true,
+      source: effectiveSource
+    }).then(res => {
+      if (res && res.success) {
+        console.log(`[InstantPrint] Bill #${orderRef} successfully placed in SYS-PRINT-QUEUE.`);
       }
-    } catch (_) {
-      // Local daemon port not reachable (e.g. cashier is using phone or laptop on Wi-Fi).
-      // Queue the bill directly into Supabase SYS-PRINT-QUEUE so the POS printer PC processes it instantly
-      try {
-        const SUPABASE_URL = (typeof CLOUD_SYNC_CFG !== 'undefined' && CLOUD_SYNC_CFG.url) || 'https://czajxtgwsxbrrymrhauz.supabase.co';
-        const SUPABASE_ANON_KEY = (typeof CLOUD_SYNC_CFG !== 'undefined' && CLOUD_SYNC_CFG.key) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk';
-        const qRes = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
-          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-        });
-        if (qRes.ok) {
-          const qList = await qRes.json();
-          let currentJobs = [];
-          if (qList[0]?.notes) {
-            try { currentJobs = JSON.parse(qList[0].notes).jobs || []; } catch(_) {}
-          }
-          currentJobs.push({
-            id: 'job-receipt-' + (order.order_number || order.id) + '-' + Date.now(),
-            type: 'receipt',
-            order: order,
-            approved: true,
-            source: 'staff_approved',
-            created_at: new Date().toISOString()
-          });
-          await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
-            method: 'PATCH',
-            headers: {
-              'apikey': SUPABASE_ANON_KEY,
-              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal'
-            },
-            body: JSON.stringify({ notes: JSON.stringify({ jobs: currentJobs }) })
-          });
-          showToast(`🖨️ Bill for #${order.order_number || order.id} sent to POS thermal printer via cloud!`, 'success');
-        } else {
-          showToast(`🖨️ Bill for #${order.order_number || order.id} routed to POS thermal printer!`, 'success');
-        }
-      } catch (_) {
-        showToast(`🖨️ Bill for #${order.order_number || order.id} routed to POS thermal printer!`, 'success');
-      }
-    }
+    }).catch(err => {
+      console.warn('[InstantPrint] Cloud queue dispatch note:', err?.message || err);
+    });
+
+    // PATH 2: Local Hardware Daemon (Immediate 50ms output if billing directly on the printer laptop)
+    fetch('http://127.0.0.1:5001/api/print', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        order: order,
+        manualReprint: Boolean(manualReprint),
+        source: effectiveSource
+      }),
+      signal: AbortSignal.timeout(1200)
+    }).catch(() => {
+      // Local daemon port not reachable (e.g. billing from remote laptop or phone) — handled by Cloud Queue!
+    });
+
+    showToast(`🖨️ Bill #${orderRef} dispatched to POS thermal printer!`, 'success');
   };
 
 

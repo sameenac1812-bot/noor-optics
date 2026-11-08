@@ -27,6 +27,7 @@ const {
 const { generateInvoicePDF } = require('./pdfInvoice');
 const {
   syncSupabaseOrders,
+  invalidateOrderSyncCache,
   syncSupabaseProducts,
   invalidateProductSyncCache,
   pushOrderPaymentStatusToCloud,

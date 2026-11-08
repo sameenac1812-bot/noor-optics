@@ -41,327 +41,316 @@
 </head>
 <body>
 
-  <!-- Top Announcement Bar (Single Row Rotating Ticker) -->
-  <aside class="top-announcement" aria-label="Store Announcement">
-    <div class="announcement-container">
-      <div class="announcement-ticker" id="announcement-ticker">
-        <span class="announcement-slide active">Complimentary Pan-India Express Delivery Over ₹1,999</span>
-        <span class="announcement-slide">2-Year Comprehensive International Frame Warranty</span>
-        <span class="announcement-slide">Handcrafted Japanese Titanium & Italian Bio-Acetate</span>
-      </div>
-      <div class="announcement-desktop-row">
-        <span>Complimentary Pan-India Express Delivery Over ₹1,999</span>
-        <span class="announcement-dot" aria-hidden="true"></span>
-        <span>2-Year Comprehensive Frame Warranty</span>
-        <span class="announcement-dot" aria-hidden="true"></span>
-        <span>Handcrafted Japanese Titanium & Italian Bio-Acetate</span>
-      </div>
-    </div>
-  </aside>
+<!-- Shared SVG icons (reused with <use>) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-glasses" viewBox="0 0 70 30"><circle cx="17" cy="16" r="12"/><circle cx="53" cy="16" r="12"/><path d="M29 14c3-3 9-3 12 0M5 12L1 6M65 12l4-6"/></symbol>
+  <symbol id="i-shape-rect" viewBox="0 0 70 30"><rect x="6" y="7" width="22" height="17" rx="3"/><rect x="42" y="7" width="22" height="17" rx="3"/><path d="M28 15h14M6 13L1 8M64 13l5-5"/></symbol>
+  <symbol id="i-shape-round" viewBox="0 0 70 30"><circle cx="17" cy="16" r="12"/><circle cx="53" cy="16" r="12"/><path d="M29 14c3-3 9-3 12 0M5 12L1 6M65 12l4-6"/></symbol>
+  <symbol id="i-shape-square" viewBox="0 0 70 30"><rect x="7" y="6" width="20" height="20" rx="4"/><rect x="43" y="6" width="20" height="20" rx="4"/><path d="M27 16h16M7 13L1 8M63 13l6-5"/></symbol>
+  <symbol id="i-shape-geom" viewBox="0 0 70 30"><polygon points="17,5 27,10 27,22 17,27 7,22 7,10"/><polygon points="53,5 63,10 63,22 53,27 43,22 43,10"/><path d="M27 16h16M7 13L1 8M63 13l6-5"/></symbol>
+  <symbol id="i-shape-aviator" viewBox="0 0 70 30"><path d="M7 8h18c2 0 3 4 2 11-1 4-6 7-11 7-5 0-9-4-10-9 0-5 0-9 1-9z"/><path d="M45 8h18c2 0 3 4 2 11-1 4-6 7-11 7-5 0-9-4-10-9 0-5 0-9 1-9z"/><path d="M25 10h20M26 15h18M7 11L1 7M63 11l6-4"/></symbol>
+  <symbol id="i-shape-cateye" viewBox="0 0 70 30"><path d="M5 8c9-3 20 0 22 5 2 7-3 13-10 13-8 0-14-6-13-13 0-2 0-4 1-5z"/><path d="M43 13c2-5 13-8 22-5 1 1 1 3 1 5 1 7-5 13-13 13-7 0-12-6-10-13z"/><path d="M27 15h16M5 8L1 5M65 8l4-3"/></symbol>
+  <symbol id="i-shape-wayfarer" viewBox="0 0 70 30"><path d="M5 7h22l-3 17a4 4 0 0 1-4 3H12a4 4 0 0 1-4-3z"/><path d="M43 7h22l-5 17a4 4 0 0 1-4 3H50a4 4 0 0 1-4-3z"/><path d="M27 12h16M5 9L1 6M65 9l4-3"/></symbol>
+  <symbol id="i-shape-oval" viewBox="0 0 70 30"><ellipse cx="17" cy="16" rx="13" ry="9"/><ellipse cx="53" cy="16" rx="13" ry="9"/><path d="M30 16h10M4 14L1 9M66 14l3-5"/></symbol>
+  <symbol id="i-shape-browline" viewBox="0 0 70 30"><path d="M5 9h24v3H5z" fill="currentColor"/><path d="M41 9h24v3H41z" fill="currentColor"/><path d="M6 12v6c0 6 5 9 11 9s11-3 11-9v-6M42 12v6c0 6 5 9 11 9s11-3 11-9v-6"/><path d="M29 13h12M5 10L1 6M65 10l4-4"/></symbol>
+  <symbol id="i-shape-rimless" viewBox="0 0 70 30"><rect x="6" y="7" width="22" height="17" rx="3" stroke-dasharray="3,2"/><rect x="42" y="7" width="22" height="17" rx="3" stroke-dasharray="3,2"/><circle cx="27" cy="15" r="1.5" fill="currentColor"/><circle cx="43" cy="15" r="1.5" fill="currentColor"/><path d="M27 15h16M6 13L1 8M64 13l5-5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9-9.2C1.8 7.6 3.6 4.5 6.8 4.5c2 0 3.6 1.1 5.2 3 1.6-1.9 3.2-3 5.2-3 3.200 0 5 3.100 3.800 6.300C19 15.600 12 20 12 20z"/></symbol>
+  <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6L5 8zM9 8V6a3 3 0 016 0v2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1v-9z"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.500"/><rect x="13" y="4" width="7" height="7" rx="1.500"/><rect x="4" y="13" width="7" height="7" rx="1.500"/><rect x="13" y="13" width="7" height="7" rx="1.500"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M2 6h11v10H2zM13 10h5l3 3v3h-8M6 19a2 2 0 100-4 2 2 0 000 4zM17 19a2 2 0 100-4 2 2 0 000 4z"/></symbol>
+  <symbol id="i-cash" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-return" viewBox="0 0 24 24"><path d="M4 12a8 8 0 108-8H7M7 1L4 4l3 3"/></symbol>
+</svg>
 
-  <!-- Storefront Header (Responsive Luxury Scandinavian Header) -->
-  <header class="store-header">
-    <div class="header-container">
-      <!-- Mobile: Hamburger Menu Toggle -->
-      <button class="header-icon-btn mobile-menu-toggle" id="btn-mobile-menu" aria-label="Open Navigation Menu">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
+<div class="app">
+
+  <!-- ANNOUNCEMENT -->
+  <div class="announce">Free express delivery over ₹1,999 • COD • <b>14-day returns</b></div>
+
+  <!-- HEADER -->
+  <header class="header store-header" id="store-header">
+    <div class="header-row">
+      <button class="icon-btn mobile-menu-toggle" id="btn-mobile-menu" aria-label="Open Navigation Menu">
+        <svg><use href="#i-menu"/></svg>
       </button>
-
-      <!-- Brand Logo: Official Noor Optic Emblem & Wordmark -->
-      <div class="header-brand-wrap">
-        <a href="index.html" class="brand-logo-link" aria-label="Noor Optics Luxury Eyewear">
-          <img src="/images/noor_logo_black.png" alt="NOOR OPTIC" class="brand-logo-desktop" onerror="this.style.display='none'" />
-          <div class="brand-logo-mobile-lockup">
-            <img src="/images/noor_emblem_black.png" alt="Noor Optic Emblem" class="brand-emblem-mobile" onerror="this.style.display='none'" />
-            <span class="brand-wordmark-mobile">NOOR OPTIC</span>
-          </div>
-        </a>
-      </div>
-
-      <!-- Desktop & Global Utility Navigation -->
-      <nav class="header-right" aria-label="Store Utility Navigation">
-        <!-- Sort Menu Dropdown (Desktop) -->
-        <div class="sort-dropdown-wrap desktop-only">
-          <button class="nav-ctrl-btn" id="btn-sort-toggle" aria-expanded="false" aria-haspopup="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 6h18M7 12h10M10 18h4"/>
-            </svg>
-            <span class="nav-btn-text">SORT BY: <span id="current-sort-label" style="font-weight:700;">CURATED</span></span>
-          </button>
-          <div class="sort-menu" id="sort-menu" role="menu">
-            <button class="sort-item active" data-sort="featured" role="menuitem">Curated / Featured</button>
-            <button class="sort-item" data-sort="price-low" role="menuitem">Price: Low to High</button>
-            <button class="sort-item" data-sort="price-high" role="menuitem">Price: High to Low</button>
-            <button class="sort-item" data-sort="newest" role="menuitem">New Arrivals</button>
-            <button class="sort-item" data-sort="rating" role="menuitem">Customer Rating</button>
-          </div>
-        </div>
-
-        <!-- Filter Drawer Toggle (Desktop) -->
-        <button class="nav-ctrl-btn desktop-only" id="btn-filter-toggle" aria-label="Open Filter Panel">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
-            <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
-            <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
-            <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
-          </svg>
-          <span class="nav-btn-text">FILTERS</span>
-          <span class="nav-badge-pill empty" id="filter-count-badge">0</span>
-        </button>
-
-        <!-- Search Bar Toggle -->
-        <button class="header-icon-btn" id="btn-search-toggle" aria-label="Search Optical Catalog">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-        </button>
-
-        <span class="nav-separator" aria-hidden="true"></span>
-
-        <!-- Wishlist Drawer Toggle -->
-        <button class="header-icon-btn" id="btn-wishlist-toggle" aria-label="View Saved Wishlist">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-          </svg>
-          <span class="nav-badge-pill empty" id="wishlist-count-badge">0</span>
-        </button>
-
-        <!-- Shopping Bag Drawer Toggle -->
-        <button class="header-icon-btn" id="btn-bag-toggle" aria-label="View Shopping Bag">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-            <line x1="3" y1="6" x2="21" y2="6"/>
-            <path d="M16 10a4 4 0 01-8 0"/>
-          </svg>
-          <span class="nav-badge-pill empty" id="bag-count-badge">0</span>
-        </button>
-      </nav>
+      <a href="index.html" class="logo" aria-label="Noor Optic">
+        <img src="/images/noor_logo_black.png" alt="Noor Optic" onerror="this.onerror=null; this.src='images/noor_logo_black.png';" />
+      </a>
+      <button class="icon-btn" id="btn-wishlist-toggle" aria-label="View Saved Wishlist">
+        <svg><use href="#i-heart"/></svg>
+        <span class="badge-dot empty" id="wishlist-count-badge">0</span>
+      </button>
+      <button class="icon-btn" id="btn-bag-toggle" aria-label="View Shopping Bag">
+        <svg><use href="#i-bag"/></svg>
+        <span class="badge-dot empty" id="bag-count-badge">0</span>
+      </button>
     </div>
+    <form class="search search-expand-bar" id="search-expand-bar" role="search" onsubmit="return false">
+      <label>
+        <svg><use href="#i-search"/></svg>
+        <input type="search" class="search-main-input" id="search-main-input" placeholder="Search eyeglasses, frames..." aria-label="Search eyeglasses catalog" />
+      </label>
+    </form>
   </header>
 
-  <!-- Expandable Real-Time Search Bar -->
-  <section class="search-expand-bar" id="search-expand-bar" aria-label="Search Catalog Bar">
-    <div class="search-inner">
-      <div class="search-input-wrap">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input type="text"
-               class="search-main-input"
-               id="search-main-input"
-               placeholder="What are you looking for?"
-               aria-label="Search eyeglasses catalog" />
-        <button class="search-clear-btn" id="search-clear-btn" aria-label="Clear Search Input">&times;</button>
-      </div>
-      <div class="search-tags">
-        <span class="search-tag-label">Popular:</span>
-        <button class="search-tag-pill" data-query="Titanium">Japanese Titanium</button>
-        <button class="search-tag-pill" data-query="Round">Round Frames</button>
-        <button class="search-tag-pill" data-query="Acetate">Bio-Acetate</button>
-        <button class="search-tag-pill" data-query="Crystal">Crystal Clear</button>
-        <button class="search-tag-pill" data-query="Cat-Eye">Cat-Eye</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═════════════════════════════════════════════════════════════════ -->
-  <!-- LENSKART-STYLE VISUAL CATEGORY & GENDER SHOWCASE SECTION        -->
-  <!-- ═════════════════════════════════════════════════════════════════ -->
-  <section class="lk-category-showcase" id="lk-category-showcase" aria-label="Eyewear Categories by Gender & Brand">
-    <div class="lk-showcase-container">
-      
-      <!-- Eyeglasses & Sunglasses Split Grid (Compact & Sleek) -->
-      <div class="lk-split-grid">
-        <!-- 1. Eyeglasses Section -->
-        <div class="lk-category-block">
-          <div class="lk-section-header">
-            <div class="lk-title-group">
-              <h2 class="lk-section-title">Eyeglasses</h2>
-              <span class="lk-title-badge">with Power</span>
-            </div>
-            <button type="button" class="lk-link-viewall" onclick="selectVisualCategory('Eyeglasses', 'all')">View All</button>
-          </div>
-          <div class="lk-cards-row">
-            <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Men" onclick="selectVisualCategory('Eyeglasses', 'Men')" role="button" tabindex="0">
-              <div class="lk-card-img-wrap">
-                <img src="images/categories/eyeglass_men.jpg?v=2" alt="Men's Eyeglasses" loading="lazy" />
-              </div>
-              <span class="lk-card-label">Men</span>
-            </div>
-            <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Women" onclick="selectVisualCategory('Eyeglasses', 'Women')" role="button" tabindex="0">
-              <div class="lk-card-img-wrap">
-                <img src="images/categories/eyeglass_women.jpg?v=2" alt="Women's Eyeglasses" loading="lazy" />
-              </div>
-              <span class="lk-card-label">Women</span>
-            </div>
-            <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Kids" onclick="selectVisualCategory('Eyeglasses', 'Kids')" role="button" tabindex="0">
-              <div class="lk-card-img-wrap">
-                <img src="images/categories/eyeglass_kids.jpg?v=2" alt="Kids Eyeglasses" loading="lazy" />
-              </div>
-              <span class="lk-card-label">Kids</span>
-            </div>
-            <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="sale" onclick="selectVisualCategory('Eyeglasses', 'sale')" role="button" tabindex="0">
-              <div class="lk-card-img-wrap lk-sale-card">
-                <span class="lk-sale-pill">Starts @₹800</span>
-                <img src="images/categories/eyeglass_sale.jpg?v=2" alt="Eyeglasses On Sale" loading="lazy" />
-              </div>
-              <span class="lk-card-label">On Sale</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. Sunglasses Section -->
-        <div class="lk-category-block">
-          <div class="lk-section-header">
-            <div class="lk-title-group">
-              <h2 class="lk-section-title">Sunglasses</h2>
-            </div>
-            <button type="button" class="lk-link-viewall" onclick="selectVisualCategory('Sunglasses', 'all')">View All</button>
-          </div>
-          <div class="lk-cards-row">
-            <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Men" onclick="selectVisualCategory('Sunglasses', 'Men')" role="button" tabindex="0">
-              <div class="lk-card-img-wrap">
-                <img src="images/categories/sunglass_men.jpg?v=2" alt="Men's Sunglasses" loading="lazy" />
-              </div>
-              <span class="lk-card-label">Men</span>
-            </div>
-            <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Women" onclick="selectVisualCategory('Sunglasses', 'Women')" role="button" tabindex="0">
-              <div class="lk-card-img-wrap">
-                <img src="images/categories/sunglass_women.jpg?v=2" alt="Women's Sunglasses" loading="lazy" />
-              </div>
-              <span class="lk-card-label">Women</span>
-            </div>
-            <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Kids" onclick="selectVisualCategory('Sunglasses', 'Kids')" role="button" tabindex="0">
-              <div class="lk-card-img-wrap">
-                <img src="images/categories/sunglass_kids.jpg?v=2" alt="Kids Sunglasses" loading="lazy" />
-              </div>
-              <span class="lk-card-label">Kids</span>
-            </div>
-            <div class="lk-cat-card" data-cat="Sunglasses" data-gender="sale" onclick="selectVisualCategory('Sunglasses', 'sale')" role="button" tabindex="0">
-              <div class="lk-card-img-wrap lk-sale-card">
-                <span class="lk-sale-pill">Starts @₹500</span>
-                <img src="images/categories/sunglass_sale.jpg?v=2" alt="Sunglasses On Sale" loading="lazy" />
-              </div>
-              <span class="lk-card-label">On Sale</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 3. Shop by Brand Section -->
-      <div class="lk-category-block lk-brands-block">
-        <div class="lk-section-header">
-          <div class="lk-title-group">
-            <h2 class="lk-section-title">Shop By Brand</h2>
-          </div>
-          <button type="button" class="lk-link-viewall" onclick="selectBrand('all')">All Brands</button>
-        </div>
-        <div class="lk-brand-pills-row">
-          <button type="button" class="lk-brand-pill active" data-brand="all" onclick="selectBrand('all')">All Brands</button>
-          <button type="button" class="lk-brand-pill" data-brand="Ray-Ban" onclick="selectBrand('Ray-Ban')">Ray-Ban</button>
-          <button type="button" class="lk-brand-pill" data-brand="Grey Jack" onclick="selectBrand('Grey Jack')">Grey Jack</button>
-          <button type="button" class="lk-brand-pill" data-brand="Luxury Eyewear" onclick="selectBrand('Luxury Eyewear')">Luxury Eyewear</button>
-          <button type="button" class="lk-brand-pill" data-brand="Vogue" onclick="selectBrand('Vogue')">Vogue</button>
-          <button type="button" class="lk-brand-pill" data-brand="Cartier" onclick="selectBrand('Cartier')">Cartier</button>
-          <button type="button" class="lk-brand-pill" data-brand="Versace" onclick="selectBrand('Versace')">Versace</button>
-          <button type="button" class="lk-brand-pill" data-brand="Dolce & Gabbana" onclick="selectBrand('Dolce & Gabbana')">D&amp;G</button>
-          <button type="button" class="lk-brand-pill" data-brand="Burberry" onclick="selectBrand('Burberry')">Burberry</button>
-        </div>
-      </div>
-
-      <!-- 4. Lenskart-Style Promo VIP Banner -->
-      <div class="lk-promo-banner-wrap">
-        <div class="lk-promo-banner">
-          <div class="lk-promo-badge">✨ NOOR GOLD SELECTION</div>
-          <h3 class="lk-promo-title">Handcrafted Luxury Frames + Free Blue-Light Lenses</h3>
-          <p class="lk-promo-sub">Zero-Power &amp; Single Vision Included • Japanese Titanium &amp; Italian Bio-Acetate</p>
-          <div class="lk-promo-pills">
-            <button type="button" class="lk-promo-pill-btn active" onclick="selectVisualCategory('Eyeglasses', 'all')">👓 Explore Eyeglasses</button>
-            <button type="button" class="lk-promo-pill-btn" onclick="selectVisualCategory('Sunglasses', 'all')">🕶️ Sunglasses Collection</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 5. Lenskart-Style Shop by Frame Shape Horizontal Scroll Row -->
-      <div class="lk-shape-section">
-        <div class="lk-section-header">
-          <div class="lk-title-group">
-            <h2 class="lk-section-title">Shop by Frame Shape</h2>
-          </div>
-          <button type="button" class="lk-link-viewall" onclick="document.querySelector('.shape-pill[data-shape=\'all\']')?.click()">All Shapes</button>
-        </div>
-        <nav class="shape-pills-nav" id="shape-pills-nav" aria-label="Filter by Frame Shape">
-          <button type="button" class="shape-pill active" data-shape="all">
-            <span class="shape-glyph">👓</span>
-            <span class="shape-label">All</span>
-          </button>
-          <button type="button" class="shape-pill" data-shape="Rectangular">
-            <span class="shape-glyph">▭</span>
-            <span class="shape-label">Rectangle</span>
-          </button>
-          <button type="button" class="shape-pill" data-shape="Round">
-            <span class="shape-glyph">◯</span>
-            <span class="shape-label">Round</span>
-          </button>
-          <button type="button" class="shape-pill" data-shape="Square">
-            <span class="shape-glyph">□</span>
-            <span class="shape-label">Square</span>
-          </button>
-          <button type="button" class="shape-pill" data-shape="Geometric">
-            <span class="shape-glyph">⬡</span>
-            <span class="shape-label">Geometric</span>
-          </button>
-          <button type="button" class="shape-pill" data-shape="Aviator">
-            <span class="shape-glyph">🕶️</span>
-            <span class="shape-label">Aviator</span>
-          </button>
-          <button type="button" class="shape-pill" data-shape="Cat-Eye">
-            <span class="shape-glyph">◈</span>
-            <span class="shape-label">Cat-Eye</span>
-          </button>
-        </nav>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- Secondary Bar: Mobile Action Bar & Item Counter -->
-  <nav class="store-sub-bar" aria-label="Product Categories & Active Filters">
-    <div class="sub-bar-container">
-      <!-- Action Row: Item Counter & Mobile Sort/Filter Buttons -->
-      <div class="sub-bar-actions-row">
-        <div class="catalog-counter" id="catalog-count"><span class="count-desktop">Loading curated frames...</span><span class="count-mobile">Loading...</span></div>
-        <div class="mobile-sub-ctrls">
-          <button class="mobile-ctrl-btn" id="btn-mobile-sort" aria-label="Sort products">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M7 12h10M10 18h4"/></svg>
-            <span>SORT</span>
-          </button>
-          <button class="mobile-ctrl-btn" id="btn-mobile-filter" aria-label="Filter products">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
-            <span>FILTERS</span>
-            <span class="mobile-badge-num empty" id="mobile-filter-count-badge">0</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="active-filter-chips" id="active-filter-chips"></div>
+  <!-- CATEGORY CHIPS -->
+  <nav class="chips" aria-label="Categories">
+    <div class="hscroll">
+      <button type="button" class="chip active" data-cat="all" data-gender="all" onclick="selectVisualCategory('all', 'all')">All</button>
+      <button type="button" class="chip" data-cat="Eyeglasses" onclick="selectVisualCategory('Eyeglasses', 'all')">Eyeglasses</button>
+      <button type="button" class="chip" data-cat="Sunglasses" onclick="selectVisualCategory('Sunglasses', 'all')">Sunglasses</button>
+      <button type="button" class="chip" data-gender="Men" onclick="selectVisualCategory('all', 'Men')">Men</button>
+      <button type="button" class="chip" data-gender="Women" onclick="selectVisualCategory('all', 'Women')">Women</button>
+      <button type="button" class="chip" data-gender="Kids" onclick="selectVisualCategory('all', 'Kids')">Kids</button>
+      <button type="button" class="chip" data-gender="sale" onclick="selectVisualCategory('Eyeglasses', 'sale')">Sale @₹800</button>
     </div>
   </nav>
 
-  <!-- Main Storefront Content: 4 Columns Desktop Optical Grid -->
-  <main class="store-main">
-    <section class="product-grid" id="product-grid" aria-label="Noor Optics Curated Eyewear Collection">
-      <!-- Populated dynamically via app.js -->
-    </section>
-  </main>
+  <!-- HERO BANNERS CAROUSEL -->
+  <section class="hero" aria-label="Offers">
+    <div class="hscroll">
+      <a class="banner b1" href="#product-grid" onclick="selectVisualCategory('Eyeglasses', 'all')">
+        <small>New Scandinavian Collection</small>
+        <h3>Bold frames, bolder you</h3>
+        <span class="btn btn-accent">Shop now</span>
+        <svg class="art" viewBox="0 0 70 30" fill="none" stroke="#fff" stroke-width="2"><use href="#i-glasses"/></svg>
+      </a>
+      <a class="banner b2" href="#product-grid" onclick="selectVisualCategory('Eyeglasses', 'sale')">
+        <small>Complimentary Delivery</small>
+        <h3>Free Blue-Cut Lenses Included</h3>
+        <span class="btn btn-light">Grab deal</span>
+        <svg class="art" viewBox="0 0 70 30" fill="none" stroke="#000042" stroke-width="2"><use href="#i-glasses"/></svg>
+      </a>
+      <a class="banner b3" href="#product-grid">
+        <small>Noor Gold</small>
+        <h3>Japanese Titanium &amp; Italian Bio-Acetate</h3>
+        <span class="btn btn-accent">Explore</span>
+        <svg class="art" viewBox="0 0 70 30" fill="none" stroke="#fff" stroke-width="2"><use href="#i-glasses"/></svg>
+      </a>
+    </div>
+  </section>
 
-  <!-- ── DRAWERS ─────────────────────────────────────────────────────────── -->
+  <!-- TRUST STRIP -->
+  <div class="trust">
+    <div><svg><use href="#i-truck"/></svg>Free<br>shipping</div>
+    <div><svg><use href="#i-cash"/></svg>Cash on<br>delivery</div>
+    <div><svg><use href="#i-return"/></svg>14-day<br>returns</div>
+  </div>
+
+  <!-- SHOP BY GENDER (MEN / WOMEN / KIDS / UNISEX) -->
+  <section class="section gender-showcase-section" aria-label="Shop Eyewear by Gender">
+    <div class="section-head">
+      <h2>Shop by Gender</h2>
+      <span class="section-subhead-pill">Curated</span>
+    </div>
+    <div class="gender-cards-grid">
+      <div class="gender-card" data-gender="Men" onclick="selectVisualCategory('all', 'Men')" role="button" tabindex="0" aria-label="Men's Eyewear">
+        <div class="gender-card-visual">
+          <div class="gender-icon-circle men-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="7" r="4"/>
+              <path d="M5.5 21v-2a6.5 6.5 0 0 1 13 0v2"/>
+            </svg>
+          </div>
+          <span class="gender-badge">Men</span>
+        </div>
+        <div class="gender-card-meta">
+          <h3 class="gender-card-title">Men's Frames</h3>
+          <p class="gender-card-desc">Architectural &amp; classic styles</p>
+        </div>
+        <span class="gender-card-link">Explore &rarr;</span>
+      </div>
+
+      <div class="gender-card" data-gender="Women" onclick="selectVisualCategory('all', 'Women')" role="button" tabindex="0" aria-label="Women's Eyewear">
+        <div class="gender-card-visual">
+          <div class="gender-icon-circle women-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="8" r="5"/>
+              <path d="M12 13v8M9 18h6"/>
+            </svg>
+          </div>
+          <span class="gender-badge">Women</span>
+        </div>
+        <div class="gender-card-meta">
+          <h3 class="gender-card-title">Women's Frames</h3>
+          <p class="gender-card-desc">Chic, elegant &amp; cat-eye trends</p>
+        </div>
+        <span class="gender-card-link">Explore &rarr;</span>
+      </div>
+
+      <div class="gender-card" data-gender="Kids" onclick="selectVisualCategory('all', 'Kids')" role="button" tabindex="0" aria-label="Kids Eyewear">
+        <div class="gender-card-visual">
+          <div class="gender-icon-circle kids-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="9"/>
+              <circle cx="9" cy="10" r="1.2" fill="currentColor"/>
+              <circle cx="15" cy="10" r="1.2" fill="currentColor"/>
+              <path d="M8 15s1.5 2.5 4 2.5 4-2.5 4-2.5"/>
+            </svg>
+          </div>
+          <span class="gender-badge">Kids</span>
+        </div>
+        <div class="gender-card-meta">
+          <h3 class="gender-card-title">Kids &amp; Teens</h3>
+          <p class="gender-card-desc">Flexible, sturdy &amp; lightweight</p>
+        </div>
+        <span class="gender-card-link">Explore &rarr;</span>
+      </div>
+
+      <div class="gender-card" data-gender="Unisex" onclick="selectVisualCategory('all', 'Unisex')" role="button" tabindex="0" aria-label="Unisex Eyewear">
+        <div class="gender-card-visual">
+          <div class="gender-icon-circle unisex-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 3a9 9 0 0 0 0 18v-18z" fill="currentColor" opacity="0.3"/>
+            </svg>
+          </div>
+          <span class="gender-badge">Unisex</span>
+        </div>
+        <div class="gender-card-meta">
+          <h3 class="gender-card-title">All / Unisex</h3>
+          <p class="gender-card-desc">Minimalist everyday styles</p>
+        </div>
+        <span class="gender-card-link">Explore &rarr;</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SHOP BY FRAME SHAPE -->
+  <section class="section">
+    <div class="section-head">
+      <h2>Shop by frame shape</h2>
+      <button type="button" onclick="document.querySelector('.shape-pill[data-shape=\'all\']')?.click();" style="background:none;border:none;color:var(--teal-dark);font-size:13px;font-weight:600;cursor:pointer;">See all</button>
+    </div>
+    <nav class="hscroll shape-pills-nav" id="shape-pills-nav" aria-label="Filter by Frame Shape">
+      <button type="button" class="tile shape-pill active" data-shape="all">
+        <div class="img"><svg viewBox="0 0 70 30"><use href="#i-glasses"/></svg></div>
+        <span class="shape-label">All</span>
+      </button>
+      <button type="button" class="tile shape-pill" data-shape="Rectangular">
+        <div class="img"><svg viewBox="0 0 70 30"><use href="#i-shape-rect"/></svg></div>
+        <span class="shape-label">Rectangle</span>
+      </button>
+      <button type="button" class="tile shape-pill" data-shape="Round">
+        <div class="img"><svg viewBox="0 0 70 30"><use href="#i-shape-round"/></svg></div>
+        <span class="shape-label">Round</span>
+      </button>
+      <button type="button" class="tile shape-pill" data-shape="Square">
+        <div class="img"><svg viewBox="0 0 70 30"><use href="#i-shape-square"/></svg></div>
+        <span class="shape-label">Square</span>
+      </button>
+      <button type="button" class="tile shape-pill" data-shape="Geometric">
+        <div class="img"><svg viewBox="0 0 70 30"><use href="#i-shape-geom"/></svg></div>
+        <span class="shape-label">Geometric</span>
+      </button>
+      <button type="button" class="tile shape-pill" data-shape="Aviator">
+        <div class="img"><svg viewBox="0 0 70 30"><use href="#i-shape-aviator"/></svg></div>
+        <span class="shape-label">Aviator</span>
+      </button>
+      <button type="button" class="tile shape-pill" data-shape="Cat-Eye">
+        <div class="img"><svg viewBox="0 0 70 30"><use href="#i-shape-cateye"/></svg></div>
+        <span class="shape-label">Cat-Eye</span>
+      </button>
+      <button type="button" class="tile shape-pill" data-shape="Wayfarer">
+        <div class="img"><svg viewBox="0 0 70 30"><use href="#i-shape-wayfarer"/></svg></div>
+        <span class="shape-label">Wayfarer</span>
+      </button>
+      <button type="button" class="tile shape-pill" data-shape="Oval">
+        <div class="img"><svg viewBox="0 0 70 30"><use href="#i-shape-oval"/></svg></div>
+        <span class="shape-label">Oval</span>
+      </button>
+      <button type="button" class="tile shape-pill" data-shape="Browline">
+        <div class="img"><svg viewBox="0 0 70 30"><use href="#i-shape-browline"/></svg></div>
+        <span class="shape-label">Browline</span>
+      </button>
+      <button type="button" class="tile shape-pill" data-shape="Rimless">
+        <div class="img"><svg viewBox="0 0 70 30"><use href="#i-shape-rimless"/></svg></div>
+        <span class="shape-label">Rimless</span>
+      </button>
+    </nav>
+  </section>
+
+  <!-- SECONDARY SUB BAR (Item counter, Sort, Filter) -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px var(--gutter) 6px;">
+    <div class="catalog-counter" id="catalog-count" style="font-size:13px;font-weight:600;color:var(--muted);">
+      <span class="count-desktop">Loading curated frames...</span>
+      <span class="count-mobile">Loading...</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-outline" id="btn-mobile-sort" aria-label="Sort products" style="height:34px;padding:0 12px;font-size:12px;border-radius:var(--pill);margin:0;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><path d="M3 6h18M7 12h10M10 18h4"/></svg>
+        SORT
+      </button>
+      <button class="btn btn-outline" id="btn-mobile-filter" aria-label="Filter products" style="height:34px;padding:0 12px;font-size:12px;border-radius:var(--pill);margin:0;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        FILTERS
+        <span class="badge-dot empty" id="mobile-filter-count-badge" style="position:static;display:inline-flex;min-width:16px;height:16px;font-size:10px;margin-left:4px;">0</span>
+      </button>
+    </div>
+  </div>
+  <div class="active-filter-chips" id="active-filter-chips" style="padding:0 var(--gutter) 6px;"></div>
+
+  <!-- PROMO BLOCK -->
+  <div class="promo">
+    <h3>Get <b>Noor Gold</b> Selection</h3>
+    <p>Handcrafted Luxury Frames + Free Blue-Light Lenses Included.</p>
+    <a class="btn btn-accent" href="#product-grid" onclick="selectVisualCategory('Eyeglasses', 'all')">Explore Collection</a>
+  </div>
+
+  <!-- POPULAR PICKS PRODUCT GRID -->
+  <section class="section">
+    <div class="section-head">
+      <h2>Popular picks</h2>
+      <a href="#product-grid" onclick="selectVisualCategory('all', 'all')">See all</a>
+    </div>
+    <div class="grid product-grid" id="product-grid" aria-label="Noor Optics Curated Eyewear Collection">
+      <!-- Populated dynamically via app.js -->
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <h4>Noor Optic Boutique</h4>
+    <p style="margin-bottom:12px;font-size:12.5px;opacity:0.85;">Bespoke Scandinavian eyewear engineered with Japanese pure titanium and sculpted Italian bio-acetate.</p>
+    <ul>
+      <li><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Returns &amp; Exchange (14 Days)</a></li>
+      <li><a href="https://wa.me/919876543210" target="_blank" rel="noopener">WhatsApp Optometrist Consultation</a></li>
+      <li><a href="/admin">Store POS &amp; Staff Portal</a></li>
+      <li><a href="#">Frame Warranty Terms (2 Years)</a></li>
+    </ul>
+    <p class="copy">&copy; 2024–2026 Noor Optic Boutique. Handcrafted Optical Excellence.</p>
+  </footer>
+
+  <!-- BOTTOM NAVIGATION -->
+  <nav class="bottom-nav lk-mobile-bottom-nav" id="lk-mobile-bottom-nav" aria-label="Mobile Navigation">
+    <button type="button" class="active" id="tab-nav-home" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Home">
+      <svg><use href="#i-home"/></svg>
+      <span>Home</span>
+    </button>
+    <button type="button" id="tab-nav-eyeglasses" onclick="selectVisualCategory('Eyeglasses', 'all')" aria-label="Eyeglasses">
+      <svg><use href="#i-grid"/></svg>
+      <span>Eyeglasses</span>
+    </button>
+    <button type="button" id="tab-nav-wishlist" onclick="document.getElementById('btn-wishlist-toggle')?.click()" aria-label="Wishlist">
+      <svg><use href="#i-heart"/></svg>
+      <span>Wishlist</span>
+      <span class="badge-dot empty" id="bottom-wishlist-badge">0</span>
+    </button>
+    <button type="button" id="tab-nav-bag" onclick="document.getElementById('btn-bag-toggle')?.click()" aria-label="Bag">
+      <svg><use href="#i-bag"/></svg>
+      <span>Cart</span>
+      <span class="badge-dot empty" id="bottom-bag-badge">0</span>
+    </button>
+  </nav>
+
+</div> <!-- /.app -->
+
+
+<!-- ── DRAWERS ─────────────────────────────────────────────────────────── -->
 
   <!-- Shared Drawer Backdrop -->
   <div class="drawer-backdrop" id="drawer-backdrop" aria-hidden="true"></div>
@@ -517,7 +506,10 @@
             <input type="radio" name="filter-gender" value="Women" /> Women
           </label>
           <label class="filter-checkbox-label">
-            <input type="radio" name="filter-gender" value="Kids" /> Kids / Unisex
+            <input type="radio" name="filter-gender" value="Kids" /> Kids
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-gender" value="Unisex" /> Unisex
           </label>
         </div>
       </div>
@@ -596,6 +588,18 @@
           </label>
           <label class="filter-checkbox-label">
             <input type="radio" name="filter-shape" value="Cat-Eye" /> Cat-Eye
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-shape" value="Wayfarer" /> Wayfarer
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-shape" value="Oval" /> Oval
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-shape" value="Browline" /> Browline / Clubmaster
+          </label>
+          <label class="filter-checkbox-label">
+            <input type="radio" name="filter-shape" value="Rimless" /> Rimless
           </label>
         </div>
       </div>
@@ -946,147 +950,7 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
-  <!-- ═════════════════════════════════════════════════════════════════ -->
-  <!-- LENSKART-STYLE TRUST GUARANTEE STRIP                            -->
-  <!-- ═════════════════════════════════════════════════════════════════ -->
-  <section class="lk-trust-strip" aria-label="Noor Optics Guarantees">
-    <div class="lk-trust-container">
-      <div class="lk-trust-item">
-        <div class="lk-trust-icon">🚚</div>
-        <div class="lk-trust-info">
-          <strong>Free Express Delivery</strong>
-          <span>Complimentary on orders &gt; ₹1,999</span>
-        </div>
-      </div>
-      <div class="lk-trust-item">
-        <div class="lk-trust-icon">🛡️</div>
-        <div class="lk-trust-info">
-          <strong>2-Year Warranty</strong>
-          <span>100% Genuine Handcrafted Eyewear</span>
-        </div>
-      </div>
-      <div class="lk-trust-item">
-        <div class="lk-trust-icon">👓</div>
-        <div class="lk-trust-info">
-          <strong>Free Blue-Cut Lenses</strong>
-          <span>Zero-power anti-reflective included</span>
-        </div>
-      </div>
-      <div class="lk-trust-item">
-        <div class="lk-trust-icon">💳</div>
-        <div class="lk-trust-info">
-          <strong>100% Secure Payment</strong>
-          <span>Instant UPI, GPay, Cards &amp; Store Pickup</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Scandinavian Luxury Footer -->
-  <footer class="store-footer">
-    <div class="footer-container">
-      <div class="footer-grid">
-        <!-- Brand Story with Official White Logo -->
-        <div>
-          <img src="/images/noor_logo_white.png" alt="Noor Optic" class="footer-logo-img" />
-          <p class="footer-brand-desc">
-            Bespoke Scandinavian eyewear engineered with Japanese pure titanium and sculpted Italian bio-acetate. Designed for enduring elegance, minimal weight, and crystalline visual clarity.
-          </p>
-        </div>
-
-        <!-- Navigation Links -->
-        <div>
-          <h5 class="footer-col-title">The Collection</h5>
-          <ul class="footer-links-list">
-            <li><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Nordic Titanium Series</a></li>
-            <li><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Bio-Acetate Frames</a></li>
-            <li><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Blue-Light Screen Shields</a></li>
-            <li><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">High-Index Precision Lenses</a></li>
-            <li><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Bespoke Frame Tailoring</a></li>
-          </ul>
-        </div>
-
-        <!-- Flagship Boutique & Customer Care -->
-        <div>
-          <h5 class="footer-col-title">Concierge & Flagship</h5>
-          <ul class="footer-links-list">
-            <li>Noor Flagship Boutique</li>
-            <li>Indiranagar 100ft Road, Bengaluru</li>
-            <li>Hours: 10:00 AM – 9:00 PM</li>
-            <li>Concierge: +91 98765 43210</li>
-            <li>Email: concierge@nooroptics.com</li>
-          </ul>
-        </div>
-
-        <!-- Newsletter Subscription -->
-        <div class="footer-newsletter-wrap">
-          <h5 class="footer-col-title">Noor Journal</h5>
-          <p>Receive private previews of limited edition handcrafted frames and optical care insights.</p>
-          <form class="footer-newsletter-form" id="footer-newsletter-form">
-            <input type="email" class="footer-newsletter-input" id="footer-newsletter-email" placeholder="Your email address" required aria-label="Newsletter email" />
-            <button type="submit" class="footer-newsletter-btn" id="footer-newsletter-btn">Join</button>
-          </form>
-        </div>
-      </div>
-
-      <div class="footer-bottom-row">
-        <div>&copy; 2024–2026 Noor Optic Boutique. Handcrafted Optical Excellence. All Rights Reserved.</div>
-        <div style="display:flex;gap:1.5rem;">
-          <a href="#">Privacy Policy</a>
-          <a href="#">Frame Warranty Terms</a>
-          <a href="#">Prescription Verification Guide</a>
-        </div>
-      </div>
-    </div>
-  </footer>
-
-  <!-- ═════════════════════════════════════════════════════════════════ -->
-  <!-- LENSKART-STYLE MOBILE FIXED BOTTOM NAVIGATION BAR                -->
-  <!-- ═════════════════════════════════════════════════════════════════ -->
-  <nav class="lk-mobile-bottom-nav" id="lk-mobile-bottom-nav" aria-label="Mobile Navigation">
-    <button type="button" class="lk-nav-tab active" id="tab-nav-home" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Home">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-        <polyline points="9 22 9 12 15 12 15 22"/>
-      </svg>
-      <span>Home</span>
-    </button>
-    <button type="button" class="lk-nav-tab" id="tab-nav-eyeglasses" onclick="selectVisualCategory('Eyeglasses', 'all')" aria-label="Eyeglasses">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="6" cy="12" r="4"/><circle cx="18" cy="12" r="4"/><line x1="10" y1="12" x2="14" y2="12"/>
-      </svg>
-      <span>Eyeglasses</span>
-    </button>
-    <button type="button" class="lk-nav-tab" id="tab-nav-sunglasses" onclick="selectVisualCategory('Sunglasses', 'all')" aria-label="Sunglasses">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M3 10a4 4 0 0 0 8 0v-1H3v1zm10 -1v1a4 4 0 0 0 8 0v-1h-8z"/>
-        <line x1="11" y1="9" x2="13" y2="9"/>
-      </svg>
-      <span>Sunglasses</span>
-    </button>
-    <button type="button" class="lk-nav-tab" id="tab-nav-wishlist" onclick="document.getElementById('btn-wishlist-toggle')?.click()" aria-label="Wishlist">
-      <div class="lk-tab-icon-wrap">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-        </svg>
-        <span class="lk-bottom-badge empty" id="bottom-wishlist-badge">0</span>
-      </div>
-      <span>Wishlist</span>
-    </button>
-    <button type="button" class="lk-nav-tab" id="tab-nav-bag" onclick="document.getElementById('btn-bag-toggle')?.click()" aria-label="Bag">
-      <div class="lk-tab-icon-wrap">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <path d="M16 10a4 4 0 01-8 0"/>
-        </svg>
-        <span class="lk-bottom-badge empty" id="bottom-bag-badge">0</span>
-      </div>
-      <span>Bag</span>
-    </button>
-  </nav>
-
-  <!-- Scripts -->
+<!-- Scripts -->
   <script src="/vendor/qrcode.min.js?v=11.1.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase.js?v=11.1.0"></script>
