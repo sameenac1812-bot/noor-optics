@@ -1507,6 +1507,47 @@
 
     const modalUtr = getOrderUtr(order);
 
+    // Resolve structured prescription from all attached sources
+    let effectiveRx = null;
+    if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
+      effectiveRx = order.prescriptions[0];
+    } else if (order.prescriptions_json) {
+      try {
+        const p = JSON.parse(order.prescriptions_json);
+        if (Array.isArray(p) && p.length > 0) effectiveRx = p[0];
+      } catch (_) {}
+    }
+    if (!effectiveRx && Array.isArray(order.items)) {
+      for (const it of order.items) {
+        if (it && (it.prescription || it.rx)) {
+          effectiveRx = it.prescription || it.rx;
+          break;
+        }
+      }
+    }
+    if (!effectiveRx && (order.od_sph != null || order.os_sph != null || order.prescription_number || order.prescription_id)) {
+      effectiveRx = {
+        id: order.prescription_id,
+        prescription_number: order.prescription_number,
+        od_sph: order.od_sph,
+        od_cyl: order.od_cyl,
+        od_axis: order.od_axis,
+        os_sph: order.os_sph,
+        os_cyl: order.os_cyl,
+        os_axis: order.os_axis,
+        addition: order.addition,
+        ipd_distance: order.ipd_distance,
+        checked_by: order.rx_checked_by || order.checked_by,
+        notes: order.rx_notes || order.notes
+      };
+    }
+    const hasStructuredRx = Boolean(effectiveRx && (
+      effectiveRx.od_sph != null || effectiveRx.os_sph != null ||
+      effectiveRx.odSph != null || effectiveRx.osSph != null ||
+      effectiveRx.od_cyl != null || effectiveRx.os_cyl != null ||
+      effectiveRx.prescription_number || effectiveRx.prescriptionNumber
+    ));
+
     contentEl.innerHTML = `
       ${(modalUtr || order.payment_status === 'AWAITING_VERIFICATION') ? `
         <div style="background:#FFFBEB; border:1.5px solid #F59E0B; border-radius:8px; padding:14px 16px; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
@@ -1567,47 +1608,6 @@
           <div style="margin-top:2px;"><strong>Order Status:</strong> <span class="badge-status status-${order.status?.toLowerCase()}">${escapeHtml(order.status)}</span></div>
         </div>
       </div>
-
-      // Resolve structured prescription from all attached sources
-      let effectiveRx = null;
-      if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
-        effectiveRx = order.prescriptions[0];
-      } else if (order.prescriptions_json) {
-        try {
-          const p = JSON.parse(order.prescriptions_json);
-          if (Array.isArray(p) && p.length > 0) effectiveRx = p[0];
-        } catch (_) {}
-      }
-      if (!effectiveRx && Array.isArray(order.items)) {
-        for (const it of order.items) {
-          if (it && (it.prescription || it.rx)) {
-            effectiveRx = it.prescription || it.rx;
-            break;
-          }
-        }
-      }
-      if (!effectiveRx && (order.od_sph != null || order.os_sph != null || order.prescription_number || order.prescription_id)) {
-        effectiveRx = {
-          id: order.prescription_id,
-          prescription_number: order.prescription_number,
-          od_sph: order.od_sph,
-          od_cyl: order.od_cyl,
-          od_axis: order.od_axis,
-          os_sph: order.os_sph,
-          os_cyl: order.os_cyl,
-          os_axis: order.os_axis,
-          addition: order.addition,
-          ipd_distance: order.ipd_distance,
-          checked_by: order.rx_checked_by || order.checked_by,
-          notes: order.rx_notes || order.notes
-        };
-      }
-      const hasStructuredRx = Boolean(effectiveRx && (
-        effectiveRx.od_sph != null || effectiveRx.os_sph != null ||
-        effectiveRx.odSph != null || effectiveRx.osSph != null ||
-        effectiveRx.od_cyl != null || effectiveRx.os_cyl != null ||
-        effectiveRx.prescription_number || effectiveRx.prescriptionNumber
-      ));
 
       <!-- Glasses Prescription Section -->
       ${hasStructuredRx ? `
