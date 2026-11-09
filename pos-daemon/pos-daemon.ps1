@@ -670,11 +670,13 @@ function Format-ReceiptBytes($order) {
     $totalPaid = if ($order.amount_paid_inr -ne $null) { [double]$order.amount_paid_inr } `
                  elseif ($order.amount_paid_paise) { [double]$order.amount_paid_paise / 100 } `
                  else { 0.0 }
-    $advance = if ($order.advance_paid_inr) { [double]$order.advance_paid_inr } `
-               elseif ($order.advance_paid_paise) { [double]$order.advance_paid_paise / 100 } `
+    $advance = if ($order.advance_paid_inr -ne $null -and [string]$order.advance_paid_inr -ne "") { [double]$order.advance_paid_inr } `
+               elseif ($order.advance_paid_paise -ne $null) { [double]$order.advance_paid_paise / 100 } `
+               elseif ($order.payment_status -eq "VERIFIED" -or $order.payment_status -eq "PAID") { [Math]::Max(0.0, $grandTotal - $second - $third) } `
                else { [Math]::Max(0.0, $totalPaid - $second - $third) }
     $remaining = if ($order.outstanding_inr -ne $null) { [double]$order.outstanding_inr } `
                  elseif ($order.outstanding_paise -ne $null) { [double]$order.outstanding_paise / 100 } `
+                 elseif ($order.payment_status -eq "VERIFIED" -or $order.payment_status -eq "PAID") { 0.0 } `
                  else { [Math]::Max(0.0, $grandTotal - ($advance + $second + $third)) }
 
     function Format-FinRow($lbl, $val) {
@@ -684,15 +686,22 @@ function Format-ReceiptBytes($order) {
         return $line.PadLeft($COLS) + "`n"
     }
 
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Total:" $grandTotal)))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Discount:" $discount)))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Advance:" $advance)))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "2nd Amount:" $(if ($second -gt 0) { $second } else { "" }))))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "3rd Amount:" $(if ($third -gt 0) { $third } else { "" }))))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Remaining:" $remaining)))
-    if ($remaining -eq 0) {
+    if ($isWebOrder) {
+        # Website orders: 100% paid in full via online checkout.
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Total:" $grandTotal)))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Center-Text "*** PAID IN FULL ***`n")))
+    } else {
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Total:" $grandTotal)))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Discount:" $discount)))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Advance:" $advance)))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "2nd Amount:" $(if ($second -gt 0) { $second } else { "" }))))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "3rd Amount:" $(if ($third -gt 0) { $third } else { "" }))))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
+        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Format-FinRow "Remaining:" $remaining)))
+        if ($remaining -eq 0) {
+            $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Center-Text "*** PAID IN FULL ***`n")))
+        }
     }
 
     # 12. Dashed line
@@ -1006,6 +1015,7 @@ function Poll-CloudPrintQueue {
                             if ($bytes -and $bytes.Length -gt 0) {
                                 $ok = Spool-Bytes $bytes "Bill-$ref"
                                 if ($ok) {
+                                    $processedJobIds.Add($jobId) | Out-Null
                                     $livePrintedOrders.Add($stageKey) | Out-Null
                                     if ($ref) { $livePrintedOrders.Add($ref) | Out-Null }
                                     if ($orderIdStr) { $livePrintedOrders.Add($orderIdStr) | Out-Null }
@@ -1147,8 +1157,8 @@ while ($running) {
                 $stageSuffix = if ($order.third_payment_inr -gt 0 -or $order.third_payment_paise -gt 0) { "stage3" } `
                                elseif ($order.second_payment_inr -gt 0 -or $order.second_payment_paise -gt 0) { "stage2" } `
                                else { "init" }
-                $stageKey = if ($isManual) { "reprint_" + (Get-Date).Ticks } else { "$orderRef:$stageSuffix" }
-                $cloudJobId = "rcp_${orderRef}_${stageSuffix}"
+                $stageKey = if ($isManual) { "reprint_" + (Get-Date).Ticks } else { $orderRef + ":" + $stageSuffix }
+                $cloudJobId = "rcp_" + $orderRef + "_" + $stageSuffix
 
                 $refs = @($order.order_number, $order.order_ref, $order.orderNumber, [string]$order.id) | Where-Object { $_ -ne $null -and $_ -ne "" }
 

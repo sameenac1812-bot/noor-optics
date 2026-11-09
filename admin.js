@@ -888,8 +888,9 @@
           const custName = o.customer_name || (orderChan === 'POS' ? 'Walk-in Client' : 'Online Client');
           const custPhone = o.customer_phone || '-';
           const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
-          const outstandingINR = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - ((o.amount_paid_paise || 0) / 100)));
-          const isDue = (outstandingINR > 0) || (o.payment_status === 'PARTIAL');
+          const isFullyPaid = (o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') && o.payment_status !== 'PARTIAL';
+          const outstandingINR = isFullyPaid ? 0 : ((o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - ((o.amount_paid_paise || 0) / 100))));
+          const isDue = !isFullyPaid && ((outstandingINR > 0) || (o.payment_status === 'PARTIAL'));
           const hasRx = !!o.prescription_id || !!o.prescription_number || (Array.isArray(o.prescriptions) && o.prescriptions.length > 0);
           const rxCount = (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) ? o.prescriptions.length : (hasRx ? 1 : 0);
           const utrCard = getOrderUtr(o);
@@ -985,10 +986,11 @@
           ? o.items.map(i => `${escapeHtml(i.product_name)} (${i.quantity})`).join(', ')
           : 'Optical Frame';
 
+        const isFullyPaidRow = (o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') && o.payment_status !== 'PARTIAL';
         const totalPayableRow = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
-        const amountPaidRow = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
-        const outstandingRow = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayableRow - amountPaidRow));
-        const isDueRow = (outstandingRow > 0) || (o.payment_status === 'PARTIAL');
+        const amountPaidRow = isFullyPaidRow ? totalPayableRow : ((o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100));
+        const outstandingRow = isFullyPaidRow ? 0 : ((o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayableRow - amountPaidRow)));
+        const isDueRow = !isFullyPaidRow && ((outstandingRow > 0) || (o.payment_status === 'PARTIAL'));
 
         const paymentClass = o.payment_status === 'VERIFIED' ? 'status-verified' : (o.payment_status === 'REFUNDED' ? 'status-cancelled' : 'status-awaiting');
         const orderClass = o.status === 'CONFIRMED' || o.status === 'DELIVERED' ? 'status-verified' : (o.status === 'CANCELLED' || o.status === 'REFUNDED' ? 'status-cancelled' : 'status-pending');
@@ -9280,9 +9282,9 @@
         : `✓ Payment of ₹${amountINR.toLocaleString('en-IN')} recorded! Remaining balance: ₹${remINR.toLocaleString('en-IN')}`;
       showToast(msg, 'success');
 
-      // Print updated receipt to POS thermal printer
+      // Print updated receipt to POS thermal printer (stage-aware settlement, prevents duplicate prints)
       if (shouldPrint && typeof instantPrintReceipt === 'function') {
-        instantPrintReceipt(orderId, true, res.order).catch(() => { });
+        instantPrintReceipt(orderId, false, res.order, 'collect_payment').catch(() => { });
       }
 
       // Refresh datasets across the system silently in background

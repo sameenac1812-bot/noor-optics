@@ -2827,7 +2827,11 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
       LEFT JOIN users u ON o.staff_user_id = u.id
       LEFT JOIN customers c ON o.customer_id = c.id
       LEFT JOIN prescriptions pr ON o.prescription_id = pr.id
-      LEFT JOIN payments pay ON o.id = pay.order_id
+      LEFT JOIN (
+        SELECT order_id, MAX(id) as id, MAX(claimed_upi_ref) as claimed_upi_ref, MAX(status) as status
+        FROM payments
+        GROUP BY order_id
+      ) pay ON o.id = pay.order_id
       WHERE 1=1
         AND o.order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
         AND o.id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)

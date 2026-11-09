@@ -703,8 +703,19 @@ function format25InchEscPosReceipt(rawOrder) {
     const second = Number(order.second_payment_inr || (order.second_payment_paise ? order.second_payment_paise / 100 : 0));
     const third = Number(order.third_payment_inr || (order.third_payment_paise ? order.third_payment_paise / 100 : 0));
     const totalPaid = Number(order.amount_paid_inr != null ? order.amount_paid_inr : (order.amount_paid_paise ? order.amount_paid_paise / 100 : 0));
-    const advance = Number(order.advance_paid_inr != null ? order.advance_paid_inr : (order.advance_paid_paise ? order.advance_paid_paise / 100 : Math.max(0, totalPaid - second - third)));
-    const remaining = Number(order.outstanding_inr != null ? order.outstanding_inr : (order.outstanding_paise != null ? order.outstanding_paise / 100 : Math.max(0, grandTotal - (advance + second + third))));
+    const isVerifiedStatus = (order.payment_status === 'VERIFIED' || order.payment_status === 'PAID');
+    const advance = Number(
+      order.advance_paid_inr != null ? order.advance_paid_inr
+      : (order.advance_paid_paise != null ? order.advance_paid_paise / 100
+      : (isVerifiedStatus ? Math.max(0, grandTotal - second - third)
+      : Math.max(0, totalPaid - second - third)))
+    );
+    const remaining = Number(
+      order.outstanding_inr != null ? order.outstanding_inr
+      : (order.outstanding_paise != null ? order.outstanding_paise / 100
+      : (isVerifiedStatus ? 0
+      : Math.max(0, grandTotal - (advance + second + third))))
+    );
 
     writeText(finRow('Total:', grandTotal));
     writeText(finRow('Discount:', discount > 0 ? discount : 0));
