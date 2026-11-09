@@ -14,7 +14,7 @@ let lastProductSyncTime = 0;
 const PRODUCT_SYNC_CACHE_MS = 15000;
 
 let lastOrderSyncTime = 0;
-const ORDER_SYNC_CACHE_MS = 2000;
+const ORDER_SYNC_CACHE_MS = 10000;
 
 function invalidateProductSyncCache() {
   lastProductSyncTime = 0;
@@ -590,7 +590,8 @@ async function syncSupabaseOrders(db, force = false) {
     if (!Array.isArray(cloudOrders) || cloudOrders.length === 0) return;
 
     for (const co of cloudOrders) {
-      if (!co.order_ref) continue;
+      try {
+        if (!co.order_ref) continue;
       // Filter out dummy/test ghost orders
       if (/TEST-REF|GHOST-TEST/i.test(co.order_ref)) continue;
 
@@ -824,11 +825,127 @@ async function syncSupabaseOrders(db, force = false) {
         }
       }
 
-      const existing = db.prepare('SELECT id, customer_id, payment_status, amount_paid_paise, outstanding_paise FROM orders WHERE order_number = ?').get(co.order_ref);
+      // Parse items
+      let items = co.items;
+      if (typeof items === 'string') {
+        try { items = JSON.parse(items); } catch(e) { items = []; }
+      }
+
+      // 3. Extract & Sync Prescription record if present in items, order payload, or Supabase prescriptions table
+      let attachedRx = null;
+      if (Array.isArray(items)) {
+        for (const it of items) {
+          if (it && (it.prescription || it.rx)) {
+            attachedRx = it.prescription || it.rx;
+            break;
+          }
+        }
+      }
+      if (!attachedRx && (co.prescription || co.prescriptions)) {
+        attachedRx = co.prescription || (Array.isArray(co.prescriptions) ? co.prescriptions[0] : null);
+        if (typeof attachedRx === 'string') {
+          try { attachedRx = JSON.parse(attachedRx); } catch (_) {}
+        }
+      }
+      if (!attachedRx && (co.od_sph != null || co.os_sph != null || co.odSph != null || co.osSph != null)) {
+        attachedRx = {
+          prescription_number: co.prescription_number || ('RX-' + co.order_ref),
+          od_sph: co.od_sph || co.odSph,
+          od_cyl: co.od_cyl || co.odCyl,
+          od_axis: co.od_axis != null ? co.od_axis : co.odAxis,
+          os_sph: co.os_sph || co.osSph,
+          os_cyl: co.os_cyl || co.osCyl,
+          os_axis: co.os_axis != null ? co.os_axis : co.osAxis,
+          addition: co.addition || co.add,
+          ipd_distance: co.ipd_distance || co.pd
+        };
+      }
+      if (!attachedRx && phone) {
+        try {
+          const rxRes = await fetch(`${SUPABASE_URL}/rest/v1/prescriptions?client_phone=eq.${encodeURIComponent(phone)}&order=created_at.desc&limit=1`, {
+            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+          });
+          if (rxRes.ok) {
+            const rxList = await rxRes.json();
+            if (Array.isArray(rxList) && rxList.length > 0) {
+              attachedRx = rxList[0];
+            }
+          }
+        } catch (_) {}
+      }
+
+      const hasRxDiopters = Boolean(attachedRx && (
+        attachedRx.od_sph != null || attachedRx.os_sph != null ||
+        attachedRx.odSph != null || attachedRx.osSph != null ||
+        attachedRx.od_cyl != null || attachedRx.os_cyl != null ||
+        attachedRx.prescription_number || attachedRx.prescriptionNumber
+      ));
+
+      // Ensure customerId exists if prescription is present (satisfies NOT NULL foreign key constraint on prescriptions.client_id)
+      if (hasRxDiopters && !customerId) {
+        customerId = 'cust-rx-' + co.order_ref.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        const existingCust = db.prepare('SELECT id FROM customers WHERE id = ?').get(customerId);
+        if (!existingCust) {
+          const clientCode = 'CLI-' + Math.floor(10000 + Math.random() * 90000);
+          try {
+            db.prepare(`
+              INSERT INTO customers (id, client_code, name, phone, email, address, city, pin_code, notes, total_spent_paise, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Auto-created for website order prescription', ?, datetime('now'), datetime('now'))
+            `).run(
+              customerId, clientCode, name || 'Website Client', phone || null,
+              co.customer_email || null, co.delivery_address || null, co.city || 'Bengaluru', co.pin_code || null,
+              grandTotalPaise, orderDate, orderDate
+            );
+          } catch (_) {
+            const fallbackCust = db.prepare('SELECT id FROM customers LIMIT 1').get();
+            if (fallbackCust) customerId = fallbackCust.id;
+          }
+        }
+      }
+
+      let syncedRxId = null;
+      if (hasRxDiopters && customerId) {
+        try {
+          const localRxId = attachedRx.id || ('rx-cld-' + co.order_ref.toLowerCase().replace(/[^a-z0-9]/g, '-'));
+          const rxNum = attachedRx.prescription_number || attachedRx.prescriptionNumber || ('RX-' + co.order_ref);
+          const existingRx = db.prepare('SELECT id FROM prescriptions WHERE id = ? OR prescription_number = ?').get(localRxId, rxNum);
+          if (!existingRx) {
+            db.prepare(`
+              INSERT INTO prescriptions (
+                id, prescription_number, client_id, prescription_date,
+                od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis, addition, ipd_distance, checked_by, notes, created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              localRxId, rxNum, customerId, attachedRx.prescription_date || orderDate.split('T')[0],
+              attachedRx.od_sph !== undefined && attachedRx.od_sph !== null && attachedRx.od_sph !== '' ? String(attachedRx.od_sph) : (attachedRx.odSph || '0.00'),
+              attachedRx.od_cyl !== undefined && attachedRx.od_cyl !== null && attachedRx.od_cyl !== '' ? String(attachedRx.od_cyl) : (attachedRx.odCyl || '0.00'),
+              attachedRx.od_axis !== undefined ? attachedRx.od_axis : null,
+              attachedRx.os_sph !== undefined && attachedRx.os_sph !== null && attachedRx.os_sph !== '' ? String(attachedRx.os_sph) : (attachedRx.osSph || '0.00'),
+              attachedRx.os_cyl !== undefined && attachedRx.os_cyl !== null && attachedRx.os_cyl !== '' ? String(attachedRx.os_cyl) : (attachedRx.osCyl || '0.00'),
+              attachedRx.os_axis !== undefined ? attachedRx.os_axis : null,
+              attachedRx.addition || attachedRx.add || null,
+              attachedRx.ipd_distance || attachedRx.pd || null,
+              attachedRx.checked_by || 'Website Client Submission',
+              attachedRx.notes || null,
+              orderDate, orderDate
+            );
+          }
+          syncedRxId = existingRx ? existingRx.id : localRxId;
+        } catch (rxErr) {
+          console.warn(`[SupabaseSync] Prescription insert warning for ${co.order_ref}:`, rxErr.message);
+        }
+      }
+
+      const existing = db.prepare('SELECT id, customer_id, payment_status, amount_paid_paise, outstanding_paise, prescription_id, prescriptions_json FROM orders WHERE order_number = ?').get(co.order_ref);
       if (existing) {
-        // Ensure channel and customer_id are kept accurate
+        // Ensure channel, customer_id, and prescription are kept accurate
         if (!existing.customer_id && customerId) {
           db.prepare('UPDATE orders SET customer_id = ? WHERE id = ?').run(customerId, existing.id);
+        }
+        if (syncedRxId && (!existing.prescription_id || !existing.prescriptions_json)) {
+          try {
+            db.prepare('UPDATE orders SET prescription_id = ?, prescriptions_json = ? WHERE id = ?').run(syncedRxId, JSON.stringify([attachedRx]), existing.id);
+          } catch (_) {}
         }
         // Local SQLite is the master authority for staff payment verification, installments, and outstanding balances!
         let finalPaymentStatus = existing.payment_status || paymentStatus;
@@ -924,27 +1041,24 @@ async function syncSupabaseOrders(db, force = false) {
       db.prepare(`
         INSERT INTO orders (
           id, order_number, token_number, channel, channel_code, source, customer_id, customer_name, customer_phone,
-          customer_email, delivery_address, city, pin_code, prescription_pref,
+          customer_email, delivery_address, city, pin_code, prescription_pref, prescription_id, prescriptions_json,
           status, payment_status, subtotal_paise, tax_paise, total_payable_paise,
           amount_paid_paise, advance_paid_paise, second_payment_paise, third_payment_paise, outstanding_paise, claimed_upi_ref, notes, created_at, updated_at
         ) VALUES (
           ?, ?, 1, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?,
           'CONFIRMED', ?, ?, ?, ?,
           ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
       `).run(
         orderId, co.order_ref, channel, channelCode, source, customerId, name, phone,
         co.customer_email || null, co.delivery_address || null, co.city || null, co.pin_code || null,
-        co.prescription_pref || 'Standard', insertPaymentStatus, subtotalPaise, taxPaise, grandTotalPaise,
+        co.prescription_pref || (hasRxDiopters ? 'enter-rx' : 'Standard'), syncedRxId, hasRxDiopters ? JSON.stringify([attachedRx]) : null,
+        insertPaymentStatus, subtotalPaise, taxPaise, grandTotalPaise,
         insertAmountPaid, advancePaidPaise, secondPaymentPaise, thirdPaymentPaise, insertOutstanding, resolvedUtr, isPos ? 'In-Store POS Bill (Synced)' : 'Online Website Order (Synced)', orderDate, orderDate
       );
 
-      // Parse and insert items
-      let items = co.items;
-      if (typeof items === 'string') {
-        try { items = JSON.parse(items); } catch(e) { items = []; }
-      }
+      // Insert items
       if (Array.isArray(items)) {
         // Known special lens package prices (in paise)
         const SPECIAL_LENS_PRICES = {
@@ -1070,76 +1184,10 @@ async function syncSupabaseOrders(db, force = false) {
         });
       }
 
-      // 3. Extract & Sync Prescription record if present in items, order payload, or Supabase prescriptions table
-      let attachedRx = null;
-      if (Array.isArray(items)) {
-        for (const it of items) {
-          if (it.prescription || it.rx) {
-            attachedRx = it.prescription || it.rx;
-            break;
-          }
-        }
-      }
-      if (!attachedRx && (co.prescription || co.prescriptions)) {
-        attachedRx = co.prescription || (Array.isArray(co.prescriptions) ? co.prescriptions[0] : null);
-        if (typeof attachedRx === 'string') {
-          try { attachedRx = JSON.parse(attachedRx); } catch (_) {}
-        }
-      }
-      if (!attachedRx && (co.od_sph != null || co.os_sph != null || co.odSph != null || co.osSph != null)) {
-        attachedRx = {
-          prescription_number: co.prescription_number || ('RX-' + co.order_ref),
-          od_sph: co.od_sph || co.odSph,
-          od_cyl: co.od_cyl || co.odCyl,
-          od_axis: co.od_axis != null ? co.od_axis : co.odAxis,
-          os_sph: co.os_sph || co.osSph,
-          os_cyl: co.os_cyl || co.osCyl,
-          os_axis: co.os_axis != null ? co.os_axis : co.osAxis,
-          addition: co.addition || co.add,
-          ipd_distance: co.ipd_distance || co.pd
-        };
-      }
-      if (!attachedRx && phone) {
+      if (syncedRxId && attachedRx) {
         try {
-          const rxRes = await fetch(`${SUPABASE_URL}/rest/v1/prescriptions?client_phone=eq.${encodeURIComponent(phone)}&order=created_at.desc&limit=1`, {
-            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-          });
-          if (rxRes.ok) {
-            const rxList = await rxRes.json();
-            if (Array.isArray(rxList) && rxList.length > 0) {
-              attachedRx = rxList[0];
-            }
-          }
+          db.prepare('UPDATE orders SET prescription_id = ?, prescriptions_json = ? WHERE id = ?').run(syncedRxId, JSON.stringify([attachedRx]), orderId);
         } catch (_) {}
-      }
-
-      if (attachedRx && (attachedRx.od_sph != null || attachedRx.os_sph != null || attachedRx.odSph != null || attachedRx.osSph != null)) {
-        const localRxId = attachedRx.id || ('rx-cld-' + co.order_ref.toLowerCase().replace(/[^a-z0-9]/g, '-'));
-        const rxNum = attachedRx.prescription_number || ('RX-' + co.order_ref);
-        const existingRx = db.prepare('SELECT id FROM prescriptions WHERE id = ? OR prescription_number = ?').get(localRxId, rxNum);
-        if (!existingRx) {
-          db.prepare(`
-            INSERT INTO prescriptions (
-              id, prescription_number, client_id, prescription_date,
-              od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis, addition, ipd_distance, checked_by, notes, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            localRxId, rxNum, customerId, attachedRx.prescription_date || orderDate.split('T')[0],
-            attachedRx.od_sph !== undefined && attachedRx.od_sph !== null && attachedRx.od_sph !== '' ? String(attachedRx.od_sph) : (attachedRx.odSph || '0.00'),
-            attachedRx.od_cyl !== undefined && attachedRx.od_cyl !== null && attachedRx.od_cyl !== '' ? String(attachedRx.od_cyl) : (attachedRx.odCyl || '0.00'),
-            attachedRx.od_axis !== undefined ? attachedRx.od_axis : null,
-            attachedRx.os_sph !== undefined && attachedRx.os_sph !== null && attachedRx.os_sph !== '' ? String(attachedRx.os_sph) : (attachedRx.osSph || '0.00'),
-            attachedRx.os_cyl !== undefined && attachedRx.os_cyl !== null && attachedRx.os_cyl !== '' ? String(attachedRx.os_cyl) : (attachedRx.osCyl || '0.00'),
-            attachedRx.os_axis !== undefined ? attachedRx.os_axis : null,
-            attachedRx.addition || attachedRx.add || null,
-            attachedRx.ipd_distance || attachedRx.pd || null,
-            attachedRx.checked_by || 'Website Client Submission',
-            attachedRx.notes || null,
-            orderDate, orderDate
-          );
-        }
-        db.prepare('UPDATE orders SET prescription_id = ?, prescriptions_json = ? WHERE id = ?').run(localRxId, JSON.stringify([attachedRx]), orderId);
-        console.log(`[SupabaseSync] Linked prescription ${rxNum} to order ${co.order_ref}`);
       }
 
       // Record payment
@@ -1174,6 +1222,9 @@ async function syncSupabaseOrders(db, force = false) {
       }
 
       console.log(`[SupabaseSync] Synced cloud order ${co.order_ref} (${channel}) for ${name}`);
+      } catch (orderErr) {
+        console.warn(`[SupabaseSync] Error processing order ${co?.order_ref}:`, orderErr.message);
+      }
     }
   } catch (err) {
     console.warn('[SupabaseSync] Error syncing orders from Supabase:', err.message);

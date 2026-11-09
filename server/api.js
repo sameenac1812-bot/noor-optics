@@ -2629,6 +2629,24 @@ router.post('/orders/online', (req, res) => {
           city || 'Bengaluru', pinCode ? pinCode.trim() : null, totalPayablePaise
         );
       }
+    } else {
+      // Client was previously tombstoned; create fresh profile for this new storefront order and clear tombstone
+      customerId = 'cust-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
+      const clientCode = getNextClientCode();
+      db.prepare(`
+        INSERT INTO customers (id, client_code, name, age, phone, email, address, city, pin_code, notes, total_spent_paise, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Created via Online Storefront Order', ?, datetime('now'), datetime('now'))
+      `).run(
+        customerId, clientCode, customerName.trim(), finalAge, customerPhone ? customerPhone.trim() : null,
+        customerEmail ? customerEmail.trim() : null, deliveryAddress ? deliveryAddress.trim() : null,
+        city || 'Bengaluru', pinCode ? pinCode.trim() : null, totalPayablePaise
+      );
+      if (customerPhone) {
+        try {
+          const cp = customerPhone.trim();
+          db.prepare('DELETE FROM deleted_customers WHERE phone = ? OR phone = ? OR phone = ?').run(cp, cp.replace('+91', '').trim(), '+91' + cp.replace('+91', '').trim());
+        } catch (_) {}
+      }
     }
     createdCustomerId = customerId;
 
@@ -2865,8 +2883,11 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
     res.setHeader('Expires', '0');
 
     const forceSync = req.query.force === '1' || req.query.force === 'true';
-    // Sync incoming cloud orders so mobile phone orders appear immediately
-    await syncSupabaseOrders(db, forceSync).catch(() => {});
+    if (forceSync) {
+      await syncSupabaseOrders(db, true).catch(() => {});
+    } else {
+      syncSupabaseOrders(db, false).catch(() => {});
+    }
 
     const { channel, paymentStatus, status, limit = 300 } = req.query;
 
@@ -2942,22 +2963,51 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
         normCreatedAt = normCreatedAt + 'Z';
       }
 
+      let parsedRxList = [];
+      if (o.prescriptions_json) {
+        try {
+          const p = JSON.parse(o.prescriptions_json);
+          if (Array.isArray(p) && p.length > 0) parsedRxList = p;
+        } catch (_) {}
+      }
+      if (parsedRxList.length === 0) {
+        const s = {
+          id: o.prescription_id || (rx ? rx.id : null),
+          prescription_number: o.prescription_number || (rx ? rx.prescription_number : null),
+          od_sph: o.od_sph || (rx ? rx.od_sph : null),
+          od_cyl: o.od_cyl || (rx ? rx.od_cyl : null),
+          od_axis: o.od_axis !== undefined && o.od_axis !== null ? o.od_axis : (rx ? rx.od_axis : null),
+          os_sph: o.os_sph || (rx ? rx.os_sph : null),
+          os_cyl: o.os_cyl || (rx ? rx.os_cyl : null),
+          os_axis: o.os_axis !== undefined && o.os_axis !== null ? o.os_axis : (rx ? rx.os_axis : null),
+          addition: o.addition || (rx ? rx.addition : null),
+          ipd_distance: o.ipd_distance || (rx ? rx.ipd_distance : null),
+          ipd_near: o.ipd_near || (rx ? rx.ipd_near : null),
+          checked_by: o.rx_checked_by || (rx ? rx.checked_by : null),
+          notes: o.rx_notes || (rx ? rx.notes : null)
+        };
+        if (s.od_sph != null || s.os_sph != null || s.prescription_number) parsedRxList = [s];
+      }
+      const firstRx = parsedRxList[0] || null;
+
       return {
         ...o,
         created_at: normCreatedAt,
-        prescription_id: o.prescription_id || (rx ? rx.id : null),
-        prescription_number: o.prescription_number || (rx ? rx.prescription_number : null),
-        od_sph: o.od_sph || (rx ? rx.od_sph : null),
-        od_cyl: o.od_cyl || (rx ? rx.od_cyl : null),
-        od_axis: o.od_axis !== undefined && o.od_axis !== null ? o.od_axis : (rx ? rx.od_axis : null),
-        os_sph: o.os_sph || (rx ? rx.os_sph : null),
-        os_cyl: o.os_cyl || (rx ? rx.os_cyl : null),
-        os_axis: o.os_axis !== undefined && o.os_axis !== null ? o.os_axis : (rx ? rx.os_axis : null),
-        addition: o.addition || (rx ? rx.addition : null),
-        ipd_distance: o.ipd_distance || (rx ? rx.ipd_distance : null),
-        ipd_near: o.ipd_near || (rx ? rx.ipd_near : null),
-        rx_checked_by: o.rx_checked_by || (rx ? rx.checked_by : null),
-        rx_notes: o.rx_notes || (rx ? rx.notes : null),
+        prescription_id: o.prescription_id || (firstRx ? firstRx.id : (rx ? rx.id : null)),
+        prescription_number: o.prescription_number || (firstRx ? (firstRx.prescription_number || firstRx.prescriptionNumber) : (rx ? rx.prescription_number : null)),
+        od_sph: o.od_sph || (firstRx ? (firstRx.od_sph || firstRx.odSph) : (rx ? rx.od_sph : null)),
+        od_cyl: o.od_cyl || (firstRx ? (firstRx.od_cyl || firstRx.odCyl) : (rx ? rx.od_cyl : null)),
+        od_axis: (o.od_axis !== undefined && o.od_axis !== null) ? o.od_axis : (firstRx ? (firstRx.od_axis ?? firstRx.odAxis) : (rx ? rx.od_axis : null)),
+        os_sph: o.os_sph || (firstRx ? (firstRx.os_sph || firstRx.osSph) : (rx ? rx.os_sph : null)),
+        os_cyl: o.os_cyl || (firstRx ? (firstRx.os_cyl || firstRx.osCyl) : (rx ? rx.os_cyl : null)),
+        os_axis: (o.os_axis !== undefined && o.os_axis !== null) ? o.os_axis : (firstRx ? (firstRx.os_axis ?? firstRx.osAxis) : (rx ? rx.os_axis : null)),
+        addition: o.addition || (firstRx ? (firstRx.addition || firstRx.add) : (rx ? rx.addition : null)),
+        ipd_distance: o.ipd_distance || (firstRx ? (firstRx.ipd_distance || firstRx.pd) : (rx ? rx.ipd_distance : null)),
+        ipd_near: o.ipd_near || (firstRx ? firstRx.ipd_near : (rx ? rx.ipd_near : null)),
+        rx_checked_by: o.rx_checked_by || (firstRx ? (firstRx.checked_by || firstRx.checkedBy) : (rx ? rx.checked_by : null)),
+        rx_notes: o.rx_notes || (firstRx ? firstRx.notes : (rx ? rx.notes : null)),
+        prescriptions: parsedRxList,
+        prescription: firstRx,
         subtotal_inr: o.subtotal_paise / 100,
         discount_inr: o.discount_paise / 100,
         total_payable_inr: o.total_payable_paise / 100,
@@ -2968,27 +3018,6 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
         outstanding_inr: (o.outstanding_paise || 0) / 100,
         previous_due_inr: (o.previous_due_paise || 0) / 100,
         pickup_time: o.pickup_time || null,
-        prescriptions: (() => {
-          if (o.prescriptions_json) {
-            try { const p = JSON.parse(o.prescriptions_json); if (Array.isArray(p) && p.length > 0) return p; } catch(_) {}
-          }
-          const s = {
-            id: o.prescription_id || (rx ? rx.id : null),
-            prescription_number: o.prescription_number || (rx ? rx.prescription_number : null),
-            od_sph: o.od_sph || (rx ? rx.od_sph : null),
-            od_cyl: o.od_cyl || (rx ? rx.od_cyl : null),
-            od_axis: o.od_axis !== undefined && o.od_axis !== null ? o.od_axis : (rx ? rx.od_axis : null),
-            os_sph: o.os_sph || (rx ? rx.os_sph : null),
-            os_cyl: o.os_cyl || (rx ? rx.os_cyl : null),
-            os_axis: o.os_axis !== undefined && o.os_axis !== null ? o.os_axis : (rx ? rx.os_axis : null),
-            addition: o.addition || (rx ? rx.addition : null),
-            ipd_distance: o.ipd_distance || (rx ? rx.ipd_distance : null),
-            ipd_near: o.ipd_near || (rx ? rx.ipd_near : null),
-            checked_by: o.rx_checked_by || (rx ? rx.checked_by : null),
-            notes: o.rx_notes || (rx ? rx.notes : null)
-          };
-          return (s.od_sph != null || s.os_sph != null || s.prescription_number) ? [s] : [];
-        })(),
         items: getItems.all(o.id).map(i => ({
           ...i,
           unit_price_inr: i.unit_price_paise / 100,

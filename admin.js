@@ -933,7 +933,7 @@
           const isFullyPaid = (o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') && o.payment_status !== 'PARTIAL';
           const outstandingINR = isFullyPaid ? 0 : ((o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - ((o.amount_paid_paise || 0) / 100))));
           const isDue = !isFullyPaid && ((outstandingINR > 0) || (o.payment_status === 'PARTIAL'));
-          const hasRx = !!o.prescription_id || !!o.prescription_number || (Array.isArray(o.prescriptions) && o.prescriptions.length > 0);
+          const hasRx = !!o.prescription_id || !!o.prescription_number || (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) || (o.od_sph != null || o.os_sph != null) || (o.prescription_pref === 'enter-rx') || (o.items && o.items[0] && (o.items[0].prescription || o.items[0].rx));
           const rxCount = (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) ? o.prescriptions.length : (hasRx ? 1 : 0);
           const utrCard = getOrderUtr(o);
           const itemsSummary = (o.items && o.items.length)
@@ -1049,10 +1049,10 @@
               ${o.client_code ? `<span style="font-size:0.68rem; font-weight:700; color:#1D4ED8; background:#EFF6FF; border:1px solid #BFDBFE; padding:1px 5px; border-radius:4px; margin-left:4px;">${escapeHtml(o.client_code)}</span>` : ''}
               ${o.customer_phone ? `<div style="font-size:0.72rem; color:#6B7280;">${escapeHtml(o.customer_phone)}</div>` : ''}
               ${o.city ? `<div style="font-size:0.7rem; color:#9CA3AF;">${escapeHtml(o.city)}</div>` : ''}
-              ${o.prescription_number ? `
+              ${(o.prescription_number || o.od_sph || o.prescription_id) ? `
                 <div style="margin-top:4px;">
-                  <span class="badge-status" style="background:#EBF5FF; color:#1E40AF; border:1px solid #BFDBFE; font-size:0.68rem; font-weight:700; cursor:pointer;" onclick="event.stopPropagation(); printPrescriptionRecord('${o.prescription_id}')" title="Click to view/print prescription">
-                    👓 ${escapeHtml(o.prescription_number)}
+                  <span class="badge-status" style="background:#EBF5FF; color:#1E40AF; border:1px solid #BFDBFE; font-size:0.68rem; font-weight:700; cursor:pointer;" onclick="event.stopPropagation(); printPrescriptionRecord('${o.prescription_id || ''}')" title="Click to view/print prescription">
+                    👓 ${escapeHtml(o.prescription_number || 'RX Attached')}
                     ${o.od_sph ? `(R: ${o.od_sph} / L: ${o.os_sph || o.od_sph})` : ''}
                   </span>
                 </div>
@@ -1568,22 +1568,63 @@
         </div>
       </div>
 
+      // Resolve structured prescription from all attached sources
+      let effectiveRx = null;
+      if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
+        effectiveRx = order.prescriptions[0];
+      } else if (order.prescriptions_json) {
+        try {
+          const p = JSON.parse(order.prescriptions_json);
+          if (Array.isArray(p) && p.length > 0) effectiveRx = p[0];
+        } catch (_) {}
+      }
+      if (!effectiveRx && Array.isArray(order.items)) {
+        for (const it of order.items) {
+          if (it && (it.prescription || it.rx)) {
+            effectiveRx = it.prescription || it.rx;
+            break;
+          }
+        }
+      }
+      if (!effectiveRx && (order.od_sph != null || order.os_sph != null || order.prescription_number || order.prescription_id)) {
+        effectiveRx = {
+          id: order.prescription_id,
+          prescription_number: order.prescription_number,
+          od_sph: order.od_sph,
+          od_cyl: order.od_cyl,
+          od_axis: order.od_axis,
+          os_sph: order.os_sph,
+          os_cyl: order.os_cyl,
+          os_axis: order.os_axis,
+          addition: order.addition,
+          ipd_distance: order.ipd_distance,
+          checked_by: order.rx_checked_by || order.checked_by,
+          notes: order.rx_notes || order.notes
+        };
+      }
+      const hasStructuredRx = Boolean(effectiveRx && (
+        effectiveRx.od_sph != null || effectiveRx.os_sph != null ||
+        effectiveRx.odSph != null || effectiveRx.osSph != null ||
+        effectiveRx.od_cyl != null || effectiveRx.os_cyl != null ||
+        effectiveRx.prescription_number || effectiveRx.prescriptionNumber
+      ));
+
       <!-- Glasses Prescription Section -->
-      ${order.prescription_number ? `
+      ${hasStructuredRx ? `
         <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:1.1rem; margin-bottom:1.5rem;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:8px;">
             <div style="display:flex; align-items:center; gap:8px;">
               <span style="font-size:1.25rem;">👓</span>
               <div>
-                <strong style="color:#166534; font-size:0.95rem;">Glasses Prescription: ${escapeHtml(order.prescription_number)}</strong>
-                <div style="font-size:0.72rem; color:#15803D;">Date: ${formatShortDate(order.prescription_date || order.created_at)} • Checked by: ${escapeHtml(order.rx_checked_by || order.checked_by || 'Optometrist')}${order.prescriber_details ? ` • Prescriber: ${escapeHtml(order.prescriber_details)}` : ''}</div>
+                <strong style="color:#166534; font-size:0.95rem;">Glasses Prescription: ${escapeHtml(effectiveRx.prescription_number || effectiveRx.prescriptionNumber || order.prescription_number || 'RX Attached')}</strong>
+                <div style="font-size:0.72rem; color:#15803D;">Date: ${formatShortDate(effectiveRx.prescription_date || order.prescription_date || order.created_at)} • Checked by: ${escapeHtml(effectiveRx.checked_by || effectiveRx.rx_checked_by || order.rx_checked_by || order.checked_by || 'Optometrist')}${effectiveRx.prescriber_details ? ` • Prescriber: ${escapeHtml(effectiveRx.prescriber_details)}` : ''}</div>
               </div>
             </div>
             <div style="display:flex; gap:6px; flex-wrap:wrap;">
-              <button type="button" class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700; padding:6px 14px;" onclick="openEditPrescriptionModal('${order.prescription_id}')">
+              <button type="button" class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700; padding:6px 14px;" onclick="openEditPrescriptionModal('${effectiveRx.id || order.prescription_id || ''}')">
                 ✏️ Edit Prescription Lens Values
               </button>
-              <button type="button" class="btn-table-action" style="background:#166534; color:#FFF; font-weight:700; padding:6px 14px;" onclick="printPrescriptionRecord('${order.prescription_id}')">
+              <button type="button" class="btn-table-action" style="background:#166534; color:#FFF; font-weight:700; padding:6px 14px;" onclick="printPrescriptionRecord('${effectiveRx.id || order.prescription_id || ''}')">
                 🖨️ Print Prescription RX
               </button>
             </div>
@@ -1591,25 +1632,25 @@
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; font-size:0.82rem; background:#FFF; padding:12px; border-radius:6px; border:1px solid #DCFCE7;">
             <div>
               <span style="color:#6B7280; font-size:0.72rem; text-transform:uppercase; font-weight:700; display:block;">OD (Right Eye)</span>
-              <strong>SPH:</strong> ${order.od_sph || '0.00'}<br/>
-              <strong>CYL:</strong> ${order.od_cyl || '0.00'}<br/>
-              <strong>AXIS:</strong> ${order.od_axis != null ? order.od_axis + '°' : '-'}
+              <strong>SPH:</strong> ${effectiveRx.od_sph || effectiveRx.odSph || order.od_sph || '0.00'}<br/>
+              <strong>CYL:</strong> ${effectiveRx.od_cyl || effectiveRx.odCyl || order.od_cyl || '0.00'}<br/>
+              <strong>AXIS:</strong> ${(effectiveRx.od_axis != null ? effectiveRx.od_axis + '°' : (effectiveRx.odAxis != null ? effectiveRx.odAxis + '°' : (order.od_axis != null ? order.od_axis + '°' : '-')))}
             </div>
             <div>
               <span style="color:#6B7280; font-size:0.72rem; text-transform:uppercase; font-weight:700; display:block;">OS (Left Eye)</span>
-              <strong>SPH:</strong> ${order.os_sph || '0.00'}<br/>
-              <strong>CYL:</strong> ${order.os_cyl || '0.00'}<br/>
-              <strong>AXIS:</strong> ${order.os_axis != null ? order.os_axis + '°' : '-'}
+              <strong>SPH:</strong> ${effectiveRx.os_sph || effectiveRx.osSph || order.os_sph || '0.00'}<br/>
+              <strong>CYL:</strong> ${effectiveRx.os_cyl || effectiveRx.osCyl || order.os_cyl || '0.00'}<br/>
+              <strong>AXIS:</strong> ${(effectiveRx.os_axis != null ? effectiveRx.os_axis + '°' : (effectiveRx.osAxis != null ? effectiveRx.osAxis + '°' : (order.os_axis != null ? order.os_axis + '°' : '-')))}
             </div>
             <div>
               <span style="color:#6B7280; font-size:0.72rem; text-transform:uppercase; font-weight:700; display:block;">Optics & IPD</span>
-              ${order.addition ? `<div><strong>ADD:</strong> ${escapeHtml(order.addition)}</div>` : ''}
-              ${order.ipd_distance ? `<div><strong>Distance IPD:</strong> ${order.ipd_distance} mm</div>` : ''}
-              ${order.ipd_near ? `<div><strong>Near IPD:</strong> ${order.ipd_near} mm</div>` : ''}
+              ${(effectiveRx.addition || effectiveRx.add || order.addition) ? `<div><strong>ADD:</strong> ${escapeHtml(effectiveRx.addition || effectiveRx.add || order.addition)}</div>` : ''}
+              ${(effectiveRx.ipd_distance || effectiveRx.pd || order.ipd_distance) ? `<div><strong>Distance IPD:</strong> ${effectiveRx.ipd_distance || effectiveRx.pd || order.ipd_distance} mm</div>` : ''}
+              ${(effectiveRx.ipd_near || order.ipd_near) ? `<div><strong>Near IPD:</strong> ${effectiveRx.ipd_near || order.ipd_near} mm</div>` : ''}
             </div>
           </div>
-          ${order.rx_notes ? `<div style="font-size:0.75rem; color:#374151; margin-top:8px; font-style:italic;"><strong>Clinical Notes:</strong> ${escapeHtml(order.rx_notes)}</div>` : ''}
-          ${order.rx_image_url ? `<div style="margin-top:8px;"><a href="${escapeHtml(order.rx_image_url.startsWith('/') ? order.rx_image_url : '/' + order.rx_image_url)}" target="_blank" style="font-size:0.75rem; color:#1D4ED8; font-weight:600;">📷 View Uploaded Prescription Document</a></div>` : ''}
+          ${(effectiveRx.notes || effectiveRx.rx_notes || order.rx_notes) ? `<div style="font-size:0.75rem; color:#374151; margin-top:8px; font-style:italic;"><strong>Clinical Notes:</strong> ${escapeHtml(effectiveRx.notes || effectiveRx.rx_notes || order.rx_notes)}</div>` : ''}
+          ${(effectiveRx.image_url || effectiveRx.imageUrl || order.rx_image_url) ? `<div style="margin-top:8px;"><a href="${escapeHtml((effectiveRx.image_url || effectiveRx.imageUrl || order.rx_image_url).startsWith('/') ? (effectiveRx.image_url || effectiveRx.imageUrl || order.rx_image_url) : '/' + (effectiveRx.image_url || effectiveRx.imageUrl || order.rx_image_url))}" target="_blank" style="font-size:0.75rem; color:#1D4ED8; font-weight:600;">📷 View Uploaded Prescription Document</a></div>` : ''}
         </div>
       ` : `
         <div style="background:#F9FAFB; border:1px dashed #D1D5DB; border-radius:6px; padding:0.75rem; margin-bottom:1.5rem; font-size:0.8rem; color:#6B7280; display:flex; justify-content:space-between; align-items:center;">
@@ -1650,7 +1691,9 @@
             if (Array.isArray(p) && p.length > 0) rxList = p;
           } catch (_) { }
         }
-        if (rxList.length === 0 && (order.od_sph || order.os_sph || order.prescription_number || order.prescription_id)) {
+        if (rxList.length === 0 && effectiveRx) {
+          rxList = [effectiveRx];
+        } else if (rxList.length === 0 && (order.od_sph || order.os_sph || order.prescription_number || order.prescription_id)) {
           rxList = [{
             id: order.prescription_id,
             prescription_number: order.prescription_number,
@@ -6613,10 +6656,13 @@
             }))
           };
 
-          const res = await apiFetch('/api/pos/checkout', {
-            method: 'POST',
-            body: JSON.stringify(payload)
-          });
+          const res = await Promise.race([
+            apiFetch('/api/pos/checkout', {
+              method: 'POST',
+              body: JSON.stringify(payload)
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Checkout request timed out. Please try again.')), 12000))
+          ]);
 
           showToast(`Sale completed! Invoice: ${res.invoiceNumber} (Token #${res.tokenNumber})`, 'success');
 
@@ -8297,8 +8343,23 @@
     if (!order.prescriptions && order.prescriptions_json) {
       try { order.prescriptions = JSON.parse(order.prescriptions_json); } catch (_) { }
     }
-    if (!order.od_sph && order.prescription) {
-      Object.assign(order, order.prescription);
+    const rxCandidate = (Array.isArray(order.prescriptions) && order.prescriptions[0])
+      || order.prescription
+      || (order.items && order.items[0] && (order.items[0].prescription || order.items[0].rx))
+      || null;
+
+    if (rxCandidate) {
+      if (!order.od_sph) order.od_sph = rxCandidate.od_sph || rxCandidate.odSph;
+      if (!order.od_cyl) order.od_cyl = rxCandidate.od_cyl || rxCandidate.odCyl;
+      if (order.od_axis == null) order.od_axis = rxCandidate.od_axis != null ? rxCandidate.od_axis : rxCandidate.odAxis;
+      if (!order.os_sph) order.os_sph = rxCandidate.os_sph || rxCandidate.osSph;
+      if (!order.os_cyl) order.os_cyl = rxCandidate.os_cyl || rxCandidate.osCyl;
+      if (order.os_axis == null) order.os_axis = rxCandidate.os_axis != null ? rxCandidate.os_axis : rxCandidate.osAxis;
+      if (!order.addition) order.addition = rxCandidate.addition || rxCandidate.add;
+      if (!order.ipd_distance) order.ipd_distance = rxCandidate.ipd_distance || rxCandidate.pd;
+      if (!order.prescription_number) order.prescription_number = rxCandidate.prescription_number || rxCandidate.prescriptionNumber;
+      if (!order.prescription) order.prescription = rxCandidate;
+      if (!Array.isArray(order.prescriptions) || order.prescriptions.length === 0) order.prescriptions = [rxCandidate];
     }
     if (!order.od_sph && order.customer_id && state.clientsCache) {
       const client = state.clientsCache.find(c => c.id === order.customer_id);
