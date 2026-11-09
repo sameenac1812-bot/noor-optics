@@ -17,14 +17,14 @@
           const id = String(item.id).toLowerCase();
           const name = String(item.name || '').toLowerCase();
           const isLegacy = id.startsWith('noor-0') || id.startsWith('noor-1') ||
-                           id.includes('mp4f2') || id.includes('5d89v') ||
-                           name.includes('meta') || name.includes('onko') || name.includes('stockholm');
+            id.includes('mp4f2') || id.includes('5d89v') ||
+            name.includes('meta') || name.includes('onko') || name.includes('stockholm');
           return !isLegacy;
         });
         localStorage.setItem('noor_custom_frames', JSON.stringify(cleaned));
       }
     }
-  } catch (_) {}
+  } catch (_) { }
 
   // ── Global Application State ───────────────────────────────────────────────
   const state = {
@@ -422,7 +422,7 @@
             h = hrPart ? parseInt(hrPart.value, 10) : dt.getHours();
             if (h === 24) h = 0;
           }
-        } catch (_) {}
+        } catch (_) { }
         const key = String(h).padStart(2, '0');
         const amt = o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || o.totalINR || 0);
         const isPos = getOrderChannel(o) === 'POS';
@@ -718,7 +718,7 @@
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
       if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
+        ctx.resume().catch(() => { });
       }
       const now = ctx.currentTime;
       // High-end dual bell chime: A5 (880Hz), E6 (1318.5Hz), A6 (1760Hz)
@@ -754,9 +754,9 @@
   async function loadOrders(silent = false) {
     try {
       // Clear legacy purge timestamp so historical orders never disappear
-      try { localStorage.removeItem('noor_orders_purged_at'); } catch (_) {}
+      try { localStorage.removeItem('noor_orders_purged_at'); } catch (_) { }
 
-      const res = await apiFetch('/api/orders?limit=150');
+      const res = await apiFetch('/api/orders?limit=300');
       let incoming = Array.isArray(res) ? res : (res.orders || []);
 
       // Filter against persistent tombstones
@@ -895,14 +895,14 @@
           const utrCard = getOrderUtr(o);
           const itemsSummary = (o.items && o.items.length)
             ? o.items.map(i => {
-                let name = escapeHtml(i.product_name || 'Frame');
-                if (i.quantity > 1) name += ` ×${i.quantity}`;
-                const lName = i.lens_name || i.lensName || i.lens;
-                if (lName && !name.toLowerCase().includes('lens package') && lName !== 'Blue-Light Filter' && !lName.toLowerCase().includes('standard demo')) {
-                  name += ` + [${escapeHtml(lName)}]`;
-                }
-                return name;
-              }).join(', ')
+              let name = escapeHtml(i.product_name || 'Frame');
+              if (i.quantity > 1) name += ` ×${i.quantity}`;
+              const lName = i.lens_name || i.lensName || i.lens;
+              if (lName && !name.toLowerCase().includes('lens package') && lName !== 'Blue-Light Filter' && !lName.toLowerCase().includes('standard demo')) {
+                name += ` + [${escapeHtml(lName)}]`;
+              }
+              return name;
+            }).join(', ')
             : 'Frame Order';
           const channelBadge = orderChan === 'POS'
             ? `<span class="badge-channel-pos" style="background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0; font-size:0.68rem; font-weight:800; padding:1px 6px; border-radius:4px;">🏪 In-Store [Code 2]</span>`
@@ -932,12 +932,12 @@
                 <div class="bill-card-right">
                   <div class="bill-due-badge-wrap">
                     ${o.payment_status === 'AWAITING_VERIFICATION'
-                      ? `<span class="bill-due-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span style="background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; font-weight:800; font-size:0.68rem; padding:2px 6px; border-radius:4px;">VERIFY UPI</span>`
-                      : (isDue
-                        ? `<span class="bill-due-amount">₹ ${outstandingINR.toLocaleString('en-IN')}</span> <span class="badge-due-red">DUE</span>`
-                        : `<span class="bill-paid-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span class="badge-paid-green">PAID</span>`
-                      )
-                    }
+              ? `<span class="bill-due-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span style="background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; font-weight:800; font-size:0.68rem; padding:2px 6px; border-radius:4px;">VERIFY UPI</span>`
+              : (isDue
+                ? `<span class="bill-due-amount">₹ ${outstandingINR.toLocaleString('en-IN')}</span> <span class="badge-due-red">DUE</span>`
+                : `<span class="bill-paid-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span class="badge-paid-green">PAID</span>`
+              )
+            }
                   </div>
                   ${(orderChan === 'POS' && isDue && outstandingINR > 0) ? `
                     <div style="margin-top:4px;">
@@ -1023,19 +1023,19 @@
             <td><strong>${formatINR(o.total_payable_paise || o.total_payable_inr * 100, true)}</strong></td>
             <td>
               ${isDueRow
-                ? `<span class="badge-status" style="background:#FEF2F2; color:#DC2626; border:1px solid #FECACA; font-weight:800;">₹${outstandingRow.toLocaleString('en-IN')} DUE</span>`
-                : `<span class="badge-status ${paymentClass}">${escapeHtml(o.payment_status)}</span>`
-              }
+            ? `<span class="badge-status" style="background:#FEF2F2; color:#DC2626; border:1px solid #FECACA; font-weight:800;">₹${outstandingRow.toLocaleString('en-IN')} DUE</span>`
+            : `<span class="badge-status ${paymentClass}">${escapeHtml(o.payment_status)}</span>`
+          }
               ${(() => {
-                const utr = getOrderUtr(o);
-                return utr ? `
+            const utr = getOrderUtr(o);
+            return utr ? `
                   <div style="margin-top:3px;">
                     <span style="font-family:monospace; font-weight:800; font-size:0.75rem; background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; padding:1px 5px; border-radius:4px; display:inline-block;" title="Claimed UPI Reference">
                       UTR: ${escapeHtml(utr)}
                     </span>
                   </div>
                 ` : '';
-              })()}
+          })()}
               <div style="font-size:0.68rem; color:#6B7280; margin-top:2px;">${escapeHtml(o.payment_method || 'CASH')}</div>
             </td>
             <td><span class="badge-status ${orderClass}">${escapeHtml(o.status)}</span></td>
@@ -1106,7 +1106,7 @@
       if (navigator.share) {
         try {
           await navigator.share({ title: `Bill #${order.order_number}`, text: shareText, url: window.location.origin });
-        } catch (err) {}
+        } catch (err) { }
       } else if (navigator.clipboard) {
         navigator.clipboard.writeText(shareText);
         showToast('Bill details copied to clipboard!', 'info');
@@ -1204,7 +1204,7 @@
             if (Array.isArray(parsed.verified_orders)) verified = parsed.verified_orders;
             if (Array.isArray(parsed.rejected_orders)) rejected = parsed.rejected_orders;
             if (parsed.details) details = parsed.details;
-          } catch (_) {}
+          } catch (_) { }
         }
       }
 
@@ -1279,7 +1279,7 @@
               attempt_count: 0,
               updated_at: new Date().toISOString()
             })
-          }).catch(() => {});
+          }).catch(() => { });
         } else if (paymentStatus === 'REJECTED') {
           await fetch(`${SUPABASE_URL}/rest/v1/print_jobs?order_id=eq.${orderRowId}`, {
             method: 'PATCH',
@@ -1288,7 +1288,7 @@
               status: 'cancelled',
               updated_at: new Date().toISOString()
             })
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
     } catch (e) {
@@ -1318,7 +1318,7 @@
       }
 
       // 3. Dual-write to cloud tables
-      directPushOrderPaymentToCloud(orderRef, 'VERIFIED').catch(() => {});
+      directPushOrderPaymentToCloud(orderRef, 'VERIFIED').catch(() => { });
 
       // 4. Call backend endpoint
       await apiFetch(`/api/orders/${orderId}/status`, {
@@ -1328,9 +1328,9 @@
 
       // 5. Instantly print approved customer bill to POS thermal printer
       if (typeof instantPrintReceipt === 'function') {
-        instantPrintReceipt(orderId, true, order, 'staff_approved').catch(() => {});
+        instantPrintReceipt(orderId, true, order, 'staff_approved').catch(() => { });
       } else {
-        fetch('http://127.0.0.1:5001/api/wakeup', { method: 'POST' }).catch(() => {});
+        fetch('http://127.0.0.1:5001/api/wakeup', { method: 'POST' }).catch(() => { });
       }
 
       showToast('✓ Payment approved! Order moved to Website Orders & queued for printing.', 'success');
@@ -1365,7 +1365,7 @@
       }
 
       // 3. Dual-write to cloud tables
-      directPushOrderPaymentToCloud(orderRef, 'REJECTED', reason).catch(() => {});
+      directPushOrderPaymentToCloud(orderRef, 'REJECTED', reason).catch(() => { });
 
       // 4. Call backend endpoint
       await apiFetch(`/api/orders/${orderId}/status`, {
@@ -1438,7 +1438,7 @@
       if (i.shape) specBits.push(`Shape: ${escapeHtml(i.shape)}`);
       if (i.color || i.variant_name) specBits.push(`Color: ${escapeHtml(i.color || i.variant_name)}`);
       if (i.size) specBits.push(`Size: ${escapeHtml(i.size)}`);
-      
+
       const lensName = i.lens_name || i.lensName || i.lens || i.lens_package_name;
       if (lensName && !String(i.product_name || '').includes('(Lens Package)')) {
         specBits.push(`Lens: <span style="color:#0284C7; font-weight:800; background:#E0F2FE; padding:1px 6px; border-radius:4px; border:1px solid #BAE6FD;">👓 ${escapeHtml(lensName)}</span>`);
@@ -1474,7 +1474,7 @@
               ${modalUtr ? `<button type="button" class="btn-table-action" style="font-size:0.72rem; padding:2px 8px; background:#FFFFFF; border:1px solid #CBD5E1;" onclick="navigator.clipboard.writeText('${escapeHtml(modalUtr)}'); showToast('UTR copied to clipboard!', 'success');">📋 Copy UTR</button>` : ''}
             </div>
             <div style="font-size:0.78rem; color:#A16207; margin-top:4px;">
-              Check your bank SMS / Airtel app for <strong>₹${((order.total_payable_paise || 0)/100).toLocaleString('en-IN')}</strong> from ${escapeHtml(order.customer_name || 'Client')}.
+              Check your bank SMS / Airtel app for <strong>₹${((order.total_payable_paise || 0) / 100).toLocaleString('en-IN')}</strong> from ${escapeHtml(order.customer_name || 'Client')}.
             </div>
           </div>
           ${order.payment_status === 'AWAITING_VERIFICATION' ? `
@@ -1597,34 +1597,34 @@
         <!-- Left Column: Client's Preferred Prescription RX Values (Multi-Rx Supported) -->
         <div style="display:flex; flex-direction:column; gap:10px;">
           ${(() => {
-            let rxList = [];
-            if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
-              rxList = order.prescriptions.filter(Boolean);
-            } else if (order.prescriptions_json) {
-              try {
-                const p = JSON.parse(order.prescriptions_json);
-                if (Array.isArray(p) && p.length > 0) rxList = p;
-              } catch (_) {}
-            }
-            if (rxList.length === 0 && (order.od_sph || order.os_sph || order.prescription_number || order.prescription_id)) {
-              rxList = [{
-                id: order.prescription_id,
-                prescription_number: order.prescription_number,
-                od_sph: order.od_sph,
-                od_cyl: order.od_cyl,
-                od_axis: order.od_axis,
-                os_sph: order.os_sph,
-                os_cyl: order.os_cyl,
-                os_axis: order.os_axis,
-                addition: order.addition,
-                ipd_distance: order.ipd_distance,
-                rx_checked_by: order.rx_checked_by,
-                rx_notes: order.rx_notes
-              }];
-            }
+        let rxList = [];
+        if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
+          rxList = order.prescriptions.filter(Boolean);
+        } else if (order.prescriptions_json) {
+          try {
+            const p = JSON.parse(order.prescriptions_json);
+            if (Array.isArray(p) && p.length > 0) rxList = p;
+          } catch (_) { }
+        }
+        if (rxList.length === 0 && (order.od_sph || order.os_sph || order.prescription_number || order.prescription_id)) {
+          rxList = [{
+            id: order.prescription_id,
+            prescription_number: order.prescription_number,
+            od_sph: order.od_sph,
+            od_cyl: order.od_cyl,
+            od_axis: order.od_axis,
+            os_sph: order.os_sph,
+            os_cyl: order.os_cyl,
+            os_axis: order.os_axis,
+            addition: order.addition,
+            ipd_distance: order.ipd_distance,
+            rx_checked_by: order.rx_checked_by,
+            rx_notes: order.rx_notes
+          }];
+        }
 
-            if (rxList.length === 0) {
-              return `
+        if (rxList.length === 0) {
+          return `
                 <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:12px; font-size:0.82rem;">
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                     <div style="display:flex; align-items:center; gap:6px;">
@@ -1641,27 +1641,27 @@
                   </div>
                 </div>
               `;
-            }
+        }
 
-            return rxList.map((rx, idx) => {
-              const rxId = rx.id || '';
-              const rxNum = rx.prescription_number || rx.prescriptionNumber || '';
-              const odSph = rx.od_sph != null ? rx.od_sph : (rx.odSph || '0.00');
-              const odCyl = rx.od_cyl != null ? rx.od_cyl : (rx.odCyl || '0.00');
-              const odAxis = rx.od_axis != null ? (rx.od_axis + '°') : (rx.odAxis != null ? rx.odAxis + '°' : '-');
-              const osSph = rx.os_sph != null ? rx.os_sph : (rx.osSph || '0.00');
-              const osCyl = rx.os_cyl != null ? rx.os_cyl : (rx.osCyl || '0.00');
-              const osAxis = rx.os_axis != null ? (rx.os_axis + '°') : (rx.osAxis != null ? rx.osAxis + '°' : '-');
-              const addVal = rx.addition || rx.add || '-';
-              const ipd = rx.ipd_distance || rx.ipdDistance || rx.pd;
-              const doc = rx.checked_by || rx.checkedBy || rx.rx_checked_by;
-              const notes = rx.notes || rx.rx_notes;
+        return rxList.map((rx, idx) => {
+          const rxId = rx.id || '';
+          const rxNum = rx.prescription_number || rx.prescriptionNumber || '';
+          const odSph = rx.od_sph != null ? rx.od_sph : (rx.odSph || '0.00');
+          const odCyl = rx.od_cyl != null ? rx.od_cyl : (rx.odCyl || '0.00');
+          const odAxis = rx.od_axis != null ? (rx.od_axis + '°') : (rx.odAxis != null ? rx.odAxis + '°' : '-');
+          const osSph = rx.os_sph != null ? rx.os_sph : (rx.osSph || '0.00');
+          const osCyl = rx.os_cyl != null ? rx.os_cyl : (rx.osCyl || '0.00');
+          const osAxis = rx.os_axis != null ? (rx.os_axis + '°') : (rx.osAxis != null ? rx.osAxis + '°' : '-');
+          const addVal = rx.addition || rx.add || '-';
+          const ipd = rx.ipd_distance || rx.ipdDistance || rx.pd;
+          const doc = rx.checked_by || rx.checkedBy || rx.rx_checked_by;
+          const notes = rx.notes || rx.rx_notes;
 
-              const titleLabel = rxList.length > 1
-                ? `Prescription RX #${idx + 1}: ${escapeHtml(rxNum || 'Attached')}`
-                : (rxNum ? `Prescription RX: ${escapeHtml(rxNum)}` : 'Client Prescription (RX)');
+          const titleLabel = rxList.length > 1
+            ? `Prescription RX #${idx + 1}: ${escapeHtml(rxNum || 'Attached')}`
+            : (rxNum ? `Prescription RX: ${escapeHtml(rxNum)}` : 'Client Prescription (RX)');
 
-              return `
+          return `
                 <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:12px; font-size:0.82rem;">
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
                     <div style="display:flex; align-items:center; gap:6px;">
@@ -1699,8 +1699,8 @@
                   ${notes ? `<div style="font-size:0.74rem; color:#4B5563; margin-top:6px; font-style:italic;">Notes: ${escapeHtml(notes)}</div>` : ''}
                 </div>
               `;
-            }).join('');
-          })()}
+        }).join('');
+      })()}
         </div>
 
         <!-- Right Column: Financial Summary -->
@@ -1812,7 +1812,7 @@
             const p = JSON.parse(list[0].notes);
             if (Array.isArray(p)) tombData.orders = p;
             else if (p.orders) tombData = p;
-          } catch(e) {}
+          } catch (e) { }
         }
       }
       if (!tombData.orders.includes(orderRef)) tombData.orders.push(orderRef);
@@ -1855,7 +1855,7 @@
             const p = JSON.parse(list[0].notes);
             if (Array.isArray(p)) tombData.orders = p;
             else if (p.orders) tombData.orders = p.orders;
-          } catch(e) {}
+          } catch (e) { }
         }
       }
       state.ordersCache.forEach(o => {
@@ -1955,7 +1955,7 @@
             }
           }
         }
-      } catch (_) {}
+      } catch (_) { }
 
       return customList;
     } catch (e) {
@@ -1979,7 +1979,7 @@
         headers,
         body: JSON.stringify({ notes: '[]', updated_at: new Date().toISOString() })
       });
-    } catch (_) {}
+    } catch (_) { }
 
     // 2. Deactivate products table
     try {
@@ -1987,8 +1987,8 @@
         method: 'PATCH',
         headers,
         body: JSON.stringify({ is_active: false })
-      }).catch(() => {});
-    } catch (_) {}
+      }).catch(() => { });
+    } catch (_) { }
 
     // 3. Collect all base and custom tokens
     const baseTokens = [
@@ -2024,7 +2024,7 @@
             const parsed = JSON.parse(list[0].notes || '{}');
             if (Array.isArray(parsed)) tombList = parsed;
             else if (parsed.products) tombList = parsed.products;
-          } catch (_) {}
+          } catch (_) { }
         }
       }
 
@@ -2056,7 +2056,7 @@
           })
         });
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   async function directSaveSupabaseProduct(product) {
@@ -2124,7 +2124,7 @@
           }
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // Step B: Direct Upsert to SYS-CATALOG-PRODUCTS
     try {
@@ -2195,7 +2195,7 @@
         },
         body: JSON.stringify([tableRow])
       });
-    } catch (_) {}
+    } catch (_) { }
   }
 
   async function directDeleteSupabaseProduct(productId, sku, name) {
@@ -2220,11 +2220,11 @@
           method: 'PATCH',
           headers,
           body: JSON.stringify({ is_active: false })
-        }).catch(() => {});
+        }).catch(() => { });
         await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${encodeURIComponent(productId)}`, {
           method: 'DELETE',
           headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } catch (e) {
       console.warn('Products table cloud delete note:', e);
@@ -2277,7 +2277,7 @@
             const parsed = JSON.parse(list[0].notes || '{}');
             if (Array.isArray(parsed)) tombList = parsed;
             else if (parsed.products) tombList = parsed.products;
-          } catch (_) {}
+          } catch (_) { }
         }
       }
       tokens.forEach(tok => {
@@ -2327,7 +2327,7 @@
         if (orderNumber && !del.includes(orderNumber)) del.push(orderNumber);
         if (orderId && !del.includes(orderId)) del.push(orderId);
         localStorage.setItem('noor_deleted_orders', JSON.stringify(del));
-      } catch (e) {}
+      } catch (e) { }
 
       // 2. Remove from local UI state immediately so UI and dashboard update instantly
       state.ordersCache = (state.ordersCache || []).filter(o => o.id !== orderId && o.order_number !== orderNumber);
@@ -2388,7 +2388,7 @@
           }
         });
         localStorage.setItem('noor_deleted_orders', JSON.stringify(del));
-      } catch (e) {}
+      } catch (e) { }
 
       // 2. Optimistically clear UI state immediately
       state.ordersCache = channel === 'ALL' ? [] : (state.ordersCache || []).filter(o => {
@@ -2701,7 +2701,7 @@
           arr.forEach(t => tokens.add(String(t).toLowerCase().trim()));
         }
       }
-    } catch (_) {}
+    } catch (_) { }
     return tokens;
   }
 
@@ -2712,7 +2712,7 @@
       if (sku) tokens.add(String(sku).toLowerCase().trim());
       if (name) tokens.add(String(name).toLowerCase().trim());
       localStorage.setItem('noor_deleted_products', JSON.stringify(Array.from(tokens)));
-    } catch (_) {}
+    } catch (_) { }
   }
 
   function unmarkProductDeleted(id, sku, name) {
@@ -2722,7 +2722,7 @@
       if (sku) tokens.delete(String(sku).toLowerCase().trim());
       if (name) tokens.delete(String(name).toLowerCase().trim());
       localStorage.setItem('noor_deleted_products', JSON.stringify(Array.from(tokens)));
-    } catch (_) {}
+    } catch (_) { }
   }
 
   async function directRemoveCloudProductTombstone(productId, sku, name) {
@@ -2754,7 +2754,7 @@
           body: JSON.stringify({ notes: JSON.stringify({ products: arr, updated_at: new Date().toISOString() }) })
         });
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   async function loadInventory() {
@@ -2764,7 +2764,7 @@
       let cloudTokens = new Set();
       try {
         cloudTokens = await directFetchCloudProductTombstones();
-      } catch (_) {}
+      } catch (_) { }
       const deletedTokens = new Set([...localTokens, ...cloudTokens]);
       if (deletedTokens.size > 0) {
         localStorage.setItem('noor_deleted_products', JSON.stringify(Array.from(deletedTokens)));
@@ -2784,12 +2784,12 @@
       if (window.NoorSupabase && window.NoorSupabase.isConfigured()) {
         try {
           cloudProducts = await window.NoorSupabase.fetchCatalog();
-        } catch (_) {}
+        } catch (_) { }
       }
       if (!Array.isArray(cloudProducts) || cloudProducts.length === 0) {
         try {
           cloudProducts = await directFetchSupabaseCatalog(deletedTokens);
-        } catch (_) {}
+        } catch (_) { }
       }
 
       if (Array.isArray(cloudProducts) && cloudProducts.length > 0) {
@@ -2891,7 +2891,7 @@
           });
           localStorage.setItem('noor_custom_frames', JSON.stringify(reconciledLocal));
         }
-      } catch (_) {}
+      } catch (_) { }
 
       // 3. In-Memory Retention: Never let stale in-memory items overwrite server image_url
       if (Array.isArray(state.inventoryList) && state.inventoryList.length > 0) {
@@ -3106,7 +3106,7 @@
     const d = new Date(dateVal);
     if (isNaN(d.getTime())) return String(dateVal);
     const day = d.getDate();
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const month = months[d.getMonth()];
     const yr = String(d.getFullYear()).slice(-2);
     let hours = d.getHours();
@@ -3173,11 +3173,11 @@
           const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
           const pName = p.name ? String(p.name).toLowerCase().trim() : '';
           return pId !== String(productId).toLowerCase().trim() &&
-                 (!sku || pSku !== String(sku).toLowerCase().trim()) &&
-                 (!name || pName !== String(name).toLowerCase().trim());
+            (!sku || pSku !== String(sku).toLowerCase().trim()) &&
+            (!name || pName !== String(name).toLowerCase().trim());
         });
         localStorage.setItem('noor_custom_frames', JSON.stringify(localList));
-      } catch (_) {}
+      } catch (_) { }
 
       // 3. Immediately update in-memory state & re-render (0ms perceived latency)
       state.inventoryList = state.inventoryList.filter(p => {
@@ -3186,8 +3186,8 @@
         const pSku = p.sku ? String(p.sku).toLowerCase().trim() : '';
         const pName = p.name ? String(p.name).toLowerCase().trim() : '';
         return pId !== String(productId).toLowerCase().trim() &&
-               (!sku || pSku !== String(sku).toLowerCase().trim()) &&
-               (!name || pName !== String(name).toLowerCase().trim());
+          (!sku || pSku !== String(sku).toLowerCase().trim()) &&
+          (!name || pName !== String(name).toLowerCase().trim());
       });
       state.selectedFrameIds.delete(productId);
       renderInventoryTable();
@@ -3475,7 +3475,7 @@
 
         // 0. Remove from deleted tombstones so newly created/re-added frame is never hidden
         unmarkProductDeleted(savedItem.id, sku, name);
-        directRemoveCloudProductTombstone(savedItem.id, sku, name).catch(() => {});
+        directRemoveCloudProductTombstone(savedItem.id, sku, name).catch(() => { });
 
         // 1. Immediately cache in localStorage (zero chance of disappearing)
         try {
@@ -3488,7 +3488,7 @@
             localList.unshift(cacheCopy);
           }
           localStorage.setItem('noor_custom_frames', JSON.stringify(localList));
-        } catch (_) {}
+        } catch (_) { }
 
         // 2. Immediately insert/update into active state.inventoryList at index 0
         const curIdx = state.inventoryList.findIndex(p => p.id === savedItem.id || (p.sku && p.sku !== 'NOOR-FRAME' && sku !== 'NOOR-FRAME' && p.sku.toUpperCase() === sku.toUpperCase()));
@@ -3788,7 +3788,7 @@
           localList.unshift(updatedItem);
         }
         localStorage.setItem('noor_custom_frames', JSON.stringify(localList));
-      } catch (_) {}
+      } catch (_) { }
 
       // Instant table re-render with the new stock count!
       renderInventoryTable();
@@ -3836,8 +3836,8 @@
               name,
               brand,
               shape,
-            category,
-            gender,
+              category,
+              gender,
               sellingPriceINR,
               purchaseCostINR,
               stockQuantity,
@@ -4343,7 +4343,7 @@
             let localList = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
             localList = localList.filter(p => !state.selectedFrameIds.has(p.id));
             localStorage.setItem('noor_custom_frames', JSON.stringify(localList));
-          } catch (_) {}
+          } catch (_) { }
 
           // 3. Immediately clean in-memory state & re-render UI
           state.inventoryList = state.inventoryList.filter(p => !state.selectedFrameIds.has(p.id));
@@ -4411,8 +4411,8 @@
         } catch (_) { jobs = []; }
       }
 
-      // Purge jobs older than 1 hour to keep queue fast and small
-      const recentThreshold = Date.now() - 60 * 60 * 1000;
+      // Purge jobs older than 2 hours to keep queue fast and small
+      const recentThreshold = Date.now() - 2 * 60 * 60 * 1000;
       jobs = jobs.filter(j => {
         if (!j || !j.created_at) return false;
         return new Date(j.created_at).getTime() > recentThreshold;
@@ -4434,6 +4434,16 @@
       const jobId = jobPayload.type === 'qr_sticker'
         ? ('stk_' + Date.now() + '_' + Math.floor(Math.random() * 1000))
         : ('rcp_' + ref + '_' + stageSuffix);
+
+      // Remove ALL old-style job-receipt-{ref}-* entries for this order ref to prevent double printing
+      if (jobPayload.type === 'receipt' && ref && !ref.startsWith('JOB_') && stageSuffix !== 'reprint_' + Date.now()) {
+        jobs = jobs.filter(j => {
+          if (!j || !j.id) return true;
+          const jid = String(j.id);
+          // Remove old-style job-receipt-{ref}-{timestamp} for this exact ref
+          return !(jid.startsWith('job-receipt-' + ref + '-') || jid.startsWith('job-receipt-' + ref.toLowerCase() + '-'));
+        });
+      }
 
       const newJob = {
         id: jobId,
@@ -4553,7 +4563,7 @@
           attempt_count: 0
         })
       });
-    } catch (_) {}
+    } catch (_) { }
 
     if (cloudRes && cloudRes.success) {
       return { success: true, method: 'cloud_queue' };
@@ -4568,7 +4578,7 @@
       if (apiRes && apiRes.success) {
         return { success: true, method: 'server_api' };
       }
-    } catch (_) {}
+    } catch (_) { }
 
     return { success: false, error: 'Could not reach local printer or cloud print queue.' };
   }
@@ -4885,7 +4895,7 @@
                 resolve(dUrl);
                 return;
               }
-            } catch (_) {}
+            } catch (_) { }
           }
 
           let attempts = 0;
@@ -4895,7 +4905,7 @@
             const img = tempDiv.querySelector('img');
             let dataUrl = '';
             if (canvas && canvas.width > 0) {
-              try { dataUrl = canvas.toDataURL('image/png'); } catch (e) {}
+              try { dataUrl = canvas.toDataURL('image/png'); } catch (e) { }
             }
             if (!dataUrl && img && img.src && img.src.startsWith('data:image')) {
               dataUrl = img.src;
@@ -5369,11 +5379,11 @@
       // ── 1. INSTANT LOCAL MEMORY RESOLUTION (0ms latency, zero delay!) ────────
       let localFrame = (state.inventoryList || []).find(f => {
         return (f.sku && f.sku.toUpperCase() === targetUpper) ||
-               (f.variant_sku && f.variant_sku.toUpperCase() === targetUpper) ||
-               (f.product_sku && f.product_sku.toUpperCase() === targetUpper) ||
-               (f.id && String(f.id).toUpperCase() === targetUpper) ||
-               (f.barcode && f.barcode === skuOrId) ||
-               (f.name && f.name.toUpperCase() === targetUpper);
+          (f.variant_sku && f.variant_sku.toUpperCase() === targetUpper) ||
+          (f.product_sku && f.product_sku.toUpperCase() === targetUpper) ||
+          (f.id && String(f.id).toUpperCase() === targetUpper) ||
+          (f.barcode && f.barcode === skuOrId) ||
+          (f.name && f.name.toUpperCase() === targetUpper);
       });
 
       if (!localFrame) {
@@ -5381,10 +5391,10 @@
           const cached = JSON.parse(localStorage.getItem('noor_custom_frames') || '[]');
           localFrame = cached.find(f => {
             return (f.sku && f.sku.toUpperCase() === targetUpper) ||
-                   (f.id && String(f.id).toUpperCase() === targetUpper) ||
-                   (f.name && f.name.toUpperCase() === targetUpper);
+              (f.id && String(f.id).toUpperCase() === targetUpper) ||
+              (f.name && f.name.toUpperCase() === targetUpper);
           });
-        } catch (_) {}
+        } catch (_) { }
       }
 
       if (localFrame) {
@@ -5614,7 +5624,7 @@
           return `
             <div class="optic-attached-rx-card" style="margin-bottom:6px;">
               <div class="optic-rx-badge-top">
-                <span class="optic-rx-badge-num">🩺 ${escapeHtml(rxLabel)}${rxList.length > 1 ? ` (Rx ${idx+1})` : ''}</span>
+                <span class="optic-rx-badge-num">🩺 ${escapeHtml(rxLabel)}${rxList.length > 1 ? ` (Rx ${idx + 1})` : ''}</span>
                 <button type="button" class="btn-rx-remove" onclick="removePosAttachedRx(${idx})" title="Remove this prescription">&times;</button>
               </div>
               <div class="optic-rx-mini-table">
@@ -5857,12 +5867,12 @@
       try {
         const formats = window.Html5QrcodeSupportedFormats
           ? [
-              window.Html5QrcodeSupportedFormats.QR_CODE,
-              window.Html5QrcodeSupportedFormats.CODE_128,
-              window.Html5QrcodeSupportedFormats.CODE_39,
-              window.Html5QrcodeSupportedFormats.EAN_13,
-              window.Html5QrcodeSupportedFormats.UPC_A
-            ]
+            window.Html5QrcodeSupportedFormats.QR_CODE,
+            window.Html5QrcodeSupportedFormats.CODE_128,
+            window.Html5QrcodeSupportedFormats.CODE_39,
+            window.Html5QrcodeSupportedFormats.EAN_13,
+            window.Html5QrcodeSupportedFormats.UPC_A
+          ]
           : undefined;
 
         state.html5QrScanner = new window.Html5Qrcode('html5-qr-reader', {
@@ -5947,7 +5957,7 @@
       if (state.html5QrScanner) {
         try {
           await state.html5QrScanner.stop();
-        } catch (e) {}
+        } catch (e) { }
         state.html5QrScanner = null;
       }
       viewportWrap.style.display = 'none';
@@ -6075,11 +6085,11 @@
         headers,
         body: formData
       })
-      .then(res => res.json())
-      .then(json => {
-        if (json.imageUrl) state.uploadedRxImageUrl = json.imageUrl;
-      })
-      .catch(err => console.warn('Server image upload sync:', err));
+        .then(res => res.json())
+        .then(json => {
+          if (json.imageUrl) state.uploadedRxImageUrl = json.imageUrl;
+        })
+        .catch(err => console.warn('Server image upload sync:', err));
     };
 
     if (fileCamera) {
@@ -6120,7 +6130,7 @@
     }
 
     // Global helper to remove a specific attached prescription
-    window.removePosAttachedRx = function(index) {
+    window.removePosAttachedRx = function (index) {
       if (Array.isArray(state.posPrescriptions) && state.posPrescriptions[index]) {
         state.posPrescriptions.splice(index, 1);
         state.posDraftPrescription = state.posPrescriptions[0] || null;
@@ -6348,7 +6358,7 @@
                     renderPosAttachedPrescriptions();
                     showToast(`Attached latest Rx (${rxList[0].prescription_number || 'Rx'}) for ${dueRes.clientName}`, 'info');
                   }
-                } catch (_) {}
+                } catch (_) { }
               }
             }
 
@@ -6599,7 +6609,7 @@
               notes: notes
             };
             if (typeof instantPrintReceipt === 'function') {
-              instantPrintReceipt(res.orderId, false, localBillOrder).catch(() => {});
+              instantPrintReceipt(res.orderId, false, localBillOrder).catch(() => { });
             }
           }
 
@@ -7525,7 +7535,7 @@
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
         }
       });
-    } catch (e) {}
+    } catch (e) { }
   }
 
   async function directDeleteAllSupabaseCustomers() {
@@ -7539,7 +7549,7 @@
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
         }
       });
-    } catch (e) {}
+    } catch (e) { }
   }
 
   async function loadClients(silent = false) {
@@ -7557,7 +7567,7 @@
       try {
         const raw = localStorage.getItem('noor_deleted_clients');
         if (raw) deletedSet = new Set(JSON.parse(raw));
-      } catch (e) {}
+      } catch (e) { }
 
       const purgedAt = parseInt(localStorage.getItem('noor_clients_purged_at') || '0', 10);
 
@@ -7644,7 +7654,7 @@
       try {
         const raw = localStorage.getItem('noor_deleted_clients');
         if (raw) deletedSet = new Set(JSON.parse(raw));
-      } catch (e) {}
+      } catch (e) { }
       deletedSet.add(clientId);
       if (clientName) deletedSet.add(clientName.toLowerCase());
       const targetClient = state.clientsCache.find(c => c.id === clientId);
@@ -7658,7 +7668,7 @@
           const parsed = JSON.parse(rawCache).filter(c => c.id !== clientId);
           localStorage.setItem('noor_clients_cache', JSON.stringify(parsed));
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. Immediately update UI state
       state.clientsCache = state.clientsCache.filter(c => c.id !== clientId);
@@ -7879,7 +7889,7 @@
               <td>${formatDateTime(o.created_at)}</td>
               <td>${o.items?.length || 1} frame(s)</td>
               <td><strong>${formatINR(o.total_payable_paise, true)}</strong></td>
-              <td>${(o.outstanding_inr > 0 || (o.payment_status !== 'VERIFIED' && o.payment_status !== 'REFUNDED')) ? `<span class="badge-due-red">Due: ₹${((o.outstanding_inr != null) ? o.outstanding_inr : ((o.total_payable_paise || 0)/100)).toLocaleString('en-IN')}</span>` : `<span class="badge-status status-verified">PAID</span>`}</td>
+              <td>${(o.outstanding_inr > 0 || (o.payment_status !== 'VERIFIED' && o.payment_status !== 'REFUNDED')) ? `<span class="badge-due-red">Due: ₹${((o.outstanding_inr != null) ? o.outstanding_inr : ((o.total_payable_paise || 0) / 100)).toLocaleString('en-IN')}</span>` : `<span class="badge-status status-verified">PAID</span>`}</td>
               <td><span class="badge-status status-verified">${escapeHtml(o.status)}</span></td>
               <td>
                 <div style="display:flex; gap:4px;">
@@ -8198,7 +8208,7 @@
     document.body.appendChild(link);
     link.click();
     setTimeout(() => {
-      try { document.body.removeChild(link); } catch (_) {}
+      try { document.body.removeChild(link); } catch (_) { }
     }, 500);
   };
 
@@ -8213,7 +8223,7 @@
         const fetchedOrder = resp.order || resp;
         const fetchedItems = resp.items || fetchedOrder.items || [];
         order = { ...(order || {}), ...fetchedOrder, items: fetchedItems };
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!order) {
@@ -8223,7 +8233,7 @@
 
     // Ensure prescription is attached if linked
     if (!order.prescriptions && order.prescriptions_json) {
-      try { order.prescriptions = JSON.parse(order.prescriptions_json); } catch (_) {}
+      try { order.prescriptions = JSON.parse(order.prescriptions_json); } catch (_) { }
     }
     if (!order.od_sph && order.prescription) {
       Object.assign(order, order.prescription);
@@ -8511,7 +8521,7 @@
         badge.onclick = null;
         return;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Offline State
     dot.style.background = '#F59E0B'; // Amber
@@ -9169,7 +9179,7 @@
           order.payments = resp.payments;
           renderPaymentHistoryIntoModal(order, resp.payments, cpHistoryBox, cpHistoryList);
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }
 
@@ -9272,7 +9282,7 @@
 
       // Print updated receipt to POS thermal printer
       if (shouldPrint && typeof instantPrintReceipt === 'function') {
-        instantPrintReceipt(orderId, true, res.order).catch(() => {});
+        instantPrintReceipt(orderId, true, res.order).catch(() => { });
       }
 
       // Refresh datasets across the system silently in background

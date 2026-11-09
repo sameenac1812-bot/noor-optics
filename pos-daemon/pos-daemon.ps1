@@ -927,11 +927,11 @@ function Poll-CloudPrintQueue {
                     $jobId = [string]$job.id
                     if ($processedJobIds.Contains($jobId)) { continue }
 
-                    # Mark processed immediately to prevent retry loops
-                    $processedJobIds.Add($jobId) | Out-Null
-                    Save-PrintedOrdersState
-
                     if ($job.type -eq "qr_sticker") {
+                        # Mark processed to prevent sticker retry loops
+                        $processedJobIds.Add($jobId) | Out-Null
+                        Save-PrintedOrdersState
+
                         $items = if ($job.items) { $job.items } else { @($job) }
                         foreach ($it in $items) {
                             $copies = if ($it.copies) { [int]$it.copies } else { 1 }
@@ -957,18 +957,47 @@ function Poll-CloudPrintQueue {
                         $order = if ($job.order) { $job.order } elseif ($job.items -and $job.items[0] -and $job.items[0].order) { $job.items[0].order } else { $null }
                         if (-not $order -or (-not $order.order_number -and -not $order.order_ref -and -not $order.id)) {
                             Write-DaemonLog "[Cloud Queue] Discarding malformed or dummy receipt job #$jobId" "INFO"
+                            $processedJobIds.Add($jobId) | Out-Null
+                            Save-PrintedOrdersState
                             continue
                         }
                         $ref = if ($order.order_number) { [string]$order.order_number } elseif ($order.order_ref) { [string]$order.order_ref } elseif ($order.id) { [string]$order.id } else { "BILL" }
                         $orderIdStr = if ($order.id) { [string]$order.id } else { "" }
+
+                        # Suppress printing of unverified website orders until staff explicitly approves
+                        $isWebOrder = $ref -like "*NOOR-WEB-*" -or $order.channel -eq "WEBSITE" -or $order.source -eq "website"
+                        if ($isWebOrder -and $order.payment_status -eq "AWAITING_VERIFICATION" -and $job.source -ne "staff_approved") {
+                            Write-DaemonLog "[Cloud Queue] Suppressing unverified website order #$ref. Awaiting staff approval." "INFO"
+                            continue
+                        }
+
                         $isReprint = ($job.source -eq "reprint" -or $job.manualReprint -eq $true)
                         $stageKey = if ($isReprint) { "reprint_" + $jobId } `
                                     elseif ($order.third_payment_inr -gt 0 -or $order.third_payment_paise -gt 0) { $ref + ":stage3" } `
                                     elseif ($order.second_payment_inr -gt 0 -or $order.second_payment_paise -gt 0) { $ref + ":stage2" } `
                                     else { $ref + ":init" }
 
-                        if (-not $isReprint -and ($livePrintedOrders.Contains($stageKey) -or $History.ContainsKey($stageKey))) {
+                        # Deduplication: check stageKey, base ref, and old-style job IDs
+                        $isOldStyleId = $jobId -like "job-receipt-*"
+                        $alreadyPrinted = $false
+                        if (-not $isReprint) {
+                            if ($livePrintedOrders.Contains($stageKey) -or $History.ContainsKey($stageKey) -or ($stageKey -like "*:init" -and ($livePrintedOrders.Contains($ref) -or $History.ContainsKey($ref)))) {
+                                $alreadyPrinted = $true
+                            }
+                            # For old-style job IDs, also skip if we've printed under the new rcp_ naming
+                            elseif ($isOldStyleId) {
+                                if ($livePrintedOrders.Contains($ref + ":init") -or $livePrintedOrders.Contains($ref + ":stage2") -or `
+                                    $livePrintedOrders.Contains($ref + ":stage3") -or $History.ContainsKey($ref + ":init") -or `
+                                    $History.ContainsKey($ref + ":stage2") -or $History.ContainsKey($ref + ":stage3") -or `
+                                    $livePrintedOrders.Contains($ref) -or $History.ContainsKey($ref)) {
+                                    $alreadyPrinted = $true
+                                }
+                            }
+                        }
+                        if ($alreadyPrinted) {
                             Write-DaemonLog "[Cloud Queue] Bill #$ref ($stageKey) already printed. Skipping duplicate." "INFO"
+                            $processedJobIds.Add($jobId) | Out-Null
+                            Save-PrintedOrdersState
                             continue
                         }
                         Write-DaemonLog "[Cloud Queue] 🖨️ Printing Bill #$ref ($stageKey)..." "INFO"
@@ -1112,33 +1141,41 @@ while ($running) {
 
                 $payload = $body | ConvertFrom-Json
                 $order = if ($payload.order) { $payload.order } else { $payload }
-                $orderRef = if ($order.order_number) { $order.order_number } elseif ($order.order_ref) { $order.order_ref } else { $order.id }
+                $orderRef = if ($order.order_number) { [string]$order.order_number } elseif ($order.order_ref) { [string]$order.order_ref } else { [string]$order.id }
                 $isManual = if ($payload.manualReprint) { [bool]$payload.manualReprint } else { $false }
+
+                $stageSuffix = if ($order.third_payment_inr -gt 0 -or $order.third_payment_paise -gt 0) { "stage3" } `
+                               elseif ($order.second_payment_inr -gt 0 -or $order.second_payment_paise -gt 0) { "stage2" } `
+                               else { "init" }
+                $stageKey = if ($isManual) { "reprint_" + (Get-Date).Ticks } else { "$orderRef:$stageSuffix" }
+                $cloudJobId = "rcp_${orderRef}_${stageSuffix}"
 
                 $refs = @($order.order_number, $order.order_ref, $order.orderNumber, [string]$order.id) | Where-Object { $_ -ne $null -and $_ -ne "" }
 
-                # Check duplicate suppression if automatic print
+                # Check duplicate suppression if automatic print (stage-aware)
                 $alreadyPrinted = $false
                 if (-not $isManual) {
-                    foreach ($r in $refs) {
-                        if ($History.ContainsKey($r) -and $History[$r] -ne "SKIPPED_STALE") {
-                            $alreadyPrinted = $true
-                            break
-                        }
+                    if ($History.ContainsKey($stageKey) -or $livePrintedOrders.Contains($stageKey)) {
+                        $alreadyPrinted = $true
                     }
                 }
 
                 if ($alreadyPrinted) {
-                    Write-DaemonLog "[Daemon] Order #$orderRef was already printed. Suppressing duplicate."
+                    Write-DaemonLog "[Daemon] Order #$orderRef ($stageKey) was already printed. Suppressing duplicate."
                     $resObj = @{ success = $true; skippedDuplicate = $true; orderNumber = $orderRef }
                 } else {
-                    Write-DaemonLog "Printing 2.5-inch receipt for order #$orderRef (manualReprint: $isManual)..."
+                    Write-DaemonLog "Printing 2.5-inch receipt for order #$orderRef ($stageKey, manualReprint: $isManual)..."
                     $bytes = Format-ReceiptBytes $order
                     $ok = Spool-Bytes $bytes "Bill-$orderRef"
                     if ($ok) {
                         $nowIso = (Get-Date).ToString("o")
                         foreach ($r in $refs) { $History[$r] = $nowIso }
+                        $History[$stageKey] = $nowIso
+                        $livePrintedOrders.Add($stageKey) | Out-Null
+                        if ($orderRef) { $livePrintedOrders.Add($orderRef) | Out-Null }
+                        $processedJobIds.Add($cloudJobId) | Out-Null
                         Save-History
+                        Save-PrintedOrdersState
                         $resObj = @{ success = $true; orderNumber = $orderRef }
                     } else {
                         $resObj = @{ success = $false; error = "Spooler failure" }

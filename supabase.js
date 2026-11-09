@@ -200,25 +200,8 @@
             }], { onConflict: 'order_id,print_type' });
           } catch (_) {}
 
-          // Cloud Spool Queue: Push job so the POS printer laptop prints it immediately!
-          try {
-            const qRes = await supabaseClient.from('customers').select('notes').eq('client_code', 'SYS-PRINT-QUEUE');
-            let currentJobs = [];
-            if (qRes && qRes.data && qRes.data[0] && qRes.data[0].notes) {
-              try { currentJobs = JSON.parse(qRes.data[0].notes).jobs || []; } catch(_) {}
-            }
-            currentJobs.push({
-              id: 'job-receipt-' + (created.order_ref || created.id) + '-' + Date.now(),
-              type: 'receipt',
-              order: created,
-              approved: true,
-              source: 'website_placed',
-              created_at: new Date().toISOString()
-            });
-            await supabaseClient.from('customers').update({
-              notes: JSON.stringify({ jobs: currentJobs })
-            }).eq('client_code', 'SYS-PRINT-QUEUE');
-          } catch (_) {}
+          // Note: Website orders strictly land in AWAITING_VERIFICATION (Verification Tab).
+          // Thermal receipt will print ONLY upon staff approval in Admin to prevent premature/duplicate printing.
         }
         return { success: true, cloud: true, data: created, orderNumber: created.order_number || created.order_ref };
       }
@@ -256,22 +239,8 @@
               last_error: null
             }).eq('order_id', rpcData.id);
 
-            const qRes = await supabaseClient.from('customers').select('notes').eq('client_code', 'SYS-PRINT-QUEUE');
-            let currentJobs = [];
-            if (qRes && qRes.data && qRes.data[0] && qRes.data[0].notes) {
-              try { currentJobs = JSON.parse(qRes.data[0].notes).jobs || []; } catch(_) {}
-            }
-            currentJobs.push({
-              id: 'job-receipt-' + (rpcData.order_ref || rpcData.id) + '-' + Date.now(),
-              type: 'receipt',
-              order: rpcData,
-              approved: true,
-              source: 'website_placed',
-              created_at: new Date().toISOString()
-            });
-            await supabaseClient.from('customers').update({
-              notes: JSON.stringify({ jobs: currentJobs })
-            }).eq('client_code', 'SYS-PRINT-QUEUE');
+            // Note: Website orders strictly land in AWAITING_VERIFICATION (Verification Tab).
+            // Thermal receipt will print ONLY upon staff approval in Admin to prevent premature/duplicate printing.
           } catch (_) {}
         }
         rpcData.payment_status = 'AWAITING_VERIFICATION';

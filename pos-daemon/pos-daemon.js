@@ -882,32 +882,37 @@ async function printLiveOrder(order, source = 'Live') {
   if (!order) return { success: false, error: 'No order provided' };
   const orderRef = String(order.order_number || order.order_ref || order.id || 'ORDER').trim();
 
-  // Deduplicate live orders across sessions (allow explicit manual reprint or staff approval)
-  const isDuplicate = source !== 'reprint' && source !== 'staff_approved' && (
-    printedOrdersSet.has(orderRef) ||
-    (order.id && printedOrdersSet.has(String(order.id))) ||
-    (order.order_number && printedOrdersSet.has(String(order.order_number))) ||
-    (order.order_ref && printedOrdersSet.has(String(order.order_ref)))
+  const stageSuffix = (order.third_payment_inr > 0 || order.third_payment_paise > 0) ? 'stage3' : (
+    (order.second_payment_inr > 0 || order.second_payment_paise > 0) ? 'stage2' : 'init'
+  );
+  const stageKey = source === 'reprint' ? `reprint_${Date.now()}` : `${orderRef}:${stageSuffix}`;
+  const cloudJobId = `rcp_${orderRef}_${stageSuffix}`;
+
+  // Stage-aware deduplication across sessions
+  const isDuplicate = source !== 'reprint' && (
+    printedOrdersSet.has(stageKey) ||
+    (stageSuffix === 'init' && (printedOrdersSet.has(orderRef) || (order.id && printedOrdersSet.has(String(order.id)))))
   );
 
   if (isDuplicate) {
-    console.log(`[Live Print] Order #${orderRef} was already printed. Skipping duplicate.`);
+    console.log(`[Live Print] Order #${orderRef} (${stageKey}) was already printed. Skipping duplicate.`);
     return { success: true, alreadyPrinted: true };
   }
 
-
-  console.log(`[Live Print] 🖨️ Printing Order #${orderRef} (${source})...`);
+  console.log(`[Live Print] 🖨️ Printing Order #${orderRef} (${stageKey}, ${source})...`);
   try {
     const binary = format25InchEscPosReceipt(order);
     const result = await spoolBytesToPrinter(binary, `Bill-${orderRef}`);
     if (result.success) {
+      printedOrdersSet.add(stageKey);
       printedOrdersSet.add(orderRef);
+      processedJobIds.add(cloudJobId);
       if (order.id) printedOrdersSet.add(String(order.id));
       if (order.order_number) printedOrdersSet.add(String(order.order_number));
       if (order.order_ref) printedOrdersSet.add(String(order.order_ref));
       savePrintedState();
-      console.log(`[Live Print] ✅ SUCCESS: Bill #${orderRef} printed to '${config.printerName}'!`);
-      return { success: true, orderNumber: orderRef };
+      console.log(`[Live Print] ✅ SUCCESS: Bill #${orderRef} (${stageKey}) printed to '${config.printerName}'!`);
+      return { success: true, orderNumber: orderRef, stageKey };
     } else {
       console.error(`[Live Print] ❌ Print spool failed for #${orderRef}:`, result.error);
       return { success: false, error: result.error };
@@ -965,9 +970,9 @@ async function pollCloudPrintQueue() {
           const jobIdStr = String(job.id);
           if (processedJobIds.has(jobIdStr)) continue;
 
-          // Only process jobs created within the last 60 minutes
+          // Only process jobs created within the last 2 hours
           const jobTime = new Date(job.created_at || Date.now()).getTime();
-          if (Date.now() - jobTime > 60 * 60 * 1000) {
+          if (Date.now() - jobTime > 2 * 60 * 60 * 1000) {
             processedJobIds.add(jobIdStr);
             continue;
           }
@@ -993,17 +998,41 @@ async function pollCloudPrintQueue() {
 
             const ref = String(order.order_number || order.order_ref || order.id || '').trim();
             const isReprint = Boolean(job.source === 'reprint' || job.manualReprint);
-            const stageKey = isReprint ? `reprint_${jobIdStr}` : (
-              (order.third_payment_inr > 0 || order.third_payment_paise > 0) ? `${ref}:stage3` : (
-                (order.second_payment_inr > 0 || order.second_payment_paise > 0) ? `${ref}:stage2` : `${ref}:init`
-              )
-            );
 
-            if (!isReprint && printedOrdersSet.has(stageKey)) {
-              console.log(`[Cloud Queue] Order #${ref} (${stageKey}) already printed. Skipping duplicate.`);
-              processedJobIds.add(jobIdStr);
-              savePrintedState();
+            // Determine stage from payment fields in the order object
+            let stageKey;
+            if (isReprint) {
+              stageKey = `reprint_${jobIdStr}`;
+            } else if (order.third_payment_inr > 0 || order.third_payment_paise > 0) {
+              stageKey = `${ref}:stage3`;
+            } else if (order.second_payment_inr > 0 || order.second_payment_paise > 0) {
+              stageKey = `${ref}:stage2`;
+            } else {
+              stageKey = `${ref}:init`;
+            }
+
+            // Suppress printing of unverified website orders until staff explicitly approves
+            const isWebOrder = ref.includes('-WEB-') || order.channel === 'WEBSITE' || order.source === 'website';
+            if (isWebOrder && order.payment_status === 'AWAITING_VERIFICATION' && job.source !== 'staff_approved') {
+              console.log(`[Cloud Queue] Suppressing unverified website order #${ref}. Awaiting staff approval.`);
               continue;
+            }
+
+            // Deduplication: check stageKey, base ref, and old-style IDs
+            const isOldStyleId = jobIdStr.startsWith('job-receipt-');
+            if (!isReprint) {
+              if (printedOrdersSet.has(stageKey) || (stageKey.endsWith(':init') && printedOrdersSet.has(ref)) || (isOldStyleId && printedOrdersSet.has(ref))) {
+                console.log(`[Cloud Queue] Order #${ref} (${stageKey}) already printed. Skipping duplicate.`);
+                processedJobIds.add(jobIdStr);
+                savePrintedState();
+                continue;
+              }
+              if (isOldStyleId && (printedOrdersSet.has(`${ref}:init`) || printedOrdersSet.has(`${ref}:stage2`) || printedOrdersSet.has(`${ref}:stage3`))) {
+                console.log(`[Cloud Queue] Old-style job for #${ref} already covered by newer stage job. Skipping.`);
+                processedJobIds.add(jobIdStr);
+                savePrintedState();
+                continue;
+              }
             }
 
             const queueSource = (job.source === 'staff_approved' || job.source === 'instore_checkout' || job.approved) ? 'staff_approved' : 'cloud_queue';

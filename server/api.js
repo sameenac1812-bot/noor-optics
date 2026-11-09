@@ -2801,7 +2801,7 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
     // Sync incoming cloud orders so mobile phone orders appear immediately
     await syncSupabaseOrders(db).catch(() => {});
 
-    const { channel, paymentStatus, status, limit = 50 } = req.query;
+    const { channel, paymentStatus, status, limit = 300 } = req.query;
 
     let sql = `
       SELECT

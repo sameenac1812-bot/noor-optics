@@ -14,7 +14,7 @@ let lastProductSyncTime = 0;
 const PRODUCT_SYNC_CACHE_MS = 15000;
 
 let lastOrderSyncTime = 0;
-const ORDER_SYNC_CACHE_MS = 8000;
+const ORDER_SYNC_CACHE_MS = 4000;
 
 function invalidateProductSyncCache() {
   lastProductSyncTime = 0;
@@ -530,6 +530,8 @@ async function syncSupabaseOrders(db, force = false) {
   if (!force && (now - lastOrderSyncTime < ORDER_SYNC_CACHE_MS)) return;
   lastOrderSyncTime = now;
   isSyncing = true;
+  // Safety reset: never block for more than 15s
+  const isSyncingReset = setTimeout(() => { isSyncing = false; }, 15000);
 
   try {
     // 0. Fetch cloud payment verifications (guarantees payment approval sticks across all lambdas & clients)
@@ -551,13 +553,13 @@ async function syncSupabaseOrders(db, force = false) {
       } catch(e) {}
     }
 
-    // 2. Fetch orders from Supabase (capped to most recent 100 for instant snappy responsiveness)
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc&limit=100`, {
+    // 2. Fetch orders from Supabase (capped to most recent 300 to ensure all orders appear in admin)
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc&limit=300`, {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
       },
-      signal: AbortSignal.timeout(6000)
+      signal: AbortSignal.timeout(8000)
     });
 
     if (!res.ok) {
@@ -657,11 +659,39 @@ async function syncSupabaseOrders(db, force = false) {
 
       let amountPaidPaise;
       let outstandingPaise;
+      let advancePaidPaise = 0;
+      let secondPaymentPaise = 0;
+      let thirdPaymentPaise = 0;
+
+      // Extract embedded financial breakdown from co.items if present
+      let rawItemsForFin = co.items;
+      if (typeof rawItemsForFin === 'string') {
+        try { rawItemsForFin = JSON.parse(rawItemsForFin); } catch(_) {}
+      }
+      const firstIt = Array.isArray(rawItemsForFin) && rawItemsForFin[0] ? rawItemsForFin[0] : null;
+      if (firstIt) {
+        if (firstIt.advance_paid_inr != null) advancePaidPaise = Math.round(Number(firstIt.advance_paid_inr) * 100);
+        else if (firstIt.advance_paid_paise != null) advancePaidPaise = Number(firstIt.advance_paid_paise);
+        if (firstIt.second_payment_inr != null) secondPaymentPaise = Math.round(Number(firstIt.second_payment_inr) * 100);
+        else if (firstIt.second_payment_paise != null) secondPaymentPaise = Number(firstIt.second_payment_paise);
+        if (firstIt.third_payment_inr != null) thirdPaymentPaise = Math.round(Number(firstIt.third_payment_inr) * 100);
+        else if (firstIt.third_payment_paise != null) thirdPaymentPaise = Number(firstIt.third_payment_paise);
+      }
+
       if (isPos) {
         if (isPaid || isCloudVerified || paymentStatus === 'VERIFIED') {
           amountPaidPaise = grandTotalPaise;
           outstandingPaise = 0;
           paymentStatus = 'VERIFIED';
+        } else if (firstIt && (firstIt.outstanding_inr != null || advancePaidPaise > 0 || secondPaymentPaise > 0)) {
+          if (firstIt.outstanding_inr != null) {
+            outstandingPaise = Math.round(Number(firstIt.outstanding_inr) * 100);
+            amountPaidPaise = Math.max(0, grandTotalPaise - outstandingPaise);
+          } else {
+            amountPaidPaise = advancePaidPaise + secondPaymentPaise + thirdPaymentPaise;
+            outstandingPaise = Math.max(0, grandTotalPaise - amountPaidPaise);
+          }
+          paymentStatus = (outstandingPaise === 0) ? 'VERIFIED' : (amountPaidPaise > 0 ? 'PARTIAL' : 'PENDING');
         } else {
           const rawCloudPaid = (co.amount_paid_paise != null) ? co.amount_paid_paise : ((co.amount_paid != null) ? Math.round(Number(co.amount_paid) * 100) : (co.advance_paid_paise != null ? co.advance_paid_paise : null));
           amountPaidPaise = rawCloudPaid != null ? rawCloudPaid : 0;
@@ -742,7 +772,13 @@ async function syncSupabaseOrders(db, force = false) {
           finalAmountPaid = grandTotalPaise;
           finalOutstanding = 0;
         } else if (isPos) {
-          if (finalOutstanding > 0 && finalAmountPaid > 0) {
+          // NEVER downgrade a locally-VERIFIED POS order. Cloud payment_status is RLS-blocked.
+          // If local says VERIFIED, trust it unconditionally.
+          if (existing.payment_status === 'VERIFIED') {
+            finalPaymentStatus = 'VERIFIED';
+            finalAmountPaid = existing.amount_paid_paise || grandTotalPaise;
+            finalOutstanding = 0;
+          } else if (finalOutstanding > 0 && finalAmountPaid > 0) {
             finalPaymentStatus = 'PARTIAL';
           } else if (finalOutstanding > 0 && finalAmountPaid === 0) {
             finalPaymentStatus = 'PENDING';
@@ -768,9 +804,13 @@ async function syncSupabaseOrders(db, force = false) {
 
         db.prepare(`
           UPDATE orders
-          SET channel = ?, channel_code = ?, source = ?, payment_status = ?, amount_paid_paise = ?, outstanding_paise = ?, claimed_upi_ref = COALESCE(claimed_upi_ref, ?)
+          SET channel = ?, channel_code = ?, source = ?, payment_status = ?,
+              amount_paid_paise = ?, advance_paid_paise = COALESCE(NULLIF(?, 0), advance_paid_paise),
+              second_payment_paise = COALESCE(NULLIF(?, 0), second_payment_paise),
+              third_payment_paise = COALESCE(NULLIF(?, 0), third_payment_paise),
+              outstanding_paise = ?, claimed_upi_ref = COALESCE(claimed_upi_ref, ?)
           WHERE id = ?
-        `).run(channel, channelCode, source, finalPaymentStatus, finalAmountPaid, finalOutstanding, resolvedUtr, existing.id);
+        `).run(channel, channelCode, source, finalPaymentStatus, finalAmountPaid, advancePaidPaise, secondPaymentPaise, thirdPaymentPaise, finalOutstanding, resolvedUtr, existing.id);
 
         // Ensure payments record exists without destroying existing multi-stage payments
         try {
@@ -790,23 +830,37 @@ async function syncSupabaseOrders(db, force = false) {
       // Generate order ID
       const orderId = 'ord-cld-' + co.order_ref.toLowerCase().replace(/[^a-z0-9]/g, '-');
 
+      // For new POS orders: if SYS-ORDER-PAYMENTS says verified, force VERIFIED status
+      // (Supabase orders.payment_status is RLS-blocked for anon writes, so it stays PARTIAL even when paid)
+      let insertPaymentStatus = paymentStatus;
+      let insertAmountPaid = amountPaidPaise;
+      let insertOutstanding = outstandingPaise;
+      if (isPos && isCloudVerified) {
+        insertPaymentStatus = 'VERIFIED';
+        insertAmountPaid = grandTotalPaise;
+        insertOutstanding = 0;
+      } else if (isPos && !isCloudVerified) {
+        // For POS orders not explicitly verified in cloud: use computed values from Supabase data
+        insertPaymentStatus = amountPaidPaise >= grandTotalPaise ? 'VERIFIED' : (amountPaidPaise > 0 ? 'PARTIAL' : 'PENDING');
+      }
+
       db.prepare(`
         INSERT INTO orders (
           id, order_number, token_number, channel, channel_code, source, customer_id, customer_name, customer_phone,
           customer_email, delivery_address, city, pin_code, prescription_pref,
           status, payment_status, subtotal_paise, tax_paise, total_payable_paise,
-          amount_paid_paise, outstanding_paise, claimed_upi_ref, notes, created_at, updated_at
+          amount_paid_paise, advance_paid_paise, second_payment_paise, third_payment_paise, outstanding_paise, claimed_upi_ref, notes, created_at, updated_at
         ) VALUES (
           ?, ?, 1, ?, ?, ?, ?, ?, ?,
           ?, ?, ?, ?, ?,
           'CONFIRMED', ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
       `).run(
         orderId, co.order_ref, channel, channelCode, source, customerId, name, phone,
         co.customer_email || null, co.delivery_address || null, co.city || null, co.pin_code || null,
-        co.prescription_pref || 'Standard', paymentStatus, subtotalPaise, taxPaise, grandTotalPaise,
-        amountPaidPaise, outstandingPaise, resolvedUtr, isPos ? 'In-Store POS Bill (Synced)' : 'Online Website Order (Synced)', orderDate, orderDate
+        co.prescription_pref || 'Standard', insertPaymentStatus, subtotalPaise, taxPaise, grandTotalPaise,
+        insertAmountPaid, advancePaidPaise, secondPaymentPaise, thirdPaymentPaise, insertOutstanding, resolvedUtr, isPos ? 'In-Store POS Bill (Synced)' : 'Online Website Order (Synced)', orderDate, orderDate
       );
 
       // Parse and insert items
@@ -1047,6 +1101,7 @@ async function syncSupabaseOrders(db, force = false) {
   } catch (err) {
     console.warn('[SupabaseSync] Error syncing orders from Supabase:', err.message);
   } finally {
+    clearTimeout(isSyncingReset);
     isSyncing = false;
   }
 }
@@ -1131,11 +1186,22 @@ async function pushOrderToSupabase(orderPayload) {
     const resolvedSource = isPosOrder ? 'instore' : 'website';
 
     const resolvedUtr = orderPayload.claimedUpiRef || orderPayload.claimed_upi_ref || orderPayload.utr || null;
-    itemsToPush = itemsToPush.map(it => ({
+    const advancePaidInr = isPosOrder ? (orderPayload.advancePaidINR != null ? orderPayload.advancePaidINR : (orderPayload.advance_paid_inr != null ? orderPayload.advance_paid_inr : (orderPayload.advance_paid_paise ? orderPayload.advance_paid_paise / 100 : 0))) : 0;
+    const secondPaymentInr = isPosOrder ? (orderPayload.secondPaymentINR != null ? orderPayload.secondPaymentINR : (orderPayload.second_payment_inr != null ? orderPayload.second_payment_inr : (orderPayload.second_payment_paise ? orderPayload.second_payment_paise / 100 : 0))) : 0;
+    const thirdPaymentInr = isPosOrder ? (orderPayload.thirdPaymentINR != null ? orderPayload.thirdPaymentINR : (orderPayload.third_payment_inr != null ? orderPayload.third_payment_inr : (orderPayload.third_payment_paise ? orderPayload.third_payment_paise / 100 : 0))) : 0;
+    const outstandingInr = isPosOrder ? (orderPayload.outstandingINR != null ? orderPayload.outstandingINR : (orderPayload.outstanding_inr != null ? orderPayload.outstanding_inr : (orderPayload.outstanding_paise ? orderPayload.outstanding_paise / 100 : 0))) : 0;
+
+    itemsToPush = itemsToPush.map((it, idx) => ({
       ...it,
       channel: resolvedChannel,
       claimed_upi_ref: resolvedUtr || it.claimed_upi_ref || null,
-      utr: resolvedUtr || it.utr || null
+      utr: resolvedUtr || it.utr || null,
+      ...(idx === 0 && isPosOrder ? {
+        advance_paid_inr: advancePaidInr,
+        second_payment_inr: secondPaymentInr,
+        third_payment_inr: thirdPaymentInr,
+        outstanding_inr: outstandingInr
+      } : {})
     }));
     const custName = String(orderPayload.customerName || orderPayload.customer_name || 'Walk-in Client').trim();
     const rawPhone = orderPayload.customerPhone || orderPayload.customer_phone || '';
