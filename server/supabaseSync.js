@@ -624,16 +624,21 @@ async function syncSupabaseOrders(db, force = false) {
 
       if (isPos) {
         // In-store POS counter orders: check if partial/due or verified (NEVER AWAITING_VERIFICATION)
-        const coStatus = String(co.payment_status || '').toUpperCase();
-        if (coStatus === 'PARTIAL' || (co.outstanding_paise && co.outstanding_paise > 0) || (co.outstanding && co.outstanding > 0)) {
-          isPaid = false;
-          paymentStatus = 'PARTIAL';
-        } else if (coStatus === 'PENDING' && (co.amount_paid_paise === 0 || co.amount_paid === 0)) {
-          isPaid = false;
-          paymentStatus = 'PENDING';
-        } else {
+        if (isCloudVerified) {
           isPaid = true;
           paymentStatus = 'VERIFIED';
+        } else {
+          const coStatus = String(co.payment_status || '').toUpperCase();
+          if (coStatus === 'PARTIAL' || (co.outstanding_paise && co.outstanding_paise > 0) || (co.outstanding && co.outstanding > 0)) {
+            isPaid = false;
+            paymentStatus = 'PARTIAL';
+          } else if (coStatus === 'PENDING' && (co.amount_paid_paise === 0 || co.amount_paid === 0)) {
+            isPaid = false;
+            paymentStatus = 'PENDING';
+          } else {
+            isPaid = true;
+            paymentStatus = 'VERIFIED';
+          }
         }
       } else {
         // Website orders strictly land in AWAITING_VERIFICATION (Verify UPI queue)
@@ -653,11 +658,21 @@ async function syncSupabaseOrders(db, force = false) {
       let amountPaidPaise;
       let outstandingPaise;
       if (isPos) {
-        const rawCloudPaid = (co.amount_paid_paise != null) ? co.amount_paid_paise : ((co.amount_paid != null) ? Math.round(Number(co.amount_paid) * 100) : (co.advance_paid_paise != null ? co.advance_paid_paise : null));
-        amountPaidPaise = rawCloudPaid != null ? rawCloudPaid : (isPaid ? grandTotalPaise : 0);
-        outstandingPaise = Math.max(0, grandTotalPaise - amountPaidPaise);
-        if (outstandingPaise > 0) {
-          paymentStatus = 'PARTIAL';
+        if (isPaid || isCloudVerified || paymentStatus === 'VERIFIED') {
+          amountPaidPaise = grandTotalPaise;
+          outstandingPaise = 0;
+          paymentStatus = 'VERIFIED';
+        } else {
+          const rawCloudPaid = (co.amount_paid_paise != null) ? co.amount_paid_paise : ((co.amount_paid != null) ? Math.round(Number(co.amount_paid) * 100) : (co.advance_paid_paise != null ? co.advance_paid_paise : null));
+          amountPaidPaise = rawCloudPaid != null ? rawCloudPaid : 0;
+          outstandingPaise = Math.max(0, grandTotalPaise - amountPaidPaise);
+          if (outstandingPaise === 0) {
+            paymentStatus = 'VERIFIED';
+          } else if (amountPaidPaise > 0) {
+            paymentStatus = 'PARTIAL';
+          } else {
+            paymentStatus = 'PENDING';
+          }
         }
       } else {
         // Website orders have ZERO advance payment option. Always 100% full payment.
@@ -722,7 +737,11 @@ async function syncSupabaseOrders(db, force = false) {
         let finalAmountPaid = existing.amount_paid_paise !== undefined ? existing.amount_paid_paise : amountPaidPaise;
         let finalOutstanding = existing.outstanding_paise !== undefined ? existing.outstanding_paise : outstandingPaise;
 
-        if (isPos) {
+        if (isCloudVerified) {
+          finalPaymentStatus = 'VERIFIED';
+          finalAmountPaid = grandTotalPaise;
+          finalOutstanding = 0;
+        } else if (isPos) {
           if (finalOutstanding > 0 && finalAmountPaid > 0) {
             finalPaymentStatus = 'PARTIAL';
           } else if (finalOutstanding > 0 && finalAmountPaid === 0) {
@@ -1216,6 +1235,10 @@ async function pushOrderToSupabase(orderPayload) {
 
     if (res.ok) {
       console.log(`[SupabaseSync] Order ${orderRef} (${isPosOrder ? 'instore' : 'website'}) successfully pushed to Supabase cloud.`);
+      
+      if (payStatus === 'VERIFIED') {
+        pushOrderPaymentStatusToCloud(orderRef, 'VERIFIED', 'POS Checkout Paid in Full').catch(() => {});
+      }
       
       // Auto-dispatch in-store POS bill to SYS-PRINT-QUEUE so the dedicated printer laptop prints it instantly!
       try {

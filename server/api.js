@@ -2005,7 +2005,8 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
 
     // Payment Logic (Advance, 2nd, 3rd installments, remaining balance)
     let amountPaidPaise = advancePaise + secondPaymentPaise + thirdPaymentPaise;
-    if (req.body.advanceINR === undefined && req.body.advance_paise === undefined) {
+    const isExplicitInstallment = (advancePaise > 0 || secondPaymentPaise > 0 || thirdPaymentPaise > 0);
+    if (!isExplicitInstallment && !req.body.isCreditSale) {
       amountPaidPaise = totalPayablePaise;
       advancePaise = totalPayablePaise;
     }
@@ -2220,6 +2221,10 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       subtotalINR: result.subtotalINR || (calculatedSubtotalPaise / 100),
       grandTotalINR: result.totalPayableINR
     }).catch(err => console.warn('[SupabaseSync] Push POS order note:', err.message));
+
+    if (result.paymentStatus === 'VERIFIED') {
+      pushOrderPaymentStatusToCloud(orderNumber, 'VERIFIED', 'In-Store POS Sale Paid in Full').catch(() => {});
+    }
 
     // Push customer to Supabase Cloud
     if (result.customerId) {

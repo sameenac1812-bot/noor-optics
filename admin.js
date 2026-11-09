@@ -5720,15 +5720,22 @@
     const thirdInput = document.getElementById('pos-third-amount');
     const thirdINR = parseFloat(thirdInput ? thirdInput.value : 0) || 0;
 
+    const isInstallmentEntered = (advanceINR > 0 || secondINR > 0 || thirdINR > 0);
     const totalPaidPaise = Math.round((advanceINR + secondINR + thirdINR) * 100);
-    const remainingPaise = Math.max(0, grandTotalPaise - totalPaidPaise);
+    const remainingPaise = isInstallmentEntered ? Math.max(0, grandTotalPaise - totalPaidPaise) : 0;
 
     if (countEl) countEl.textContent = `${totalItems} item${totalItems > 1 ? 's' : ''}`;
     if (subtotalEl) subtotalEl.textContent = '₹' + (totalBeforeDiscountPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (discountValEl) discountValEl.value = (discountPaise / 100).toFixed(2);
     if (taxEl) taxEl.value = (taxPaise / 100).toFixed(2);
     if (advanceValEl) advanceValEl.value = (advancePaise / 100).toFixed(2);
-    if (remainingValEl) remainingValEl.textContent = '₹ ' + (remainingPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (remainingValEl) {
+      if (!isInstallmentEntered && grandTotalPaise > 0) {
+        remainingValEl.textContent = '₹ 0 (PAID IN FULL)';
+      } else {
+        remainingValEl.textContent = '₹ ' + (remainingPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+    }
     const remBadgeActive = document.getElementById('optic-rem-badge');
     if (remBadgeActive) {
       if (remainingPaise === 0) {
@@ -6469,6 +6476,7 @@
           const pickupTime = document.getElementById('pos-pickup-time')?.value || null;
           const claimedUtr = document.getElementById('pos-claimed-utr') ? document.getElementById('pos-claimed-utr').value.trim() : null;
           const notes = document.getElementById('pos-bill-notes')?.value.trim() || null;
+          const isInstallment = (advanceINR > 0 || secondAmountINR > 0 || thirdAmountINR > 0);
 
           // ── 1. PRESERVE CART & PRESCRIPTION SNAPSHOT BEFORE STATE RESET ──
           const cartSnapshot = state.posCart.map(item => ({ ...item }));
@@ -6490,7 +6498,7 @@
             customerAge: clientPayload.age || null,
             paymentMethod: state.posPaymode,
             discountINR,
-            advanceINR,
+            advanceINR: isInstallment ? advanceINR : undefined,
             previousDueINR,
             secondAmountINR,
             thirdAmountINR,
@@ -6536,20 +6544,21 @@
               customer_city: clientPayload.city || null,
               customer_age: clientPayload.age || null,
               payment_method: state.posPaymode,
+              payment_status: isInstallment && (res.totalPayableINR - (advanceINR + secondAmountINR + thirdAmountINR) > 0) ? 'PARTIAL' : 'VERIFIED',
               subtotal: subtotalPaiseSnapshot / 100,
               grand_total: res.totalPayableINR,
               total_payable_inr: res.totalPayableINR,
               total_payable_paise: Math.round(res.totalPayableINR * 100),
               discount_inr: discountINR,
               discount_paise: Math.round(discountINR * 100),
-              advance_paid_inr: advanceINR,
-              advance_paid_paise: Math.round(advanceINR * 100),
+              advance_paid_inr: isInstallment ? advanceINR : res.totalPayableINR,
+              advance_paid_paise: Math.round((isInstallment ? advanceINR : res.totalPayableINR) * 100),
               second_payment_inr: secondAmountINR,
               second_payment_paise: Math.round(secondAmountINR * 100),
               third_payment_inr: thirdAmountINR,
               third_payment_paise: Math.round(thirdAmountINR * 100),
-              outstanding_inr: Math.max(0, res.totalPayableINR - (advanceINR + secondAmountINR + thirdAmountINR)),
-              outstanding_paise: Math.round(Math.max(0, res.totalPayableINR - (advanceINR + secondAmountINR + thirdAmountINR)) * 100),
+              outstanding_inr: isInstallment ? Math.max(0, res.totalPayableINR - (advanceINR + secondAmountINR + thirdAmountINR)) : 0,
+              outstanding_paise: isInstallment ? Math.round(Math.max(0, res.totalPayableINR - (advanceINR + secondAmountINR + thirdAmountINR)) * 100) : 0,
               pickup_time: pickupTime,
               items: cartSnapshot,
               prescriptions: rxListSnapshot,
