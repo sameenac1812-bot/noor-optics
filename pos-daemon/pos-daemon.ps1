@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     pos-daemon/pos-daemon.ps1 – Native Windows PowerShell POS Print Engine
     Zero-dependency thermal print daemon for Windows 10/11.
@@ -918,7 +918,7 @@ function Poll-CloudPrintQueue {
             "Authorization" = "Bearer " + $Config.supabaseAnonKey
         }
         $url = $Config.supabaseUrl + "/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE&select=notes"
-        $res = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 4 -ErrorAction SilentlyContinue
+        $res = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 2 -ErrorAction SilentlyContinue
         if ($res -and $res.Count -gt 0 -and $res[0].notes) {
             $parsed = $res[0].notes | ConvertFrom-Json
             if ($parsed -and $parsed.jobs) {
@@ -961,26 +961,32 @@ function Poll-CloudPrintQueue {
                         }
                         $ref = if ($order.order_number) { [string]$order.order_number } elseif ($order.order_ref) { [string]$order.order_ref } elseif ($order.id) { [string]$order.id } else { "BILL" }
                         $orderIdStr = if ($order.id) { [string]$order.id } else { "" }
-                        $isExplicit = ($job.approved -eq $true -or $job.source -eq "staff_approved" -or $job.source -eq "reprint" -or $job.source -eq "website_placed" -or $job.source -eq "instore_checkout")
-                        $alreadyDone = $livePrintedOrders.Contains($ref) -or ($orderIdStr -and $livePrintedOrders.Contains($orderIdStr)) -or ($History.ContainsKey($ref)) -or ($orderIdStr -and $History.ContainsKey($orderIdStr))
-                        if (-not $isExplicit -and $alreadyDone) {
-                            Write-DaemonLog "[Cloud Queue] Order #$ref already printed. Skipping duplicate." "INFO"
+                        $isReprint = ($job.source -eq "reprint" -or $job.manualReprint -eq $true)
+                        $stageKey = if ($isReprint) { "reprint_" + $jobId } `
+                                    elseif ($order.third_payment_inr -gt 0 -or $order.third_payment_paise -gt 0) { $ref + ":stage3" } `
+                                    elseif ($order.second_payment_inr -gt 0 -or $order.second_payment_paise -gt 0) { $ref + ":stage2" } `
+                                    else { $ref + ":init" }
+
+                        if (-not $isReprint -and ($livePrintedOrders.Contains($stageKey) -or $History.ContainsKey($stageKey))) {
+                            Write-DaemonLog "[Cloud Queue] Bill #$ref ($stageKey) already printed. Skipping duplicate." "INFO"
                             continue
                         }
-                        Write-DaemonLog "[Cloud Queue] 🖨️ Printing Bill #$ref..." "INFO"
+                        Write-DaemonLog "[Cloud Queue] 🖨️ Printing Bill #$ref ($stageKey)..." "INFO"
                         try {
                             $bytes = Format-ReceiptBytes $order
                             if ($bytes -and $bytes.Length -gt 0) {
                                 $ok = Spool-Bytes $bytes "Bill-$ref"
                                 if ($ok) {
-                                    $livePrintedOrders.Add($ref) | Out-Null
+                                    $livePrintedOrders.Add($stageKey) | Out-Null
+                                    if ($ref) { $livePrintedOrders.Add($ref) | Out-Null }
                                     if ($orderIdStr) { $livePrintedOrders.Add($orderIdStr) | Out-Null }
                                     $nowIso = (Get-Date).ToString("o")
+                                    $History[$stageKey] = $nowIso
                                     $History[$ref] = $nowIso
                                     if ($orderIdStr) { $History[$orderIdStr] = $nowIso }
                                     Save-PrintedOrdersState
                                     Save-History
-                                    Write-DaemonLog "[Cloud Queue] ✅ SUCCESS: Bill #$ref printed to $($Config.printerName)!" "INFO"
+                                    Write-DaemonLog "[Cloud Queue] ✅ SUCCESS: Bill #$ref ($stageKey) printed to $($Config.printerName)!" "INFO"
                                 }
                             }
                         } catch {
@@ -1005,7 +1011,7 @@ function Poll-LiveCloudOrders {
         }
         $since = [DateTime]::UtcNow.AddMinutes(-30).ToString("yyyy-MM-ddTHH:mm:ssZ")
         $url = $Config.supabaseUrl + "/rest/v1/orders?created_at=gte." + $since + "&order=created_at.desc&limit=15"
-        $orders = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 5 -ErrorAction SilentlyContinue
+        $orders = Invoke-RestMethod -Uri $url -Headers $headers -Method Get -TimeoutSec 3 -ErrorAction SilentlyContinue
         if ($orders -and $orders.Count -gt 0) {
             # On startup: acknowledge existing orders so no missed/old orders are printed!
             if (-not $script:firstCloudPollDone) {
@@ -1018,18 +1024,28 @@ function Poll-LiveCloudOrders {
                 return
             }
 
-            # Subsequent live polls: print every newly placed or verified order!
+            # Subsequent live polls: print newly placed verified website orders!
+            # (In-store POS orders are NEVER printed from raw /orders table because installment details live in SYS-PRINT-QUEUE)
             foreach ($ord in $orders) {
                 $ref = if ($ord.order_number) { [string]$ord.order_number } elseif ($ord.order_ref) { [string]$ord.order_ref } else { [string]$ord.id }
                 if (-not $ref -or $livePrintedOrders.Contains($ref)) { continue }
 
-                Write-DaemonLog "[Live Cloud] Printing Live Order #$ref..." "INFO"
+                # In-store POS bills are handled exclusively with full installment breakdown via SYS-PRINT-QUEUE
+                if ($ref -like "*NOOR-POS-*" -or $ord.channel -eq "POS" -or $ord.channel_code -eq 2 -or $ord.source -eq "instore") {
+                    continue
+                }
+                # Website orders only print after payment is verified by staff
+                if ($ord.payment_status -ne "VERIFIED") {
+                    continue
+                }
+
+                Write-DaemonLog "[Live Cloud] Printing Live Website Order #$ref..." "INFO"
                 $bytes = Format-ReceiptBytes $ord
                 $ok = Spool-Bytes $bytes "Bill-$ref"
                 if ($ok) {
                     $livePrintedOrders.Add($ref) | Out-Null
                     Save-PrintedOrdersState
-                    Write-DaemonLog "[Live Cloud] SUCCESS: Bill #$ref printed to $($Config.printerName)!" "INFO"
+                    Write-DaemonLog "[Live Cloud] SUCCESS: Website Bill #$ref printed to $($Config.printerName)!" "INFO"
                 }
             }
         }
@@ -1041,7 +1057,8 @@ Write-DaemonLog "[Cloud Sync] Mode: LIVE-ONLY (Zero Backlog Replay, Instant Prin
 
 $running = $true
 $asyncResult = $listener.BeginGetContext($null, $null)
-$lastCloudPoll = 0
+$lastQueuePoll = 0
+$lastLivePoll = 0
 
 while ($running) {
     try {
@@ -1196,15 +1213,20 @@ while ($running) {
             $response.Close()
         }
 
-        # 2. Live Cloud Order Check (Every 3 seconds for new orders created after startup)
+        # 2. Fast Cloud Print Queue Poll (Every 1 second for instant printing on dedicated laptop)
         $nowEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-        if ($nowEpoch - $lastCloudPoll -ge 3) {
-            $lastCloudPoll = $nowEpoch
-            Poll-LiveCloudOrders
+        if ($nowEpoch - $lastQueuePoll -ge 1) {
+            $lastQueuePoll = $nowEpoch
             Poll-CloudPrintQueue
         }
 
-        Start-Sleep -Milliseconds 150
+        # 3. Background Website Order Check (Every 10 seconds for online website orders only)
+        if ($nowEpoch - $lastLivePoll -ge 10) {
+            $lastLivePoll = $nowEpoch
+            Poll-LiveCloudOrders
+        }
+
+        Start-Sleep -Milliseconds 100
     } catch {
         Write-DaemonLog "Daemon loop error: $_" "ERROR"
         Start-Sleep -Milliseconds 500

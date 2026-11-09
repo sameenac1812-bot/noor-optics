@@ -1251,9 +1251,20 @@ async function pushOrderToSupabase(orderPayload) {
           if (qList[0]?.notes) {
             try { currentJobs = JSON.parse(qList[0].notes).jobs || []; } catch(_) {}
           }
-          currentJobs.push({
-            id: 'job-receipt-' + orderRef + '-' + Date.now(),
+          let stageSuffix = 'init';
+          if (orderPayload.thirdPaymentINR > 0 || orderPayload.third_payment_inr > 0 || orderPayload.third_payment_paise > 0) {
+            stageSuffix = 'stage3';
+          } else if (orderPayload.secondPaymentINR > 0 || orderPayload.second_payment_inr > 0 || orderPayload.second_payment_paise > 0) {
+            stageSuffix = 'stage2';
+          }
+          const jobId = 'rcp_' + orderRef + '_' + stageSuffix;
+
+          const newJobObj = {
+            id: jobId,
             type: 'receipt',
+            approved: true,
+            source: stageSuffix === 'init' ? 'instore_checkout' : 'collect_payment',
+            created_at: new Date().toISOString(),
             order: {
               ...baseOrderBody,
               ...orderPayload,
@@ -1280,11 +1291,16 @@ async function pushOrderToSupabase(orderPayload) {
               discount_inr: orderPayload.discountINR != null ? orderPayload.discountINR : (orderPayload.discount_inr || 0),
               subtotal: subtotal,
               grand_total: grandTotal
-            },
-            approved: true,
-            source: isPosOrder ? 'instore_checkout' : 'staff_approved',
-            created_at: new Date().toISOString()
-          });
+            }
+          };
+
+          const existingIdx = currentJobs.findIndex(j => j.id === jobId);
+          if (existingIdx >= 0) {
+            currentJobs[existingIdx] = newJobObj;
+          } else {
+            currentJobs.push(newJobObj);
+          }
+          if (currentJobs.length > 30) currentJobs = currentJobs.slice(-30);
           await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
             method: 'PATCH',
             headers: {

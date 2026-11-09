@@ -4418,8 +4418,25 @@
         return new Date(j.created_at).getTime() > recentThreshold;
       });
 
+      const ord = jobPayload.order || (jobPayload.items && jobPayload.items[0] && jobPayload.items[0].order) || null;
+      const ref = String(ord?.order_number || ord?.order_ref || ord?.id || ('JOB_' + Date.now())).trim();
+      let stageSuffix = 'init';
+      if (jobPayload.source === 'reprint' || jobPayload.manualReprint) {
+        stageSuffix = 'reprint_' + Date.now();
+      } else if (ord) {
+        if (ord.third_payment_inr > 0 || ord.third_payment_paise > 0) {
+          stageSuffix = 'stage3';
+        } else if (ord.second_payment_inr > 0 || ord.second_payment_paise > 0) {
+          stageSuffix = 'stage2';
+        }
+      }
+
+      const jobId = jobPayload.type === 'qr_sticker'
+        ? ('stk_' + Date.now() + '_' + Math.floor(Math.random() * 1000))
+        : ('rcp_' + ref + '_' + stageSuffix);
+
       const newJob = {
-        id: (jobPayload.type === 'receipt' ? 'rcp_' : 'stk_') + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        id: jobId,
         type: jobPayload.type || 'qr_sticker',
         order: jobPayload.order || null,
         items: jobPayload.items || (jobPayload.order ? jobPayload.order.items : [jobPayload]),
@@ -4427,7 +4444,13 @@
         source: jobPayload.source || (jobPayload.type === 'receipt' ? 'staff_approved' : 'cloud_queue'),
         created_at: new Date().toISOString()
       };
-      jobs.push(newJob);
+
+      const existingIdx = jobs.findIndex(j => j.id === jobId);
+      if (existingIdx >= 0) {
+        jobs[existingIdx] = newJob;
+      } else {
+        jobs.push(newJob);
+      }
 
       if (jobs.length > 30) jobs = jobs.slice(-30);
 
@@ -9236,12 +9259,7 @@
         renderOrdersTable();
       }
 
-      // Print updated receipt to POS thermal printer
-      if (shouldPrint && typeof instantPrintReceipt === 'function') {
-        instantPrintReceipt(orderId, true, res.order).catch(() => {});
-      }
-
-      // Close modal
+      // Close modal immediately for instant snappy feedback
       const modal = document.getElementById('modal-collect-payment');
       if (modal) modal.classList.remove('open');
       document.body.classList.remove('modal-open');
@@ -9252,9 +9270,14 @@
         : `✓ Payment of ₹${amountINR.toLocaleString('en-IN')} recorded! Remaining balance: ₹${remINR.toLocaleString('en-IN')}`;
       showToast(msg, 'success');
 
-      // Refresh datasets across the system
-      loadOrders();
-      if (typeof loadClients === 'function') loadClients();
+      // Print updated receipt to POS thermal printer
+      if (shouldPrint && typeof instantPrintReceipt === 'function') {
+        instantPrintReceipt(orderId, true, res.order).catch(() => {});
+      }
+
+      // Refresh datasets across the system silently in background
+      loadOrders(true);
+      if (typeof loadClients === 'function') loadClients(true);
       loadDashboard();
 
       // Update POS customer due alert if active phone is this customer

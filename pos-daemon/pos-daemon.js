@@ -992,9 +992,15 @@ async function pollCloudPrintQueue() {
             }
 
             const ref = String(order.order_number || order.order_ref || order.id || '').trim();
-            const isExplicit = Boolean(job.approved || job.source === 'staff_approved' || job.source === 'reprint' || job.source === 'website_placed' || job.source === 'instore_checkout');
-            if (!isExplicit && (printedOrdersSet.has(ref) || (order.id && printedOrdersSet.has(String(order.id))) || (order.order_number && printedOrdersSet.has(String(order.order_number))) || (order.order_ref && printedOrdersSet.has(String(order.order_ref))))) {
-              console.log(`[Cloud Queue] Order #${ref} already printed. Skipping duplicate.`);
+            const isReprint = Boolean(job.source === 'reprint' || job.manualReprint);
+            const stageKey = isReprint ? `reprint_${jobIdStr}` : (
+              (order.third_payment_inr > 0 || order.third_payment_paise > 0) ? `${ref}:stage3` : (
+                (order.second_payment_inr > 0 || order.second_payment_paise > 0) ? `${ref}:stage2` : `${ref}:init`
+              )
+            );
+
+            if (!isReprint && printedOrdersSet.has(stageKey)) {
+              console.log(`[Cloud Queue] Order #${ref} (${stageKey}) already printed. Skipping duplicate.`);
               processedJobIds.add(jobIdStr);
               savePrintedState();
               continue;
@@ -1004,6 +1010,8 @@ async function pollCloudPrintQueue() {
             const resPrint = await printLiveOrder(order, queueSource);
             if (resPrint.success) {
               processedJobIds.add(jobIdStr);
+              printedOrdersSet.add(stageKey);
+              if (ref) printedOrdersSet.add(ref);
               savePrintedState();
             }
           }
@@ -1051,13 +1059,20 @@ async function pollRecentUnprintedOrders() {
           return;
         }
 
-        // Subsequent live polls: print every newly placed or verified order!
+        // Subsequent live polls: print every newly placed verified website order!
+        // In-store POS bills are handled exclusively via SYS-PRINT-QUEUE with full installment details
         for (const order of orders.reverse()) {
           const ref = String(order.order_number || order.order_ref || order.id || '').trim();
           if (!ref) continue;
+          if (ref.includes('-POS-') || order.channel === 'POS' || order.channel_code === 2 || order.source === 'instore') {
+            continue;
+          }
+          if (order.payment_status !== 'VERIFIED') {
+            continue;
+          }
           if (printedOrdersSet.has(ref) || (order.id && printedOrdersSet.has(String(order.id))) || (order.order_number && printedOrdersSet.has(String(order.order_number))) || (order.order_ref && printedOrdersSet.has(String(order.order_ref)))) continue;
 
-          console.log(`[Order Sync] Found new live unprinted order #${ref}. Printing now...`);
+          console.log(`[Order Sync] Found new live unprinted website order #${ref}. Printing now...`);
           await printLiveOrder(order, 'cloud_sync');
         }
       }
@@ -1319,7 +1334,7 @@ if (require.main === module) {
     console.log(`  🖨️  Printer:       ${config.printerName}`);
     console.log(`  🌐 Local API:     http://127.0.0.1:${config.port}`);
     console.log('  ⚡ Cloud Live:    Supabase Realtime WebSocket');
-    console.log('  📦 Cloud Queue:   Active (Polling SYS-PRINT-QUEUE every 2.5s)');
+    console.log('  📦 Cloud Queue:   Active (Polling SYS-PRINT-QUEUE every 1.0s)');
     console.log('  🎯 Mode:          LIVE DUAL-CHANNEL (Direct + Cloud Spooler)');
     console.log('============================================================');
     console.log('[LIVE] Ready! Listening for incoming customer orders & item QR stickers...\n');
@@ -1330,9 +1345,9 @@ if (require.main === module) {
     pollRecentUnprintedOrders();
     setInterval(pollRecentUnprintedOrders, 10000);
 
-    // 2. Continuous cloud queue listener for remote cashier item QRs and bills
+    // 2. Continuous cloud queue listener for remote cashier item QRs and bills (Fast 1s interval)
     pollCloudPrintQueue();
-    setInterval(pollCloudPrintQueue, 2500);
+    setInterval(pollCloudPrintQueue, 1000);
 
     // 3. Periodic background auto-update check (every 30 minutes)
     setTimeout(checkDaemonUpdates, 15000);

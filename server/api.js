@@ -2352,6 +2352,10 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     thirdPaymentINR: (updatedOrder.third_payment_paise || 0) / 100
   }).catch(() => {});
 
+  if (newPaymentStatus === 'VERIFIED') {
+    pushOrderPaymentStatusToCloud(order.order_number, 'VERIFIED', 'Installment Payment Settled in Full').catch(() => {});
+  }
+
   const orderPayload = {
     ...updatedOrder,
     items: orderItems.map(i => ({
