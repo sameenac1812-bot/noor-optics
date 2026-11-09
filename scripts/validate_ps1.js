@@ -56,3 +56,4 @@ if (anyFailed) {
 } else {
     console.log('\nAll PowerShell scripts parsed successfully with 0 errors!');
 }
+

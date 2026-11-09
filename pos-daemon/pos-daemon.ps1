@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     pos-daemon/pos-daemon.ps1 – Native Windows PowerShell POS Print Engine
     Zero-dependency thermal print daemon for Windows 10/11.

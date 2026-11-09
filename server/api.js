@@ -26,6 +26,8 @@ const {
 } = require('./printer');
 const { generateInvoicePDF } = require('./pdfInvoice');
 const {
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
   syncSupabaseOrders,
   invalidateOrderSyncCache,
   syncSupabaseProducts,
@@ -2255,8 +2257,9 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
 // ==============================================================================
 // 7B. COLLECT SUBSEQUENT INSTALLMENT PAYMENT (2ND PAYMENT / 3RD PAYMENT)
 // ==============================================================================
-router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '/orders/:id/payment'], authenticateToken, (req, res) => {
+router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '/orders/:id/payment'], authenticateToken, async (req, res) => {
   const orderId = req.params.id;
+  const orderNumberHint = req.body.orderNumber || req.body.order_number || req.body.orderRef || req.body.order_ref;
   const {
     amountINR,
     amount_paise,
@@ -2274,7 +2277,37 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     return res.status(400).json({ error: 'Payment amount must be greater than zero.' });
   }
 
-  const order = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ?').get(orderId, orderId);
+  const cldId = 'ord-cld-' + String(orderId).toLowerCase().replace(/[^a-z0-9]/g, '-');
+  let order = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ? OR id = ? OR order_number = ?').get(orderId, orderId, cldId, cldId);
+  if (!order && orderNumberHint) {
+    const cldHint = 'ord-cld-' + String(orderNumberHint).toLowerCase().replace(/[^a-z0-9]/g, '-');
+    order = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ? OR id = ? OR order_number = ?').get(orderNumberHint, orderNumberHint, cldHint, cldHint);
+  }
+  if (!order) {
+    // Cloud sync fallback
+    await syncSupabaseOrders(db, true).catch(() => {});
+    order = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ? OR id = ? OR order_number = ?').get(orderId, orderId, cldId, cldId);
+    if (!order && orderNumberHint) {
+      const cldHint = 'ord-cld-' + String(orderNumberHint).toLowerCase().replace(/[^a-z0-9]/g, '-');
+      order = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ? OR id = ? OR order_number = ?').get(orderNumberHint, orderNumberHint, cldHint, cldHint);
+    }
+  }
+  if (!order && SUPABASE_URL && SUPABASE_ANON_KEY) {
+    try {
+      const q = encodeURIComponent(orderNumberHint || orderId);
+      const sRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?or=(id.eq.${q},order_ref.eq.${q},order_number.eq.${q})&limit=1`, {
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      if (sRes.ok) {
+        const sRows = await sRes.json();
+        if (Array.isArray(sRows) && sRows.length > 0) {
+          await syncSupabaseOrders(db, true).catch(() => {});
+          const matchedRef = sRows[0].order_ref || sRows[0].order_number || sRows[0].id;
+          order = db.prepare('SELECT * FROM orders WHERE order_number = ? OR id = ?').get(matchedRef, matchedRef);
+        }
+      }
+    } catch (_) {}
+  }
   if (!order) {
     return res.status(404).json({ error: 'Order not found.' });
   }
@@ -2352,9 +2385,14 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     thirdPaymentINR: (updatedOrder.third_payment_paise || 0) / 100
   }).catch(() => {});
 
-  if (newPaymentStatus === 'VERIFIED') {
-    pushOrderPaymentStatusToCloud(order.order_number, 'VERIFIED', 'Installment Payment Settled in Full').catch(() => {});
-  }
+  // Persist financial installment breakdown unconditionally to Supabase SYS-ORDER-PAYMENTS
+  pushOrderPaymentStatusToCloud(order.order_number, newPaymentStatus, stageLabel, {
+    amountPaidINR: newAmountPaid / 100,
+    outstandingINR: newOutstanding / 100,
+    advancePaidINR: (updatedOrder.advance_paid_paise || (order.advance_paid_paise || 0)) / 100,
+    secondPaymentINR: (updatedOrder.second_payment_paise || 0) / 100,
+    thirdPaymentINR: (updatedOrder.third_payment_paise || 0) / 100
+  }).catch(() => {});
 
   const orderPayload = {
     ...updatedOrder,
@@ -2944,8 +2982,10 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
   }
 });
 
-router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), (req, res) => {
-  const order = db.prepare(`
+router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), async (req, res) => {
+  const idParam = req.params.id;
+  const cldId = 'ord-cld-' + String(idParam).toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const getOrderSql = `
     SELECT
       o.*,
       u.name as staff_name,
@@ -2972,9 +3012,35 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), (
     LEFT JOIN invoices inv ON o.id = inv.order_id
     LEFT JOIN customers c ON o.customer_id = c.id
     LEFT JOIN prescriptions pr ON o.prescription_id = pr.id
-    LEFT JOIN payments pay ON o.id = pay.order_id
-    WHERE o.id = ?
-  `).get(req.params.id);
+    LEFT JOIN (
+      SELECT order_id, MAX(id) as id, MAX(claimed_upi_ref) as claimed_upi_ref, MAX(status) as status
+      FROM payments GROUP BY order_id
+    ) pay ON o.id = pay.order_id
+    WHERE o.id = ? OR o.order_number = ? OR o.id = ? OR o.order_number = ?
+    LIMIT 1
+  `;
+
+  let order = db.prepare(getOrderSql).get(idParam, idParam, cldId, cldId);
+  if (!order) {
+    await syncSupabaseOrders(db, true).catch(() => {});
+    order = db.prepare(getOrderSql).get(idParam, idParam, cldId, cldId);
+  }
+  if (!order && SUPABASE_URL && SUPABASE_ANON_KEY) {
+    try {
+      const q = encodeURIComponent(idParam);
+      const sRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?or=(id.eq.${q},order_ref.eq.${q},order_number.eq.${q})&limit=1`, {
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      if (sRes.ok) {
+        const sRows = await sRes.json();
+        if (Array.isArray(sRows) && sRows.length > 0) {
+          await syncSupabaseOrders(db, true).catch(() => {});
+          const matchedRef = sRows[0].order_ref || sRows[0].order_number || sRows[0].id;
+          order = db.prepare(getOrderSql).get(matchedRef, matchedRef, cldId, cldId);
+        }
+      }
+    } catch (_) {}
+  }
 
   if (!order) return res.status(404).json({ error: 'Order not found' });
 

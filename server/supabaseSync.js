@@ -101,7 +101,7 @@ async function fetchCloudOrderPayments() {
 /**
  * Persist an order payment verification (VERIFIED / REJECTED) into Supabase SYS-ORDER-PAYMENTS
  */
-async function pushOrderPaymentStatusToCloud(orderRef, paymentStatus, reasonOrNotes = null) {
+async function pushOrderPaymentStatusToCloud(orderRef, paymentStatus, reasonOrNotes = null, financialDetails = null) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !orderRef) return false;
   try {
     const cleanRef = String(orderRef).trim();
@@ -129,11 +129,30 @@ async function pushOrderPaymentStatusToCloud(orderRef, paymentStatus, reasonOrNo
     if (paymentStatus === 'VERIFIED') {
       if (!verified.includes(cleanRef)) verified.push(cleanRef);
       rejected = rejected.filter(r => r !== cleanRef);
-      details[cleanRef] = { status: 'VERIFIED', verified_at: new Date().toISOString(), notes: reasonOrNotes || 'Verified by Staff' };
+      details[cleanRef] = {
+        status: 'VERIFIED',
+        verified_at: new Date().toISOString(),
+        notes: reasonOrNotes || 'Verified by Staff',
+        ...(financialDetails || {})
+      };
     } else if (paymentStatus === 'REJECTED') {
       if (!rejected.includes(cleanRef)) rejected.push(cleanRef);
       verified = verified.filter(r => r !== cleanRef);
-      details[cleanRef] = { status: 'REJECTED', rejected_at: new Date().toISOString(), notes: reasonOrNotes || 'Payment rejected' };
+      details[cleanRef] = {
+        status: 'REJECTED',
+        rejected_at: new Date().toISOString(),
+        notes: reasonOrNotes || 'Payment rejected'
+      };
+    } else {
+      // PARTIAL / PENDING installment update
+      verified = verified.filter(r => r !== cleanRef);
+      rejected = rejected.filter(r => r !== cleanRef);
+      details[cleanRef] = {
+        status: paymentStatus,
+        updated_at: new Date().toISOString(),
+        notes: reasonOrNotes || 'Installment payment recorded',
+        ...(financialDetails || {})
+      };
     }
 
     const payloadNotes = JSON.stringify({
@@ -535,7 +554,7 @@ async function syncSupabaseOrders(db, force = false) {
 
   try {
     // 0. Fetch cloud payment verifications (guarantees payment approval sticks across all lambdas & clients)
-    const { verified: cloudVerifiedOrders, rejected: cloudRejectedOrders } = await fetchCloudOrderPayments();
+    const { verified: cloudVerifiedOrders, rejected: cloudRejectedOrders, details: cloudDetails } = await fetchCloudOrderPayments();
 
     // 1. Fetch cloud tombstones and sync into local deleted_orders table
     const { orders: cloudTombstones, purgedBefore } = await fetchCloudOrderTombstones();
@@ -679,7 +698,26 @@ async function syncSupabaseOrders(db, force = false) {
       }
 
       if (isPos) {
-        if (isPaid || isCloudVerified || paymentStatus === 'VERIFIED') {
+        const refKey = String(co.order_ref || co.order_number || co.id || '').trim();
+        const cDetail = (cloudDetails && (cloudDetails[refKey] || (co.id && cloudDetails[co.id]) || (co.order_number && cloudDetails[co.order_number]))) || null;
+        if (cDetail && cDetail.status === 'VERIFIED') {
+          isPaid = true;
+          amountPaidPaise = grandTotalPaise;
+          outstandingPaise = 0;
+          paymentStatus = 'VERIFIED';
+        } else if (cDetail && (cDetail.status === 'PARTIAL' || cDetail.outstanding_inr != null || cDetail.outstandingINR != null)) {
+          const outINR = cDetail.outstanding_inr != null ? cDetail.outstanding_inr : cDetail.outstandingINR;
+          const paidINR = cDetail.amount_paid_inr != null ? cDetail.amount_paid_inr : cDetail.amountPaidINR;
+          const advINR = cDetail.advance_paid_inr != null ? cDetail.advance_paid_inr : cDetail.advancePaidINR;
+          const secINR = cDetail.second_payment_inr != null ? cDetail.second_payment_inr : cDetail.secondPaymentINR;
+          const thdINR = cDetail.third_payment_inr != null ? cDetail.third_payment_inr : cDetail.thirdPaymentINR;
+          if (outINR != null) outstandingPaise = Math.round(Number(outINR) * 100);
+          if (paidINR != null) amountPaidPaise = Math.round(Number(paidINR) * 100);
+          if (advINR != null) advancePaidPaise = Math.round(Number(advINR) * 100);
+          if (secINR != null) secondPaymentPaise = Math.round(Number(secINR) * 100);
+          if (thdINR != null) thirdPaymentPaise = Math.round(Number(thdINR) * 100);
+          paymentStatus = (outstandingPaise === 0) ? 'VERIFIED' : (amountPaidPaise > 0 ? 'PARTIAL' : 'PENDING');
+        } else if (isPaid || isCloudVerified || paymentStatus === 'VERIFIED') {
           amountPaidPaise = grandTotalPaise;
           outstandingPaise = 0;
           paymentStatus = 'VERIFIED';
@@ -772,9 +810,18 @@ async function syncSupabaseOrders(db, force = false) {
           finalAmountPaid = grandTotalPaise;
           finalOutstanding = 0;
         } else if (isPos) {
+          // If local or cloud has higher payments recorded, preserve the highest progress
+          if (existing.amount_paid_paise > finalAmountPaid) {
+            finalAmountPaid = existing.amount_paid_paise;
+            finalOutstanding = Math.max(0, grandTotalPaise - finalAmountPaid);
+            finalPaymentStatus = (finalOutstanding === 0) ? 'VERIFIED' : 'PARTIAL';
+            if (existing.second_payment_paise > secondPaymentPaise) secondPaymentPaise = existing.second_payment_paise;
+            if (existing.third_payment_paise > thirdPaymentPaise) thirdPaymentPaise = existing.third_payment_paise;
+            if (existing.advance_paid_paise > advancePaidPaise) advancePaidPaise = existing.advance_paid_paise;
+          }
           // NEVER downgrade a locally-VERIFIED POS order. Cloud payment_status is RLS-blocked.
           // If local says VERIFIED, trust it unconditionally.
-          if (existing.payment_status === 'VERIFIED') {
+          if (existing.payment_status === 'VERIFIED' || finalPaymentStatus === 'VERIFIED') {
             finalPaymentStatus = 'VERIFIED';
             finalAmountPaid = existing.amount_paid_paise || grandTotalPaise;
             finalOutstanding = 0;
@@ -2183,6 +2230,8 @@ function startBackgroundSync(db, intervalMs = 10000) {
 }
 
 module.exports = {
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
   syncSupabaseOrders,
   invalidateOrderSyncCache,
   syncSupabaseCustomers,

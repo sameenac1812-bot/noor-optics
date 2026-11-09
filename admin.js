@@ -9107,7 +9107,12 @@
     const cpLiveDue = document.getElementById('cp-live-due-preview');
     const btnPayFull = document.getElementById('btn-cp-pay-full');
 
-    if (cpOrderId) cpOrderId.value = order.id;
+    const resolvedRef = order.order_number || order.order_ref || order.id;
+    if (cpOrderId) {
+      cpOrderId.value = resolvedRef;
+      cpOrderId.dataset.dbId = order.id || '';
+      cpOrderId.dataset.orderNumber = order.order_number || order.order_ref || '';
+    }
     if (cpCustName) cpCustName.textContent = order.customer_name || 'Walk-in Client';
     if (cpOrderInv) cpOrderInv.textContent = order.order_number || ('INV-' + order.id.slice(-4));
 
@@ -9223,7 +9228,9 @@
 
   window.handleCollectPaymentSubmit = async function (e) {
     if (e) e.preventDefault();
-    const orderId = document.getElementById('cp-order-id')?.value;
+    const cpIdEl = document.getElementById('cp-order-id');
+    const orderId = cpIdEl?.value;
+    const orderNumber = cpIdEl?.dataset?.orderNumber || orderId;
     const amountINR = parseFloat(document.getElementById('cp-amount-inr')?.value || 0) || 0;
     const stage = document.getElementById('cp-stage-select')?.value || 'installment';
     const paymentMethod = document.getElementById('cp-payment-method')?.value || 'CASH';
@@ -9246,9 +9253,10 @@
     }
 
     try {
-      const res = await apiFetch(`/api/pos/orders/${orderId}/collect-payment`, {
+      const res = await apiFetch(`/api/pos/orders/${encodeURIComponent(orderId)}/collect-payment`, {
         method: 'POST',
         body: JSON.stringify({
+          orderNumber,
           paymentStage: stage,
           amountINR,
           paymentMethod,
@@ -9258,7 +9266,12 @@
 
       // Update local cache immediately
       if (res.order && Array.isArray(state.ordersCache)) {
-        const idx = state.ordersCache.findIndex(o => o.id === orderId);
+        const targetRef = res.order.order_number || res.order.order_ref || orderId;
+        const idx = state.ordersCache.findIndex(o => 
+          o.id === orderId || 
+          o.order_number === orderId || 
+          (targetRef && (o.order_number === targetRef || o.order_ref === targetRef || o.id === targetRef))
+        );
         if (idx >= 0) {
           state.ordersCache[idx] = { ...state.ordersCache[idx], ...res.order };
         } else {
