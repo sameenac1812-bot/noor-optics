@@ -541,6 +541,98 @@ async function pushAllDeletedOrdersToCloudTombstone(orderRefs = []) {
 }
 
 /**
+ * Synchronize accurate multi-stage payments into SQLite payments table
+ */
+function syncOrderPaymentsInDb(db, orderId, isPos, paymentMethod, paymentStatus, grandTotalPaise, amountPaidPaise, advancePaidPaise, secondPaymentPaise, thirdPaymentPaise, resolvedUtr, orderDate) {
+  try {
+    const payMethod = paymentMethod || (isPos ? 'CASH' : 'UPI_GPAY');
+    const payRecordStatus = paymentStatus === 'VERIFIED' ? 'VERIFIED' : (paymentStatus === 'REJECTED' ? 'REJECTED' : (paymentStatus === 'PARTIAL' ? 'VERIFIED' : 'PENDING_VERIFICATION'));
+    const createdAt = orderDate || new Date().toISOString();
+
+    if (isPos) {
+      const hasStages = (advancePaidPaise > 0 || secondPaymentPaise > 0 || thirdPaymentPaise > 0);
+      if (hasStages) {
+        // Multi-stage installment POS order
+        if (advancePaidPaise > 0) {
+          const advId = 'pay-' + orderId + '-adv';
+          const existingAdv = db.prepare('SELECT id, amount_paise FROM payments WHERE id = ? OR (order_id = ? AND payment_stage = ?)').get(advId, orderId, 'advance');
+          if (!existingAdv) {
+            db.prepare(`
+              INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes, payment_stage, created_at)
+              VALUES (?, ?, ?, ?, 'VERIFIED', ?, 'Advance Payment', 'advance', ?)
+            `).run(advId, orderId, payMethod, advancePaidPaise, resolvedUtr || null, createdAt);
+          } else if (existingAdv.amount_paise !== advancePaidPaise) {
+            db.prepare(`
+              UPDATE payments SET amount_paise = ?, status = 'VERIFIED', notes = 'Advance Payment' WHERE id = ?
+            `).run(advancePaidPaise, existingAdv.id);
+          }
+        }
+        if (secondPaymentPaise > 0) {
+          const secId = 'pay-' + orderId + '-2nd';
+          const existingSec = db.prepare('SELECT id, amount_paise FROM payments WHERE id = ? OR (order_id = ? AND payment_stage = ?)').get(secId, orderId, 'second_payment');
+          if (!existingSec) {
+            db.prepare(`
+              INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes, payment_stage, created_at)
+              VALUES (?, ?, ?, ?, 'VERIFIED', ?, '2nd Payment', 'second_payment', ?)
+            `).run(secId, orderId, payMethod, secondPaymentPaise, resolvedUtr || null, createdAt);
+          } else if (existingSec.amount_paise !== secondPaymentPaise) {
+            db.prepare(`
+              UPDATE payments SET amount_paise = ?, status = 'VERIFIED', notes = '2nd Payment' WHERE id = ?
+            `).run(secondPaymentPaise, existingSec.id);
+          }
+        }
+        if (thirdPaymentPaise > 0) {
+          const thdId = 'pay-' + orderId + '-3rd';
+          const existingThd = db.prepare('SELECT id, amount_paise FROM payments WHERE id = ? OR (order_id = ? AND payment_stage = ?)').get(thdId, orderId, 'third_payment');
+          if (!existingThd) {
+            db.prepare(`
+              INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes, payment_stage, created_at)
+              VALUES (?, ?, ?, ?, 'VERIFIED', ?, '3rd Payment', 'third_payment', ?)
+            `).run(thdId, orderId, payMethod, thirdPaymentPaise, resolvedUtr || null, createdAt);
+          } else if (existingThd.amount_paise !== thirdPaymentPaise) {
+            db.prepare(`
+              UPDATE payments SET amount_paise = ?, status = 'VERIFIED', notes = '3rd Payment' WHERE id = ?
+            `).run(thirdPaymentPaise, existingThd.id);
+          }
+        }
+        // Remove legacy single row pay-orderId if it exists with grandTotalPaise and multi-stage rows exist
+        db.prepare("DELETE FROM payments WHERE id = ? AND id != ? AND id != ? AND id != ?").run('pay-' + orderId, 'pay-' + orderId + '-adv', 'pay-' + orderId + '-2nd', 'pay-' + orderId + '-3rd');
+        return;
+      }
+
+      // POS order with single full or deposit payment (no multiple installment breakdown)
+      const singlePayId = 'pay-' + orderId;
+      const existingPay = db.prepare('SELECT id, amount_paise FROM payments WHERE order_id = ?').get(orderId);
+      if (!existingPay) {
+        db.prepare(`
+          INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes, payment_stage, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'advance', ?)
+        `).run(singlePayId, orderId, payMethod, amountPaidPaise, payRecordStatus, resolvedUtr || null, `POS Payment (${paymentStatus})`, createdAt);
+      } else if (existingPay.amount_paise !== amountPaidPaise && amountPaidPaise > 0) {
+        db.prepare('UPDATE payments SET amount_paise = ?, status = ? WHERE id = ?').run(amountPaidPaise, payRecordStatus, existingPay.id);
+      }
+      return;
+    }
+
+    // Website orders
+    const webPayId = 'pay-' + orderId;
+    const existingWebPay = db.prepare('SELECT id, amount_paise, status FROM payments WHERE order_id = ?').get(orderId);
+    if (!existingWebPay) {
+      db.prepare(`
+        INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes, payment_stage, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'advance', ?)
+      `).run(webPayId, orderId, payMethod, amountPaidPaise, payRecordStatus, resolvedUtr || null, `Online Storefront Payment (${paymentStatus})`, createdAt);
+    } else {
+      db.prepare(`
+        UPDATE payments SET amount_paise = ?, status = ?, claimed_upi_ref = COALESCE(claimed_upi_ref, ?) WHERE id = ?
+      `).run(amountPaidPaise, payRecordStatus, resolvedUtr || null, existingWebPay.id);
+    }
+  } catch (err) {
+    console.warn(`[SupabaseSync] Error syncing payments for order ${orderId}:`, err.message);
+  }
+}
+
+/**
  * Sync orders from Supabase cloud into local SQLite database
  */
 async function syncSupabaseOrders(db, force = false) {
@@ -1006,17 +1098,12 @@ async function syncSupabaseOrders(db, force = false) {
           WHERE id = ?
         `).run(channel, channelCode, source, finalPaymentStatus, finalAmountPaid, advancePaidPaise, secondPaymentPaise, thirdPaymentPaise, finalOutstanding, resolvedUtr, existing.id);
 
-        // Ensure payments record exists without destroying existing multi-stage payments
-        try {
-          const payRecordStatus = finalPaymentStatus === 'VERIFIED' ? 'VERIFIED' : (finalPaymentStatus === 'REJECTED' ? 'REJECTED' : (finalPaymentStatus === 'PARTIAL' ? 'VERIFIED' : 'PENDING_VERIFICATION'));
-          const existingPay = db.prepare('SELECT id FROM payments WHERE order_id = ?').get(existing.id);
-          if (!existingPay) {
-            db.prepare(`
-              INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes)
-              VALUES (?, ?, ?, ?, ?, ?, ?)
-            `).run('pay-' + existing.id, existing.id, co.payment_method || (isPos ? 'CASH' : 'UPI_GPAY'), finalAmountPaid, payRecordStatus, resolvedUtr, `Synced Payment (${finalPaymentStatus})`);
-          }
-        } catch (_) {}
+        // Synchronize accurate multi-stage payments into payments table
+        syncOrderPaymentsInDb(
+          db, existing.id, isPos, co.payment_method, finalPaymentStatus,
+          grandTotalPaise, finalAmountPaid, advancePaidPaise, secondPaymentPaise, thirdPaymentPaise,
+          resolvedUtr, orderDate
+        );
 
         continue;
       }
@@ -1035,7 +1122,7 @@ async function syncSupabaseOrders(db, force = false) {
         insertOutstanding = 0;
       } else if (isPos && !isCloudVerified) {
         // For POS orders not explicitly verified in cloud: use computed values from Supabase data
-        insertPaymentStatus = amountPaidPaise >= grandTotalPaise ? 'VERIFIED' : (amountPaidPaise > 0 ? 'PARTIAL' : 'PENDING');
+        insertPaymentStatus = (insertOutstanding === 0 || insertAmountPaid >= grandTotalPaise) ? 'VERIFIED' : (insertAmountPaid > 0 ? 'PARTIAL' : 'PENDING');
       }
 
       db.prepare(`
@@ -1190,20 +1277,12 @@ async function syncSupabaseOrders(db, force = false) {
         } catch (_) {}
       }
 
-      // Record payment
-      try {
-        const payRecordStatus = paymentStatus === 'VERIFIED' ? 'VERIFIED' : (paymentStatus === 'REJECTED' ? 'REJECTED' : 'PENDING_VERIFICATION');
-        const payExists = db.prepare('SELECT id FROM payments WHERE order_id = ?').get(orderId);
-        if (!payExists) {
-          db.prepare(`
-            INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            'pay-' + orderId, orderId, co.payment_method || (isPos ? 'CASH' : 'UPI_GPAY'),
-            grandTotalPaise, payRecordStatus, resolvedUtr, `Online Storefront Payment (${paymentStatus})`
-          );
-        }
-      } catch (_) {}
+      // Synchronize accurate multi-stage payments into payments table
+      syncOrderPaymentsInDb(
+        db, orderId, isPos, co.payment_method, insertPaymentStatus,
+        grandTotalPaise, insertAmountPaid, advancePaidPaise, secondPaymentPaise, thirdPaymentPaise,
+        resolvedUtr, orderDate
+      );
 
       // Record invoice
       const invoiceNum = 'INV-' + co.order_ref;
@@ -1432,6 +1511,14 @@ async function pushOrderToSupabase(orderPayload) {
       
       if (payStatus === 'VERIFIED') {
         pushOrderPaymentStatusToCloud(orderRef, 'VERIFIED', 'POS Checkout Paid in Full').catch(() => {});
+      } else if (payStatus === 'PARTIAL' && isPosOrder) {
+        pushOrderPaymentStatusToCloud(orderRef, 'PARTIAL', 'In-Store POS Advance Payment', {
+          amountPaidINR: orderPayload.amountPaidINR != null ? orderPayload.amountPaidINR : (orderPayload.advancePaidINR || 0),
+          outstandingINR: orderPayload.outstandingINR != null ? orderPayload.outstandingINR : 0,
+          advancePaidINR: orderPayload.advancePaidINR != null ? orderPayload.advancePaidINR : 0,
+          secondPaymentINR: orderPayload.secondPaymentINR != null ? orderPayload.secondPaymentINR : 0,
+          thirdPaymentINR: orderPayload.thirdPaymentINR != null ? orderPayload.thirdPaymentINR : 0
+        }).catch(() => {});
       }
       
       // Auto-dispatch in-store POS bill to SYS-PRINT-QUEUE so the dedicated printer laptop prints it instantly!

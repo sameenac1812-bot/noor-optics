@@ -2247,6 +2247,14 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
 
     if (result.paymentStatus === 'VERIFIED') {
       pushOrderPaymentStatusToCloud(orderNumber, 'VERIFIED', 'In-Store POS Sale Paid in Full').catch(() => {});
+    } else if (result.paymentStatus === 'PARTIAL') {
+      pushOrderPaymentStatusToCloud(orderNumber, 'PARTIAL', 'In-Store POS Advance Payment', {
+        amountPaidINR: result.amountPaidINR,
+        outstandingINR: result.outstandingINR,
+        advancePaidINR: result.advancePaidINR,
+        secondPaymentINR: result.secondPaymentINR,
+        thirdPaymentINR: result.thirdPaymentINR
+      }).catch(() => {});
     }
 
     // Push customer to Supabase Cloud
@@ -3013,6 +3021,7 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
         third_payment_inr: (o.third_payment_paise || 0) / 100,
         outstanding_inr: (o.outstanding_paise || 0) / 100,
         previous_due_inr: (o.previous_due_paise || 0) / 100,
+        payment_status: ((o.outstanding_paise || 0) === 0 && (o.amount_paid_paise >= o.total_payable_paise)) ? 'VERIFIED' : o.payment_status,
         pickup_time: o.pickup_time || null,
         items: getItems.all(o.id).map(i => ({
           ...i,
@@ -3134,6 +3143,11 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), a
     rx_notes: order.rx_notes || (rx ? rx.notes : null),
     total_payable_inr: order.total_payable_paise / 100,
     amount_paid_inr: order.amount_paid_paise / 100,
+    advance_paid_inr: (order.advance_paid_paise || 0) / 100,
+    second_payment_inr: (order.second_payment_paise || 0) / 100,
+    third_payment_inr: (order.third_payment_paise || 0) / 100,
+    outstanding_inr: (order.outstanding_paise || 0) / 100,
+    payment_status: ((order.outstanding_paise || 0) === 0 && order.amount_paid_paise >= order.total_payable_paise) ? 'VERIFIED' : order.payment_status,
     prescriptions: (orderRxList && orderRxList.length > 0) ? orderRxList : (() => {
       const s = {
         id: order.prescription_id || (rx ? rx.id : null),
@@ -3155,7 +3169,63 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), a
   };
 
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
-  const payments = db.prepare('SELECT * FROM payments WHERE order_id = ?').all(order.id);
+  let rawPayments = db.prepare('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at ASC').all(order.id);
+
+  // If order is POS with explicit installments, ensure payments records match actual installments
+  if (order.channel === 'POS' && (order.advance_paid_paise > 0 || order.second_payment_paise > 0 || order.third_payment_paise > 0)) {
+    const hasBadPayment = rawPayments.some(p => p.payment_stage === 'advance' && p.amount_paise > order.advance_paid_paise && order.advance_paid_paise > 0);
+    const isMissingInstallment = (order.second_payment_paise > 0 && !rawPayments.some(p => p.payment_stage === 'second_payment')) ||
+                                 (order.third_payment_paise > 0 && !rawPayments.some(p => p.payment_stage === 'third_payment'));
+
+    if (hasBadPayment || isMissingInstallment || rawPayments.length === 0) {
+      const synPayments = [];
+      if (order.advance_paid_paise > 0) {
+        synPayments.push({
+          id: 'pay-' + order.id + '-adv',
+          order_id: order.id,
+          payment_method: order.payment_method || 'CASH',
+          amount_paise: order.advance_paid_paise,
+          amount_inr: order.advance_paid_paise / 100,
+          status: 'VERIFIED',
+          notes: 'Advance Payment',
+          payment_stage: 'advance',
+          created_at: order.created_at
+        });
+      }
+      if (order.second_payment_paise > 0) {
+        synPayments.push({
+          id: 'pay-' + order.id + '-2nd',
+          order_id: order.id,
+          payment_method: order.payment_method || 'CASH',
+          amount_paise: order.second_payment_paise,
+          amount_inr: order.second_payment_paise / 100,
+          status: 'VERIFIED',
+          notes: '2nd Payment',
+          payment_stage: 'second_payment',
+          created_at: order.updated_at || order.created_at
+        });
+      }
+      if (order.third_payment_paise > 0) {
+        synPayments.push({
+          id: 'pay-' + order.id + '-3rd',
+          order_id: order.id,
+          payment_method: order.payment_method || 'CASH',
+          amount_paise: order.third_payment_paise,
+          amount_inr: order.third_payment_paise / 100,
+          status: 'VERIFIED',
+          notes: '3rd Payment',
+          payment_stage: 'third_payment',
+          created_at: order.updated_at || order.created_at
+        });
+      }
+      rawPayments = synPayments;
+    }
+  }
+
+  const payments = rawPayments.map(p => ({
+    ...p,
+    amount_inr: p.amount_inr != null ? p.amount_inr : ((p.amount_paise || 0) / 100)
+  }));
   const printJobs = db.prepare('SELECT * FROM print_jobs WHERE order_id = ? ORDER BY created_at DESC').all(order.id);
 
   res.json({

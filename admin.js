@@ -797,6 +797,28 @@
         }
       } catch (_) {}
 
+      // Apply session recorded installment payments so collected payments NEVER revert on continuous poll
+      try {
+        const storedCollected = JSON.parse(sessionStorage.getItem('noor_collected_payments') || '{}');
+        if (Object.keys(storedCollected).length > 0) {
+          incoming.forEach(o => {
+            const key = o.order_number || o.order_ref || o.id;
+            const rec = storedCollected[key] || (o.id && storedCollected[o.id]);
+            if (rec) {
+              if (rec.amount_paid_inr != null && rec.amount_paid_inr >= (o.amount_paid_inr || 0)) {
+                o.amount_paid_inr = rec.amount_paid_inr;
+                o.amount_paid_paise = Math.round(rec.amount_paid_inr * 100);
+                o.outstanding_inr = rec.outstanding_inr;
+                o.outstanding_paise = Math.round(rec.outstanding_inr * 100);
+                o.payment_status = rec.payment_status;
+                if (rec.second_payment_inr != null) o.second_payment_inr = rec.second_payment_inr;
+                if (rec.third_payment_inr != null) o.third_payment_inr = rec.third_payment_inr;
+              }
+            }
+          });
+        }
+      } catch (_) {}
+
       // Strictly sort newest orders first
       incoming.sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a));
 
@@ -953,9 +975,11 @@
           const custName = o.customer_name || (orderChan === 'POS' ? 'Walk-in Client' : 'Online Client');
           const custPhone = o.customer_phone || '-';
           const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
-          const isFullyPaid = (o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') && o.payment_status !== 'PARTIAL';
-          const outstandingINR = isFullyPaid ? 0 : ((o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - ((o.amount_paid_paise || 0) / 100))));
-          const isDue = !isFullyPaid && ((outstandingINR > 0) || (o.payment_status === 'PARTIAL'));
+          const rawPaid = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
+          const rawDue = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - rawPaid));
+          const isFullyPaid = (rawDue <= 0 || rawPaid >= totalPayable) || ((o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') && o.payment_status !== 'PARTIAL');
+          const outstandingINR = isFullyPaid ? 0 : rawDue;
+          const isDue = (outstandingINR > 0) && !isFullyPaid;
           const hasRx = !!o.prescription_id || !!o.prescription_number || (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) || (o.od_sph != null || o.os_sph != null) || (o.prescription_pref === 'enter-rx') || (o.items && o.items[0] && (o.items[0].prescription || o.items[0].rx));
           const rxCount = (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) ? o.prescriptions.length : (hasRx ? 1 : 0);
           const utrCard = getOrderUtr(o);
@@ -1051,13 +1075,15 @@
           ? o.items.map(i => `${escapeHtml(i.product_name)} (${i.quantity})`).join(', ')
           : 'Optical Frame';
 
-        const isFullyPaidRow = (o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') && o.payment_status !== 'PARTIAL';
         const totalPayableRow = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
-        const amountPaidRow = isFullyPaidRow ? totalPayableRow : ((o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100));
-        const outstandingRow = isFullyPaidRow ? 0 : ((o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayableRow - amountPaidRow)));
-        const isDueRow = !isFullyPaidRow && ((outstandingRow > 0) || (o.payment_status === 'PARTIAL'));
+        const rawPaidRow = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
+        const rawDueRow = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayableRow - rawPaidRow));
+        const isFullyPaidRow = (rawDueRow <= 0 || rawPaidRow >= totalPayableRow) || ((o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') && o.payment_status !== 'PARTIAL');
+        const amountPaidRow = isFullyPaidRow ? totalPayableRow : rawPaidRow;
+        const outstandingRow = isFullyPaidRow ? 0 : rawDueRow;
+        const isDueRow = (outstandingRow > 0) && !isFullyPaidRow;
 
-        const paymentClass = o.payment_status === 'VERIFIED' ? 'status-verified' : (o.payment_status === 'REFUNDED' ? 'status-cancelled' : 'status-awaiting');
+        const paymentClass = (isFullyPaidRow || o.payment_status === 'VERIFIED') ? 'status-verified' : (o.payment_status === 'REFUNDED' ? 'status-cancelled' : 'status-awaiting');
         const orderClass = o.status === 'CONFIRMED' || o.status === 'DELIVERED' ? 'status-verified' : (o.status === 'CANCELLED' || o.status === 'REFUNDED' ? 'status-cancelled' : 'status-pending');
 
         return `
@@ -1091,7 +1117,7 @@
             <td>
               ${isDueRow
             ? `<span class="badge-status" style="background:#FEF2F2; color:#DC2626; border:1px solid #FECACA; font-weight:800;">₹${outstandingRow.toLocaleString('en-IN')} DUE</span>`
-            : `<span class="badge-status ${paymentClass}">${escapeHtml(o.payment_status)}</span>`
+            : `<span class="badge-status ${paymentClass}">${escapeHtml(isFullyPaidRow ? 'VERIFIED' : o.payment_status)}</span>`
           }
               ${(() => {
             const utr = getOrderUtr(o);
@@ -1115,7 +1141,7 @@
                   </div>
                 ` : ''}
                 <div style="display:flex; gap:4px; flex-wrap:wrap;">
-                  ${(getOrderChannel(o) === 'POS' && isDueRow) ? `<button class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800;" onclick="event.stopPropagation(); openCollectPaymentModal('${o.id}')" title="Collect Remaining Balance">💳 Collect</button>` : ''}
+                  ${(getOrderChannel(o) === 'POS' && isDueRow && outstandingRow > 0) ? `<button class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800;" onclick="event.stopPropagation(); openCollectPaymentModal('${o.id}')" title="Collect Remaining Balance">💳 Collect</button>` : ''}
                   <button class="btn-table-action" onclick="viewOrderDetails('${o.id}')" title="View Full Details">View</button>
                   <button class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="event.stopPropagation(); downloadInvoicePDF('${o.id}', '${escapeHtml(o.order_number)}')" title="Download Tax Invoice PDF">📄 Invoice</button>
                   <button class="btn-table-action" onclick="instantPrintReceipt('${o.id}', true)" title="Instant Spool Receipt">🖨️ Receipt</button>
@@ -8022,23 +8048,27 @@
         if (orders.length === 0) {
           ordersTbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:2rem; color:#9CA3AF;">No purchase history recorded for this client.</td></tr>`;
         } else {
-          ordersTbody.innerHTML = orders.map(o => `
+          ordersTbody.innerHTML = orders.map(o => {
+            const clDue = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, ((o.total_payable_paise || 0) / 100) - ((o.amount_paid_paise || 0) / 100)));
+            const clIsDue = (clDue > 0) && (o.payment_status !== 'VERIFIED');
+            return `
             <tr>
               <td><strong>${escapeHtml(o.order_number)}</strong></td>
               <td>${formatDateTime(o.created_at)}</td>
               <td>${o.items?.length || 1} frame(s)</td>
               <td><strong>${formatINR(o.total_payable_paise, true)}</strong></td>
-              <td>${(o.outstanding_inr > 0 || (o.payment_status !== 'VERIFIED' && o.payment_status !== 'REFUNDED')) ? `<span class="badge-due-red">Due: ₹${((o.outstanding_inr != null) ? o.outstanding_inr : ((o.total_payable_paise || 0) / 100)).toLocaleString('en-IN')}</span>` : `<span class="badge-status status-verified">PAID</span>`}</td>
+              <td>${clIsDue ? `<span class="badge-due-red">Due: ₹${clDue.toLocaleString('en-IN')}</span>` : `<span class="badge-status status-verified">PAID</span>`}</td>
               <td><span class="badge-status status-verified">${escapeHtml(o.status)}</span></td>
               <td>
                 <div style="display:flex; gap:4px;">
                   <button type="button" class="btn-table-action" onclick="viewOrderDetails('${o.id}')">View</button>
-                  ${(o.outstanding_inr > 0) ? `<button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:700;" onclick="openCollectPaymentModal('${o.id}')">💳 Pay</button>` : ''}
+                  ${clIsDue ? `<button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:700;" onclick="openCollectPaymentModal('${o.id}')">💳 Pay</button>` : ''}
                   <button type="button" class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="downloadInvoicePDF('${o.id}', '${escapeHtml(o.order_number)}')" title="Download Tax Invoice PDF">📄 Invoice</button>
                 </div>
               </td>
             </tr>
-          `).join('');
+          `;
+          }).join('');
         }
       }
 
@@ -9261,21 +9291,56 @@
   function renderPaymentHistoryIntoModal(order, paymentsList, cpHistoryBox, cpHistoryList) {
     if (!cpHistoryBox || !cpHistoryList) return;
     let historyItems = [];
+    const totalINR = (order.total_payable_inr != null) ? order.total_payable_inr : ((order.total_payable_paise || 0) / 100);
+    const paidINR = (order.amount_paid_inr != null) ? order.amount_paid_inr : ((order.amount_paid_paise || 0) / 100);
+    const advINR = (order.advance_paid_inr != null) ? order.advance_paid_inr : (order.advance_paid_paise ? (order.advance_paid_paise / 100) : 0);
+    const secINR = (order.second_payment_inr != null) ? order.second_payment_inr : (order.second_payment_paise ? (order.second_payment_paise / 100) : 0);
+    const thdINR = (order.third_payment_inr != null) ? order.third_payment_inr : (order.third_payment_paise ? (order.third_payment_paise / 100) : 0);
+
     if (Array.isArray(paymentsList) && paymentsList.length > 0) {
-      historyItems = paymentsList.map((p, idx) => ({
-        label: p.payment_stage || (idx === 0 ? 'Advance' : (idx === 1 ? '2nd Payment' : 'Installment')),
-        amount: p.amount_inr != null ? p.amount_inr : ((p.amount_paise || 0) / 100),
-        date: p.created_at ? formatDateTime(p.created_at) : '',
-        method: p.payment_method || 'CASH'
-      }));
+      historyItems = paymentsList.map((p, idx) => {
+        let label = p.notes || p.payment_stage || (idx === 0 ? 'Advance' : (idx === 1 ? '2nd Payment' : 'Installment'));
+        if (label === 'advance') label = 'Advance Payment';
+        else if (label === 'second_payment') label = '2nd Payment';
+        else if (label === 'third_payment') label = '3rd Payment';
+
+        let amt = p.amount_inr != null ? p.amount_inr : ((p.amount_paise || 0) / 100);
+        // If this is the advance stage and order records an explicit advance, ensure amount matches
+        if ((p.payment_stage === 'advance' || idx === 0) && advINR > 0 && amt > advINR && (order.outstanding_inr > 0 || order.outstanding_paise > 0)) {
+          amt = advINR;
+        }
+        return {
+          label,
+          amount: amt,
+          date: p.created_at ? formatDateTime(p.created_at) : '',
+          method: p.payment_method || 'CASH'
+        };
+      });
+
+      // If paymentsList is missing 2nd or 3rd installments recorded on the order, append them
+      const has2nd = paymentsList.some(p => p.payment_stage === 'second_payment' || (p.notes && p.notes.includes('2nd')));
+      const has3rd = paymentsList.some(p => p.payment_stage === 'third_payment' || (p.notes && p.notes.includes('3rd')));
+      if (secINR > 0 && !has2nd) {
+        historyItems.push({
+          label: '2nd Payment',
+          amount: secINR,
+          date: formatDateTime(order.second_payment_date || order.updated_at || order.created_at),
+          method: 'CASH'
+        });
+      }
+      if (thdINR > 0 && !has3rd) {
+        historyItems.push({
+          label: '3rd Payment',
+          amount: thdINR,
+          date: formatDateTime(order.third_payment_date || order.updated_at || order.created_at),
+          method: 'CASH'
+        });
+      }
     } else {
-      const paidINR = (order.amount_paid_inr != null) ? order.amount_paid_inr : ((order.amount_paid_paise || 0) / 100);
-      const adv = (order.advance_paid_inr != null) ? order.advance_paid_inr : (order.advance_paid_paise ? order.advance_paid_paise / 100 : Math.max(0, paidINR - (order.second_payment_inr || 0) - (order.third_payment_inr || 0)));
-      const sec = (order.second_payment_inr != null) ? order.second_payment_inr : ((order.second_payment_paise || 0) / 100);
-      const thd = (order.third_payment_inr != null) ? order.third_payment_inr : ((order.third_payment_paise || 0) / 100);
+      const adv = advINR > 0 ? advINR : Math.max(0, paidINR - secINR - thdINR);
       if (adv > 0) historyItems.push({ label: 'Advance Payment', amount: adv, date: formatDateTime(order.created_at), method: 'CASH' });
-      if (sec > 0) historyItems.push({ label: '2nd Payment', amount: sec, date: formatDateTime(order.second_payment_date || order.updated_at), method: 'CASH' });
-      if (thd > 0) historyItems.push({ label: '3rd Payment', amount: thd, date: formatDateTime(order.third_payment_date || order.updated_at), method: 'CASH' });
+      if (secINR > 0) historyItems.push({ label: '2nd Payment', amount: secINR, date: formatDateTime(order.second_payment_date || order.updated_at), method: 'CASH' });
+      if (thdINR > 0) historyItems.push({ label: '3rd Payment', amount: thdINR, date: formatDateTime(order.third_payment_date || order.updated_at), method: 'CASH' });
     }
 
     if (historyItems.length > 0) {
@@ -9316,12 +9381,20 @@
     if (cpOrderInv) cpOrderInv.textContent = order.order_number || ('INV-' + order.id.slice(-4));
 
     const totalINR = (order.total_payable_inr != null) ? order.total_payable_inr : ((order.total_payable_paise || 0) / 100);
-    const paidINR = (order.amount_paid_inr != null) ? order.amount_paid_inr : ((order.amount_paid_paise || 0) / 100);
-    const remainingINR = (order.outstanding_inr != null) ? order.outstanding_inr : (order.outstanding_paise != null ? (order.outstanding_paise / 100) : Math.max(0, totalINR - paidINR));
+    const rawPaid = (order.amount_paid_inr != null) ? order.amount_paid_inr : ((order.amount_paid_paise || 0) / 100);
+    const isPaidInFull = (order.payment_status === 'VERIFIED') || (rawPaid >= totalINR && totalINR > 0);
+    const paidINR = isPaidInFull ? totalINR : rawPaid;
+    const remainingINR = isPaidInFull ? 0 : Math.max(0, Math.min(totalINR - paidINR, (order.outstanding_inr != null) ? order.outstanding_inr : (order.outstanding_paise != null ? (order.outstanding_paise / 100) : (totalINR - paidINR))));
 
     if (cpTotalBill) cpTotalBill.textContent = '₹ ' + totalINR.toLocaleString('en-IN');
     if (cpPaidSofar) cpPaidSofar.textContent = '₹ ' + paidINR.toLocaleString('en-IN');
-    if (cpRemainingDue) cpRemainingDue.textContent = '₹ ' + remainingINR.toLocaleString('en-IN');
+    if (cpRemainingDue) {
+      if (remainingINR === 0) {
+        cpRemainingDue.innerHTML = '<span style="color:#16A34A; font-weight:800;">₹ 0 (PAID IN FULL ✓)</span>';
+      } else {
+        cpRemainingDue.innerHTML = '₹ ' + remainingINR.toLocaleString('en-IN');
+      }
+    }
 
     // 1. Initial render of payment history
     renderPaymentHistoryIntoModal(order, order.payments, cpHistoryBox, cpHistoryList);
@@ -9342,28 +9415,39 @@
 
     // 3. Pre-fill amount with exact balance and wire live calculation
     if (cpAmountInput) {
-      cpAmountInput.value = remainingINR > 0 ? remainingINR : '';
-      const updatePreview = () => {
-        const val = parseFloat(cpAmountInput.value || 0) || 0;
-        const newDue = Math.max(0, remainingINR - val);
-        if (newDue === 0 && val > 0) {
-          if (cpLiveDue) cpLiveDue.innerHTML = `New Balance: <span style="color:#16A34A; font-weight:800;">₹ 0 (PAID IN FULL ✓)</span>`;
-        } else {
-          if (cpLiveDue) cpLiveDue.innerHTML = `New Balance: <strong style="color:#B91C1C;">₹ ${newDue.toLocaleString('en-IN')}</strong>`;
-        }
-      };
-      cpAmountInput.oninput = updatePreview;
-      updatePreview();
+      if (remainingINR === 0) {
+        cpAmountInput.value = '';
+        cpAmountInput.placeholder = '0 (Fully Settled)';
+        if (cpLiveDue) cpLiveDue.innerHTML = '<span style="color:#16A34A; font-weight:800;">Order is already settled in full ✓</span>';
+      } else {
+        cpAmountInput.value = remainingINR;
+        const updatePreview = () => {
+          const val = parseFloat(cpAmountInput.value || 0) || 0;
+          const newDue = Math.max(0, remainingINR - val);
+          if (newDue === 0 && val > 0) {
+            if (cpLiveDue) cpLiveDue.innerHTML = `New Balance: <span style="color:#16A34A; font-weight:800;">₹ 0 (PAID IN FULL ✓)</span>`;
+          } else {
+            if (cpLiveDue) cpLiveDue.innerHTML = `New Balance: <strong style="color:#B91C1C;">₹ ${newDue.toLocaleString('en-IN')}</strong>`;
+          }
+        };
+        cpAmountInput.oninput = updatePreview;
+        updatePreview();
+      }
     }
 
     // 4. Wire quick Pay Full Due button
     if (btnPayFull) {
-      btnPayFull.onclick = () => {
-        if (cpAmountInput) {
-          cpAmountInput.value = remainingINR;
-          cpAmountInput.dispatchEvent(new Event('input'));
-        }
-      };
+      if (remainingINR === 0) {
+        btnPayFull.style.display = 'none';
+      } else {
+        btnPayFull.style.display = 'inline-block';
+        btnPayFull.onclick = () => {
+          if (cpAmountInput) {
+            cpAmountInput.value = remainingINR;
+            cpAmountInput.dispatchEvent(new Event('input'));
+          }
+        };
+      }
     }
 
     // Allow backdrop click to dismiss
@@ -9477,6 +9561,20 @@
           state.ordersCache.unshift(res.order);
         }
       }
+
+      // Persist to session storage so continuous polls never revert this collected payment
+      try {
+        const storedCollected = JSON.parse(sessionStorage.getItem('noor_collected_payments') || '{}');
+        const key = (res.order && (res.order.order_number || res.order.order_ref || res.order.id)) || orderId;
+        storedCollected[key] = {
+          amount_paid_inr: res.order ? res.order.amount_paid_inr : null,
+          outstanding_inr: res.remaining_due_inr != null ? res.remaining_due_inr : 0,
+          payment_status: (res.remaining_due_inr === 0) ? 'VERIFIED' : 'PARTIAL',
+          second_payment_inr: res.order ? res.order.second_payment_inr : null,
+          third_payment_inr: res.order ? res.order.third_payment_inr : null
+        };
+        sessionStorage.setItem('noor_collected_payments', JSON.stringify(storedCollected));
+      } catch (_) {}
 
       // Re-render orders tab in real-time
       if (typeof renderOrdersTable === 'function') {
