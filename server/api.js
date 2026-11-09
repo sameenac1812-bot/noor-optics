@@ -2883,11 +2883,7 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
     res.setHeader('Expires', '0');
 
     const forceSync = req.query.force === '1' || req.query.force === 'true';
-    if (forceSync) {
-      await syncSupabaseOrders(db, true).catch(() => {});
-    } else {
-      syncSupabaseOrders(db, false).catch(() => {});
-    }
+    await syncSupabaseOrders(db, forceSync).catch(err => console.warn('[SupabaseSync] GET /orders sync note:', err.message));
 
     const { channel, paymentStatus, status, limit = 300 } = req.query;
 
@@ -3190,11 +3186,11 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
           amount_paid_paise = total_payable_paise,
           outstanding_paise = 0,
           updated_at = datetime('now')
-        WHERE id = ?
-      `).run(orderId);
-      db.prepare("UPDATE payments SET status = 'VERIFIED', notes = COALESCE(notes, '') || ' | Verified by Staff' WHERE order_id = ?").run(orderId);
-      db.prepare("UPDATE invoices SET payment_status = 'VERIFIED', amount_paid_paise = grand_total_paise WHERE order_id = ?").run(orderId);
-      const approvedOrd = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+        WHERE id = ? OR order_number = ?
+      `).run(orderId, orderId);
+      db.prepare("UPDATE payments SET status = 'VERIFIED', notes = COALESCE(notes, '') || ' | Verified by Staff' WHERE order_id = ? OR order_id IN (SELECT id FROM orders WHERE order_number = ?)").run(orderId, orderId);
+      db.prepare("UPDATE invoices SET payment_status = 'VERIFIED', amount_paid_paise = grand_total_paise WHERE order_id = ? OR order_id IN (SELECT id FROM orders WHERE order_number = ?)").run(orderId, orderId);
+      const approvedOrd = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ?').get(orderId, orderId);
       if (approvedOrd) {
         enqueuePrintJob(approvedOrd.id, approvedOrd.token_number, 'BILL');
       }
@@ -3204,20 +3200,23 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
           payment_status = 'REJECTED',
           notes = CASE WHEN notes IS NOT NULL THEN notes || ' | ' || ? ELSE ? END,
           updated_at = datetime('now')
-        WHERE id = ?
-      `).run(reasonOrNotes || 'Payment rejected / UTR mismatch', reasonOrNotes || 'Payment rejected / UTR mismatch', orderId);
-      db.prepare("UPDATE payments SET status = 'REJECTED', notes = ? WHERE order_id = ?").run(reasonOrNotes || 'Payment rejected / UTR mismatch', orderId);
+        WHERE id = ? OR order_number = ?
+      `).run(reasonOrNotes || 'Payment rejected / UTR mismatch', reasonOrNotes || 'Payment rejected / UTR mismatch', orderId, orderId);
+      db.prepare("UPDATE payments SET status = 'REJECTED', notes = ? WHERE order_id = ? OR order_id IN (SELECT id FROM orders WHERE order_number = ?)").run(reasonOrNotes || 'Payment rejected / UTR mismatch', orderId, orderId);
     } else {
-      db.prepare("UPDATE orders SET payment_status = ?, updated_at = datetime('now') WHERE id = ?").run(paymentStatus, orderId);
+      db.prepare("UPDATE orders SET payment_status = ?, updated_at = datetime('now') WHERE id = ? OR order_number = ?").run(paymentStatus, orderId, orderId);
     }
 
     // Sync updated payment status to cloud Supabase SYS-ORDER-PAYMENTS (guaranteed cloud persistence)
     try {
-      const ord = db.prepare('SELECT order_number FROM orders WHERE id = ?').get(orderId);
+      const ord = db.prepare('SELECT order_number FROM orders WHERE id = ? OR order_number = ?').get(orderId, orderId);
       if (ord && ord.order_number) {
         await pushOrderPaymentStatusToCloud(ord.order_number, paymentStatus, reasonOrNotes);
       }
     } catch (_) {}
+    if (typeof invalidateOrderSyncCache === 'function') {
+      invalidateOrderSyncCache();
+    }
   }
 
   if (status) {
@@ -3532,6 +3531,12 @@ router.post('/payments/:id/verify', authenticateToken, requirePermission('paymen
 
   try {
     const result = verifyTx();
+    if (result && result.orderNumber) {
+      pushOrderPaymentStatusToCloud(result.orderNumber, action === 'VERIFY' ? 'VERIFIED' : 'REJECTED', reasonOrNotes).catch(() => {});
+      if (typeof invalidateOrderSyncCache === 'function') {
+        invalidateOrderSyncCache();
+      }
+    }
     logAudit(req.user.id, req.user.email, action === 'VERIFY' ? 'PAYMENT_VERIFIED' : 'PAYMENT_REJECTED', 'PAYMENT', paymentId, result, req);
     res.json({ success: true, ...result });
   } catch (err) {

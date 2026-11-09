@@ -473,7 +473,7 @@
     try {
       // 1. Ensure ordersCache is initialized
       if (!state.hasInitializedOrders && typeof loadOrders === 'function') {
-        await loadOrders(true);
+        await loadOrders(true, true);
       }
 
       // 2. Fetch inventory metrics from overview API
@@ -779,6 +779,24 @@
         return true;
       });
 
+      // Apply session verified UPI orders so approved orders NEVER revert
+      try {
+        const storedVerified = JSON.parse(sessionStorage.getItem('noor_verified_upi_orders') || '[]');
+        if (storedVerified.length > 0) {
+          const verifiedSet = new Set(storedVerified);
+          incoming.forEach(o => {
+            if (verifiedSet.has(o.order_number) || verifiedSet.has(o.id) || verifiedSet.has(o.order_ref)) {
+              o.payment_status = 'VERIFIED';
+              o.status = 'CONFIRMED';
+              o.outstanding_paise = 0;
+              o.outstanding_inr = 0;
+              o.amount_paid_paise = o.total_payable_paise || (o.total_payable_inr ? Math.round(o.total_payable_inr * 100) : 0);
+              o.amount_paid_inr = o.amount_paid_paise / 100;
+            }
+          });
+        }
+      } catch (_) {}
+
       // Strictly sort newest orders first
       incoming.sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a));
 
@@ -811,7 +829,12 @@
         showToast(`🔔 New ${chanLabel} Order #${topNew.order_number || topNew.id} (${topNew.customer_name || 'Client'})`, 'success');
       }
 
-      state.ordersCache = incoming;
+      if (Array.isArray(incoming) && incoming.length === 0 && state.ordersCache && state.ordersCache.length > 0 && !forceCloudSync) {
+        // Protect against transient network glitch or cold start blanking out ordersCache
+        console.warn('[loadOrders] Received empty list during background poll; retaining existing ordersCache');
+      } else {
+        state.ordersCache = incoming;
+      }
       renderOrdersTable();
       if (!silent) loadClients(true);
 
@@ -1346,6 +1369,14 @@
       const order = (state.ordersCache || []).find(o => o.id === orderId || o.order_number === orderId);
       const orderRef = order?.order_number || order?.order_ref || orderId;
 
+      // 0. Persist verified status to session storage so it NEVER reverts to VERIFY UPI
+      try {
+        const stored = JSON.parse(sessionStorage.getItem('noor_verified_upi_orders') || '[]');
+        if (orderRef && !stored.includes(orderRef)) stored.push(orderRef);
+        if (orderId && !stored.includes(orderId)) stored.push(orderId);
+        sessionStorage.setItem('noor_verified_upi_orders', JSON.stringify(stored));
+      } catch (_) { }
+
       // 1. Immediate zero-latency UI update
       if (order) {
         order.payment_status = 'VERIFIED';
@@ -1382,7 +1413,7 @@
       if (modal && modal.classList.contains('open')) {
         modal.classList.remove('open');
       }
-      await loadOrders(true);
+      await loadOrders(true, true);
       if (typeof loadDashboard === 'function') loadDashboard();
     } catch (err) {
       showToast('Verification failed: ' + err.message, 'error');
@@ -1422,7 +1453,7 @@
       if (modal && modal.classList.contains('open')) {
         modal.classList.remove('open');
       }
-      await loadOrders(true);
+      await loadOrders(true, true);
       if (typeof loadDashboard === 'function') loadDashboard();
     } catch (err) {
       showToast('Rejection failed: ' + err.message, 'error');
@@ -2446,7 +2477,7 @@
       if (detailsModal) detailsModal.classList.remove('open');
 
       // Refresh data across orders, dashboard, and inventory
-      await loadOrders(true);
+      await loadOrders(true, true);
       if (typeof loadDashboard === 'function') loadDashboard();
       if (typeof loadInventory === 'function') loadInventory();
     } catch (err) {
@@ -2500,7 +2531,7 @@
       const res = await apiFetch(url, { method: 'DELETE' });
       showToast(res.message || 'Orders deleted successfully.', 'success');
 
-      await loadOrders(true);
+      await loadOrders(true, true);
       if (typeof loadDashboard === 'function') loadDashboard();
       if (typeof loadInventory === 'function') loadInventory();
     } catch (err) {
