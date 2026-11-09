@@ -14,7 +14,7 @@ let lastProductSyncTime = 0;
 const PRODUCT_SYNC_CACHE_MS = 15000;
 
 let lastOrderSyncTime = 0;
-const ORDER_SYNC_CACHE_MS = 4000;
+const ORDER_SYNC_CACHE_MS = 2000;
 
 function invalidateProductSyncCache() {
   lastProductSyncTime = 0;

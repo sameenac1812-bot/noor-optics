@@ -230,8 +230,11 @@
     if (!(options.body instanceof FormData) && !headers['Content-Type']) {
       headers['Content-Type'] = 'application/json';
     }
+    headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+    headers['Pragma'] = 'no-cache';
 
     const config = {
+      cache: 'no-store',
       ...options,
       headers
     };
@@ -750,13 +753,17 @@
   // ═══════════════════════════════════════════════════════════════════════════
   state.knownOrderIds = new Set();
   state.hasInitializedOrders = false;
+  let _isOrdersLoading = false;
 
-  async function loadOrders(silent = false) {
+  async function loadOrders(silent = false, forceCloudSync = false) {
+    if (_isOrdersLoading) return;
+    _isOrdersLoading = true;
     try {
       // Clear legacy purge timestamp so historical orders never disappear
       try { localStorage.removeItem('noor_orders_purged_at'); } catch (_) { }
 
-      const res = await apiFetch('/api/orders?limit=300');
+      const url = `/api/orders?limit=300&_t=${Date.now()}${forceCloudSync ? '&force=1' : ''}`;
+      const res = await apiFetch(url);
       let incoming = Array.isArray(res) ? res : (res.orders || []);
 
       // Filter against persistent tombstones
@@ -775,17 +782,43 @@
       // Strictly sort newest orders first
       incoming.sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a));
 
-      // Record known order IDs quietly. Audio chime is handled centrally by NoorSupabase.realtime event stream.
-      if (!state.hasInitializedOrders) {
-        incoming.forEach(o => state.knownOrderIds.add(o.id));
-        state.hasInitializedOrders = true;
-      } else {
-        incoming.forEach(o => state.knownOrderIds.add(o.id));
+      // Detect brand new incoming orders that arrived since last continuous refresh!
+      const newOrders = [];
+      if (state.hasInitializedOrders) {
+        for (const o of incoming) {
+          const k1 = o.id ? String(o.id) : null;
+          const k2 = o.order_number ? String(o.order_number) : null;
+          const k3 = o.order_ref ? String(o.order_ref) : null;
+          if ((!k1 || !state.knownOrderIds.has(k1)) && (!k2 || !state.knownOrderIds.has(k2)) && (!k3 || !state.knownOrderIds.has(k3))) {
+            newOrders.push(o);
+          }
+        }
+      }
+
+      // Record known IDs
+      incoming.forEach(o => {
+        if (o.id) state.knownOrderIds.add(String(o.id));
+        if (o.order_number) state.knownOrderIds.add(String(o.order_number));
+        if (o.order_ref) state.knownOrderIds.add(String(o.order_ref));
+      });
+      state.hasInitializedOrders = true;
+
+      // Notify and chime whenever a new order arrives via continuous sync!
+      if (newOrders.length > 0) {
+        playOrderChime();
+        const topNew = newOrders[0];
+        const chanLabel = getOrderChannel(topNew) === 'POS' ? '🏪 In-Store' : '🌐 Website';
+        showToast(`🔔 New ${chanLabel} Order #${topNew.order_number || topNew.id} (${topNew.customer_name || 'Client'})`, 'success');
       }
 
       state.ordersCache = incoming;
       renderOrdersTable();
-      loadClients(true);
+      if (!silent) loadClients(true);
+
+      // If viewing dashboard, keep dashboard figures 100% synchronized in real time
+      if (state.activeNav === 'dashboard' && typeof renderDashCards === 'function') {
+        loadDashboard(true);
+      }
 
       // Update live order count badge on desktop sidebar and mobile bottom nav
       const totalCount = incoming.length;
@@ -799,11 +832,20 @@
         mobBadge.textContent = totalCount;
         mobBadge.style.display = totalCount > 0 ? 'inline-block' : 'none';
       }
+
+      // Animate live sync badge to indicate successful continuous refresh
+      const liveDot = document.getElementById('live-sync-dot');
+      if (liveDot) {
+        liveDot.style.opacity = '0.35';
+        setTimeout(() => { if (liveDot) liveDot.style.opacity = '1'; }, 180);
+      }
     } catch (err) {
       if (!silent) {
         console.error('Failed to load orders:', err);
         showToast('Error loading orders: ' + err.message, 'error');
       }
+    } finally {
+      _isOrdersLoading = false;
     }
   }
 
@@ -8964,12 +9006,59 @@
     setupPrescriptionModal();
     setupDiopterSelector();
 
-    // Real-time constant orders polling: loads orders instantly as placed, with audio ring and auto-bill printout
+    // Continuous Live Auto-Refresh (polls every 2.5s): loads orders instantly as placed with chime & visual sync
     setInterval(() => {
       if (state.token) {
         loadOrders(true);
       }
-    }, 3000);
+    }, 2500);
+
+    // Instant wake-up refresh on browser tab visibility or window focus
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && state.token) {
+        loadOrders(true, true);
+        if (state.activeNav === 'dashboard' && typeof renderDashCards === 'function') loadDashboard(true);
+      }
+    });
+    window.addEventListener('focus', () => {
+      if (state.token) {
+        loadOrders(true, true);
+      }
+    });
+
+    // Wire Orders View Manual Refresh Button
+    const btnRefreshOrders = document.getElementById('btn-refresh-orders');
+    const iconRefreshOrders = document.getElementById('icon-refresh-orders');
+    if (btnRefreshOrders) {
+      btnRefreshOrders.addEventListener('click', async () => {
+        if (iconRefreshOrders) iconRefreshOrders.classList.add('spin-fast');
+        showToast('🔄 Syncing orders from cloud...', 'info');
+        try {
+          await loadOrders(false, true);
+          showToast('✓ Orders up to date!', 'success');
+        } finally {
+          if (iconRefreshOrders) {
+            setTimeout(() => iconRefreshOrders.classList.remove('spin-fast'), 600);
+          }
+        }
+      });
+    }
+
+    // Wire Top Header Live Sync Badge (Clickable for Instant Live Refresh)
+    const liveSyncBadge = document.getElementById('live-sync-badge');
+    if (liveSyncBadge) {
+      liveSyncBadge.addEventListener('click', async () => {
+        const liveDot = document.getElementById('live-sync-dot');
+        if (liveDot) liveDot.style.background = '#F59E0B';
+        showToast('🔄 Live sync: Refreshing all orders...', 'info');
+        try {
+          await loadOrders(false, true);
+          showToast('✓ Live sync refreshed!', 'success');
+        } finally {
+          if (liveDot) liveDot.style.background = '#22C55E';
+        }
+      });
+    }
 
     // Monitor POS Print Daemon on Port 5001
     checkDaemonStatus();

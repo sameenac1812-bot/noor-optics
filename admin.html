@@ -177,6 +177,12 @@
           </div>
         </div>
         <div class="header-actions">
+          <div class="live-sync-badge" id="live-sync-badge" title="Live Continuous Auto-Refresh is ACTIVE (continuous sync every 2.5s). Click to refresh now."
+            style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:#F0FDF4; border:1px solid #BBF7D0; border-radius:99px; font-size:0.75rem; font-weight:700; color:#15803D; cursor:pointer; user-select:none; transition:all 0.2s ease;">
+            <span id="live-sync-dot" class="live-sync-dot-active"
+              style="width:8px; height:8px; border-radius:50%; background:#22C55E; display:inline-block;"></span>
+            <span id="live-sync-label">Live Sync: ON</span>
+          </div>
           <div class="daemon-status-badge" id="daemon-status-badge" title="POS Print Daemon (Port 5001)"
             style="display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:99px; font-size:0.75rem; font-weight:700; color:#475569; transition:all 0.2s ease;">
             <span id="daemon-indicator-dot"
@@ -677,6 +683,13 @@
                   <polyline points="14 2 14 8 20 8" />
                 </svg>
                 <span>Saved Bills</span>
+              </button>
+              <button type="button" class="optic-tab-pill secondary" id="btn-refresh-orders" title="Instantly fetch latest orders from cloud & in-store POS">
+                <svg id="icon-refresh-orders" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="transition:transform 0.4s ease;">
+                  <polyline points="23 4 23 10 17 10" />
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+                <span id="label-refresh-orders">Refresh Orders</span>
               </button>
               <button type="button" class="optic-tab-pill secondary" id="btn-orders-new-bill"
                 onclick="switchNav('pos')">

@@ -2247,6 +2247,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       }).catch(err => console.warn('[SupabaseSync] Push POS rx note:', err.message));
     }
 
+    invalidateOrderSyncCache();
     res.json({ success: true, ...result });
   } catch (err) {
     console.error('[POS Checkout Error]:', err.message);
@@ -2411,6 +2412,7 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     payment_status: newPaymentStatus
   };
 
+  invalidateOrderSyncCache();
   res.json({
     success: true,
     message: `Payment of Rs.${(paymentPaise / 100).toLocaleString('en-IN')} recorded successfully!`,
@@ -2824,6 +2826,7 @@ router.post('/orders/online', (req, res) => {
       }).catch(err => console.warn('[SupabaseSync] Push rx note:', err.message));
     }
 
+    invalidateOrderSyncCache();
     res.json({ success: true, ...result, customerId: createdCustomerId, prescriptionId: createdPrescriptionId });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -2836,8 +2839,13 @@ router.post('/orders/online', (req, res) => {
 
 router.get('/orders', authenticateToken, requirePermission('orders:view'), async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    const forceSync = req.query.force === '1' || req.query.force === 'true';
     // Sync incoming cloud orders so mobile phone orders appear immediately
-    await syncSupabaseOrders(db).catch(() => {});
+    await syncSupabaseOrders(db, forceSync).catch(() => {});
 
     const { channel, paymentStatus, status, limit = 300 } = req.query;
 
