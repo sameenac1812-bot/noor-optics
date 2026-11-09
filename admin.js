@@ -6434,6 +6434,17 @@
       });
     }
 
+    // Real-time synchronization for POS inline customer name
+    const inlineNameInput = document.getElementById('pos-inline-name');
+    if (inlineNameInput) {
+      inlineNameInput.addEventListener('input', () => {
+        const val = inlineNameInput.value.trim();
+        if (state.posSelectedClient) {
+          state.posSelectedClient.name = val;
+        }
+      });
+    }
+
     // Manual item entry handler
     const addManualItem = () => {
       const name = (manualNameInput?.value || '').trim();
@@ -7586,7 +7597,7 @@
     const SUPABASE_URL = 'https://czajxtgwsxbrrymrhauz.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk';
     try {
-      await fetch(`${SUPABASE_URL}/rest/v1/customers?id=not.is.null`, {
+      await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=not.like.SYS-*&id=not.like.sys-*&id=not.like.tombstone-*`, {
         method: 'DELETE',
         headers: {
           'apikey': SUPABASE_ANON_KEY,
@@ -7617,11 +7628,11 @@
 
       serverClients = serverClients.filter(c => {
         if (deletedSet.has(c.id)) return false;
-        if (c.phone && deletedSet.has(c.phone)) return false;
+        if (c.phone && (deletedSet.has(c.phone) || deletedSet.has(c.phone.replace('+91', '').trim()))) return false;
         if (c.name && deletedSet.has(c.name.toLowerCase())) return false;
         if (purgedAt > 0 && c.created_at) {
-          const clientTime = new Date(c.created_at).getTime();
-          if (clientTime < purgedAt) return false;
+          const clientTime = new Date(String(c.created_at).replace(' ', 'T')).getTime();
+          if (!isNaN(clientTime) && clientTime <= purgedAt) return false;
         }
         return true;
       });
@@ -7745,9 +7756,12 @@
 
       // 1. Tombstone all currently loaded clients in localStorage
       const allTokens = [];
-      state.clientsCache.forEach(c => {
+      (state.clientsCache || []).forEach(c => {
         if (c.id) allTokens.push(c.id);
-        if (c.phone) allTokens.push(c.phone);
+        if (c.phone) {
+          allTokens.push(c.phone);
+          allTokens.push(c.phone.replace('+91', '').trim());
+        }
         if (c.name) allTokens.push(c.name.toLowerCase());
       });
       localStorage.setItem('noor_deleted_clients', JSON.stringify(allTokens));
@@ -7756,6 +7770,8 @@
 
       // 2. Clear state and update UI immediately
       state.clientsCache = [];
+      state.posSelectedClient = null;
+      clearPosInlineCustomer();
       renderClientsTableUI();
 
       // 3. Delete via backend API
@@ -7770,6 +7786,8 @@
       loadClients(true);
     } catch (err) {
       directDeleteAllSupabaseCustomers().catch(console.warn);
+      state.posSelectedClient = null;
+      clearPosInlineCustomer();
       showToast('All clients deleted.', 'success');
       loadClients(true);
     }

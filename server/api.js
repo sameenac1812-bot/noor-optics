@@ -1057,6 +1057,8 @@ router.get('/customers', authenticateToken, async (req, res) => {
     WHERE 1=1
       AND (c.client_code IS NULL OR c.client_code NOT LIKE 'SYS-%')
       AND c.id NOT IN (SELECT customer_id FROM deleted_customers WHERE customer_id IS NOT NULL)
+      AND (c.phone IS NULL OR c.phone NOT IN (SELECT phone FROM deleted_customers WHERE phone IS NOT NULL))
+      AND (datetime(c.created_at) > datetime((SELECT value FROM store_settings WHERE key = 'clients_purged_at')) OR NOT EXISTS (SELECT 1 FROM store_settings WHERE key = 'clients_purged_at'))
   `;
   const params = [];
 
@@ -1228,10 +1230,13 @@ router.get('/customers/:id/due', authenticateToken, (req, res) => {
 
   let client = db.prepare(`
     SELECT * FROM customers 
-    WHERE id = ? 
+    WHERE (id = ? 
        OR client_code = ? 
        OR phone = ? 
-       OR REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ?
+       OR REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', '') LIKE ?)
+      AND id NOT IN (SELECT customer_id FROM deleted_customers WHERE customer_id IS NOT NULL)
+      AND (phone IS NULL OR phone NOT IN (SELECT phone FROM deleted_customers WHERE phone IS NOT NULL))
+      AND (datetime(created_at) > datetime((SELECT value FROM store_settings WHERE key = 'clients_purged_at')) OR NOT EXISTS (SELECT 1 FROM store_settings WHERE key = 'clients_purged_at'))
     LIMIT 1
   `).get(customerId, customerId, customerId, phoneTail10 ? ('%' + phoneTail10) : '%' + customerId);
 
@@ -1256,19 +1261,12 @@ router.get('/customers/:id/due', authenticateToken, (req, res) => {
   const totalDuePaise = unpaidOrders.reduce((sum, o) => sum + (o.outstanding_paise || 0), 0);
   const totalDueINR = totalDuePaise / 100;
 
-  const latestOrder = unpaidOrders[0] || (clientPhone ? db.prepare(`
-    SELECT customer_name, customer_phone, city AS customer_city, customer_age 
-    FROM orders 
-    WHERE customer_phone = ? OR REPLACE(REPLACE(REPLACE(customer_phone, ' ', ''), '-', ''), '+', '') LIKE ?
-    ORDER BY created_at DESC LIMIT 1
-  `).get(clientPhone, phoneTail10 ? ('%' + phoneTail10) : '%' + customerId) : null);
-
   res.json({
     clientId: client ? client.id : null,
-    clientName: client ? client.name : (latestOrder ? latestOrder.customer_name : null),
-    clientPhone: client ? client.phone : (latestOrder ? latestOrder.customer_phone : clientPhone),
-    clientCity: client ? client.city : (latestOrder ? latestOrder.customer_city : null),
-    clientAge: client ? client.age : (latestOrder ? latestOrder.customer_age : null),
+    clientName: client ? client.name : null,
+    clientPhone: client ? client.phone : clientPhone,
+    clientCity: client ? client.city : null,
+    clientAge: client ? client.age : null,
     totalDueINR,
     total_due_inr: totalDueINR,
     total_due_paise: totalDuePaise,
@@ -1420,7 +1418,7 @@ router.delete('/customers/:id', authenticateToken, (req, res) => {
 });
 
 // ── DELETE /api/customers (Delete All Clients) ───────────────────────────────
-router.delete('/customers', authenticateToken, (req, res) => {
+router.delete('/customers', authenticateToken, async (req, res) => {
   // Verify permissions (owner or inventory/admin)
   const isOwner = req.user.roleId === 'role-owner' || (req.user.permissions && (req.user.permissions.includes('*') || req.user.permissions.includes('orders:manage')));
   if (!isOwner) {
@@ -1439,19 +1437,32 @@ router.delete('/customers', authenticateToken, (req, res) => {
       try { insertTombstone.run(c.id, c.client_code, c.name || null, c.phone || null); } catch (e) {}
     });
 
-    // 2. Delete all from Supabase cloud
-    deleteAllCustomersFromSupabase().catch(console.warn);
+    // 2. Record purge timestamp in store_settings
+    const nowIso = new Date().toISOString();
+    try {
+      db.prepare(`
+        INSERT INTO store_settings (key, value, updated_at)
+        VALUES ('clients_purged_at', datetime('now'), datetime('now'))
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+      `).run();
+    } catch (e) {
+      console.warn('store_settings purge timestamp note:', e.message);
+    }
 
-    // 3. Clear prescriptions & disassociate orders
+    // 3. Delete all real customers from Supabase cloud
+    await deleteAllCustomersFromSupabase().catch(console.warn);
+
+    // 4. Clear prescriptions & disassociate orders
     db.prepare('DELETE FROM prescriptions').run();
     db.prepare('UPDATE orders SET customer_id = NULL').run();
     db.prepare('DELETE FROM customers').run();
 
     logAudit(req.user.id, req.user.email, 'ALL_CLIENTS_DELETED', 'CLIENT', 'ALL', {
-      count: allClients.length
+      count: allClients.length,
+      purged_at: nowIso
     }, req);
 
-    res.json({ success: true, count: allClients.length, message: `All ${allClients.length} clients have been permanently deleted from database and cloud.` });
+    res.json({ success: true, count: allClients.length, purged_at: nowIso, message: `All ${allClients.length} clients have been permanently deleted from database and cloud.` });
   } catch (err) {
     console.error('Error deleting all customers:', err);
     res.status(500).json({ error: 'Failed to delete all clients: ' + err.message });
@@ -1774,9 +1785,19 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     } else if (finalCustomerId) {
       const client = db.prepare('SELECT * FROM customers WHERE id = ?').get(finalCustomerId);
       if (client) {
-        finalCustomerName = client.name;
-        finalCustomerPhone = client.phone;
-        finalCustomerEmail = client.email;
+        const inputName = (customerName || '').trim();
+        const isGenericName = !inputName || inputName === 'Walk-in Customer' || inputName === 'Walk-in Client';
+        if (!isGenericName && inputName !== client.name) {
+          // Cashier intentionally provided a new or updated name for this customer/phone!
+          finalCustomerName = inputName;
+          try {
+            db.prepare("UPDATE customers SET name = ?, updated_at = datetime('now') WHERE id = ?").run(inputName, client.id);
+          } catch (e) {}
+        } else {
+          finalCustomerName = client.name;
+        }
+        finalCustomerPhone = client.phone || customerPhone;
+        finalCustomerEmail = client.email || customerEmail;
       }
     }
 

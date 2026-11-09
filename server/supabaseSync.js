@@ -766,7 +766,7 @@ async function syncSupabaseOrders(db, force = false) {
         if (m) resolvedUtr = m[1].trim();
       }
 
-      // Resolve or create customer record
+      // Resolve or link customer record
       let customerId = null;
       if (phone) {
         const cleanPhone = phone.replace('+91', '').trim();
@@ -780,18 +780,48 @@ async function syncSupabaseOrders(db, force = false) {
             .run(grandTotalPaise, customerId);
         }
       }
-      if (!customerId) {
+
+      // Check if client is tombstoned or if client directory was purged
+      let isTombstoned = false;
+      try {
+        const cleanPhone = phone ? phone.replace('+91', '').trim() : '';
+        const tomb = db.prepare(`
+          SELECT customer_id FROM deleted_customers 
+          WHERE (? IS NOT NULL AND customer_id = ?) 
+             OR (? IS NOT NULL AND (phone = ? OR phone = ? OR phone = ('+91' || ?)))
+          LIMIT 1
+        `).get(co.customer_id || null, co.customer_id || null, phone || null, phone || '', cleanPhone || '', cleanPhone || '');
+        if (tomb) isTombstoned = true;
+
+        if (!isTombstoned) {
+          const purgedRow = db.prepare("SELECT value FROM store_settings WHERE key = 'clients_purged_at'").get();
+          if (purgedRow && purgedRow.value) {
+            const orderTs = new Date(orderDate).getTime();
+            const purgeTs = new Date(purgedRow.value).getTime();
+            if (orderTs <= purgeTs) {
+              isTombstoned = true;
+            }
+          }
+        }
+      } catch (e) {}
+
+      // Only create customer record if client is not tombstoned and not purged
+      if (!customerId && !isTombstoned && phone && name && name !== 'Walk-in Client' && name !== 'Walk-in Customer') {
         customerId = 'cust-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
         const clientCode = 'CLI-' + Math.floor(10000 + Math.random() * 90000);
-        db.prepare(`
-          INSERT INTO customers (
-            id, client_code, name, phone, email, address, city, pin_code, notes, total_spent_paise, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Created via Supabase Order Sync', ?, ?, ?)
-        `).run(
-          customerId, clientCode, name, phone, co.customer_email || null,
-          co.delivery_address || null, co.city || 'Bengaluru', co.pin_code || null,
-          grandTotalPaise, orderDate, orderDate
-        );
+        try {
+          db.prepare(`
+            INSERT INTO customers (
+              id, client_code, name, phone, email, address, city, pin_code, notes, total_spent_paise, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Created via Supabase Order Sync', ?, ?, ?)
+          `).run(
+            customerId, clientCode, name, phone, co.customer_email || null,
+            co.delivery_address || null, co.city || 'Bengaluru', co.pin_code || null,
+            grandTotalPaise, orderDate, orderDate
+          );
+        } catch (insErr) {
+          customerId = null;
+        }
       }
 
       const existing = db.prepare('SELECT id, customer_id, payment_status, amount_paid_paise, outstanding_paise FROM orders WHERE order_number = ?').get(co.order_ref);
@@ -1564,10 +1594,12 @@ async function pushPrescriptionToSupabase(rx) {
  */
 async function deleteCustomerFromSupabase(customerId, phone = null) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !customerId) return;
+  // Guard against deleting system configuration rows
+  if (String(customerId).startsWith('sys-') || String(customerId).startsWith('tombstone-')) return;
   try {
-    let url = `${SUPABASE_URL}/rest/v1/customers?id=eq.${encodeURIComponent(customerId)}`;
+    let url = `${SUPABASE_URL}/rest/v1/customers?id=eq.${encodeURIComponent(customerId)}&client_code=not.like.SYS-*&id=not.like.sys-*&id=not.like.tombstone-*`;
     if (phone) {
-      url = `${SUPABASE_URL}/rest/v1/customers?or=(id.eq.${encodeURIComponent(customerId)},phone.eq.${encodeURIComponent(phone)})`;
+      url = `${SUPABASE_URL}/rest/v1/customers?or=(id.eq.${encodeURIComponent(customerId)},phone.eq.${encodeURIComponent(phone)})&client_code=not.like.SYS-*&id=not.like.sys-*&id=not.like.tombstone-*`;
     }
     const res = await fetch(url, {
       method: 'DELETE',
@@ -1584,12 +1616,12 @@ async function deleteCustomerFromSupabase(customerId, phone = null) {
 }
 
 /**
- * Delete all customers from Supabase cloud
+ * Delete all real customers from Supabase cloud (safely preserving system tracking records)
  */
 async function deleteAllCustomersFromSupabase() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?id=not.is.null`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=not.like.SYS-*&id=not.like.sys-*&id=not.like.tombstone-*`, {
       method: 'DELETE',
       headers: {
         'apikey': SUPABASE_ANON_KEY,
@@ -1609,7 +1641,7 @@ async function deleteAllCustomersFromSupabase() {
 async function syncSupabaseCustomers(db) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?select=*`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=not.like.SYS-*&id=not.like.sys-*&id=not.like.tombstone-*&select=*`, {
       headers: {
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
@@ -1621,12 +1653,29 @@ async function syncSupabaseCustomers(db) {
 
     for (const c of cloudCusts) {
       if (!c.name || /Walk-in Client|Concierge Test/i.test(c.name)) continue;
+      // Skip system rows
+      if ((c.client_code && c.client_code.startsWith('SYS-')) || (c.id && (c.id.startsWith('sys-') || c.id.startsWith('tombstone-')))) continue;
 
-      // Check if client was specifically deleted / tombstoned by admin by ID
+      // Check if client was deleted / tombstoned by admin by ID or phone
       try {
-        const isTombstoned = db.prepare('SELECT customer_id FROM deleted_customers WHERE customer_id = ?').get(c.id);
+        const cleanPhone = c.phone ? c.phone.replace('+91', '').trim() : '';
+        const isTombstoned = db.prepare(`
+          SELECT customer_id FROM deleted_customers 
+          WHERE customer_id = ? 
+             OR (? IS NOT NULL AND (phone = ? OR phone = ? OR phone = ('+91' || ?)))
+          LIMIT 1
+        `).get(c.id, c.phone || null, c.phone || '', cleanPhone || '', cleanPhone || '');
         if (isTombstoned) {
           continue;
+        }
+
+        const purgedRow = db.prepare("SELECT value FROM store_settings WHERE key = 'clients_purged_at'").get();
+        if (purgedRow && purgedRow.value) {
+          const cDate = c.created_at ? new Date(c.created_at).getTime() : 0;
+          const purgeTs = new Date(purgedRow.value).getTime();
+          if (cDate <= purgeTs) {
+            continue;
+          }
         }
       } catch (e) {}
 
