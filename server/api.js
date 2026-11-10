@@ -2458,6 +2458,8 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
   let stageLabel = '2nd Payment';
   let paymentStageCode = 'second_payment';
 
+  const existingPaymentsCount = (db.prepare('SELECT COUNT(*) as count FROM payments WHERE order_id = ?').get(order.id)?.count || 0);
+
   if (!order.second_payment_paise || order.second_payment_paise === 0) {
     stageCol = 'second_payment_paise';
     stageLabel = (newOutstanding === 0) ? '2nd Payment (Settled)' : '2nd Payment';
@@ -2467,21 +2469,37 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     stageLabel = (newOutstanding === 0) ? '3rd Payment (Settled)' : '3rd Payment';
     paymentStageCode = 'third_payment';
   } else {
-    stageCol = 'third_payment_paise';
-    stageLabel = (newOutstanding === 0) ? 'Final Settlement' : 'Installment Payment';
+    // 4th installment or subsequent payment:
+    // DO NOT add payment to third_payment_paise (which would corrupt 3rd payment & distort receipt math!)
+    // Instead, third_payment_paise stays fixed as 3rd payment, while amount_paid_paise and outstanding_paise
+    // track the true overall progress across all installments.
+    stageCol = null;
+    const payNum = Math.max(4, existingPaymentsCount + 1);
+    stageLabel = (newOutstanding === 0) ? `${payNum}th Payment (Settled)` : `${payNum}th Payment`;
     paymentStageCode = 'installment';
   }
 
   db.transaction(() => {
-    db.prepare(`
-      UPDATE orders
-      SET amount_paid_paise = ?,
-          outstanding_paise = ?,
-          payment_status = ?,
-          updated_at = datetime('now'),
-          ${stageCol} = COALESCE(${stageCol}, 0) + ?
-      WHERE id = ?
-    `).run(newAmountPaid, newOutstanding, newPaymentStatus, paymentPaise, order.id);
+    if (stageCol) {
+      db.prepare(`
+        UPDATE orders
+        SET amount_paid_paise = ?,
+            outstanding_paise = ?,
+            payment_status = ?,
+            updated_at = datetime('now'),
+            ${stageCol} = COALESCE(${stageCol}, 0) + ?
+        WHERE id = ?
+      `).run(newAmountPaid, newOutstanding, newPaymentStatus, paymentPaise, order.id);
+    } else {
+      db.prepare(`
+        UPDATE orders
+        SET amount_paid_paise = ?,
+            outstanding_paise = ?,
+            payment_status = ?,
+            updated_at = datetime('now')
+        WHERE id = ?
+      `).run(newAmountPaid, newOutstanding, newPaymentStatus, order.id);
+    }
 
     // Record in payments table
     const payId = 'pay-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
@@ -2526,7 +2544,10 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     grandTotalINR: currentTotal / 100,
     advancePaidINR: (updatedOrder.advance_paid_paise || (order.advance_paid_paise || 0)) / 100,
     secondPaymentINR: (updatedOrder.second_payment_paise || 0) / 100,
-    thirdPaymentINR: (updatedOrder.third_payment_paise || 0) / 100
+    thirdPaymentINR: (updatedOrder.third_payment_paise || 0) / 100,
+    payments: allPayments,
+    isCollectPayment: true,
+    source: 'collect_payment'
   }).catch(() => {});
 
   // Persist financial installment breakdown unconditionally to Supabase SYS-ORDER-PAYMENTS
@@ -3063,6 +3084,7 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
 
     const orders = db.prepare(sql).all(...params);
     const getItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?');
+    const getPayments = db.prepare('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at ASC');
     const getLatestRxForCustomer = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1');
     const getCustByPhone = db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0 LIMIT 1');
 
@@ -3138,6 +3160,10 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
         previous_due_inr: (o.previous_due_paise || 0) / 100,
         payment_status: ((o.outstanding_paise || 0) === 0 && (o.amount_paid_paise >= o.total_payable_paise)) ? 'VERIFIED' : o.payment_status,
         pickup_time: o.pickup_time || null,
+        payments: getPayments.all(o.id).map(p => ({
+          ...p,
+          amount_inr: (p.amount_inr != null) ? p.amount_inr : ((p.amount_paise || 0) / 100)
+        })),
         items: getItems.all(o.id).map(i => ({
           ...i,
           unit_price_inr: i.unit_price_paise / 100,
@@ -3267,13 +3293,9 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), a
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
   let rawPayments = db.prepare('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at ASC').all(order.id);
 
-  // If order is POS with explicit installments, ensure payments records match actual installments
+  // If order is POS with explicit installments and no payments are logged in payments table, synthesize them
   if (order.channel === 'POS' && (order.advance_paid_paise > 0 || order.second_payment_paise > 0 || order.third_payment_paise > 0)) {
-    const hasBadPayment = rawPayments.some(p => p.payment_stage === 'advance' && p.amount_paise > order.advance_paid_paise && order.advance_paid_paise > 0);
-    const isMissingInstallment = (order.second_payment_paise > 0 && !rawPayments.some(p => p.payment_stage === 'second_payment')) ||
-                                 (order.third_payment_paise > 0 && !rawPayments.some(p => p.payment_stage === 'third_payment'));
-
-    if (hasBadPayment || isMissingInstallment || rawPayments.length === 0) {
+    if (rawPayments.length === 0) {
       const synPayments = [];
       if (order.advance_paid_paise > 0) {
         synPayments.push({

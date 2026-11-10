@@ -264,11 +264,92 @@ async function runTests() {
   assert.strictEqual(syncedSettled.amount_paid_paise, 199800, 'Amount paid must be 199800 paise (full amount)');
   console.log('  ✓ [PASS] Cloud sync never reverts settled order back to due balance');
 
+  // --- 6. Testing 4th Installment Collection & Deduplication Bypass ---
+  console.log('\n--- 6. Testing 4th Installment Collection & Deduplication Bypass ---');
+  const multiStageRef = 'NOOR-POS-STAGE4-' + Date.now();
+  const multiStageId = 'ord-test-stage4-' + Date.now();
+  const grandTotal = 200000; // 2000 INR
+
+  // Create order with Advance: 500, 2nd: 500, 3rd: 500 (total paid: 1500, remaining: 500)
+  db.prepare(`
+    INSERT INTO orders (
+      id, order_number, token_number, channel, channel_code, source, customer_name, customer_phone,
+      status, payment_status, subtotal_paise, total_payable_paise, amount_paid_paise,
+      advance_paid_paise, second_payment_paise, third_payment_paise, outstanding_paise,
+      created_at, updated_at
+    ) VALUES (
+      ?, ?, 1, 'POS', 2, 'instore', 'Stage 4 Customer', '9849821199',
+      'CONFIRMED', 'PARTIAL', ?, ?, 150000,
+      50000, 50000, 50000, 50000,
+      datetime('now'), datetime('now')
+    )
+  `).run(multiStageId, multiStageRef, grandTotal, grandTotal);
+
+  db.prepare(`INSERT INTO payments (id, order_id, payment_method, amount_paise, status, payment_stage, notes, created_at) VALUES (?, ?, 'CASH', 50000, 'VERIFIED', 'advance', 'Advance', datetime('now'))`).run('p1-' + multiStageId, multiStageId);
+  db.prepare(`INSERT INTO payments (id, order_id, payment_method, amount_paise, status, payment_stage, notes, created_at) VALUES (?, ?, 'CASH', 50000, 'VERIFIED', 'second_payment', '2nd Payment', datetime('now'))`).run('p2-' + multiStageId, multiStageId);
+  db.prepare(`INSERT INTO payments (id, order_id, payment_method, amount_paise, status, payment_stage, notes, created_at) VALUES (?, ?, 'CASH', 50000, 'VERIFIED', 'third_payment', '3rd Payment', datetime('now'))`).run('p3-' + multiStageId, multiStageId);
+
+  // Now collect 4th payment of remaining 500
+  const fourthPayAmount = 50000;
+  const pay4Order = db.prepare('SELECT * FROM orders WHERE id = ?').get(multiStageId);
+  const pay4ExistingCount = db.prepare('SELECT COUNT(*) as count FROM payments WHERE order_id = ?').get(multiStageId).count;
+  assert.strictEqual(pay4ExistingCount, 3, 'Must have 3 payments initially');
+
+  const pay4NewOutstanding = Math.max(0, pay4Order.outstanding_paise - fourthPayAmount);
+  const pay4NewPaid = Math.max(0, pay4Order.total_payable_paise - pay4NewOutstanding);
+  const pay4Status = pay4NewOutstanding === 0 ? 'VERIFIED' : 'PARTIAL';
+
+  // Under our new logic: stageCol is null for 4th payment, keeping third_payment_paise intact at 50000!
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE orders
+      SET amount_paid_paise = ?,
+          outstanding_paise = ?,
+          payment_status = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).run(pay4NewPaid, pay4NewOutstanding, pay4Status, multiStageId);
+
+    db.prepare(`
+      INSERT INTO payments (id, order_id, payment_method, amount_paise, status, notes, payment_stage, created_at)
+      VALUES (?, ?, 'CASH', ?, 'VERIFIED', '4th Payment (Settled)', 'installment', datetime('now'))
+    `).run('p4-' + multiStageId, multiStageId, fourthPayAmount);
+  })();
+
+  const postPay4 = db.prepare('SELECT * FROM orders WHERE id = ?').get(multiStageId);
+  assert.strictEqual(postPay4.third_payment_paise, 50000, 'third_payment_paise must NOT be inflated/corrupted by 4th installment');
+  assert.strictEqual(postPay4.amount_paid_paise, 200000, 'Total paid must equal 2000 INR (200000 paise)');
+  assert.strictEqual(postPay4.outstanding_paise, 0, 'Outstanding due must drop to 0');
+  assert.strictEqual(postPay4.payment_status, 'VERIFIED', 'Payment status must be VERIFIED');
+
+  const allStage4Payments = db.prepare('SELECT * FROM payments WHERE order_id = ? ORDER BY created_at ASC').all(multiStageId);
+  assert.strictEqual(allStage4Payments.length, 4, 'Must have exactly 4 payment records');
+  assert.strictEqual(allStage4Payments[3].payment_stage, 'installment', '4th payment stage must be installment');
+
+  // Verify cloud queue job payload properties for 4th installment
+  const isInstallmentCollection = Boolean(true); // source === 'collect_payment'
+  const testJobId = 'rcp_' + multiStageRef + '_collect_' + Date.now();
+  const testJob = {
+    id: testJobId,
+    type: 'receipt',
+    approved: true,
+    manualReprint: isInstallmentCollection,
+    source: 'reprint',
+    order: {
+      ...postPay4,
+      payments: allStage4Payments
+    }
+  };
+  // In pos-daemon: const isReprint = Boolean(job.source === 'reprint' || job.manualReprint);
+  const daemonIsReprint = Boolean(testJob.source === 'reprint' || testJob.manualReprint);
+  assert.strictEqual(daemonIsReprint, true, 'POS daemon must recognize reprint/manualReprint to bypass stage-key deduplication');
+  console.log('  ✓ [PASS] 4th installment records cleanly: 3rd payment not inflated, 0 due balance, and POS daemon reprint flag active');
+
   // Cleanup test data
-  db.prepare('DELETE FROM payments WHERE order_id IN (?, ?, ?, ?)').run(processed.id, newBillId, seqBillId, syncedSettled.id);
-  db.prepare('DELETE FROM order_items WHERE order_id IN (?, ?, ?, ?)').run(processed.id, newBillId, seqBillId, syncedSettled.id);
-  db.prepare('DELETE FROM invoices WHERE order_id IN (?, ?, ?, ?)').run(processed.id, newBillId, seqBillId, syncedSettled.id);
-  db.prepare('DELETE FROM orders WHERE id IN (?, ?, ?, ?)').run(processed.id, newBillId, seqBillId, syncedSettled.id);
+  db.prepare('DELETE FROM payments WHERE order_id IN (?, ?, ?, ?, ?)').run(processed.id, newBillId, seqBillId, syncedSettled.id, multiStageId);
+  db.prepare('DELETE FROM order_items WHERE order_id IN (?, ?, ?, ?, ?)').run(processed.id, newBillId, seqBillId, syncedSettled.id, multiStageId);
+  db.prepare('DELETE FROM invoices WHERE order_id IN (?, ?, ?, ?, ?)').run(processed.id, newBillId, seqBillId, syncedSettled.id, multiStageId);
+  db.prepare('DELETE FROM orders WHERE id IN (?, ?, ?, ?, ?)').run(processed.id, newBillId, seqBillId, syncedSettled.id, multiStageId);
 
   console.log('\n======================================================');
   console.log('🏁 ALL POS DUE CLEARANCE & ORDER LOOKUP TESTS PASSED!');

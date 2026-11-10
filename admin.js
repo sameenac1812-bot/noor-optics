@@ -4598,9 +4598,16 @@
 
       const ord = jobPayload.order || (jobPayload.items && jobPayload.items[0] && jobPayload.items[0].order) || null;
       const ref = String(ord?.order_number || ord?.order_ref || ord?.id || ('JOB_' + Date.now())).trim();
+      const isManualOrCollect = Boolean(
+        jobPayload.source === 'reprint' ||
+        jobPayload.manualReprint ||
+        jobPayload.source === 'collect_payment' ||
+        (ord && Array.isArray(ord.payments) && ord.payments.length > 3)
+      );
+
       let stageSuffix = 'init';
-      if (jobPayload.source === 'reprint' || jobPayload.manualReprint) {
-        stageSuffix = 'reprint_' + Date.now();
+      if (isManualOrCollect) {
+        stageSuffix = 'collect_' + Date.now();
       } else if (ord) {
         if (ord.third_payment_inr > 0 || ord.third_payment_paise > 0) {
           stageSuffix = 'stage3';
@@ -4614,7 +4621,7 @@
         : ('rcp_' + ref + '_' + stageSuffix);
 
       // Remove ALL old-style job-receipt-{ref}-* entries for this order ref to prevent double printing
-      if (jobPayload.type === 'receipt' && ref && !ref.startsWith('JOB_') && stageSuffix !== 'reprint_' + Date.now()) {
+      if (jobPayload.type === 'receipt' && ref && !ref.startsWith('JOB_') && !isManualOrCollect) {
         jobs = jobs.filter(j => {
           if (!j || !j.id) return true;
           const jid = String(j.id);
@@ -4629,7 +4636,8 @@
         order: jobPayload.order || null,
         items: jobPayload.items || (jobPayload.order ? jobPayload.order.items : [jobPayload]),
         approved: jobPayload.approved !== undefined ? Boolean(jobPayload.approved) : true,
-        source: jobPayload.source || (jobPayload.type === 'receipt' ? 'staff_approved' : 'cloud_queue'),
+        manualReprint: isManualOrCollect,
+        source: isManualOrCollect ? 'reprint' : (jobPayload.source || (jobPayload.type === 'receipt' ? 'staff_approved' : 'cloud_queue')),
         created_at: new Date().toISOString()
       };
 
@@ -8464,7 +8472,9 @@
     }
 
     const orderRef = order.order_number || order.order_ref || order.id || 'ORDER';
-    const effectiveSource = printSource || (manualReprint ? 'reprint' : 'staff_approved');
+    const isReprintOrCollect = Boolean(manualReprint || printSource === 'collect_payment' || printSource === 'reprint' || (order.payments && order.payments.length > 3));
+    const effectiveSource = isReprintOrCollect ? 'reprint' : (printSource || 'staff_approved');
+    const effectiveManualReprint = isReprintOrCollect;
 
     // ── DUAL DISPATCH (Zero-Lag Counter Output + Bulletproof Remote Cloud Spooling) ──
     // PATH 1: Instant Cloud Queue Dispatch (Guarantees Laptop B / dedicated printer prints within 2.5s)
@@ -8472,6 +8482,7 @@
       type: 'receipt',
       order: order,
       approved: true,
+      manualReprint: effectiveManualReprint,
       source: effectiveSource
     }).then(res => {
       if (res && res.success) {
@@ -8487,7 +8498,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         order: order,
-        manualReprint: Boolean(manualReprint),
+        manualReprint: effectiveManualReprint,
         source: effectiveSource
       }),
       signal: AbortSignal.timeout(1200)
@@ -9333,16 +9344,17 @@
 
     if (Array.isArray(paymentsList) && paymentsList.length > 0) {
       historyItems = paymentsList.map((p, idx) => {
-        let label = p.notes || p.payment_stage || (idx === 0 ? 'Advance' : (idx === 1 ? '2nd Payment' : 'Installment'));
-        if (label === 'advance') label = 'Advance Payment';
+        let label = p.notes || p.payment_stage;
+        if (!label || label === 'advance') label = 'Advance Payment';
         else if (label === 'second_payment') label = '2nd Payment';
         else if (label === 'third_payment') label = '3rd Payment';
+        else if (label === 'installment') label = `${idx + 1}th Payment`;
 
         let amt = p.amount_inr != null ? p.amount_inr : ((p.amount_paise || 0) / 100);
         // If this is the advance stage and order records an explicit advance, ensure amount matches
         const hasDueBalance = (order.outstanding_inr != null ? order.outstanding_inr : ((order.outstanding_paise || 0) / 100)) > 0;
         if ((p.payment_stage === 'advance' || idx === 0) && hasDueBalance) {
-          const effectiveAdv = advINR > 0 ? advINR : Math.max(0, paidINR - secINR - thdINR);
+          const effectiveAdv = Math.min(paidINR, advINR > 0 ? advINR : Math.max(0, paidINR - secINR - thdINR));
           if (effectiveAdv > 0 && amt > effectiveAdv) {
             amt = effectiveAdv;
           } else if (amt > paidINR && paidINR > 0) {
@@ -9377,7 +9389,7 @@
         });
       }
     } else {
-      const adv = advINR > 0 ? advINR : Math.max(0, paidINR - secINR - thdINR);
+      const adv = Math.min(paidINR, advINR > 0 ? advINR : Math.max(0, paidINR - secINR - thdINR));
       if (adv > 0) historyItems.push({ label: 'Advance Payment', amount: adv, date: formatDateTime(order.created_at), method: 'CASH' });
       if (secINR > 0) historyItems.push({ label: '2nd Payment', amount: secINR, date: formatDateTime(order.second_payment_date || order.updated_at), method: 'CASH' });
       if (thdINR > 0) historyItems.push({ label: '3rd Payment', amount: thdINR, date: formatDateTime(order.third_payment_date || order.updated_at), method: 'CASH' });
@@ -9414,9 +9426,10 @@
     const resolvedRef = order.order_number || order.order_ref || order.id;
     const totalINR = (order.total_payable_inr != null) ? order.total_payable_inr : ((order.total_payable_paise || 0) / 100);
     const rawPaid = (order.amount_paid_inr != null) ? order.amount_paid_inr : ((order.amount_paid_paise || 0) / 100);
-    const isPaidInFull = (order.payment_status === 'VERIFIED') || (rawPaid >= totalINR && totalINR > 0) || ((order.outstanding_inr != null ? order.outstanding_inr : (order.outstanding_paise || 0)) <= 0 && rawPaid > 0);
-    const paidINR = isPaidInFull ? totalINR : rawPaid;
-    const remainingINR = isPaidInFull ? 0 : Math.max(0, Math.min(totalINR - paidINR, (order.outstanding_inr != null) ? order.outstanding_inr : (order.outstanding_paise != null ? (order.outstanding_paise / 100) : (totalINR - paidINR))));
+    const rawOutstanding = (order.outstanding_inr != null) ? order.outstanding_inr : ((order.outstanding_paise != null) ? (order.outstanding_paise / 100) : Math.max(0, totalINR - rawPaid));
+    const isPaidInFull = (order.payment_status === 'VERIFIED') || (rawPaid >= totalINR && totalINR > 0) || (rawOutstanding <= 0 && rawPaid > 0);
+    const remainingINR = isPaidInFull ? 0 : Math.max(0, rawOutstanding);
+    const paidINR = isPaidInFull ? totalINR : Math.max(0, totalINR - remainingINR);
 
     if (cpOrderId) {
       cpOrderId.value = resolvedRef;
@@ -9443,6 +9456,9 @@
     // 2. Auto-detect next stage
     const secPaise = order.second_payment_paise || (order.second_payment_inr ? order.second_payment_inr * 100 : 0);
     const thirdPaise = order.third_payment_paise || (order.third_payment_inr ? order.third_payment_inr * 100 : 0);
+    const existingPaymentsList = Array.isArray(order.payments) ? order.payments : [];
+    const nextPayNum = Math.max(2, existingPaymentsList.length + 1);
+
     if (!secPaise || secPaise === 0) {
       if (cpStageSelect) cpStageSelect.value = 'second_payment';
       if (cpStageBadge) cpStageBadge.textContent = 'Auto: 2nd Payment';
@@ -9451,7 +9467,8 @@
       if (cpStageBadge) cpStageBadge.textContent = 'Auto: 3rd Payment';
     } else {
       if (cpStageSelect) cpStageSelect.value = 'installment';
-      if (cpStageBadge) cpStageBadge.textContent = 'Auto: Installment';
+      if (cpStageBadge) cpStageBadge.textContent = `Auto: ${nextPayNum}th Payment`;
+    }
     }
 
     // 3. Pre-fill amount with exact balance and wire live calculation
@@ -9686,7 +9703,7 @@
 
       // Print updated receipt to POS thermal printer (stage-aware settlement, prevents duplicate prints)
       if (shouldPrint && typeof instantPrintReceipt === 'function') {
-        instantPrintReceipt(orderId, false, res.order, 'collect_payment').catch(() => { });
+        instantPrintReceipt(orderId, true, res.order, 'reprint').catch(() => { });
       }
 
       // Refresh datasets across the system silently in background

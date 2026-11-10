@@ -783,8 +783,12 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
             outstandingPaise = Math.round(Number(firstIt.outstanding_inr) * 100);
             amountPaidPaise = Math.max(0, grandTotalPaise - outstandingPaise);
           } else {
-            amountPaidPaise = advancePaidPaise + secondPaymentPaise + thirdPaymentPaise;
-            outstandingPaise = Math.max(0, grandTotalPaise - amountPaidPaise);
+            const sumStages = advancePaidPaise + secondPaymentPaise + thirdPaymentPaise;
+            const existingPaid = db.prepare('SELECT amount_paid_paise, outstanding_paise FROM orders WHERE order_number = ?').get(co.order_ref);
+            amountPaidPaise = Math.max(sumStages, existingPaid?.amount_paid_paise || 0);
+            outstandingPaise = (existingPaid?.outstanding_paise != null && existingPaid.outstanding_paise < (grandTotalPaise - amountPaidPaise))
+              ? existingPaid.outstanding_paise
+              : Math.max(0, grandTotalPaise - amountPaidPaise);
           }
           paymentStatus = (outstandingPaise === 0) ? 'VERIFIED' : (amountPaidPaise > 0 ? 'PARTIAL' : 'PENDING');
         } else {
@@ -1628,7 +1632,17 @@ async function pushOrderToSupabase(orderPayload) {
             try { currentJobs = JSON.parse(qList[0].notes).jobs || []; } catch(_) {}
           }
           let stageSuffix = 'init';
-          if (orderPayload.thirdPaymentINR > 0 || orderPayload.third_payment_inr > 0 || orderPayload.third_payment_paise > 0) {
+          const isInstallmentCollection = Boolean(
+            orderPayload.isCollectPayment ||
+            orderPayload.source === 'collect_payment' ||
+            orderPayload.source === 'reprint' ||
+            orderPayload.manualReprint ||
+            (Array.isArray(orderPayload.payments) && orderPayload.payments.length > 3)
+          );
+
+          if (isInstallmentCollection) {
+            stageSuffix = 'collect_' + Date.now();
+          } else if (orderPayload.thirdPaymentINR > 0 || orderPayload.third_payment_inr > 0 || orderPayload.third_payment_paise > 0) {
             stageSuffix = 'stage3';
           } else if (orderPayload.secondPaymentINR > 0 || orderPayload.second_payment_inr > 0 || orderPayload.second_payment_paise > 0) {
             stageSuffix = 'stage2';
@@ -1639,11 +1653,13 @@ async function pushOrderToSupabase(orderPayload) {
             id: jobId,
             type: 'receipt',
             approved: true,
-            source: stageSuffix === 'init' ? 'instore_checkout' : 'collect_payment',
+            manualReprint: isInstallmentCollection,
+            source: isInstallmentCollection ? 'reprint' : (stageSuffix === 'init' ? 'instore_checkout' : 'collect_payment'),
             created_at: new Date().toISOString(),
             order: {
               ...baseOrderBody,
               ...orderPayload,
+              payments: orderPayload.payments || [],
               order_number: orderRef,
               order_ref: orderRef,
               id: orderPayload.id || orderRef,
