@@ -785,9 +785,9 @@
         o.order_ref = o.order_ref || o.order_number;
       });
 
-      // Apply session verified UPI orders so approved orders NEVER revert
+      // Apply session & local verified UPI orders so approved orders NEVER revert
       try {
-        const storedVerified = JSON.parse(sessionStorage.getItem('noor_verified_upi_orders') || '[]');
+        const storedVerified = JSON.parse(localStorage.getItem('noor_verified_upi_orders') || sessionStorage.getItem('noor_verified_upi_orders') || '[]');
         if (storedVerified.length > 0) {
           const verifiedSet = new Set(storedVerified);
           incoming.forEach(o => {
@@ -941,7 +941,7 @@
     // Count badges (100% Authoritative Segregation)
     const allCount = cleanOrders.length;
     const instoreCount = cleanOrders.filter(o => getOrderChannel(o) === 'POS').length;
-    const websiteCount = cleanOrders.filter(o => getOrderChannel(o) === 'WEBSITE' && o.payment_status === 'VERIFIED').length;
+    const websiteCount = cleanOrders.filter(o => getOrderChannel(o) === 'WEBSITE').length;
     const upiPendingCount = cleanOrders.filter(o => getOrderChannel(o) === 'WEBSITE' && o.payment_status === 'AWAITING_VERIFICATION').length;
     const badgeAll = document.getElementById('count-all-orders');
     const badgeInstore = document.getElementById('count-instore-orders');
@@ -957,7 +957,7 @@
       // Channel match
       const orderChan = getOrderChannel(o);
       if (channel === 'POS' && orderChan !== 'POS') return false;
-      if (channel === 'WEBSITE' && (orderChan !== 'WEBSITE' || o.payment_status !== 'VERIFIED')) return false;
+      if (channel === 'WEBSITE' && orderChan !== 'WEBSITE') return false;
       if (channel === 'UPI_PENDING' && (orderChan !== 'WEBSITE' || o.payment_status !== 'AWAITING_VERIFICATION')) return false;
 
       // Status
@@ -1414,11 +1414,13 @@
       const order = (state.ordersCache || []).find(o => o.id === orderId || o.order_number === orderId);
       const orderRef = order?.order_number || order?.order_ref || orderId;
 
-      // 0. Persist verified status to session storage so it NEVER reverts to VERIFY UPI
+      // 0. Persist verified status to local & session storage so it NEVER reverts to VERIFY UPI
       try {
-        const stored = JSON.parse(sessionStorage.getItem('noor_verified_upi_orders') || '[]');
+        const stored = JSON.parse(localStorage.getItem('noor_verified_upi_orders') || sessionStorage.getItem('noor_verified_upi_orders') || '[]');
         if (orderRef && !stored.includes(orderRef)) stored.push(orderRef);
         if (orderId && !stored.includes(orderId)) stored.push(orderId);
+        if (order?.id && !stored.includes(order.id)) stored.push(order.id);
+        localStorage.setItem('noor_verified_upi_orders', JSON.stringify(stored));
         sessionStorage.setItem('noor_verified_upi_orders', JSON.stringify(stored));
       } catch (_) { }
 
@@ -9352,17 +9354,21 @@
 
     if (Array.isArray(paymentsList) && paymentsList.length > 0) {
       historyItems = paymentsList.map((p, idx) => {
-        let label = p.notes || p.payment_stage;
-        if (!label || label === 'advance') label = 'Advance Payment';
-        else if (label === 'second_payment') label = '2nd Payment';
-        else if (label === 'third_payment') label = '3rd Payment';
-        else if (label === 'installment') label = `${idx + 1}th Payment`;
+        let label = (p.notes || p.payment_stage || '').trim();
+        if (!label || /^advance(\b|_|\s|$)/i.test(label) || label.toLowerCase() === 'advance') {
+          label = 'Advance Payment';
+        } else if (/^second_payment|2nd(\b|_|\s|$)/i.test(label)) {
+          label = '2nd Payment';
+        } else if (/^third_payment|3rd(\b|_|\s|$)/i.test(label)) {
+          label = '3rd Payment';
+        } else if (/^installment|payment/i.test(label)) {
+          label = `${idx + 1}th Payment`;
+        }
 
         let amt = p.amount_inr != null ? p.amount_inr : ((p.amount_paise || 0) / 100);
         // If this is the advance stage and order records an explicit advance, ensure amount matches
-        const hasDueBalance = (order.outstanding_inr != null ? order.outstanding_inr : ((order.outstanding_paise || 0) / 100)) > 0;
-        if ((p.payment_stage === 'advance' || idx === 0) && hasDueBalance) {
-          const effectiveAdv = Math.min(paidINR, advINR > 0 ? advINR : Math.max(0, paidINR - secINR - thdINR));
+        if (p.payment_stage === 'advance' || idx === 0) {
+          const effectiveAdv = advINR > 0 ? advINR : Math.max(0, paidINR - secINR - thdINR);
           if (effectiveAdv > 0 && amt > effectiveAdv) {
             amt = effectiveAdv;
           } else if (amt > paidINR && paidINR > 0) {
@@ -9636,11 +9642,18 @@
         const reqId = String(orderId || '').trim().toLowerCase();
         const dbId = String(cpIdEl?.dataset?.dbId || '').trim().toLowerCase();
 
+        const cleanToken = (val) => String(val || '').toLowerCase().replace(/^ord-cld-/, '').trim();
+        const tokenNum = cleanToken(targetNum);
+        const tokenRef = cleanToken(targetRef);
+        const tokenReq = cleanToken(reqNum);
+
         const idx = state.ordersCache.findIndex(o => {
           if (!o) return false;
           const oId = String(o.id || '').trim().toLowerCase();
           const oNum = String(o.order_number || '').trim().toLowerCase();
           const oRef = String(o.order_ref || '').trim().toLowerCase();
+          const oTokNum = cleanToken(oNum);
+          const oTokRef = cleanToken(oRef);
           
           return (
             (targetNum && (oNum === targetNum || oRef === targetNum || oId === targetNum)) ||
@@ -9648,14 +9661,17 @@
             (targetId && (oId === targetId || oNum === targetId || oRef === targetId)) ||
             (reqNum && (oNum === reqNum || oRef === reqNum || oId === reqNum)) ||
             (reqId && (oId === reqId || oNum === reqId || oRef === reqId)) ||
-            (dbId && (oId === dbId || oNum === dbId || oRef === dbId))
+            (dbId && (oId === dbId || oNum === dbId || oRef === dbId)) ||
+            (tokenNum && (oTokNum === tokenNum || oTokRef === tokenNum)) ||
+            (tokenRef && (oTokNum === tokenRef || oTokRef === tokenRef)) ||
+            (tokenReq && (oTokNum === tokenReq || oTokRef === tokenReq))
           );
         });
 
         if (idx >= 0) {
           state.ordersCache[idx] = { ...state.ordersCache[idx], ...res.order };
         } else {
-          // Check if customer phone and total matches an existing order before unshifting
+          // Check if customer phone and total matches an existing order
           const custPhone = String(res.order.customer_phone || '').replace(/\D/g, '');
           const matchByPhone = (custPhone && custPhone.length >= 10)
             ? state.ordersCache.findIndex(o => {
@@ -9666,9 +9682,8 @@
 
           if (matchByPhone >= 0) {
             state.ordersCache[matchByPhone] = { ...state.ordersCache[matchByPhone], ...res.order };
-          } else {
-            state.ordersCache.unshift(res.order);
           }
+          // NEVER unshift duplicate order on payment collection
         }
       }
 
@@ -9681,7 +9696,8 @@
           outstanding_inr: res.remaining_due_inr != null ? res.remaining_due_inr : 0,
           payment_status: (res.remaining_due_inr === 0) ? 'VERIFIED' : 'PARTIAL',
           second_payment_inr: res.order ? res.order.second_payment_inr : null,
-          third_payment_inr: res.order ? res.order.third_payment_inr : null
+          third_payment_inr: res.order ? res.order.third_payment_inr : null,
+          payments: res.order?.payments || []
         };
         storedCollected[key] = record;
         if (res.order?.order_number) storedCollected[res.order.order_number] = record;

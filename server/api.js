@@ -2296,9 +2296,9 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
   try {
     const result = checkoutTx();
 
-    // Asynchronously push queued rollover settlements to cloud
+    // Asynchronously push queued rollover settlements to cloud (non-blocking for fast POS checkout)
     for (const rs of rolloverSyncs) {
-      await pushOrderPaymentStatusToCloud(rs.orderNumber, rs.status, rs.note, rs.details).catch(() => {});
+      pushOrderPaymentStatusToCloud(rs.orderNumber, rs.status, rs.note, rs.details).catch(() => {});
     }
     logAudit(req.user.id, req.user.email, 'POS_SALE_COMPLETED', 'ORDER', result.orderId, {
       orderNumber, total: result.totalPayableINR, customerId: result.customerId
@@ -2366,11 +2366,11 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     }).catch(err => console.warn('[SupabaseSync] Push POS order note:', err.message));
 
     if (result.paymentStatus === 'VERIFIED') {
-      await pushOrderPaymentStatusToCloud(orderNumber, 'VERIFIED', 'In-Store POS Sale Paid in Full', {
+      pushOrderPaymentStatusToCloud(orderNumber, 'VERIFIED', 'In-Store POS Sale Paid in Full', {
         aliases: [result.orderId, orderNumber, result.orderRef].filter(Boolean)
       }).catch(() => {});
     } else if (result.paymentStatus === 'PARTIAL') {
-      await pushOrderPaymentStatusToCloud(orderNumber, 'PARTIAL', 'In-Store POS Advance Payment', {
+      pushOrderPaymentStatusToCloud(orderNumber, 'PARTIAL', 'In-Store POS Advance Payment', {
         amountPaidINR: result.amountPaidINR,
         outstandingINR: result.outstandingINR,
         advancePaidINR: result.advancePaidINR,
@@ -2558,6 +2558,7 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     advancePaidINR: (updatedOrder.advance_paid_paise || (order.advance_paid_paise || 0)) / 100,
     secondPaymentINR: (updatedOrder.second_payment_paise || 0) / 100,
     thirdPaymentINR: (updatedOrder.third_payment_paise || 0) / 100,
+    payments: allPayments,
     aliases: [order.id, order.order_number, order.order_ref, updatedOrder.id, updatedOrder.order_number, updatedOrder.order_ref].filter(Boolean)
   }).catch(err => console.warn('[SupabaseSync] pushOrderPaymentStatusToCloud error:', err.message));
 
@@ -3363,6 +3364,14 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
     return res.status(400).json({ error: 'Invalid order status' });
   }
 
+  const targetOrder = await getOrderByIdOrRef(db, orderId);
+  if (!targetOrder) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
+
+  const resolvedDbId = targetOrder.id;
+  const resolvedOrderNum = targetOrder.order_number;
+
   if (paymentStatus) {
     if (!['VERIFIED', 'AWAITING_VERIFICATION', 'UNPAID', 'REJECTED', 'REFUNDED'].includes(paymentStatus)) {
       return res.status(400).json({ error: 'Invalid payment status' });
@@ -3376,10 +3385,10 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
           outstanding_paise = 0,
           updated_at = datetime('now')
         WHERE id = ? OR order_number = ?
-      `).run(orderId, orderId);
-      db.prepare("UPDATE payments SET status = 'VERIFIED', notes = COALESCE(notes, '') || ' | Verified by Staff' WHERE order_id = ? OR order_id IN (SELECT id FROM orders WHERE order_number = ?)").run(orderId, orderId);
-      db.prepare("UPDATE invoices SET payment_status = 'VERIFIED', amount_paid_paise = grand_total_paise WHERE order_id = ? OR order_id IN (SELECT id FROM orders WHERE order_number = ?)").run(orderId, orderId);
-      const approvedOrd = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ?').get(orderId, orderId);
+      `).run(resolvedDbId, resolvedOrderNum);
+      db.prepare("UPDATE payments SET status = 'VERIFIED', notes = COALESCE(notes, '') || ' | Verified by Staff' WHERE order_id = ? OR order_id IN (SELECT id FROM orders WHERE order_number = ?)").run(resolvedDbId, resolvedOrderNum);
+      db.prepare("UPDATE invoices SET payment_status = 'VERIFIED', amount_paid_paise = grand_total_paise WHERE order_id = ? OR order_id IN (SELECT id FROM orders WHERE order_number = ?)").run(resolvedDbId, resolvedOrderNum);
+      const approvedOrd = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ?').get(resolvedDbId, resolvedOrderNum);
       if (approvedOrd) {
         enqueuePrintJob(approvedOrd.id, approvedOrd.token_number, 'BILL');
       }
@@ -3390,17 +3399,20 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
           notes = CASE WHEN notes IS NOT NULL THEN notes || ' | ' || ? ELSE ? END,
           updated_at = datetime('now')
         WHERE id = ? OR order_number = ?
-      `).run(reasonOrNotes || 'Payment rejected / UTR mismatch', reasonOrNotes || 'Payment rejected / UTR mismatch', orderId, orderId);
-      db.prepare("UPDATE payments SET status = 'REJECTED', notes = ? WHERE order_id = ? OR order_id IN (SELECT id FROM orders WHERE order_number = ?)").run(reasonOrNotes || 'Payment rejected / UTR mismatch', orderId, orderId);
+      `).run(reasonOrNotes || 'Payment rejected / UTR mismatch', reasonOrNotes || 'Payment rejected / UTR mismatch', resolvedDbId, resolvedOrderNum);
+      db.prepare("UPDATE payments SET status = 'REJECTED', notes = ? WHERE order_id = ? OR order_id IN (SELECT id FROM orders WHERE order_number = ?)").run(reasonOrNotes || 'Payment rejected / UTR mismatch', resolvedDbId, resolvedOrderNum);
     } else {
-      db.prepare("UPDATE orders SET payment_status = ?, updated_at = datetime('now') WHERE id = ? OR order_number = ?").run(paymentStatus, orderId, orderId);
+      db.prepare("UPDATE orders SET payment_status = ?, updated_at = datetime('now') WHERE id = ? OR order_number = ?").run(paymentStatus, resolvedDbId, resolvedOrderNum);
     }
 
     // Sync updated payment status to cloud Supabase SYS-ORDER-PAYMENTS (guaranteed cloud persistence)
     try {
-      const ord = db.prepare('SELECT order_number FROM orders WHERE id = ? OR order_number = ?').get(orderId, orderId);
-      if (ord && ord.order_number) {
-        await pushOrderPaymentStatusToCloud(ord.order_number, paymentStatus, reasonOrNotes);
+      if (resolvedOrderNum) {
+        await pushOrderPaymentStatusToCloud(resolvedOrderNum, paymentStatus, reasonOrNotes, {
+          amountPaidINR: targetOrder.total_payable_paise / 100,
+          outstandingINR: paymentStatus === 'VERIFIED' ? 0 : (targetOrder.outstanding_paise / 100),
+          aliases: [resolvedDbId, resolvedOrderNum, targetOrder.order_ref, orderId].filter(Boolean)
+        });
       }
     } catch (_) {}
     if (typeof invalidateOrderSyncCache === 'function') {

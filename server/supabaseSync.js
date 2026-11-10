@@ -553,11 +553,35 @@ async function pushAllDeletedOrdersToCloudTombstone(orderRefs = []) {
 /**
  * Synchronize accurate multi-stage payments into SQLite payments table
  */
-function syncOrderPaymentsInDb(db, orderId, isPos, paymentMethod, paymentStatus, grandTotalPaise, amountPaidPaise, advancePaidPaise, secondPaymentPaise, thirdPaymentPaise, resolvedUtr, orderDate) {
+function syncOrderPaymentsInDb(db, orderId, isPos, paymentMethod, paymentStatus, grandTotalPaise, amountPaidPaise, advancePaidPaise, secondPaymentPaise, thirdPaymentPaise, resolvedUtr, orderDate, cloudPaymentsList = null) {
   try {
     const payMethod = paymentMethod || (isPos ? 'CASH' : 'UPI_GPAY');
     const payRecordStatus = paymentStatus === 'VERIFIED' ? 'VERIFIED' : (paymentStatus === 'REJECTED' ? 'REJECTED' : (paymentStatus === 'PARTIAL' ? 'VERIFIED' : 'PENDING_VERIFICATION'));
     const createdAt = orderDate || new Date().toISOString();
+
+    if (Array.isArray(cloudPaymentsList) && cloudPaymentsList.length > 0) {
+      cloudPaymentsList.forEach((p, idx) => {
+        const stage = p.payment_stage || (idx === 0 ? 'advance' : (idx === 1 ? 'second_payment' : (idx === 2 ? 'third_payment' : 'installment')));
+        const payId = p.id || ('pay-' + orderId + '-' + stage + '-' + idx);
+        const amtPaise = p.amount_paise || Math.round((Number(p.amount_inr || p.amount || 0)) * 100);
+        const label = p.notes || (idx === 0 ? 'Advance Payment' : (idx === 1 ? '2nd Payment' : (idx === 2 ? '3rd Payment' : `${idx + 1}th Payment`)));
+        const method = p.payment_method || payMethod;
+        const payDate = p.created_at || createdAt;
+
+        const existing = db.prepare('SELECT id FROM payments WHERE id = ? OR (order_id = ? AND payment_stage = ?)').get(payId, orderId, stage);
+        if (!existing) {
+          db.prepare(`
+            INSERT INTO payments (id, order_id, payment_method, amount_paise, status, claimed_upi_ref, notes, payment_stage, created_at)
+            VALUES (?, ?, ?, ?, 'VERIFIED', ?, ?, ?, ?)
+          `).run(payId, orderId, method, amtPaise, p.claimed_upi_ref || resolvedUtr || null, label, stage, payDate);
+        } else {
+          db.prepare(`
+            UPDATE payments SET amount_paise = ?, status = 'VERIFIED', notes = ?, payment_method = ? WHERE id = ?
+          `).run(amtPaise, label, method, existing.id);
+        }
+      });
+      return;
+    }
 
     if (isPos) {
       const hasStages = (advancePaidPaise > 0 || secondPaymentPaise > 0 || thirdPaymentPaise > 0);
@@ -738,6 +762,7 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
       let advancePaidPaise = 0;
       let secondPaymentPaise = 0;
       let thirdPaymentPaise = 0;
+      let cDetail = null;
 
       // Extract embedded financial breakdown from co.items if present
       let rawItemsForFin = co.items;
@@ -756,7 +781,19 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
 
       if (isPos) {
         const refKey = String(co.order_ref || co.order_number || co.id || '').trim();
-        const cDetail = (cloudDetails && (cloudDetails[refKey] || (co.id && cloudDetails[co.id]) || (co.order_number && cloudDetails[co.order_number]))) || null;
+        const cleanRefKey = refKey.replace(/^ord-cld-/, '').toLowerCase();
+        if (cloudDetails) {
+          cDetail = cloudDetails[refKey] || (co.id && cloudDetails[co.id]) || (co.order_number && cloudDetails[co.order_number]) || cloudDetails[cleanRefKey];
+          if (!cDetail) {
+            for (const [k, v] of Object.entries(cloudDetails)) {
+              const ck = String(k).replace(/^ord-cld-/, '').toLowerCase();
+              if (ck === cleanRefKey || (co.id && k === co.id) || (co.order_ref && k === co.order_ref)) {
+                cDetail = v;
+                break;
+              }
+            }
+          }
+        }
         if (cDetail && (cDetail.status === 'VERIFIED' || cDetail.outstandingINR === 0 || cDetail.outstanding_inr === 0)) {
           isPaid = true;
           amountPaidPaise = grandTotalPaise;
@@ -1095,7 +1132,7 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
         syncOrderPaymentsInDb(
           db, existing.id, isPos, co.payment_method, finalPaymentStatus,
           grandTotalPaise, finalAmountPaid, advancePaidPaise, secondPaymentPaise, thirdPaymentPaise,
-          resolvedUtr, orderDate
+          resolvedUtr, orderDate, cDetail?.payments
         );
 
         return db.prepare('SELECT * FROM orders WHERE id = ?').get(existing.id);
@@ -1274,7 +1311,7 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
       syncOrderPaymentsInDb(
         db, orderId, isPos, co.payment_method, insertPaymentStatus,
         grandTotalPaise, insertAmountPaid, advancePaidPaise, secondPaymentPaise, thirdPaymentPaise,
-        resolvedUtr, orderDate
+        resolvedUtr, orderDate, cDetail?.payments
       );
 
       // Record invoice
