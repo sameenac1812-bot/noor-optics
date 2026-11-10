@@ -1396,7 +1396,7 @@
         pinCode: pin,
         prescriptionPref: rxChoice,
         prescription: prescriptionData,
-        paymentMethod: payChoice === 'upi' ? 'UPI_GPAY' : (payChoice === 'card' ? 'CARD' : 'CASH'),
+        paymentMethod: payChoice === 'upi' ? 'UPI_GPAY' : (payChoice === 'card' ? 'CARD' : 'UPI_GPAY'),
         claimedUpiRef: utrVal || null,
         claimed_upi_ref: utrVal || null,
         utr: utrVal || null,
@@ -1454,7 +1454,7 @@
             </div>
             <div class="receipt-detail-item">
               <span class="receipt-item-label">Payment</span>
-              <span class="receipt-item-val" style="${payChoice === 'upi' ? 'color:#B45309; font-weight:700;' : ''}">${payChoice === 'upi' ? `⏳ Awaiting UPI Verification (UTR: ${escapeHtml(utrVal)})` : (payChoice === 'card' ? 'Card Payment' : 'Cash on Delivery')}</span>
+              <span class="receipt-item-val" style="${payChoice === 'upi' ? 'color:#B45309; font-weight:700;' : ''}">${payChoice === 'upi' ? `⏳ Awaiting UPI Verification (UTR: ${escapeHtml(utrVal)})` : (payChoice === 'card' ? 'Card Payment' : 'Prepaid / Online Payment')}</span>
             </div>
           </div>
           <div class="receipt-total-row">
