@@ -9469,7 +9469,6 @@
       if (cpStageSelect) cpStageSelect.value = 'installment';
       if (cpStageBadge) cpStageBadge.textContent = `Auto: ${nextPayNum}th Payment`;
     }
-    }
 
     // 3. Pre-fill amount with exact balance and wire live calculation
     if (cpAmountInput) {
