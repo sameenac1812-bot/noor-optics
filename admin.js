@@ -779,6 +779,12 @@
         return true;
       });
 
+      incoming.forEach(o => {
+        if (!o) return;
+        o.order_number = o.order_number || o.order_ref || o.id;
+        o.order_ref = o.order_ref || o.order_number;
+      });
+
       // Apply session verified UPI orders so approved orders NEVER revert
       try {
         const storedVerified = JSON.parse(sessionStorage.getItem('noor_verified_upi_orders') || '[]');
@@ -1489,8 +1495,23 @@
   // ── View Order Details Modal ──────────────────────────────────────────────
   window.viewOrderDetails = async function (orderId) {
     window._activeViewingOrderId = orderId;
-    const order = state.ordersCache.find(o => o.id === orderId);
+    const cleanId = String(orderId || '').trim().toLowerCase();
+    let order = (state.ordersCache || []).find(o => {
+      if (!o) return false;
+      const oId = String(o.id || '').trim().toLowerCase();
+      const oNum = String(o.order_number || '').trim().toLowerCase();
+      const oRef = String(o.order_ref || '').trim().toLowerCase();
+      return oId === cleanId || oNum === cleanId || oRef === cleanId;
+    });
+
     if (!order) {
+      try {
+        const resp = await apiFetch(`/api/orders/${encodeURIComponent(orderId)}`);
+        order = resp?.order || resp;
+      } catch (_) {}
+    }
+
+    if (!order || (!order.id && !order.order_number)) {
       showToast('Order details not found.', 'error');
       return;
     }
@@ -9485,17 +9506,25 @@
       return;
     }
 
-    let order = (state.ordersCache || []).find(o => o.id === orderId || o.order_number === orderId);
+    const cleanReq = String(orderId).trim().toLowerCase();
+    let order = (state.ordersCache || []).find(o => {
+      if (!o) return false;
+      const oId = String(o.id || '').trim().toLowerCase();
+      const oNum = String(o.order_number || '').trim().toLowerCase();
+      const oRef = String(o.order_ref || '').trim().toLowerCase();
+      return oId === cleanReq || oNum === cleanReq || oRef === cleanReq;
+    });
+
     if (order) {
       // Open immediately with cached order data
       populateAndOpenCollectModal(order, modal);
     } else {
       // Fetch order from server if not found in local cache
       showToast('Loading order details...', 'info');
-      apiFetch(`/api/orders/${orderId}`)
+      apiFetch(`/api/orders/${encodeURIComponent(orderId)}`)
         .then(resp => {
           const fetchedOrder = resp?.order || resp;
-          if (fetchedOrder && fetchedOrder.id) {
+          if (fetchedOrder && (fetchedOrder.id || fetchedOrder.order_number)) {
             fetchedOrder.payments = resp.payments || fetchedOrder.payments || [];
             populateAndOpenCollectModal(fetchedOrder, modal);
           } else {
@@ -9547,18 +9576,48 @@
         })
       });
 
-      // Update local cache immediately
+      // Update local cache in-place (NEVER create duplicate order entry)
       if (res.order && Array.isArray(state.ordersCache)) {
-        const targetRef = res.order.order_number || res.order.order_ref || orderId;
-        const idx = state.ordersCache.findIndex(o => 
-          o.id === orderId || 
-          o.order_number === orderId || 
-          (targetRef && (o.order_number === targetRef || o.order_ref === targetRef || o.id === targetRef))
-        );
+        const targetNum = String(res.order.order_number || '').trim().toLowerCase();
+        const targetRef = String(res.order.order_ref || '').trim().toLowerCase();
+        const targetId = String(res.order.id || '').trim().toLowerCase();
+        const reqNum = String(orderNumber || '').trim().toLowerCase();
+        const reqId = String(orderId || '').trim().toLowerCase();
+        const dbId = String(cpIdEl?.dataset?.dbId || '').trim().toLowerCase();
+
+        const idx = state.ordersCache.findIndex(o => {
+          if (!o) return false;
+          const oId = String(o.id || '').trim().toLowerCase();
+          const oNum = String(o.order_number || '').trim().toLowerCase();
+          const oRef = String(o.order_ref || '').trim().toLowerCase();
+          
+          return (
+            (targetNum && (oNum === targetNum || oRef === targetNum || oId === targetNum)) ||
+            (targetRef && (oNum === targetRef || oRef === targetRef || oId === targetRef)) ||
+            (targetId && (oId === targetId || oNum === targetId || oRef === targetId)) ||
+            (reqNum && (oNum === reqNum || oRef === reqNum || oId === reqNum)) ||
+            (reqId && (oId === reqId || oNum === reqId || oRef === reqId)) ||
+            (dbId && (oId === dbId || oNum === dbId || oRef === dbId))
+          );
+        });
+
         if (idx >= 0) {
           state.ordersCache[idx] = { ...state.ordersCache[idx], ...res.order };
         } else {
-          state.ordersCache.unshift(res.order);
+          // Check if customer phone and total matches an existing order before unshifting
+          const custPhone = String(res.order.customer_phone || '').replace(/\D/g, '');
+          const matchByPhone = (custPhone && custPhone.length >= 10)
+            ? state.ordersCache.findIndex(o => {
+                const p = String(o.customer_phone || '').replace(/\D/g, '');
+                return p.endsWith(custPhone.slice(-10)) && Math.abs((o.total_payable_inr || o.grand_total || 0) - (res.order.total_payable_inr || res.order.grand_total || 0)) < 1;
+              })
+            : -1;
+
+          if (matchByPhone >= 0) {
+            state.ordersCache[matchByPhone] = { ...state.ordersCache[matchByPhone], ...res.order };
+          } else {
+            state.ordersCache.unshift(res.order);
+          }
         }
       }
 

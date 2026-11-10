@@ -45,11 +45,58 @@ const {
   deleteCustomerFromSupabase,
   deleteAllCustomersFromSupabase,
   pushPrintJobToCloudQueue,
-  startBackgroundSync
+  startBackgroundSync,
+  syncSingleOrderFromCloud
 } = require('./supabaseSync');
 
 // Start recurring multi-device background sync with Supabase cloud
 startBackgroundSync(db, 8000);
+
+/**
+ * Authoritative Order Lookup: Searches SQLite across all ID/reference formats,
+ * and if not found, immediately fetches & syncs that specific order from Supabase cloud.
+ * Eliminates serverless lambda cold-start lag and "Order not found" errors.
+ */
+async function getOrderByIdOrRef(db, orderId, orderNumberHint = null) {
+  if (!orderId && !orderNumberHint) return null;
+  const raw1 = String(orderId || '').trim();
+  const raw2 = String(orderNumberHint || '').trim();
+  const clean1 = raw1.replace(/^ord-cld-/, '');
+  const clean2 = raw2.replace(/^ord-cld-/, '');
+  const cld1 = 'ord-cld-' + raw1.toLowerCase().replace(/[^a-z0-9]/g, '-');
+  const cld2 = 'ord-cld-' + clean1.toLowerCase().replace(/[^a-z0-9]/g, '-');
+
+  const candidates = Array.from(new Set([raw1, raw2, clean1, clean2, cld1, cld2].filter(Boolean)));
+  
+  // 1. Search SQLite directly
+  const placeholders = candidates.map(() => '?').join(',');
+  let order = db.prepare(`
+    SELECT * FROM orders 
+    WHERE id IN (${placeholders}) OR order_number IN (${placeholders})
+    LIMIT 1
+  `).get(...candidates, ...candidates);
+
+  if (order) return order;
+
+  // 2. Fetch single order from Supabase cloud immediately
+  const targetToFetch = raw2 || raw1;
+  const synced = await syncSingleOrderFromCloud(db, targetToFetch);
+  if (synced) return synced;
+
+  // 3. Fallback: try raw1 if different from targetToFetch
+  if (raw1 && raw1 !== targetToFetch) {
+    const synced2 = await syncSingleOrderFromCloud(db, raw1);
+    if (synced2) return synced2;
+  }
+
+  // 4. Fallback: full sync if still not found
+  await syncSupabaseOrders(db, true).catch(() => {});
+  return db.prepare(`
+    SELECT * FROM orders 
+    WHERE id IN (${placeholders}) OR order_number IN (${placeholders})
+    LIMIT 1
+  `).get(...candidates, ...candidates);
+}
 
 // ── Helper: Format Daily Token Number ────────────────────────────────────────
 function getNextDailyTokenNumber() {
@@ -1223,7 +1270,8 @@ router.get('/customers/:id', authenticateToken, (req, res) => {
 });
 
 // ── GET /api/customers/:id/due (Quick check for previous unpaid dues) ────────
-router.get('/customers/:id/due', authenticateToken, (req, res) => {
+router.get('/customers/:id/due', authenticateToken, async (req, res) => {
+  await syncSupabaseOrders(db, false).catch(() => {});
   const customerId = (req.params.id || '').trim();
   const cleanPhone = customerId.replace(/\D/g, '');
   const phoneTail10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
@@ -2072,6 +2120,63 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       nowIso, nowIso
     );
 
+    // 2B. If this checkout rolled in previous due (previousDuePaise > 0), settle or reduce prior unpaid orders
+    // so the past due balance is NOT duplicated across multiple order entries!
+    if (previousDuePaise > 0 && (finalCustomerId || finalCustomerPhone)) {
+      try {
+        const priorUnpaid = db.prepare(`
+          SELECT * FROM orders
+          WHERE ((? IS NOT NULL AND customer_id = ?) OR (? IS NOT NULL AND customer_phone = ?))
+            AND id != ?
+            AND order_number != ?
+            AND outstanding_paise > 0
+            AND status != 'CANCELLED'
+          ORDER BY created_at ASC
+        `).all(finalCustomerId, finalCustomerId, finalCustomerPhone, finalCustomerPhone, orderId, orderNumber);
+
+        let remainingToDeduct = previousDuePaise;
+        for (const priorOrd of priorUnpaid) {
+          if (remainingToDeduct <= 0) break;
+          const priorDue = priorOrd.outstanding_paise || 0;
+          const deduct = Math.min(priorDue, remainingToDeduct);
+          const newPriorOutstanding = Math.max(0, priorDue - deduct);
+          const newPriorPaid = (priorOrd.amount_paid_paise || 0) + deduct;
+          const newPriorStatus = (newPriorOutstanding === 0) ? 'VERIFIED' : 'PARTIAL';
+          const rolloverNote = `Balance rolled into Bill #${orderNumber}`;
+
+          db.prepare(`
+            UPDATE orders
+            SET outstanding_paise = ?,
+                amount_paid_paise = ?,
+                payment_status = ?,
+                notes = CASE 
+                  WHEN notes IS NULL OR notes = '' THEN ?
+                  ELSE notes || ' · ' || ?
+                END,
+                updated_at = datetime('now')
+            WHERE id = ?
+          `).run(newPriorOutstanding, newPriorPaid, newPriorStatus, rolloverNote, rolloverNote, priorOrd.id);
+
+          // Add audit payment record to prior order
+          const rolloverPayId = 'pay-roll-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+          db.prepare(`
+            INSERT INTO payments (id, order_id, payment_method, amount_paise, status, notes, payment_stage, created_at)
+            VALUES (?, ?, 'CASH', ?, 'VERIFIED', ?, 'rollover', datetime('now'))
+          `).run(rolloverPayId, priorOrd.id, deduct, rolloverNote);
+
+          // Sync settlement to Supabase SYS-ORDER-PAYMENTS so cloud state stays 100% in sync
+          pushOrderPaymentStatusToCloud(priorOrd.order_number, newPriorStatus, rolloverNote, {
+            amountPaidINR: newPriorPaid / 100,
+            outstandingINR: newPriorOutstanding / 100
+          }).catch(() => {});
+
+          remainingToDeduct -= deduct;
+        }
+      } catch (rolloverErr) {
+        console.warn('[POS Checkout] Rollover prior due note:', rolloverErr.message);
+      }
+    }
+
     // Update customer's total spent
     if (finalCustomerId) {
       db.prepare(`
@@ -2307,37 +2412,7 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     return res.status(400).json({ error: 'Payment amount must be greater than zero.' });
   }
 
-  const cldId = 'ord-cld-' + String(orderId).toLowerCase().replace(/[^a-z0-9]/g, '-');
-  let order = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ? OR id = ? OR order_number = ?').get(orderId, orderId, cldId, cldId);
-  if (!order && orderNumberHint) {
-    const cldHint = 'ord-cld-' + String(orderNumberHint).toLowerCase().replace(/[^a-z0-9]/g, '-');
-    order = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ? OR id = ? OR order_number = ?').get(orderNumberHint, orderNumberHint, cldHint, cldHint);
-  }
-  if (!order) {
-    // Cloud sync fallback
-    await syncSupabaseOrders(db, true).catch(() => {});
-    order = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ? OR id = ? OR order_number = ?').get(orderId, orderId, cldId, cldId);
-    if (!order && orderNumberHint) {
-      const cldHint = 'ord-cld-' + String(orderNumberHint).toLowerCase().replace(/[^a-z0-9]/g, '-');
-      order = db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ? OR id = ? OR order_number = ?').get(orderNumberHint, orderNumberHint, cldHint, cldHint);
-    }
-  }
-  if (!order && SUPABASE_URL && SUPABASE_ANON_KEY) {
-    try {
-      const q = encodeURIComponent(orderNumberHint || orderId);
-      const sRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?or=(id.eq.${q},order_ref.eq.${q},order_number.eq.${q})&limit=1`, {
-        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-      });
-      if (sRes.ok) {
-        const sRows = await sRes.json();
-        if (Array.isArray(sRows) && sRows.length > 0) {
-          await syncSupabaseOrders(db, true).catch(() => {});
-          const matchedRef = sRows[0].order_ref || sRows[0].order_number || sRows[0].id;
-          order = db.prepare('SELECT * FROM orders WHERE order_number = ? OR id = ?').get(matchedRef, matchedRef);
-        }
-      }
-    } catch (_) {}
-  }
+  let order = await getOrderByIdOrRef(db, orderId, orderNumberHint);
   if (!order) {
     return res.status(404).json({ error: 'Order not found.' });
   }
@@ -3083,29 +3158,10 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), a
     LIMIT 1
   `;
 
-  let order = db.prepare(getOrderSql).get(idParam, idParam, cldId, cldId);
-  if (!order) {
-    await syncSupabaseOrders(db, true).catch(() => {});
-    order = db.prepare(getOrderSql).get(idParam, idParam, cldId, cldId);
-  }
-  if (!order && SUPABASE_URL && SUPABASE_ANON_KEY) {
-    try {
-      const q = encodeURIComponent(idParam);
-      const sRes = await fetch(`${SUPABASE_URL}/rest/v1/orders?or=(id.eq.${q},order_ref.eq.${q},order_number.eq.${q})&limit=1`, {
-        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-      });
-      if (sRes.ok) {
-        const sRows = await sRes.json();
-        if (Array.isArray(sRows) && sRows.length > 0) {
-          await syncSupabaseOrders(db, true).catch(() => {});
-          const matchedRef = sRows[0].order_ref || sRows[0].order_number || sRows[0].id;
-          order = db.prepare(getOrderSql).get(matchedRef, matchedRef, cldId, cldId);
-        }
-      }
-    } catch (_) {}
-  }
+  const baseOrder = await getOrderByIdOrRef(db, idParam);
+  if (!baseOrder) return res.status(404).json({ error: 'Order not found' });
 
-  if (!order) return res.status(404).json({ error: 'Order not found' });
+  let order = db.prepare(getOrderSql).get(baseOrder.id, baseOrder.order_number, baseOrder.id, baseOrder.order_number) || baseOrder;
 
   // Fallback to customer's latest prescription if order has none linked
   let rx = null;

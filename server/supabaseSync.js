@@ -633,69 +633,23 @@ function syncOrderPaymentsInDb(db, orderId, isPos, paymentMethod, paymentStatus,
 }
 
 /**
- * Sync orders from Supabase cloud into local SQLite database
+ * Process a single cloud order record and upsert into local SQLite database
  */
-async function syncSupabaseOrders(db, force = false) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || isSyncing) return;
-  const now = Date.now();
-  if (!force && (now - lastOrderSyncTime < ORDER_SYNC_CACHE_MS)) return;
-  lastOrderSyncTime = now;
-  isSyncing = true;
-  // Safety reset: never block for more than 15s
-  const isSyncingReset = setTimeout(() => { isSyncing = false; }, 15000);
-
-  try {
-    // 0. Fetch cloud payment verifications (guarantees payment approval sticks across all lambdas & clients)
-    const { verified: cloudVerifiedOrders, rejected: cloudRejectedOrders, details: cloudDetails } = await fetchCloudOrderPayments();
-
-    // 1. Fetch cloud tombstones and sync into local deleted_orders table
-    const { orders: cloudTombstones, purgedBefore } = await fetchCloudOrderTombstones();
-    for (const deadRef of cloudTombstones) {
+async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), cloudRejectedOrders = new Set(), cloudDetails = {}, cloudTombstones = new Set()) {
       try {
-        db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(deadRef);
-        // Cascade delete from local orders if still present
-        const deadOrder = db.prepare('SELECT id FROM orders WHERE order_number = ? OR id = ?').get(deadRef, deadRef);
-        if (deadOrder) {
-          db.prepare('DELETE FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE order_id = ?)').run(deadOrder.id);
-          db.prepare('DELETE FROM invoices WHERE order_id = ?').run(deadOrder.id);
-          db.prepare('DELETE FROM order_items WHERE order_id = ?').run(deadOrder.id);
-          db.prepare('DELETE FROM orders WHERE id = ?').run(deadOrder.id);
-        }
-      } catch(e) {}
-    }
-
-    // 2. Fetch orders from Supabase (capped to most recent 300 to ensure all orders appear in admin)
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc&limit=300`, {
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-      },
-      signal: AbortSignal.timeout(8000)
-    });
-
-    if (!res.ok) {
-      console.warn(`[SupabaseSync] Fetch failed with status ${res.status}`);
-      return;
-    }
-
-    const cloudOrders = await res.json();
-    if (!Array.isArray(cloudOrders) || cloudOrders.length === 0) return;
-
-    for (const co of cloudOrders) {
-      try {
-        if (!co.order_ref) continue;
+        if (!co.order_ref) return null;
       // Filter out dummy/test ghost orders
-      if (/TEST-REF|GHOST-TEST/i.test(co.order_ref)) continue;
+      if (/TEST-REF|GHOST-TEST/i.test(co.order_ref)) return null;
 
       // Filter out if explicitly in cloud tombstones
       if (cloudTombstones.has(co.order_ref) || (co.id && cloudTombstones.has(co.id))) {
-        continue;
+        return null;
       }
 
       // Check if this order was deleted / tombstoned in local SQLite
       try {
         const isTombstoned = db.prepare('SELECT order_number FROM deleted_orders WHERE order_number = ?').get(co.order_ref);
-        if (isTombstoned) continue;
+        if (isTombstoned) return null;
       } catch (e) {}
 
       const grandTotalPaise = Math.round((Number(co.grand_total) || 0) * 100);
@@ -1105,7 +1059,7 @@ async function syncSupabaseOrders(db, force = false) {
           resolvedUtr, orderDate
         );
 
-        continue;
+        return null;
       }
 
       // Generate order ID
@@ -1301,15 +1255,117 @@ async function syncSupabaseOrders(db, force = false) {
       }
 
       console.log(`[SupabaseSync] Synced cloud order ${co.order_ref} (${channel}) for ${name}`);
-      } catch (orderErr) {
-        console.warn(`[SupabaseSync] Error processing order ${co?.order_ref}:`, orderErr.message);
-      }
+      return db.prepare('SELECT * FROM orders WHERE id = ? OR order_number = ?').get(orderId, co.order_ref);
+    } catch (orderErr) {
+      console.warn(`[SupabaseSync] Error processing order ${co?.order_ref}:`, orderErr.message);
+      return null;
+    }
+}
+
+/**
+ * Sync orders from Supabase cloud into local SQLite database
+ */
+async function syncSupabaseOrders(db, force = false) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || isSyncing) return;
+  const now = Date.now();
+  if (!force && (now - lastOrderSyncTime < ORDER_SYNC_CACHE_MS)) return;
+  lastOrderSyncTime = now;
+  isSyncing = true;
+  // Safety reset: never block for more than 15s
+  const isSyncingReset = setTimeout(() => { isSyncing = false; }, 15000);
+
+  try {
+    // 0. Fetch cloud payment verifications (guarantees payment approval sticks across all lambdas & clients)
+    const { verified: cloudVerifiedOrders, rejected: cloudRejectedOrders, details: cloudDetails } = await fetchCloudOrderPayments();
+
+    // 1. Fetch cloud tombstones and sync into local deleted_orders table
+    const { orders: cloudTombstones, purgedBefore } = await fetchCloudOrderTombstones();
+    for (const deadRef of cloudTombstones) {
+      try {
+        db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(deadRef);
+        // Cascade delete from local orders if still present
+        const deadOrder = db.prepare('SELECT id FROM orders WHERE order_number = ? OR id = ?').get(deadRef, deadRef);
+        if (deadOrder) {
+          db.prepare('DELETE FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE order_id = ?)').run(deadOrder.id);
+          db.prepare('DELETE FROM invoices WHERE order_id = ?').run(deadOrder.id);
+          db.prepare('DELETE FROM order_items WHERE order_id = ?').run(deadOrder.id);
+          db.prepare('DELETE FROM orders WHERE id = ?').run(deadOrder.id);
+        }
+      } catch(e) {}
+    }
+
+    // 2. Fetch orders from Supabase (capped to most recent 300 to ensure all orders appear in admin)
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?select=*&order=created_at.desc&limit=300`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      },
+      signal: AbortSignal.timeout(8000)
+    });
+
+    if (!res.ok) {
+      console.warn(`[SupabaseSync] Fetch failed with status ${res.status}`);
+      return;
+    }
+
+    const cloudOrders = await res.json();
+    if (!Array.isArray(cloudOrders) || cloudOrders.length === 0) return;
+
+    for (const co of cloudOrders) {
+      await processSingleCloudOrder(db, co, cloudVerifiedOrders, cloudRejectedOrders, cloudDetails, cloudTombstones);
     }
   } catch (err) {
     console.warn('[SupabaseSync] Error syncing orders from Supabase:', err.message);
   } finally {
     clearTimeout(isSyncingReset);
     isSyncing = false;
+  }
+}
+
+/**
+ * Fetch and sync a single order from Supabase cloud into SQLite immediately (bypasses rate limiter & sync locks)
+ */
+async function syncSingleOrderFromCloud(db, orderRefOrId) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !orderRefOrId) return null;
+  const rawTarget = String(orderRefOrId).trim();
+  const cleanTarget = rawTarget.replace(/^ord-cld-/, "");
+  try {
+    const isUuid = (val) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    const q1 = encodeURIComponent(rawTarget);
+    const q2 = encodeURIComponent(cleanTarget);
+    
+    let parts = [];
+    if (isUuid(rawTarget)) parts.push("id.eq." + q1);
+    parts.push("order_ref.eq." + q1, "order_number.eq." + q1);
+    if (rawTarget !== cleanTarget) {
+      if (isUuid(cleanTarget)) parts.push("id.eq." + q2);
+      parts.push("order_ref.eq." + q2, "order_number.eq." + q2);
+    }
+    const filter = "or=(" + parts.join(",") + ")";
+
+    const res = await fetch(SUPABASE_URL + "/rest/v1/orders?" + filter + "&limit=1", {
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": "Bearer " + SUPABASE_ANON_KEY
+      },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!res.ok) return null;
+    const list = await res.json();
+    if (!Array.isArray(list) || list.length === 0) return null;
+    const co = list[0];
+
+    const { verified: cloudVerifiedOrders, rejected: cloudRejectedOrders, details: cloudDetails } = await fetchCloudOrderPayments();
+    const { orders: cloudTombstones } = await fetchCloudOrderTombstones();
+
+    await processSingleCloudOrder(db, co, cloudVerifiedOrders, cloudRejectedOrders, cloudDetails, cloudTombstones);
+
+    const ref = co.order_ref || co.order_number || co.id;
+    const cldId = "ord-cld-" + String(ref).toLowerCase().replace(/[^a-z0-9]/g, "-");
+    return db.prepare("SELECT * FROM orders WHERE order_number = ? OR id = ? OR id = ?").get(ref, ref, cldId);
+  } catch (err) {
+    console.warn("[SupabaseSync] syncSingleOrderFromCloud failed:", err.message);
+    return null;
   }
 }
 
@@ -2442,5 +2498,7 @@ module.exports = {
   deleteCustomerFromSupabase,
   deleteAllCustomersFromSupabase,
   pushPrintJobToCloudQueue,
-  startBackgroundSync
+  startBackgroundSync,
+  syncSingleOrderFromCloud,
+  processSingleCloudOrder
 };

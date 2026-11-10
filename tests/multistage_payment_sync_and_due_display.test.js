@@ -14,7 +14,7 @@
 
 const assert = require('assert');
 const { db } = require('../server/db');
-const { syncSupabaseOrders } = require('../server/supabaseSync');
+const { processSingleCloudOrder } = require('../server/supabaseSync');
 
 console.log('\n======================================================');
 console.log('🧪 RUNNING MULTI-STAGE PAYMENT SYNC & DUE DISPLAY TEST');
@@ -23,19 +23,27 @@ console.log('======================================================\n');
 // 1. Verify payments table does not inflate advance to full grand total
 console.log('--- 1. Testing Sync of Order with Partial Advance ---');
 
-const testOrderRef = 'NOOR-POS-20261109-9647-3326';
+const testOrderRef = 'TEST-POS-' + Date.now();
+const testCo = {
+  order_ref: testOrderRef,
+  channel: 'POS',
+  customer_name: 'Test Customer',
+  customer_phone: '9988776655',
+  grand_total: 1998,
+  subtotal: 1998,
+  payment_method: 'CASH',
+  payment_status: 'PARTIAL',
+  created_at: new Date().toISOString(),
+  items: [{
+    name: 'Test Frame',
+    advance_paid_inr: 220,
+    second_payment_inr: 778,
+    outstanding_inr: 1000
+  }]
+};
 
-// Clean out existing local test data for fresh assertion
-const existingOrd = db.prepare('SELECT id FROM orders WHERE order_number = ?').get(testOrderRef);
-if (existingOrd) {
-  db.prepare('DELETE FROM payments WHERE order_id = ?').run(existingOrd.id);
-  db.prepare('DELETE FROM order_items WHERE order_id = ?').run(existingOrd.id);
-  db.prepare('DELETE FROM invoices WHERE order_id = ?').run(existingOrd.id);
-  db.prepare('DELETE FROM orders WHERE id = ?').run(existingOrd.id);
-}
-
-// Run sync
-syncSupabaseOrders(db, true).then(() => {
+// Run process
+processSingleCloudOrder(db, testCo).then(() => {
   const synced = db.prepare('SELECT * FROM orders WHERE order_number = ?').get(testOrderRef);
   assert.ok(synced, 'Order must be synced into SQLite');
   assert.strictEqual(synced.total_payable_paise, 199800, 'Total bill must be 199800 (Rs. 1,998)');
@@ -98,6 +106,12 @@ syncSupabaseOrders(db, true).then(() => {
 
   console.log('  ✓ [PASS] Partial balance correctly triggers due indicator');
 
+  // Cleanup test order
+  db.prepare('DELETE FROM payments WHERE order_id = ?').run(synced.id);
+  db.prepare('DELETE FROM order_items WHERE order_id = ?').run(synced.id);
+  db.prepare('DELETE FROM invoices WHERE order_id = ?').run(synced.id);
+  db.prepare('DELETE FROM orders WHERE id = ?').run(synced.id);
+
   console.log('\n======================================================');
   console.log('🏁 MULTI-STAGE PAYMENT & DUE DISPLAY: ALL TESTS PASSED!');
   console.log('======================================================\n');
@@ -105,3 +119,4 @@ syncSupabaseOrders(db, true).then(() => {
   console.error('Test execution failed:', err);
   process.exit(1);
 });
+
