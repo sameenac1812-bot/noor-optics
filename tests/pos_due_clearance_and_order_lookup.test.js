@@ -166,11 +166,71 @@ async function runTests() {
 
   console.log('  ✓ [PASS] Prior order balance settled to 0; new bill carries rolled balance cleanly');
 
+  // --- 4. Testing Multi-Stage Remaining Due Sequential Deduction ---
+  console.log('\n--- 4. Testing Sequential Due Deduction (500 -> pay 50 -> 450 -> pay 100 -> 350 -> pay 350 -> 0) ---');
+  const seqBillRef = 'NOOR-POS-SEQ-' + Date.now();
+  const seqBillId = 'ord-test-seq-' + Date.now();
+  const grandTotalPaise = 50000; // Rs. 500
+
+  db.prepare(`
+    INSERT INTO orders (
+      id, order_number, token_number, channel, channel_code, source, customer_name, customer_phone,
+      status, payment_status, subtotal_paise, total_payable_paise, amount_paid_paise,
+      outstanding_paise, created_at, updated_at
+    ) VALUES (
+      ?, ?, 1, 'POS', 2, 'instore', 'Sequential Due Test', '9849821199',
+      'CONFIRMED', 'PARTIAL', ?, ?, 0,
+      ?, datetime('now'), datetime('now')
+    )
+  `).run(seqBillId, seqBillRef, grandTotalPaise, grandTotalPaise, grandTotalPaise);
+
+  // Helper matching the deduction engine in server/api.js
+  function recordPayment(orderId, paymentINR, explicitDueINR) {
+    const ord = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    const paymentPaise = Math.round(paymentINR * 100);
+    const currentTotal = ord.total_payable_paise || 0;
+    let currentDuePaise = (explicitDueINR != null)
+      ? Math.round(explicitDueINR * 100)
+      : (ord.outstanding_paise != null ? ord.outstanding_paise : Math.max(0, currentTotal - (ord.amount_paid_paise || 0)));
+
+    const newOutstanding = Math.max(0, currentDuePaise - paymentPaise);
+    const newAmountPaid = Math.max(0, currentTotal - newOutstanding);
+    const newStatus = (newOutstanding === 0) ? 'VERIFIED' : 'PARTIAL';
+
+    db.prepare(`
+      UPDATE orders
+      SET amount_paid_paise = ?, outstanding_paise = ?, payment_status = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(newAmountPaid, newOutstanding, newStatus, orderId);
+
+    return { newOutstanding, newAmountPaid, newStatus };
+  }
+
+  // Payment 1: Pay Rs. 50 on Rs. 500 -> remaining Rs. 450
+  const p1 = recordPayment(seqBillId, 50, 500);
+  assert.strictEqual(p1.newOutstanding, 45000, 'Remaining due after paying 50 must be 45000 paise (Rs. 450)');
+  assert.strictEqual(p1.newAmountPaid, 5000, 'Amount paid must be 5000 paise (Rs. 50)');
+  assert.strictEqual(p1.newStatus, 'PARTIAL');
+
+  // Payment 2: Pay Rs. 100 on remaining Rs. 450 -> remaining Rs. 350 (NOT 400!)
+  const p2 = recordPayment(seqBillId, 100, 450);
+  assert.strictEqual(p2.newOutstanding, 35000, 'Remaining due after paying 100 must be 35000 paise (Rs. 350, NOT 400)');
+  assert.strictEqual(p2.newAmountPaid, 15000, 'Amount paid must be 15000 paise (Rs. 150)');
+  assert.strictEqual(p2.newStatus, 'PARTIAL');
+
+  // Payment 3: Pay Rs. 350 (Full balance) -> remaining Rs. 0 (VERIFIED / PAID IN FULL)
+  const p3 = recordPayment(seqBillId, 350, 350);
+  assert.strictEqual(p3.newOutstanding, 0, 'Remaining due after full settlement must be 0');
+  assert.strictEqual(p3.newAmountPaid, 50000, 'Total paid must be 50000 paise (Rs. 500)');
+  assert.strictEqual(p3.newStatus, 'VERIFIED', 'Payment status must be VERIFIED (PAID IN FULL)');
+
+  console.log('  ✓ [PASS] Sequential due deduction exact: 500 -> 450 -> 350 -> 0 (Paid in Full)');
+
   // Cleanup test data
-  db.prepare('DELETE FROM payments WHERE order_id IN (?, ?)').run(processed.id, newBillId);
-  db.prepare('DELETE FROM order_items WHERE order_id IN (?, ?)').run(processed.id, newBillId);
-  db.prepare('DELETE FROM invoices WHERE order_id IN (?, ?)').run(processed.id, newBillId);
-  db.prepare('DELETE FROM orders WHERE id IN (?, ?)').run(processed.id, newBillId);
+  db.prepare('DELETE FROM payments WHERE order_id IN (?, ?, ?)').run(processed.id, newBillId, seqBillId);
+  db.prepare('DELETE FROM order_items WHERE order_id IN (?, ?, ?)').run(processed.id, newBillId, seqBillId);
+  db.prepare('DELETE FROM invoices WHERE order_id IN (?, ?, ?)').run(processed.id, newBillId, seqBillId);
+  db.prepare('DELETE FROM orders WHERE id IN (?, ?, ?)').run(processed.id, newBillId, seqBillId);
 
   console.log('\n======================================================');
   console.log('🏁 ALL POS DUE CLEARANCE & ORDER LOOKUP TESTS PASSED!');

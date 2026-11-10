@@ -1011,6 +1011,14 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
             if (existing.second_payment_paise > secondPaymentPaise) secondPaymentPaise = existing.second_payment_paise;
             if (existing.third_payment_paise > thirdPaymentPaise) thirdPaymentPaise = existing.third_payment_paise;
             if (existing.advance_paid_paise > advancePaidPaise) advancePaidPaise = existing.advance_paid_paise;
+          } else if (finalAmountPaid > (existing.amount_paid_paise || 0)) {
+            finalOutstanding = Math.max(0, grandTotalPaise - finalAmountPaid);
+            finalPaymentStatus = (finalOutstanding === 0) ? 'VERIFIED' : 'PARTIAL';
+          }
+          // Preserve the lowest outstanding recorded anywhere
+          if (existing.outstanding_paise != null && existing.outstanding_paise < finalOutstanding) {
+            finalOutstanding = existing.outstanding_paise;
+            finalAmountPaid = Math.max(finalAmountPaid, grandTotalPaise - finalOutstanding);
           }
           // NEVER downgrade a locally-VERIFIED POS order. Cloud payment_status is RLS-blocked.
           // If local says VERIFIED, trust it unconditionally.
@@ -1517,7 +1525,6 @@ async function pushOrderToSupabase(orderPayload) {
       delivery_address: address,
       city: city,
       pin_code: pin,
-      items: itemsToPush,
       prescription_pref: rxPref,
       payment_method: payMethod,
       payment_status: payStatus,
@@ -1529,6 +1536,9 @@ async function pushOrderToSupabase(orderPayload) {
       grand_total: grandTotal,
       status: orderStatus
     };
+    if (itemsToPush.length > 0) {
+      baseOrderBody.items = itemsToPush;
+    }
 
     let res = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
       method: 'POST',
@@ -1554,7 +1564,6 @@ async function pushOrderToSupabase(orderPayload) {
           delivery_address: address,
           city: city,
           pin_code: pin,
-          items: itemsToPush,
           prescription_pref: rxPref,
           payment_method: payMethod,
           payment_status: payStatus,
@@ -1563,6 +1572,9 @@ async function pushOrderToSupabase(orderPayload) {
           grand_total: grandTotal,
           status: orderStatus
         };
+        if (itemsToPush.length > 0) {
+          legacyBody.items = itemsToPush;
+        }
         res = await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
           method: 'POST',
           headers: {

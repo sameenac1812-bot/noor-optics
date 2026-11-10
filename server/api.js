@@ -2420,10 +2420,23 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     return res.status(404).json({ error: 'Order not found.' });
   }
 
-  const currentPaid = order.amount_paid_paise || 0;
   const currentTotal = order.total_payable_paise || 0;
-  const newAmountPaid = currentPaid + paymentPaise;
-  const newOutstanding = Math.max(0, currentTotal - newAmountPaid);
+
+  // Determine current active remaining due to deduct installment from
+  let currentDuePaise = null;
+  if (req.body.currentDueINR !== undefined && req.body.currentDueINR !== null && !isNaN(Number(req.body.currentDueINR))) {
+    currentDuePaise = Math.round(Number(req.body.currentDueINR) * 100);
+  } else if (req.body.current_due_inr !== undefined && req.body.current_due_inr !== null && !isNaN(Number(req.body.current_due_inr))) {
+    currentDuePaise = Math.round(Number(req.body.current_due_inr) * 100);
+  } else if (order.outstanding_paise != null) {
+    currentDuePaise = order.outstanding_paise;
+  } else {
+    currentDuePaise = Math.max(0, currentTotal - (order.amount_paid_paise || 0));
+  }
+
+  // Deduct payment amount directly from the remaining balance until 0
+  const newOutstanding = Math.max(0, currentDuePaise - paymentPaise);
+  const newAmountPaid = Math.max(0, currentTotal - newOutstanding);
   const newPaymentStatus = (newOutstanding === 0) ? 'VERIFIED' : 'PARTIAL';
 
   let stageCol = 'second_payment_paise';
@@ -2479,16 +2492,24 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     amount_inr: (p.amount_paise || 0) / 100
   }));
 
-  // Sync to Supabase
+  // Sync to Supabase with full items array and financial breakdown
   pushOrderToSupabase({
     orderNumber: order.order_number,
     channel: 'POS',
     customerName: order.customer_name,
     customerPhone: order.customer_phone,
+    items: orderItems.map(i => ({
+      name: i.item_name,
+      item_name: i.item_name,
+      quantity: i.quantity,
+      unit_price: (i.unit_price_paise || 0) / 100,
+      subtotal: (i.subtotal_paise || 0) / 100
+    })),
     amountPaidINR: newAmountPaid / 100,
     outstandingINR: newOutstanding / 100,
     paymentStatus: newPaymentStatus,
     grandTotalINR: currentTotal / 100,
+    advancePaidINR: (updatedOrder.advance_paid_paise || (order.advance_paid_paise || 0)) / 100,
     secondPaymentINR: (updatedOrder.second_payment_paise || 0) / 100,
     thirdPaymentINR: (updatedOrder.third_payment_paise || 0) / 100
   }).catch(() => {});
@@ -2969,11 +2990,7 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
     res.setHeader('Expires', '0');
 
     const forceSync = req.query.force === '1' || req.query.force === 'true';
-    if (forceSync) {
-      await syncSupabaseOrders(db, true).catch(err => console.warn('[SupabaseSync] GET /orders sync note:', err.message));
-    } else {
-      syncSupabaseOrders(db, false).catch(() => {});
-    }
+    await syncSupabaseOrders(db, forceSync).catch(err => console.warn('[SupabaseSync] GET /orders sync note:', err.message));
 
     const { channel, paymentStatus, status, limit = 300 } = req.query;
 

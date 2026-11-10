@@ -809,7 +809,7 @@
         if (Object.keys(storedCollected).length > 0) {
           incoming.forEach(o => {
             const key = o.order_number || o.order_ref || o.id;
-            const rec = storedCollected[key] || (o.id && storedCollected[o.id]);
+            const rec = storedCollected[key] || (o.id && storedCollected[o.id]) || (o.order_number && storedCollected[o.order_number]) || (o.order_ref && storedCollected[o.order_ref]);
             if (rec) {
               if (rec.amount_paid_inr != null && rec.amount_paid_inr >= (o.amount_paid_inr || 0)) {
                 o.amount_paid_inr = rec.amount_paid_inr;
@@ -9393,19 +9393,20 @@
     const btnPayFull = document.getElementById('btn-cp-pay-full');
 
     const resolvedRef = order.order_number || order.order_ref || order.id;
-    if (cpOrderId) {
-      cpOrderId.value = resolvedRef;
-      cpOrderId.dataset.dbId = order.id || '';
-      cpOrderId.dataset.orderNumber = order.order_number || order.order_ref || '';
-    }
-    if (cpCustName) cpCustName.textContent = order.customer_name || 'Walk-in Client';
-    if (cpOrderInv) cpOrderInv.textContent = order.order_number || ('INV-' + order.id.slice(-4));
-
     const totalINR = (order.total_payable_inr != null) ? order.total_payable_inr : ((order.total_payable_paise || 0) / 100);
     const rawPaid = (order.amount_paid_inr != null) ? order.amount_paid_inr : ((order.amount_paid_paise || 0) / 100);
     const isPaidInFull = (order.payment_status === 'VERIFIED') || (rawPaid >= totalINR && totalINR > 0);
     const paidINR = isPaidInFull ? totalINR : rawPaid;
     const remainingINR = isPaidInFull ? 0 : Math.max(0, Math.min(totalINR - paidINR, (order.outstanding_inr != null) ? order.outstanding_inr : (order.outstanding_paise != null ? (order.outstanding_paise / 100) : (totalINR - paidINR))));
+
+    if (cpOrderId) {
+      cpOrderId.value = resolvedRef;
+      cpOrderId.dataset.dbId = order.id || '';
+      cpOrderId.dataset.orderNumber = order.order_number || order.order_ref || '';
+      cpOrderId.dataset.currentDueInr = String(remainingINR);
+    }
+    if (cpCustName) cpCustName.textContent = order.customer_name || 'Walk-in Client';
+    if (cpOrderInv) cpOrderInv.textContent = order.order_number || ('INV-' + order.id.slice(-4));
 
     if (cpTotalBill) cpTotalBill.textContent = '₹ ' + totalINR.toLocaleString('en-IN');
     if (cpPaidSofar) cpPaidSofar.textContent = '₹ ' + paidINR.toLocaleString('en-IN');
@@ -9565,16 +9566,23 @@
     }
 
     try {
+      const currentDueINR = parseFloat(cpIdEl?.dataset?.currentDueInr);
       const res = await apiFetch(`/api/pos/orders/${encodeURIComponent(orderId)}/collect-payment`, {
         method: 'POST',
         body: JSON.stringify({
           orderNumber,
           paymentStage: stage,
           amountINR,
+          currentDueINR: !isNaN(currentDueINR) ? currentDueINR : undefined,
           paymentMethod,
           notes
         })
       });
+
+      // Update remaining due dataset for any subsequent collect on same modal session
+      if (cpIdEl) {
+        cpIdEl.dataset.currentDueInr = String(res.remaining_due_inr != null ? res.remaining_due_inr : (res.order?.outstanding_inr != null ? res.order.outstanding_inr : 0));
+      }
 
       // Update local cache in-place (NEVER create duplicate order entry)
       if (res.order && Array.isArray(state.ordersCache)) {
