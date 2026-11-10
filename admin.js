@@ -9167,12 +9167,12 @@
     setupPrescriptionModal();
     setupDiopterSelector();
 
-    // Continuous Live Auto-Refresh (polls every 2.5s): loads orders instantly as placed with chime & visual sync
+    // Continuous Live Auto-Refresh (polls every 4s): loads orders instantly as placed with chime & visual sync
     setInterval(() => {
       if (state.token) {
         loadOrders(true);
       }
-    }, 2500);
+    }, 4000);
 
     // Instant wake-up refresh on browser tab visibility or window focus
     document.addEventListener('visibilitychange', () => {

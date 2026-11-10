@@ -45,10 +45,14 @@ db.pragma('foreign_keys = ON');
 db.pragma('synchronous = NORMAL');
 db.pragma('busy_timeout = 10000'); // 10s wait during concurrent transactions to eliminate 'database is locked'
 
+let _dbInitialized = false;
+
 /**
  * Initialize all 27 business tables
  */
 function initializeDatabase() {
+  if (_dbInitialized) return;
+  _dbInitialized = true;
   db.exec(`
     -- 1. Roles
     CREATE TABLE IF NOT EXISTS roles (

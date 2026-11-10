@@ -1082,8 +1082,12 @@ router.post('/purchase-orders/:id/receive', authenticateToken, requirePermission
 
 // ── GET /api/customers (Directory with Search, Stats & Archival Filters) ───────
 router.get('/customers', authenticateToken, async (req, res) => {
-  // Sync incoming cloud orders to keep client directory synchronized
-  await syncSupabaseOrders(db).catch(() => {});
+  const forceSync = req.query.force === '1' || req.query.force === 'true';
+  if (forceSync) {
+    await syncSupabaseOrders(db, true).catch(() => {});
+  } else {
+    syncSupabaseOrders(db, false).catch(() => {});
+  }
 
   const search = req.query.search ? req.query.search.trim() : '';
   const searchPattern = `%${search}%`;
@@ -1270,8 +1274,7 @@ router.get('/customers/:id', authenticateToken, (req, res) => {
 });
 
 // ── GET /api/customers/:id/due (Quick check for previous unpaid dues) ────────
-router.get('/customers/:id/due', authenticateToken, async (req, res) => {
-  await syncSupabaseOrders(db, false).catch(() => {});
+router.get('/customers/:id/due', authenticateToken, (req, res) => {
   const customerId = (req.params.id || '').trim();
   const cleanPhone = customerId.replace(/\D/g, '');
   const phoneTail10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
@@ -2966,7 +2969,11 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
     res.setHeader('Expires', '0');
 
     const forceSync = req.query.force === '1' || req.query.force === 'true';
-    await syncSupabaseOrders(db, forceSync).catch(err => console.warn('[SupabaseSync] GET /orders sync note:', err.message));
+    if (forceSync) {
+      await syncSupabaseOrders(db, true).catch(err => console.warn('[SupabaseSync] GET /orders sync note:', err.message));
+    } else {
+      syncSupabaseOrders(db, false).catch(() => {});
+    }
 
     const { channel, paymentStatus, status, limit = 300 } = req.query;
 

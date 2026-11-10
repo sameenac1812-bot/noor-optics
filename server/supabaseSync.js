@@ -1042,6 +1042,23 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
           }
         }
 
+        // Check if existing record is already identical to avoid unnecessary disk writes & lock contention!
+        const isIdentical = (
+          existing.channel === channel &&
+          existing.channel_code === channelCode &&
+          existing.payment_status === finalPaymentStatus &&
+          existing.amount_paid_paise === finalAmountPaid &&
+          existing.outstanding_paise === finalOutstanding &&
+          (advancePaidPaise === 0 || (existing.advance_paid_paise || 0) === advancePaidPaise) &&
+          (secondPaymentPaise === 0 || (existing.second_payment_paise || 0) === secondPaymentPaise) &&
+          (thirdPaymentPaise === 0 || (existing.third_payment_paise || 0) === thirdPaymentPaise) &&
+          (!resolvedUtr || existing.claimed_upi_ref === resolvedUtr)
+        );
+
+        if (isIdentical) {
+          return null;
+        }
+
         db.prepare(`
           UPDATE orders
           SET channel = ?, channel_code = ?, source = ?, payment_status = ?,
