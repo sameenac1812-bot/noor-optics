@@ -1752,7 +1752,7 @@ router.post('/products/upload-image', authenticateToken, (req, res) => {
 // 7. POINT OF SALE (POS) CHECKOUT (ATOMIC TRANSACTION WITH CLIENT INTEGRATION)
 // ==============================================================================
 
-router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'), (req, res) => {
+router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'), async (req, res) => {
   const {
     customerId, prescriptionId, customerName = 'Walk-in Client', customerPhone, customerEmail,
     clientDetails, newPrescription,
@@ -1780,6 +1780,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
 
   let incomingRx = newPrescription || req.body.prescription || null;
   const preparedItems = [];
+  const rolloverSyncs = [];
   let calculatedSubtotalPaise = 0;
 
   const checkoutTx = db.transaction(() => {
@@ -2167,11 +2168,17 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
             VALUES (?, ?, 'CASH', ?, 'VERIFIED', ?, 'rollover', datetime('now'))
           `).run(rolloverPayId, priorOrd.id, deduct, rolloverNote);
 
-          // Sync settlement to Supabase SYS-ORDER-PAYMENTS so cloud state stays 100% in sync
-          pushOrderPaymentStatusToCloud(priorOrd.order_number, newPriorStatus, rolloverNote, {
-            amountPaidINR: newPriorPaid / 100,
-            outstandingINR: newPriorOutstanding / 100
-          }).catch(() => {});
+          // Queue settlement to Supabase SYS-ORDER-PAYMENTS so cloud state stays 100% in sync
+          rolloverSyncs.push({
+            orderNumber: priorOrd.order_number,
+            status: newPriorStatus,
+            note: rolloverNote,
+            details: {
+              amountPaidINR: newPriorPaid / 100,
+              outstandingINR: newPriorOutstanding / 100,
+              aliases: [priorOrd.id, priorOrd.order_number, priorOrd.order_ref].filter(Boolean)
+            }
+          });
 
           remainingToDeduct -= deduct;
         }
@@ -2288,6 +2295,11 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
 
   try {
     const result = checkoutTx();
+
+    // Asynchronously push queued rollover settlements to cloud
+    for (const rs of rolloverSyncs) {
+      await pushOrderPaymentStatusToCloud(rs.orderNumber, rs.status, rs.note, rs.details).catch(() => {});
+    }
     logAudit(req.user.id, req.user.email, 'POS_SALE_COMPLETED', 'ORDER', result.orderId, {
       orderNumber, total: result.totalPayableINR, customerId: result.customerId
     }, req);
@@ -2354,14 +2366,17 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     }).catch(err => console.warn('[SupabaseSync] Push POS order note:', err.message));
 
     if (result.paymentStatus === 'VERIFIED') {
-      pushOrderPaymentStatusToCloud(orderNumber, 'VERIFIED', 'In-Store POS Sale Paid in Full').catch(() => {});
+      await pushOrderPaymentStatusToCloud(orderNumber, 'VERIFIED', 'In-Store POS Sale Paid in Full', {
+        aliases: [result.orderId, orderNumber, result.orderRef].filter(Boolean)
+      }).catch(() => {});
     } else if (result.paymentStatus === 'PARTIAL') {
-      pushOrderPaymentStatusToCloud(orderNumber, 'PARTIAL', 'In-Store POS Advance Payment', {
+      await pushOrderPaymentStatusToCloud(orderNumber, 'PARTIAL', 'In-Store POS Advance Payment', {
         amountPaidINR: result.amountPaidINR,
         outstandingINR: result.outstandingINR,
         advancePaidINR: result.advancePaidINR,
         secondPaymentINR: result.secondPaymentINR,
-        thirdPaymentINR: result.thirdPaymentINR
+        thirdPaymentINR: result.thirdPaymentINR,
+        aliases: [result.orderId, orderNumber, result.orderRef].filter(Boolean)
       }).catch(() => {});
     }
 
@@ -2515,13 +2530,14 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
   }).catch(() => {});
 
   // Persist financial installment breakdown unconditionally to Supabase SYS-ORDER-PAYMENTS
-  pushOrderPaymentStatusToCloud(order.order_number, newPaymentStatus, stageLabel, {
+  await pushOrderPaymentStatusToCloud(order.order_number, newPaymentStatus, stageLabel, {
     amountPaidINR: newAmountPaid / 100,
     outstandingINR: newOutstanding / 100,
     advancePaidINR: (updatedOrder.advance_paid_paise || (order.advance_paid_paise || 0)) / 100,
     secondPaymentINR: (updatedOrder.second_payment_paise || 0) / 100,
-    thirdPaymentINR: (updatedOrder.third_payment_paise || 0) / 100
-  }).catch(() => {});
+    thirdPaymentINR: (updatedOrder.third_payment_paise || 0) / 100,
+    aliases: [order.id, order.order_number, order.order_ref, updatedOrder.id, updatedOrder.order_number, updatedOrder.order_ref].filter(Boolean)
+  }).catch(err => console.warn('[SupabaseSync] pushOrderPaymentStatusToCloud error:', err.message));
 
   const orderPayload = {
     ...updatedOrder,

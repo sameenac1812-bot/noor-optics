@@ -226,11 +226,49 @@ async function runTests() {
 
   console.log('  ✓ [PASS] Sequential due deduction exact: 500 -> 450 -> 350 -> 0 (Paid in Full)');
 
+  // --- 5. Test Cloud Order Sync Never Reverts Settled Balance ---
+  console.log('\n--- 5. Testing Cloud Order Sync Never Reverts Settled Balance ---');
+  const settledRef = 'NOOR-POS-SETTLED-' + Date.now();
+  const cloudVerified = new Set([settledRef]);
+  const cloudDetails = {
+    [settledRef]: {
+      status: 'VERIFIED',
+      amountPaidINR: 1998,
+      outstandingINR: 0
+    }
+  };
+
+  // Simulate cloud order coming in with older partial items payload
+  const cloudOrderWithStaleItems = {
+    order_ref: settledRef,
+    channel: 'POS',
+    customer_name: 'Settled Customer',
+    customer_phone: '9849821199',
+    grand_total: 1998,
+    subtotal: 1998,
+    payment_method: 'CASH',
+    payment_status: 'PARTIAL', // stale cloud status
+    created_at: new Date().toISOString(),
+    items: [{
+      name: 'Grey Jack (3079)',
+      quantity: 1,
+      advance_paid_inr: 998,
+      outstanding_inr: 1000 // stale cloud items due
+    }]
+  };
+
+  const syncedSettled = await processSingleCloudOrder(db, cloudOrderWithStaleItems, cloudVerified, new Set(), cloudDetails, new Set());
+  assert.ok(syncedSettled, 'Order must sync into SQLite');
+  assert.strictEqual(syncedSettled.outstanding_paise, 0, 'Outstanding paise must be 0 (never revert to 1000)');
+  assert.strictEqual(syncedSettled.payment_status, 'VERIFIED', 'Payment status must remain VERIFIED');
+  assert.strictEqual(syncedSettled.amount_paid_paise, 199800, 'Amount paid must be 199800 paise (full amount)');
+  console.log('  ✓ [PASS] Cloud sync never reverts settled order back to due balance');
+
   // Cleanup test data
-  db.prepare('DELETE FROM payments WHERE order_id IN (?, ?, ?)').run(processed.id, newBillId, seqBillId);
-  db.prepare('DELETE FROM order_items WHERE order_id IN (?, ?, ?)').run(processed.id, newBillId, seqBillId);
-  db.prepare('DELETE FROM invoices WHERE order_id IN (?, ?, ?)').run(processed.id, newBillId, seqBillId);
-  db.prepare('DELETE FROM orders WHERE id IN (?, ?, ?)').run(processed.id, newBillId, seqBillId);
+  db.prepare('DELETE FROM payments WHERE order_id IN (?, ?, ?, ?)').run(processed.id, newBillId, seqBillId, syncedSettled.id);
+  db.prepare('DELETE FROM order_items WHERE order_id IN (?, ?, ?, ?)').run(processed.id, newBillId, seqBillId, syncedSettled.id);
+  db.prepare('DELETE FROM invoices WHERE order_id IN (?, ?, ?, ?)').run(processed.id, newBillId, seqBillId, syncedSettled.id);
+  db.prepare('DELETE FROM orders WHERE id IN (?, ?, ?, ?)').run(processed.id, newBillId, seqBillId, syncedSettled.id);
 
   console.log('\n======================================================');
   console.log('🏁 ALL POS DUE CLEARANCE & ORDER LOOKUP TESTS PASSED!');

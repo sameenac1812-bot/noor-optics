@@ -126,34 +126,44 @@ async function pushOrderPaymentStatusToCloud(orderRef, paymentStatus, reasonOrNo
       }
     }
 
-    if (paymentStatus === 'VERIFIED') {
-      if (!verified.includes(cleanRef)) verified.push(cleanRef);
-      rejected = rejected.filter(r => r !== cleanRef);
-      details[cleanRef] = {
-        status: 'VERIFIED',
-        verified_at: new Date().toISOString(),
-        notes: reasonOrNotes || 'Verified by Staff',
-        ...(financialDetails || {})
-      };
-    } else if (paymentStatus === 'REJECTED') {
-      if (!rejected.includes(cleanRef)) rejected.push(cleanRef);
-      verified = verified.filter(r => r !== cleanRef);
-      details[cleanRef] = {
-        status: 'REJECTED',
-        rejected_at: new Date().toISOString(),
-        notes: reasonOrNotes || 'Payment rejected'
-      };
-    } else {
-      // PARTIAL / PENDING installment update
-      verified = verified.filter(r => r !== cleanRef);
-      rejected = rejected.filter(r => r !== cleanRef);
-      details[cleanRef] = {
-        status: paymentStatus,
-        updated_at: new Date().toISOString(),
-        notes: reasonOrNotes || 'Installment payment recorded',
-        ...(financialDetails || {})
-      };
+    const allRefs = [cleanRef];
+    if (financialDetails && Array.isArray(financialDetails.aliases)) {
+      financialDetails.aliases.forEach(a => {
+        const ca = String(a).trim();
+        if (ca && !allRefs.includes(ca)) allRefs.push(ca);
+      });
     }
+
+    allRefs.forEach(ref => {
+      if (paymentStatus === 'VERIFIED') {
+        if (!verified.includes(ref)) verified.push(ref);
+        rejected = rejected.filter(r => r !== ref);
+        details[ref] = {
+          status: 'VERIFIED',
+          verified_at: new Date().toISOString(),
+          notes: reasonOrNotes || 'Verified by Staff',
+          ...(financialDetails || {})
+        };
+      } else if (paymentStatus === 'REJECTED') {
+        if (!rejected.includes(ref)) rejected.push(ref);
+        verified = verified.filter(r => r !== ref);
+        details[ref] = {
+          status: 'REJECTED',
+          rejected_at: new Date().toISOString(),
+          notes: reasonOrNotes || 'Payment rejected'
+        };
+      } else {
+        // PARTIAL / PENDING installment update
+        verified = verified.filter(r => r !== ref);
+        rejected = rejected.filter(r => r !== ref);
+        details[ref] = {
+          status: paymentStatus,
+          updated_at: new Date().toISOString(),
+          notes: reasonOrNotes || 'Installment payment recorded',
+          ...(financialDetails || {})
+        };
+      }
+    });
 
     const payloadNotes = JSON.stringify({
       verified_orders: verified,
@@ -747,7 +757,7 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
       if (isPos) {
         const refKey = String(co.order_ref || co.order_number || co.id || '').trim();
         const cDetail = (cloudDetails && (cloudDetails[refKey] || (co.id && cloudDetails[co.id]) || (co.order_number && cloudDetails[co.order_number]))) || null;
-        if (cDetail && cDetail.status === 'VERIFIED') {
+        if (cDetail && (cDetail.status === 'VERIFIED' || cDetail.outstandingINR === 0 || cDetail.outstanding_inr === 0)) {
           isPaid = true;
           amountPaidPaise = grandTotalPaise;
           outstandingPaise = 0;
@@ -982,7 +992,7 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
         }
       }
 
-      const existing = db.prepare('SELECT id, customer_id, payment_status, amount_paid_paise, outstanding_paise, prescription_id, prescriptions_json FROM orders WHERE order_number = ?').get(co.order_ref);
+      const existing = db.prepare('SELECT id, order_number, channel, channel_code, customer_id, payment_status, amount_paid_paise, outstanding_paise, advance_paid_paise, second_payment_paise, third_payment_paise, claimed_upi_ref, prescription_id, prescriptions_json FROM orders WHERE order_number = ?').get(co.order_ref);
       if (existing) {
         // Ensure channel, customer_id, and prescription are kept accurate
         if (!existing.customer_id && customerId) {
@@ -998,7 +1008,7 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
         let finalAmountPaid = existing.amount_paid_paise !== undefined ? existing.amount_paid_paise : amountPaidPaise;
         let finalOutstanding = existing.outstanding_paise !== undefined ? existing.outstanding_paise : outstandingPaise;
 
-        if (isCloudVerified) {
+        if (isCloudVerified || finalPaymentStatus === 'VERIFIED' || finalOutstanding === 0) {
           finalPaymentStatus = 'VERIFIED';
           finalAmountPaid = grandTotalPaise;
           finalOutstanding = 0;
@@ -1021,10 +1031,10 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
             finalAmountPaid = Math.max(finalAmountPaid, grandTotalPaise - finalOutstanding);
           }
           // NEVER downgrade a locally-VERIFIED POS order. Cloud payment_status is RLS-blocked.
-          // If local says VERIFIED, trust it unconditionally.
-          if (existing.payment_status === 'VERIFIED' || finalPaymentStatus === 'VERIFIED') {
+          // If local says VERIFIED or balance is settled, trust it unconditionally.
+          if (existing.payment_status === 'VERIFIED' || finalPaymentStatus === 'VERIFIED' || finalOutstanding === 0) {
             finalPaymentStatus = 'VERIFIED';
-            finalAmountPaid = existing.amount_paid_paise || grandTotalPaise;
+            finalAmountPaid = grandTotalPaise;
             finalOutstanding = 0;
           } else if (finalOutstanding > 0 && finalAmountPaid > 0) {
             finalPaymentStatus = 'PARTIAL';
@@ -1064,7 +1074,7 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
         );
 
         if (isIdentical) {
-          return null;
+          return db.prepare('SELECT * FROM orders WHERE id = ?').get(existing.id);
         }
 
         db.prepare(`
@@ -1084,7 +1094,7 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
           resolvedUtr, orderDate
         );
 
-        return null;
+        return db.prepare('SELECT * FROM orders WHERE id = ?').get(existing.id);
       }
 
       // Generate order ID
@@ -1095,7 +1105,7 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
       let insertPaymentStatus = paymentStatus;
       let insertAmountPaid = amountPaidPaise;
       let insertOutstanding = outstandingPaise;
-      if (isPos && isCloudVerified) {
+      if (isPos && (isCloudVerified || insertOutstanding === 0 || insertPaymentStatus === 'VERIFIED')) {
         insertPaymentStatus = 'VERIFIED';
         insertAmountPaid = grandTotalPaise;
         insertOutstanding = 0;

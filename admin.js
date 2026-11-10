@@ -803,20 +803,33 @@
         }
       } catch (_) {}
 
-      // Apply session recorded installment payments so collected payments NEVER revert on continuous poll
+      // Apply recorded installment payments so collected payments NEVER revert on continuous poll
       try {
-        const storedCollected = JSON.parse(sessionStorage.getItem('noor_collected_payments') || '{}');
+        const storedCollected = JSON.parse(localStorage.getItem('noor_collected_payments') || sessionStorage.getItem('noor_collected_payments') || '{}');
         if (Object.keys(storedCollected).length > 0) {
           incoming.forEach(o => {
             const key = o.order_number || o.order_ref || o.id;
             const rec = storedCollected[key] || (o.id && storedCollected[o.id]) || (o.order_number && storedCollected[o.order_number]) || (o.order_ref && storedCollected[o.order_ref]);
             if (rec) {
-              if (rec.amount_paid_inr != null && rec.amount_paid_inr >= (o.amount_paid_inr || 0)) {
-                o.amount_paid_inr = rec.amount_paid_inr;
-                o.amount_paid_paise = Math.round(rec.amount_paid_inr * 100);
-                o.outstanding_inr = rec.outstanding_inr;
-                o.outstanding_paise = Math.round(rec.outstanding_inr * 100);
-                o.payment_status = rec.payment_status;
+              if (rec.payment_status === 'VERIFIED' || rec.outstanding_inr === 0) {
+                const tot = o.total_payable_inr || (o.total_payable_paise ? o.total_payable_paise / 100 : o.amount_paid_inr || 0);
+                o.amount_paid_inr = tot;
+                o.amount_paid_paise = Math.round(tot * 100);
+                o.outstanding_inr = 0;
+                o.outstanding_paise = 0;
+                o.payment_status = 'VERIFIED';
+                if (rec.second_payment_inr != null) o.second_payment_inr = rec.second_payment_inr;
+                if (rec.third_payment_inr != null) o.third_payment_inr = rec.third_payment_inr;
+              } else if ((rec.amount_paid_inr != null && rec.amount_paid_inr >= (o.amount_paid_inr || 0)) || (rec.outstanding_inr != null && (o.outstanding_inr == null || rec.outstanding_inr <= o.outstanding_inr))) {
+                if (rec.amount_paid_inr != null) {
+                  o.amount_paid_inr = rec.amount_paid_inr;
+                  o.amount_paid_paise = Math.round(rec.amount_paid_inr * 100);
+                }
+                if (rec.outstanding_inr != null) {
+                  o.outstanding_inr = rec.outstanding_inr;
+                  o.outstanding_paise = Math.round(rec.outstanding_inr * 100);
+                }
+                o.payment_status = rec.payment_status || (rec.outstanding_inr === 0 ? 'VERIFIED' : 'PARTIAL');
                 if (rec.second_payment_inr != null) o.second_payment_inr = rec.second_payment_inr;
                 if (rec.third_payment_inr != null) o.third_payment_inr = rec.third_payment_inr;
               }
@@ -983,7 +996,7 @@
           const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
           const rawPaid = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
           const rawDue = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - rawPaid));
-          const isFullyPaid = (rawDue <= 0 || rawPaid >= totalPayable) || ((o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') && o.payment_status !== 'PARTIAL');
+          const isFullyPaid = (rawDue <= 0 || rawPaid >= totalPayable) || o.payment_status === 'VERIFIED' || o.payment_status === 'PAID';
           const outstandingINR = isFullyPaid ? 0 : rawDue;
           const isDue = (outstandingINR > 0) && !isFullyPaid;
           const hasRx = !!o.prescription_id || !!o.prescription_number || (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) || (o.od_sph != null || o.os_sph != null) || (o.prescription_pref === 'enter-rx') || (o.items && o.items[0] && (o.items[0].prescription || o.items[0].rx));
@@ -1084,7 +1097,7 @@
         const totalPayableRow = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
         const rawPaidRow = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
         const rawDueRow = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayableRow - rawPaidRow));
-        const isFullyPaidRow = (rawDueRow <= 0 || rawPaidRow >= totalPayableRow) || ((o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') && o.payment_status !== 'PARTIAL');
+        const isFullyPaidRow = (rawDueRow <= 0 || rawPaidRow >= totalPayableRow) || o.payment_status === 'VERIFIED' || o.payment_status === 'PAID';
         const amountPaidRow = isFullyPaidRow ? totalPayableRow : rawPaidRow;
         const outstandingRow = isFullyPaidRow ? 0 : rawDueRow;
         const isDueRow = (outstandingRow > 0) && !isFullyPaidRow;
@@ -9327,8 +9340,14 @@
 
         let amt = p.amount_inr != null ? p.amount_inr : ((p.amount_paise || 0) / 100);
         // If this is the advance stage and order records an explicit advance, ensure amount matches
-        if ((p.payment_stage === 'advance' || idx === 0) && advINR > 0 && amt > advINR && (order.outstanding_inr > 0 || order.outstanding_paise > 0)) {
-          amt = advINR;
+        const hasDueBalance = (order.outstanding_inr != null ? order.outstanding_inr : ((order.outstanding_paise || 0) / 100)) > 0;
+        if ((p.payment_stage === 'advance' || idx === 0) && hasDueBalance) {
+          const effectiveAdv = advINR > 0 ? advINR : Math.max(0, paidINR - secINR - thdINR);
+          if (effectiveAdv > 0 && amt > effectiveAdv) {
+            amt = effectiveAdv;
+          } else if (amt > paidINR && paidINR > 0) {
+            amt = paidINR;
+          }
         }
         return {
           label,
@@ -9395,7 +9414,7 @@
     const resolvedRef = order.order_number || order.order_ref || order.id;
     const totalINR = (order.total_payable_inr != null) ? order.total_payable_inr : ((order.total_payable_paise || 0) / 100);
     const rawPaid = (order.amount_paid_inr != null) ? order.amount_paid_inr : ((order.amount_paid_paise || 0) / 100);
-    const isPaidInFull = (order.payment_status === 'VERIFIED') || (rawPaid >= totalINR && totalINR > 0);
+    const isPaidInFull = (order.payment_status === 'VERIFIED') || (rawPaid >= totalINR && totalINR > 0) || ((order.outstanding_inr != null ? order.outstanding_inr : (order.outstanding_paise || 0)) <= 0 && rawPaid > 0);
     const paidINR = isPaidInFull ? totalINR : rawPaid;
     const remainingINR = isPaidInFull ? 0 : Math.max(0, Math.min(totalINR - paidINR, (order.outstanding_inr != null) ? order.outstanding_inr : (order.outstanding_paise != null ? (order.outstanding_paise / 100) : (totalINR - paidINR))));
 
@@ -9629,17 +9648,23 @@
         }
       }
 
-      // Persist to session storage so continuous polls never revert this collected payment
+      // Persist to local & session storage so continuous polls never revert this collected payment
       try {
-        const storedCollected = JSON.parse(sessionStorage.getItem('noor_collected_payments') || '{}');
+        const storedCollected = JSON.parse(localStorage.getItem('noor_collected_payments') || sessionStorage.getItem('noor_collected_payments') || '{}');
         const key = (res.order && (res.order.order_number || res.order.order_ref || res.order.id)) || orderId;
-        storedCollected[key] = {
+        const record = {
           amount_paid_inr: res.order ? res.order.amount_paid_inr : null,
           outstanding_inr: res.remaining_due_inr != null ? res.remaining_due_inr : 0,
           payment_status: (res.remaining_due_inr === 0) ? 'VERIFIED' : 'PARTIAL',
           second_payment_inr: res.order ? res.order.second_payment_inr : null,
           third_payment_inr: res.order ? res.order.third_payment_inr : null
         };
+        storedCollected[key] = record;
+        if (res.order?.order_number) storedCollected[res.order.order_number] = record;
+        if (res.order?.order_ref) storedCollected[res.order.order_ref] = record;
+        if (res.order?.id) storedCollected[res.order.id] = record;
+        if (orderId) storedCollected[orderId] = record;
+        localStorage.setItem('noor_collected_payments', JSON.stringify(storedCollected));
         sessionStorage.setItem('noor_collected_payments', JSON.stringify(storedCollected));
       } catch (_) {}
 
