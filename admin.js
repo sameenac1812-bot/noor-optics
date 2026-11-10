@@ -999,7 +999,8 @@
           const isFullyPaid = (rawDue <= 0 || rawPaid >= totalPayable) || o.payment_status === 'VERIFIED' || o.payment_status === 'PAID';
           const outstandingINR = isFullyPaid ? 0 : rawDue;
           const isDue = (outstandingINR > 0) && !isFullyPaid;
-          const hasRx = !!o.prescription_id || !!o.prescription_number || (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) || (o.od_sph != null || o.os_sph != null) || (o.prescription_pref === 'enter-rx') || (o.items && o.items[0] && (o.items[0].prescription || o.items[0].rx));
+          const isZeroPower = String(o.prescription_pref || '').toLowerCase().includes('zero') || String(o.prescription_pref || '').toLowerCase().includes('plano');
+          const hasRx = !isZeroPower && (!!o.prescription_id || !!o.prescription_number || (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) || (o.od_sph != null || o.os_sph != null) || (o.prescription_pref === 'enter-rx') || (o.items && o.items[0] && (o.items[0].prescription || o.items[0].rx)));
           const rxCount = (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) ? o.prescriptions.length : (hasRx ? 1 : 0);
           const utrCard = getOrderUtr(o);
           const itemsSummary = (o.items && o.items.length)
@@ -1117,14 +1118,20 @@
               ${o.client_code ? `<span style="font-size:0.68rem; font-weight:700; color:#1D4ED8; background:#EFF6FF; border:1px solid #BFDBFE; padding:1px 5px; border-radius:4px; margin-left:4px;">${escapeHtml(o.client_code)}</span>` : ''}
               ${o.customer_phone ? `<div style="font-size:0.72rem; color:#6B7280;">${escapeHtml(o.customer_phone)}</div>` : ''}
               ${o.city ? `<div style="font-size:0.7rem; color:#9CA3AF;">${escapeHtml(o.city)}</div>` : ''}
-              ${(o.prescription_number || o.od_sph || o.prescription_id) ? `
+              ${isZeroPower ? `
+                <div style="margin-top:4px;">
+                  <span class="badge-status" style="background:#F1F5F9; color:#475569; border:1px solid #CBD5E1; font-size:0.68rem; font-weight:700;">
+                    👓 Zero Power (Blue-Cut)
+                  </span>
+                </div>
+              ` : ((o.prescription_number || o.od_sph || o.prescription_id) ? `
                 <div style="margin-top:4px;">
                   <span class="badge-status" style="background:#EBF5FF; color:#1E40AF; border:1px solid #BFDBFE; font-size:0.68rem; font-weight:700; cursor:pointer;" onclick="event.stopPropagation(); printPrescriptionRecord('${o.prescription_id || ''}')" title="Click to view/print prescription">
                     👓 ${escapeHtml(o.prescription_number || 'RX Attached')}
                     ${o.od_sph ? `(R: ${o.od_sph} / L: ${o.os_sph || o.od_sph})` : ''}
                   </span>
                 </div>
-              ` : (o.prescription_pref ? `<div style="font-size:0.68rem; color:#9CA3AF; margin-top:2px;">RX: ${escapeHtml(o.prescription_pref)}</div>` : '')}
+              ` : (o.prescription_pref ? `<div style="font-size:0.68rem; color:#9CA3AF; margin-top:2px;">RX: ${escapeHtml(o.prescription_pref)}</div>` : ''))}
             </td>
             <td>
               <div style="font-weight:600;">${itemsCount} item${itemsCount > 1 ? 's' : ''}</div>
@@ -1171,7 +1178,7 @@
                 ${o.customer_phone ? `
                   <div style="display:flex; gap:4px; margin-top:2px;">
                     <a href="tel:${escapeHtml(o.customer_phone)}" class="btn-table-action" title="Call Client" style="text-decoration:none; display:inline-flex; align-items:center; gap:2px; font-weight:700; color:#1D4ED8; background:#EFF6FF; border:1px solid #BFDBFE;">📞 Call</a>
-                    <button type="button" class="btn-table-action" onclick="openWhatsAppDirect('${escapeHtml(o.customer_phone)}', '${escapeHtml(o.customer_name || 'Client')}')" title="WhatsApp Chat" style="display:inline-flex; align-items:center; gap:2px; font-weight:700; color:#15803D; background:#F0FDF4; border:1px solid #BBF7D0;">💬 WhatsApp</button>
+                    <button type="button" class="btn-table-action" onclick="sendWhatsAppBill('${o.id}')" title="Send Bill Image via WhatsApp" style="display:inline-flex; align-items:center; gap:2px; font-weight:700; color:#15803D; background:#F0FDF4; border:1px solid #BBF7D0;">💬 WhatsApp</button>
                   </div>
                 ` : ''}
               </div>
@@ -1262,16 +1269,12 @@
       }
     };
 
-    // Wire WA
+    // Wire WA (Sends Digital Bill Image via WhatsApp)
     const btnWa = document.getElementById('action-sheet-wa');
     if (btnWa) btnWa.onclick = () => {
       modal?.classList.remove('open');
       document.body.classList.remove('modal-open');
-      if (order.customer_phone) {
-        openWhatsAppDirect(order.customer_phone, order.customer_name || 'Client');
-      } else {
-        showToast('No phone number recorded for this client.', 'warning');
-      }
+      sendWhatsAppBill(orderId, order);
     };
 
     // Wire Pay
@@ -1600,41 +1603,52 @@
 
     const modalUtr = getOrderUtr(order);
 
-    // Resolve structured prescription from all attached sources
+    // Resolve structured prescription from all attached sources (only if not zero-power)
+    const hasAnyRxAttached = Boolean(
+      order.prescription_id ||
+      order.prescription_number ||
+      order.od_sph != null ||
+      order.os_sph != null ||
+      (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) ||
+      (order.items && order.items.some(it => it && (it.prescription || it.rx)))
+    );
+    const isZeroPower = !hasAnyRxAttached && (String(order.prescription_pref || '').toLowerCase().includes('zero') || String(order.prescription_pref || '').toLowerCase().includes('plano'));
     let effectiveRx = null;
-    if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
-      effectiveRx = order.prescriptions[0];
-    } else if (order.prescriptions_json) {
-      try {
-        const p = JSON.parse(order.prescriptions_json);
-        if (Array.isArray(p) && p.length > 0) effectiveRx = p[0];
-      } catch (_) {}
-    }
-    if (!effectiveRx && Array.isArray(order.items)) {
-      for (const it of order.items) {
-        if (it && (it.prescription || it.rx)) {
-          effectiveRx = it.prescription || it.rx;
-          break;
+    if (!isZeroPower) {
+      if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
+        effectiveRx = order.prescriptions[0];
+      } else if (order.prescriptions_json) {
+        try {
+          const p = JSON.parse(order.prescriptions_json);
+          if (Array.isArray(p) && p.length > 0) effectiveRx = p[0];
+        } catch (_) {}
+      }
+      if (!effectiveRx && Array.isArray(order.items)) {
+        for (const it of order.items) {
+          if (it && (it.prescription || it.rx)) {
+            effectiveRx = it.prescription || it.rx;
+            break;
+          }
         }
       }
+      if (!effectiveRx && (order.od_sph != null || order.os_sph != null || order.prescription_number || order.prescription_id)) {
+        effectiveRx = {
+          id: order.prescription_id,
+          prescription_number: order.prescription_number,
+          od_sph: order.od_sph,
+          od_cyl: order.od_cyl,
+          od_axis: order.od_axis,
+          os_sph: order.os_sph,
+          os_cyl: order.os_cyl,
+          os_axis: order.os_axis,
+          addition: order.addition,
+          ipd_distance: order.ipd_distance,
+          checked_by: order.rx_checked_by || order.checked_by,
+          notes: order.rx_notes || order.notes
+        };
+      }
     }
-    if (!effectiveRx && (order.od_sph != null || order.os_sph != null || order.prescription_number || order.prescription_id)) {
-      effectiveRx = {
-        id: order.prescription_id,
-        prescription_number: order.prescription_number,
-        od_sph: order.od_sph,
-        od_cyl: order.od_cyl,
-        od_axis: order.od_axis,
-        os_sph: order.os_sph,
-        os_cyl: order.os_cyl,
-        os_axis: order.os_axis,
-        addition: order.addition,
-        ipd_distance: order.ipd_distance,
-        checked_by: order.rx_checked_by || order.checked_by,
-        notes: order.rx_notes || order.notes
-      };
-    }
-    const hasStructuredRx = Boolean(effectiveRx && (
+    const hasStructuredRx = !isZeroPower && Boolean(effectiveRx && (
       effectiveRx.od_sph != null || effectiveRx.os_sph != null ||
       effectiveRx.odSph != null || effectiveRx.osSph != null ||
       effectiveRx.od_cyl != null || effectiveRx.os_cyl != null ||
@@ -1676,7 +1690,7 @@
               <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:2px;">
                 <span><strong>Phone:</strong> ${escapeHtml(order.customer_phone)}</span>
                 <a href="tel:${escapeHtml(order.customer_phone)}" class="btn-table-action" style="text-decoration:none; padding:2px 8px; font-size:0.75rem; background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE;">📞 Call</a>
-                <button type="button" class="btn-table-action" onclick="openWhatsAppDirect('${escapeHtml(order.customer_phone)}', '${escapeHtml(order.customer_name || 'Client')}')" style="padding:2px 8px; font-size:0.75rem; background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0;">💬 WhatsApp</button>
+                <button type="button" class="btn-table-action" onclick="sendWhatsAppBill('${order.id}', order)" title="Send Bill Image via WhatsApp" style="padding:2px 8px; font-size:0.75rem; background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0;">💬 WhatsApp</button>
               </div>
             ` : ''}
             ${order.customer_age ? `<div><strong>Age:</strong> ${escapeHtml(order.customer_age)} yrs</div>` : ''}
@@ -1701,60 +1715,6 @@
           <div style="margin-top:2px;"><strong>Order Status:</strong> <span class="badge-status status-${order.status?.toLowerCase()}">${escapeHtml(order.status)}</span></div>
         </div>
       </div>
-
-      <!-- Glasses Prescription Section -->
-      ${hasStructuredRx ? `
-        <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:8px; padding:1.1rem; margin-bottom:1.5rem;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; flex-wrap:wrap; gap:8px;">
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span style="font-size:1.25rem;">👓</span>
-              <div>
-                <strong style="color:#166534; font-size:0.95rem;">Glasses Prescription: ${escapeHtml(effectiveRx.prescription_number || effectiveRx.prescriptionNumber || order.prescription_number || 'RX Attached')}</strong>
-                <div style="font-size:0.72rem; color:#15803D;">Date: ${formatShortDate(effectiveRx.prescription_date || order.prescription_date || order.created_at)} • Checked by: ${escapeHtml(effectiveRx.checked_by || effectiveRx.rx_checked_by || order.rx_checked_by || order.checked_by || 'Optometrist')}${effectiveRx.prescriber_details ? ` • Prescriber: ${escapeHtml(effectiveRx.prescriber_details)}` : ''}</div>
-              </div>
-            </div>
-            <div style="display:flex; gap:6px; flex-wrap:wrap;">
-              <button type="button" class="btn-table-action" style="background:#2563EB; color:#FFF; font-weight:700; padding:6px 14px;" onclick="openEditPrescriptionModal('${effectiveRx.id || order.prescription_id || ''}')">
-                ✏️ Edit Prescription Lens Values
-              </button>
-              <button type="button" class="btn-table-action" style="background:#166534; color:#FFF; font-weight:700; padding:6px 14px;" onclick="printPrescriptionRecord('${effectiveRx.id || order.prescription_id || ''}')">
-                🖨️ Print Prescription RX
-              </button>
-            </div>
-          </div>
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; font-size:0.82rem; background:#FFF; padding:12px; border-radius:6px; border:1px solid #DCFCE7;">
-            <div>
-              <span style="color:#6B7280; font-size:0.72rem; text-transform:uppercase; font-weight:700; display:block;">OD (Right Eye)</span>
-              <strong>SPH:</strong> ${effectiveRx.od_sph || effectiveRx.odSph || order.od_sph || '0.00'}<br/>
-              <strong>CYL:</strong> ${effectiveRx.od_cyl || effectiveRx.odCyl || order.od_cyl || '0.00'}<br/>
-              <strong>AXIS:</strong> ${(effectiveRx.od_axis != null ? effectiveRx.od_axis + '°' : (effectiveRx.odAxis != null ? effectiveRx.odAxis + '°' : (order.od_axis != null ? order.od_axis + '°' : '-')))}
-            </div>
-            <div>
-              <span style="color:#6B7280; font-size:0.72rem; text-transform:uppercase; font-weight:700; display:block;">OS (Left Eye)</span>
-              <strong>SPH:</strong> ${effectiveRx.os_sph || effectiveRx.osSph || order.os_sph || '0.00'}<br/>
-              <strong>CYL:</strong> ${effectiveRx.os_cyl || effectiveRx.osCyl || order.os_cyl || '0.00'}<br/>
-              <strong>AXIS:</strong> ${(effectiveRx.os_axis != null ? effectiveRx.os_axis + '°' : (effectiveRx.osAxis != null ? effectiveRx.osAxis + '°' : (order.os_axis != null ? order.os_axis + '°' : '-')))}
-            </div>
-            <div>
-              <span style="color:#6B7280; font-size:0.72rem; text-transform:uppercase; font-weight:700; display:block;">Optics & IPD</span>
-              ${(effectiveRx.addition || effectiveRx.add || order.addition) ? `<div><strong>ADD:</strong> ${escapeHtml(effectiveRx.addition || effectiveRx.add || order.addition)}</div>` : ''}
-              ${(effectiveRx.ipd_distance || effectiveRx.pd || order.ipd_distance) ? `<div><strong>Distance IPD:</strong> ${effectiveRx.ipd_distance || effectiveRx.pd || order.ipd_distance} mm</div>` : ''}
-              ${(effectiveRx.ipd_near || order.ipd_near) ? `<div><strong>Near IPD:</strong> ${effectiveRx.ipd_near || order.ipd_near} mm</div>` : ''}
-            </div>
-          </div>
-          ${(effectiveRx.notes || effectiveRx.rx_notes || order.rx_notes) ? `<div style="font-size:0.75rem; color:#374151; margin-top:8px; font-style:italic;"><strong>Clinical Notes:</strong> ${escapeHtml(effectiveRx.notes || effectiveRx.rx_notes || order.rx_notes)}</div>` : ''}
-          ${(effectiveRx.image_url || effectiveRx.imageUrl || order.rx_image_url) ? `<div style="margin-top:8px;"><a href="${escapeHtml((effectiveRx.image_url || effectiveRx.imageUrl || order.rx_image_url).startsWith('/') ? (effectiveRx.image_url || effectiveRx.imageUrl || order.rx_image_url) : '/' + (effectiveRx.image_url || effectiveRx.imageUrl || order.rx_image_url))}" target="_blank" style="font-size:0.75rem; color:#1D4ED8; font-weight:600;">📷 View Uploaded Prescription Document</a></div>` : ''}
-        </div>
-      ` : `
-        <div style="background:#F9FAFB; border:1px dashed #D1D5DB; border-radius:6px; padding:0.75rem; margin-bottom:1.5rem; font-size:0.8rem; color:#6B7280; display:flex; justify-content:space-between; align-items:center;">
-          <span>${order.prescription_pref ? `Prescription Preference: <strong>${escapeHtml(order.prescription_pref)}</strong>` : 'No structured glasses prescription attached to this order.'}</span>
-          ${order.customer_id ? `
-            <button type="button" class="btn-table-action" onclick="openClientProfile('${order.customer_id}')">
-              View Client Profile & Past RX
-            </button>
-          ` : ''}
-        </div>
-      `}
 
       <h4 style="font-size:0.85rem; font-weight:800; margin-bottom:8px;">Purchased Frames & Products</h4>
       <table class="data-table" style="margin-bottom:1.5rem;">
@@ -1899,10 +1859,6 @@
             <span>Discount:</span>
             <span>-${formatINR(order.discount_paise || 0, true)}</span>
           </div>
-          <div style="display:flex; justify-content:space-between; color:#6B7280;">
-            <span>GST (18% Included):</span>
-            <span>${formatINR(order.tax_paise || 0, true)}</span>
-          </div>
           <div style="display:flex; justify-content:space-between; font-size:1.05rem; font-weight:800; border-top:1px solid #CCC; padding-top:6px; margin-top:4px;">
             <span>Grand Total:</span>
             <span>${formatINR(order.total_payable_paise, true)}</span>
@@ -1949,14 +1905,8 @@
         <button type="button" class="btn-header-action" style="background:#16A34A; color:#FFF; font-weight:800;" onclick="confirmUpiPayment('${order.id}', '${order.payment_id || ''}')">✓ Approve UPI Payment</button>
         <button type="button" class="btn-header-action" style="background:#DC2626; color:#FFF; font-weight:700;" onclick="rejectUpiPayment('${order.id}', '${order.payment_id || ''}')">✗ Reject Payment</button>
       ` : ''}
-      <button type="button" class="btn-header-action" style="background:#2563EB; color:#FFF; font-weight:700;" onclick="downloadInvoicePDF('${order.id}', '${escapeHtml(order.order_number)}')">📥 Download PDF Invoice</button>
       <button type="button" class="btn-header-action btn-secondary" onclick="window.open('/api/invoices/order/${order.id}/pdf', '_blank')">👁️ View PDF</button>
-      <button type="button" class="btn-header-action btn-secondary" onclick="previewThermalReceipt('${order.id}')">🖨️ Thermal Receipt</button>
-      ${order.prescription_id ? `<button type="button" class="btn-header-action" style="background:#059669; color:#FFF; font-weight:700;" onclick="printPrescriptionRecord('${order.prescription_id}')">👓 Prescription RX</button>` : ''}
       <button type="button" class="btn-header-action btn-danger-soft" onclick="deleteOrderPrompt('${order.id}', '${escapeHtml(order.order_number)}')">🗑️ Delete Order</button>
-      ${order.status !== 'REFUNDED' && order.payment_status === 'VERIFIED' ? `
-        <button type="button" class="btn-header-action" style="background:#DC2626; color:#FFF;" onclick="promptRefund('${order.id}')">Safe Refund & Restock</button>
-      ` : ''}
       ${order.channel !== 'POS' && order.status !== 'CANCELLED' && order.status !== 'DELIVERED' ? `
         <select id="update-fulfillment-status" class="form-control" style="width:auto; display:inline-block;" onchange="updateFulfillment('${order.id}', this.value)">
           <option value="">Update Fulfillment...</option>
@@ -2712,8 +2662,7 @@
             <div style="font-size:1.25rem; font-weight:800; color:#FFF;">${formatINR(s.combinedSalesINR || 0)}</div>
           </div>
           <div style="text-align:right; font-size:0.75rem; color:#D1D5DB;">
-            <div>GST: ${formatINR(s.taxCollectedINR || 0)}</div>
-            <div>Orders: ${(s.inStoreOrderCount || 0) + (s.websiteOrderCount || 0)}</div>
+            <div>Total Orders: ${(s.inStoreOrderCount || 0) + (s.websiteOrderCount || 0)}</div>
           </div>
         </div>
       `;
@@ -2821,10 +2770,6 @@
             <div class="card-title">Combined Net Sales</div>
             <div class="card-val">${formatINR(s.combinedSalesINR || 0)}</div>
             <div style="font-size:0.75rem;">${(s.inStoreOrderCount || 0) + (s.websiteOrderCount || 0)} orders</div>
-          </div>
-          <div class="card">
-            <div class="card-title">Taxes Collected (GST)</div>
-            <div class="card-val">${formatINR(s.taxCollectedINR || 0)}</div>
           </div>
         </div>
 
@@ -3215,7 +3160,11 @@
               </div>
               <div class="optic-inv-info">
                 <div class="optic-inv-name">${escapeHtml(p.name || p.model || 'Frame')}</div>
-                <div class="optic-inv-qty">Qty: <span class="qty-bold">${stock}</span></div>
+                <div class="optic-inv-qty" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:4px;">
+                  <span>Qty: <span class="qty-bold">${stock}</span></span>
+                  <span style="font-size:0.72rem; font-weight:700; background:#EFF6FF; color:#1E3A8A; padding:2px 7px; border-radius:4px; border:1px solid #BFDBFE;">Size: ${escapeHtml(p.frame_size || p.size || (p.fit === 'Narrow' ? 'Small' : (p.fit === 'Wide' ? 'Large' : 'Medium')))}</span>
+                  ${p.shape ? `<span style="font-size:0.72rem; font-weight:600; background:#F8FAFC; color:#475569; padding:2px 7px; border-radius:4px; border:1px solid #E2E8F0;">${escapeHtml(p.shape)}</span>` : ''}
+                </div>
               </div>
               <div class="optic-inv-meta" style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
                 <div class="optic-inv-date">Created: ${createdDate}</div>
@@ -3589,7 +3538,13 @@
       const brand = document.getElementById('frm-brand')?.value.trim() || 'Noor Optics';
       const model = document.getElementById('frm-model')?.value.trim() || '';
       const color = document.getElementById('frm-color')?.value.trim() || 'Black';
-      const size = document.getElementById('frm-size')?.value.trim() || '52-18';
+      const rawSize = document.getElementById('frm-size')?.value.trim() || 'Medium';
+      let frameSize = 'Medium';
+      const sNorm = rawSize.toLowerCase();
+      if (sNorm.includes('small') || sNorm.includes('narrow') || sNorm === 's') frameSize = 'Small';
+      else if (sNorm.includes('large') || sNorm.includes('wide') || sNorm === 'l') frameSize = 'Large';
+      else frameSize = 'Medium';
+      const cleanFit = frameSize === 'Small' ? 'Narrow' : (frameSize === 'Large' ? 'Wide' : 'Regular');
       let sku = document.getElementById('frm-sku')?.value.trim().toUpperCase() || '';
       if (!sku) {
         sku = generateFreshSku();
@@ -3616,12 +3571,14 @@
           gender,
           shape,
           material: 'Acetate',
-          fit: size,
+          frame_size: frameSize,
+          size: frameSize,
+          fit: cleanFit,
           sellingPriceINR: retail,
           purchaseCostINR: wholesale,
           reorderThreshold: lowStock,
           imageUrl,
-          description: `Brand: ${brand} | Model: ${model} | Color: ${color} | Size: ${size}`,
+          description: `Brand: ${brand} | Model: ${model} | Color: ${color} | Size: ${frameSize}`,
           variants: [
             {
               colorName: color,
@@ -3641,13 +3598,15 @@
           gender,
           shape,
           material: 'Acetate',
-          fit: size,
+          frame_size: frameSize,
+          size: frameSize,
+          fit: cleanFit,
           selling_price_inr: retail,
           purchase_cost_inr: wholesale,
           total_stock: quantity,
           reorder_threshold: lowStock,
           image_url: imageUrl,
-          description: `Brand: ${brand} | Model: ${model} | Color: ${color} | Size: ${size}`,
+          description: `Brand: ${brand} | Model: ${model} | Color: ${color} | Size: ${frameSize}`,
           is_active: 1,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -3842,6 +3801,7 @@
     }
     const catSelect = document.getElementById('edit-frame-category');
     const genSelect = document.getElementById('edit-frame-gender');
+    const sizeSelect = document.getElementById('edit-frame-size');
     if (catSelect) catSelect.value = frame.category || 'Eyeglasses';
     if (genSelect) {
       const curGen = frame.gender || 'Unisex';
@@ -3854,6 +3814,16 @@
             break;
           }
         }
+      }
+    }
+    if (sizeSelect) {
+      const curSize = frame.frame_size || frame.size || (frame.fit === 'Narrow' ? 'Small' : (frame.fit === 'Wide' ? 'Large' : 'Medium')) || 'Medium';
+      sizeSelect.value = curSize;
+      if (!sizeSelect.value || sizeSelect.selectedIndex === -1) {
+        const sNorm = String(curSize).toLowerCase();
+        if (sNorm.includes('small') || sNorm.includes('narrow') || sNorm === 's') sizeSelect.value = 'Small';
+        else if (sNorm.includes('large') || sNorm.includes('wide') || sNorm === 'l') sizeSelect.value = 'Large';
+        else sizeSelect.value = 'Medium';
       }
     }
     if (retailInput) retailInput.value = frame.selling_price_inr !== undefined ? frame.selling_price_inr : Math.round((frame.selling_price_paise || 0) / 100);
@@ -3924,6 +3894,8 @@
       const shape = document.getElementById('edit-frame-shape')?.value || 'Rectangular';
       const category = document.getElementById('edit-frame-category')?.value || 'Eyeglasses';
       const gender = document.getElementById('edit-frame-gender')?.value || 'Unisex';
+      const frameSize = document.getElementById('edit-frame-size')?.value || 'Medium';
+      const cleanFit = frameSize === 'Small' ? 'Narrow' : (frameSize === 'Large' ? 'Wide' : 'Regular');
       const sellingPriceINR = Number(document.getElementById('edit-frame-retail')?.value) || 0;
       const purchaseCostINR = Number(document.getElementById('edit-frame-wholesale')?.value) || 0;
       const stockQuantity = Number(document.getElementById('edit-frame-stock')?.value) || 0;
@@ -3940,6 +3912,9 @@
         shape: shape || existing.shape,
         category: category || existing.category,
         gender: gender || existing.gender,
+        frame_size: frameSize,
+        size: frameSize,
+        fit: cleanFit,
         selling_price_inr: sellingPriceINR,
         selling_price_paise: Math.round(sellingPriceINR * 100),
         purchase_cost_inr: purchaseCostINR,
@@ -4018,6 +3993,9 @@
               shape,
               category,
               gender,
+              frame_size: frameSize,
+              size: frameSize,
+              fit: cleanFit,
               sellingPriceINR,
               purchaseCostINR,
               stockQuantity,
@@ -5929,8 +5907,8 @@
 
     const totalBeforeDiscountPaise = subtotalPaise + prevDuePaise;
     const grandTotalPaise = Math.max(0, totalBeforeDiscountPaise - discountPaise);
-    // GST 18% inclusive
-    const taxPaise = Math.round(grandTotalPaise - (grandTotalPaise / 1.18));
+    // GST calculation removed (all boutique prices net direct)
+    const taxPaise = 0;
 
     const advanceINR = parseFloat(advanceInput ? advanceInput.value : 0) || 0;
     const advancePaise = Math.round(advanceINR * 100);
@@ -5946,7 +5924,7 @@
     if (countEl) countEl.textContent = `${totalItems} item${totalItems > 1 ? 's' : ''}`;
     if (subtotalEl) subtotalEl.textContent = '₹' + (totalBeforeDiscountPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (discountValEl) discountValEl.value = (discountPaise / 100).toFixed(2);
-    if (taxEl) taxEl.value = (taxPaise / 100).toFixed(2);
+    if (taxEl) taxEl.value = '0.00';
     if (advanceValEl) advanceValEl.value = (advancePaise / 100).toFixed(2);
     if (remainingValEl) {
       if (!isInstallmentEntered && grandTotalPaise > 0) {
@@ -6860,6 +6838,10 @@
             const btnPdf = document.getElementById('btn-success-pdf');
             if (btnPdf) {
               btnPdf.onclick = () => downloadInvoicePDF(res.orderId, res.invoiceNumber);
+            }
+            const btnShareWa = document.getElementById('btn-success-share-wa') || document.getElementById('btn-success-share-image');
+            if (btnShareWa) {
+              btnShareWa.onclick = () => sendWhatsAppBill(res.orderId, localBillOrder);
             }
             const btnReprint = document.getElementById('btn-success-reprint');
             if (btnReprint) {
@@ -7938,7 +7920,102 @@
     }
   };
 
-  window.openWhatsAppDirect = function (rawPhone, clientName) {
+  // ── 1-Click WhatsApp Digital Bill Sender ───────────────────────────────────
+  window.sendWhatsAppBill = async function (orderId, directOrder = null) {
+    if (!orderId && (!directOrder || !directOrder.id)) {
+      showToast('Order reference missing for WhatsApp.', 'warning');
+      return;
+    }
+
+    const targetId = orderId || (directOrder && (directOrder.id || directOrder.order_number));
+    let order = directOrder;
+    let items = (directOrder && directOrder.items) || [];
+    let rx = (directOrder && directOrder.prescription) || null;
+
+    // Always fetch fresh authoritative order data (prescription, items, multi-payments)
+    try {
+      const token = getToken();
+      const res = await fetch(`/api/orders/${targetId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const detail = await res.json();
+        if (detail.order) order = { ...detail.order, ...(order || {}) };
+        if (detail.items && detail.items.length) items = detail.items;
+        if (detail.payments && detail.payments.length) {
+          order.payments = detail.payments;
+        }
+        if (detail.prescription) rx = detail.prescription;
+        else if (order && order.prescription) rx = order.prescription;
+      }
+    } catch (err) {
+      console.warn('Could not fetch full order details for WhatsApp bill:', err);
+    }
+
+    if (!order) {
+      order = (state.ordersCache || []).find(o => o.id === targetId || o.order_number === targetId) || { id: targetId };
+    }
+
+    // Auto-parse prescription if present on order
+    if (!rx && order) {
+      if (!order.prescriptions && order.prescriptions_json) {
+        try {
+          const parsed = JSON.parse(order.prescriptions_json);
+          if (Array.isArray(parsed) && parsed.length > 0) order.prescriptions = parsed;
+        } catch (_) {}
+      }
+      if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
+        rx = order.prescriptions[0];
+      } else if (order.od_sph != null || order.os_sph != null || order.prescription_number || order.prescription_id) {
+        rx = {
+          id: order.prescription_id,
+          prescription_number: order.prescription_number,
+          od_sph: order.od_sph,
+          od_cyl: order.od_cyl,
+          od_axis: order.od_axis,
+          os_sph: order.os_sph,
+          os_cyl: order.os_cyl,
+          os_axis: order.os_axis,
+          addition: order.addition,
+          ipd_distance: order.ipd_distance,
+          checked_by: order.rx_checked_by || order.checked_by
+        };
+      } else if (order.customer_id && state.clientsCache) {
+        const cl = state.clientsCache.find(c => c.id === order.customer_id);
+        if (cl && cl.latest_prescription) rx = cl.latest_prescription;
+      }
+    }
+
+    if (!order.customer_phone) {
+      showToast('No phone number recorded for this client.', 'warning');
+      return;
+    }
+
+    const payload = {
+      order,
+      items,
+      rx,
+      storeSettings: state.storeSettings || {}
+    };
+
+    showToast('Preparing digital bill image for WhatsApp...', 'info');
+
+    if (window.BillCardGenerator) {
+      try {
+        await window.BillCardGenerator.sendBillCardWhatsApp(payload);
+      } catch (err) {
+        console.error('Error generating bill card for WhatsApp:', err);
+        window.openWhatsAppDirect(order.customer_phone, order.customer_name);
+      }
+    } else {
+      window.openWhatsAppDirect(order.customer_phone, order.customer_name);
+    }
+  };
+
+  window.openWhatsAppDirect = function (rawPhone, clientName, orderId = null) {
+    if (orderId) {
+      return window.sendWhatsAppBill(orderId);
+    }
     const cleanDigits = String(rawPhone || '').replace(/[^0-9]/g, '');
     if (!cleanDigits) {
       showToast('No phone number on file for WhatsApp.', 'warning');
@@ -8423,6 +8500,68 @@
     }, 500);
   };
 
+  // ── Digital Bill Card & Image Sender Modal Controller ───────────────────────
+  window.openBillImageModal = async function (orderId, directOrder = null) {
+    const modal = document.getElementById('modal-bill-image-card');
+    const previewBody = document.getElementById('bc-modal-preview-body');
+    if (!modal || !previewBody) return;
+
+    previewBody.innerHTML = '<div style="padding:40px; text-align:center; color:#64748B;"><div class="spinner-sm" style="margin:0 auto 10px auto;"></div>Rendering boutique bill card...</div>';
+    modal.classList.add('open');
+    document.body.classList.add('modal-open');
+
+    let order = directOrder;
+    let items = (directOrder && directOrder.items) || [];
+    let rx = (directOrder && directOrder.prescription) || null;
+
+    if (!order || !order.id || !items.length) {
+      try {
+        const token = getToken();
+        const res = await fetch(`/api/orders/${orderId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const detail = await res.json();
+          order = detail.order || order;
+          items = detail.items || items;
+          rx = detail.prescription || (order ? order.prescription : null);
+        }
+      } catch (err) {
+        console.warn('Could not fetch full order details:', err);
+      }
+    }
+
+    if (!order) {
+      order = (state.ordersCache || []).find(o => o.id === orderId) || { id: orderId };
+    }
+
+    const payload = {
+      order,
+      items,
+      rx,
+      storeSettings: state.storeSettings || {}
+    };
+
+    if (window.BillCardGenerator) {
+      previewBody.innerHTML = window.BillCardGenerator.renderBillCardHTML(payload);
+
+      const btnWa = document.getElementById('bc-btn-share-wa');
+      if (btnWa) {
+        btnWa.onclick = () => window.BillCardGenerator.sendBillCardWhatsApp(payload);
+      }
+      const btnCopy = document.getElementById('bc-btn-copy-img');
+      if (btnCopy) {
+        btnCopy.onclick = () => window.BillCardGenerator.copyBillCardImageToClipboard(payload);
+      }
+      const btnDownload = document.getElementById('bc-btn-download-img');
+      if (btnDownload) {
+        btnDownload.onclick = () => window.BillCardGenerator.downloadBillCardPNG(payload);
+      }
+    } else {
+      previewBody.innerHTML = '<div style="color:red; padding:20px;">BillCardGenerator module is loading. Please try again.</div>';
+    }
+  };
+
   // ── Dispatch Print Signal to POS Portable Daemon (Port 5001 & Cloud Queue) ──
   window.instantPrintReceipt = async function (orderId, manualReprint = false, directOrder = null, printSource = 'staff_approved') {
     if (!orderId && !directOrder) return;
@@ -8446,29 +8585,53 @@
     if (!order.prescriptions && order.prescriptions_json) {
       try { order.prescriptions = JSON.parse(order.prescriptions_json); } catch (_) { }
     }
-    const rxCandidate = (Array.isArray(order.prescriptions) && order.prescriptions[0])
-      || order.prescription
-      || (order.items && order.items[0] && (order.items[0].prescription || order.items[0].rx))
-      || null;
+    const hasRxCandidate = Boolean(
+      order.prescription_id ||
+      order.prescription_number ||
+      order.od_sph != null ||
+      order.os_sph != null ||
+      (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) ||
+      order.prescription ||
+      (order.items && order.items.some(it => it && (it.prescription || it.rx)))
+    );
+    const isZeroPowerOrder = !hasRxCandidate && (String(order.prescription_pref || '').toLowerCase().includes('zero') || String(order.prescription_pref || '').toLowerCase().includes('plano'));
+    if (!isZeroPowerOrder) {
+      const rxCandidate = (Array.isArray(order.prescriptions) && order.prescriptions[0])
+        || order.prescription
+        || (order.items && order.items[0] && (order.items[0].prescription || order.items[0].rx))
+        || null;
 
-    if (rxCandidate) {
-      if (!order.od_sph) order.od_sph = rxCandidate.od_sph || rxCandidate.odSph;
-      if (!order.od_cyl) order.od_cyl = rxCandidate.od_cyl || rxCandidate.odCyl;
-      if (order.od_axis == null) order.od_axis = rxCandidate.od_axis != null ? rxCandidate.od_axis : rxCandidate.odAxis;
-      if (!order.os_sph) order.os_sph = rxCandidate.os_sph || rxCandidate.osSph;
-      if (!order.os_cyl) order.os_cyl = rxCandidate.os_cyl || rxCandidate.osCyl;
-      if (order.os_axis == null) order.os_axis = rxCandidate.os_axis != null ? rxCandidate.os_axis : rxCandidate.osAxis;
-      if (!order.addition) order.addition = rxCandidate.addition || rxCandidate.add;
-      if (!order.ipd_distance) order.ipd_distance = rxCandidate.ipd_distance || rxCandidate.pd;
-      if (!order.prescription_number) order.prescription_number = rxCandidate.prescription_number || rxCandidate.prescriptionNumber;
-      if (!order.prescription) order.prescription = rxCandidate;
-      if (!Array.isArray(order.prescriptions) || order.prescriptions.length === 0) order.prescriptions = [rxCandidate];
-    }
-    if (!order.od_sph && order.customer_id && state.clientsCache) {
-      const client = state.clientsCache.find(c => c.id === order.customer_id);
-      if (client && client.latest_prescription) {
-        Object.assign(order, client.latest_prescription);
+      if (rxCandidate) {
+        if (!order.od_sph) order.od_sph = rxCandidate.od_sph || rxCandidate.odSph;
+        if (!order.od_cyl) order.od_cyl = rxCandidate.od_cyl || rxCandidate.odCyl;
+        if (order.od_axis == null) order.od_axis = rxCandidate.od_axis != null ? rxCandidate.od_axis : rxCandidate.odAxis;
+        if (!order.os_sph) order.os_sph = rxCandidate.os_sph || rxCandidate.osSph;
+        if (!order.os_cyl) order.os_cyl = rxCandidate.os_cyl || rxCandidate.osCyl;
+        if (order.os_axis == null) order.os_axis = rxCandidate.os_axis != null ? rxCandidate.os_axis : rxCandidate.osAxis;
+        if (!order.addition) order.addition = rxCandidate.addition || rxCandidate.add;
+        if (!order.ipd_distance) order.ipd_distance = rxCandidate.ipd_distance || rxCandidate.pd;
+        if (!order.prescription_number) order.prescription_number = rxCandidate.prescription_number || rxCandidate.prescriptionNumber;
+        if (!order.prescription) order.prescription = rxCandidate;
+        if (!Array.isArray(order.prescriptions) || order.prescriptions.length === 0) order.prescriptions = [rxCandidate];
       }
+      if (!order.od_sph && order.customer_id && state.clientsCache) {
+        const client = state.clientsCache.find(c => c.id === order.customer_id);
+        if (client && client.latest_prescription) {
+          Object.assign(order, client.latest_prescription);
+        }
+      }
+    } else {
+      order.prescription_id = null;
+      order.prescriptions_json = null;
+      order.prescription_number = null;
+      order.od_sph = null;
+      order.os_sph = null;
+      order.od_cyl = null;
+      order.os_cyl = null;
+      order.od_axis = null;
+      order.os_axis = null;
+      order.prescriptions = [];
+      order.prescription = null;
     }
 
     const orderRef = order.order_number || order.order_ref || order.id || 'ORDER';

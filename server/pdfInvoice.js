@@ -246,16 +246,18 @@ function generateInvoicePDF(invoice, items, prescription = null) {
       y += 16;
     }
 
-    // Split GST (CGST 9% + SGST 9%)
-    const halfTax = Math.round(invoice.tax_paise / 2);
-    doc
-      .text('Central GST (CGST 9%):', totalsLeft, y)
-      .text(formatINR(halfTax), totalsLeft, y, { align: 'right', width: totalsWidth });
-    y += 16;
-    doc
-      .text('State GST (SGST 9%):', totalsLeft, y)
-      .text(formatINR(invoice.tax_paise - halfTax), totalsLeft, y, { align: 'right', width: totalsWidth });
-    y += 18;
+    // Split GST (CGST 9% + SGST 9%) - only displayed if tax is collected
+    if (invoice.tax_paise > 0) {
+      const halfTax = Math.round(invoice.tax_paise / 2);
+      doc
+        .text('Central GST (CGST 9%):', totalsLeft, y)
+        .text(formatINR(halfTax), totalsLeft, y, { align: 'right', width: totalsWidth });
+      y += 16;
+      doc
+        .text('State GST (SGST 9%):', totalsLeft, y)
+        .text(formatINR(invoice.tax_paise - halfTax), totalsLeft, y, { align: 'right', width: totalsWidth });
+      y += 18;
+    }
 
     doc.moveTo(totalsLeft, y - 4).lineTo(550, y - 4).strokeColor('#111111').lineWidth(1).stroke();
 

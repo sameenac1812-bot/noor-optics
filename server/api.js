@@ -25,6 +25,7 @@ const {
   getStoreSettings
 } = require('./printer');
 const { generateInvoicePDF } = require('./pdfInvoice');
+const { generateBillCardSVG } = require('./cardImage');
 const {
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
@@ -371,20 +372,26 @@ router.get('/products', async (req, res) => {
     WHERE pv.product_id = ?
   `);
 
-  const results = products.map(p => ({
-    ...p,
-    selling_price_inr: p.selling_price_paise / 100,
-    original_price_inr: p.original_price_paise ? p.original_price_paise / 100 : null,
-    purchase_cost_inr: p.purchase_cost_paise / 100,
-    variants: getVariants.all(p.id)
-  }));
+  const results = products.map(p => {
+    const frameSize = p.frame_size || (p.fit === 'Narrow' ? 'Small' : (p.fit === 'Wide' ? 'Large' : (p.fit === 'Small' || p.fit === 'Large' ? p.fit : 'Medium')));
+    return {
+      ...p,
+      frame_size: frameSize,
+      size: frameSize,
+      fit: p.fit || (frameSize === 'Small' ? 'Narrow' : (frameSize === 'Large' ? 'Wide' : 'Regular')),
+      selling_price_inr: p.selling_price_paise / 100,
+      original_price_inr: p.original_price_paise ? p.original_price_paise / 100 : null,
+      purchase_cost_inr: p.purchase_cost_paise / 100,
+      variants: getVariants.all(p.id)
+    };
+  });
 
   res.json(results);
 });
 
 router.post('/products', authenticateToken, requirePermission('products:manage'), async (req, res) => {
   const {
-    name, sku, brand, shape, material, fit, category,
+    name, sku, brand, shape, material, fit, size, frame_size, category,
     sellingPriceINR, originalPriceINR, purchaseCostINR,
     supplierId, reorderThreshold, imageUrl, description, variants
   } = req.body;
@@ -392,6 +399,9 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
   if (!name || !sku || sellingPriceINR === undefined || sellingPriceINR === null) {
     return res.status(400).json({ error: 'Name, SKU, and Selling Price are required.' });
   }
+
+  const frameSize = frame_size || size || (fit === 'Small' || fit === 'Medium' || fit === 'Large' ? fit : (fit === 'Narrow' ? 'Small' : (fit === 'Wide' ? 'Large' : 'Medium')));
+  const cleanFit = fit || (frameSize === 'Small' ? 'Narrow' : (frameSize === 'Large' ? 'Wide' : 'Regular'));
 
   const cleanSku = String(sku).trim().toUpperCase();
   const sellingPaise = Math.round(Number(sellingPriceINR) * 100);
@@ -422,6 +432,7 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
           shape = ?,
           material = ?,
           fit = ?,
+          frame_size = ?,
           category = ?,
           selling_price_paise = ?,
           original_price_paise = ?,
@@ -436,7 +447,7 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
       `).run(
         name, brand || 'Noor Optics',
         shape || 'Rectangular', material || 'Japanese Titanium',
-        fit || 'Regular', category || 'Optical',
+        cleanFit, frameSize, category || 'Optical',
         sellingPaise, origPaise, costPaise,
         supplierId || null, cleanReorderThreshold,
         cleanImageUrl, cleanImageUrl, cleanImageUrl, cleanDesc,
@@ -506,15 +517,15 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
     const createTx = db.transaction(() => {
       db.prepare(`
         INSERT INTO products (
-          id, sku, name, brand, shape, material, fit, category, gender,
+          id, sku, name, brand, shape, material, fit, frame_size, category, gender,
           selling_price_paise, original_price_paise, purchase_cost_paise,
           supplier_id, reorder_threshold, image_url, description,
           is_active, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))
       `).run(
         productId, cleanSku, name, brand || 'Noor Optics',
         shape || 'Rectangular', material || 'Japanese Titanium',
-        fit || 'Regular', category || 'Eyeglasses', req.body.gender || 'Unisex', sellingPaise, origPaise,
+        cleanFit, frameSize, category || 'Eyeglasses', req.body.gender || 'Unisex', sellingPaise, origPaise,
         costPaise, supplierId || null, cleanReorderThreshold,
         cleanImageUrl, cleanDesc
       );
@@ -562,9 +573,12 @@ router.post('/products', authenticateToken, requirePermission('products:manage')
 
 router.put('/products/:id', authenticateToken, requirePermission('products:manage'), (req, res) => {
   const pId = req.params.id;
-  const { name, brand, shape, material, fit, category, gender, sellingPriceINR, purchaseCostINR, reorderThreshold, isActive, description, stockQuantity } = req.body;
+  const { name, brand, shape, material, fit, size, frame_size, category, gender, sellingPriceINR, purchaseCostINR, reorderThreshold, isActive, description, stockQuantity } = req.body;
   const imageUrl = req.body.imageUrl || req.body.image_url;
   const cleanImageUrl = (imageUrl && typeof imageUrl === 'string') ? imageUrl.trim() : null;
+
+  const resolvedFrameSize = frame_size || size || (fit === 'Small' || fit === 'Medium' || fit === 'Large' ? fit : (fit === 'Narrow' ? 'Small' : (fit === 'Wide' ? 'Large' : null)));
+  const resolvedFit = fit || (resolvedFrameSize === 'Small' ? 'Narrow' : (resolvedFrameSize === 'Large' ? 'Wide' : (resolvedFrameSize === 'Medium' ? 'Regular' : null)));
 
   const sellingPaise = sellingPriceINR !== undefined ? Math.round(Number(sellingPriceINR) * 100) : null;
   const costPaise = purchaseCostINR !== undefined ? Math.round(Number(purchaseCostINR) * 100) : null;
@@ -578,6 +592,7 @@ router.put('/products/:id', authenticateToken, requirePermission('products:manag
       shape = COALESCE(?, shape),
       material = COALESCE(?, material),
       fit = COALESCE(?, fit),
+      frame_size = COALESCE(?, frame_size),
       selling_price_paise = COALESCE(?, selling_price_paise),
       purchase_cost_paise = COALESCE(?, purchase_cost_paise),
       reorder_threshold = COALESCE(?, reorder_threshold),
@@ -586,7 +601,7 @@ router.put('/products/:id', authenticateToken, requirePermission('products:manag
       image_url = CASE WHEN ? IS NOT NULL AND ? != '' AND ? != 'images/stockholm_noir.jpg' THEN ? ELSE image_url END,
       updated_at = datetime('now')
     WHERE id = ?
-  `).run(name, brand, category || null, gender || null, shape, material, fit, sellingPaise, costPaise, reorderThreshold, isActive !== undefined ? (isActive ? 1 : 0) : null, description, cleanImageUrl, cleanImageUrl, cleanImageUrl, cleanImageUrl, pId);
+  `).run(name, brand, category || null, gender || null, shape, material, resolvedFit, resolvedFrameSize, sellingPaise, costPaise, reorderThreshold, isActive !== undefined ? (isActive ? 1 : 0) : null, description, cleanImageUrl, cleanImageUrl, cleanImageUrl, cleanImageUrl, pId);
 
   // Update stock balance if provided
   if (stockQuantity !== undefined) {
@@ -2073,9 +2088,9 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     const thirdPaymentPaise = req.body.thirdAmountINR !== undefined ? Math.round(Number(req.body.thirdAmountINR) * 100) : (req.body.third_payment_paise ? parseInt(req.body.third_payment_paise, 10) : 0);
     const pickupTime = req.body.pickupTime || req.body.pickup_time || null;
 
-    const taxRate = 0.18; // 18% GST inclusive
+    const taxRate = 0; // GST removed
     const netBase = Math.max(0, subtotalPaise + previousDuePaise - discountPaise);
-    const taxPaise = Math.round(netBase - (netBase / (1 + taxRate)));
+    const taxPaise = 0;
     const totalPayablePaise = netBase;
 
     // Payment Logic (Advance, 2nd, 3rd installments, remaining balance)
@@ -2742,7 +2757,7 @@ router.post('/orders/online', (req, res) => {
 
     const shippingPaise = subtotalPaise >= 199900 ? 0 : 19900;
     const totalPayablePaise = subtotalPaise + shippingPaise;
-    const taxPaise = Math.round(totalPayablePaise * 0.18 / 1.18);
+    const taxPaise = 0;
 
     // Resolve or create customer permanently (unless customer is tombstoned/deleted)
     let customerId = null;
@@ -3091,12 +3106,17 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
     const getCustByPhone = db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0 LIMIT 1');
 
     const formatted = orders.map(o => {
+      const rxPrefNorm = String(o.prescription_pref || '').trim().toLowerCase();
+      const isZeroPower = rxPrefNorm.includes('zero') || rxPrefNorm.includes('plano') || rxPrefNorm === 'none' || rxPrefNorm === 'fashion';
+
       let rx = null;
-      if (!o.prescription_number && o.customer_id) {
-        rx = getLatestRxForCustomer.get(o.customer_id);
-      } else if (!o.prescription_number && o.customer_phone) {
-        const cust = getCustByPhone.get(o.customer_phone.trim());
-        if (cust) rx = getLatestRxForCustomer.get(cust.id);
+      if (!isZeroPower) {
+        if (!o.prescription_number && o.customer_id) {
+          rx = getLatestRxForCustomer.get(o.customer_id);
+        } else if (!o.prescription_number && o.customer_phone) {
+          const cust = getCustByPhone.get(o.customer_phone.trim());
+          if (cust) rx = getLatestRxForCustomer.get(cust.id);
+        }
       }
 
       let normCreatedAt = o.created_at;
@@ -3107,13 +3127,13 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
       }
 
       let parsedRxList = [];
-      if (o.prescriptions_json) {
+      if (!isZeroPower && o.prescriptions_json) {
         try {
           const p = JSON.parse(o.prescriptions_json);
           if (Array.isArray(p) && p.length > 0) parsedRxList = p;
         } catch (_) {}
       }
-      if (parsedRxList.length === 0) {
+      if (!isZeroPower && parsedRxList.length === 0) {
         const s = {
           id: o.prescription_id || (rx ? rx.id : null),
           prescription_number: o.prescription_number || (rx ? rx.prescription_number : null),
@@ -3131,26 +3151,26 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
         };
         if (s.od_sph != null || s.os_sph != null || s.prescription_number) parsedRxList = [s];
       }
-      const firstRx = parsedRxList[0] || null;
+      const firstRx = (!isZeroPower && parsedRxList[0]) ? parsedRxList[0] : null;
 
       return {
         ...o,
         created_at: normCreatedAt,
-        prescription_id: o.prescription_id || (firstRx ? firstRx.id : (rx ? rx.id : null)),
-        prescription_number: o.prescription_number || (firstRx ? (firstRx.prescription_number || firstRx.prescriptionNumber) : (rx ? rx.prescription_number : null)),
-        od_sph: o.od_sph || (firstRx ? (firstRx.od_sph || firstRx.odSph) : (rx ? rx.od_sph : null)),
-        od_cyl: o.od_cyl || (firstRx ? (firstRx.od_cyl || firstRx.odCyl) : (rx ? rx.od_cyl : null)),
-        od_axis: (o.od_axis !== undefined && o.od_axis !== null) ? o.od_axis : (firstRx ? (firstRx.od_axis ?? firstRx.odAxis) : (rx ? rx.od_axis : null)),
-        os_sph: o.os_sph || (firstRx ? (firstRx.os_sph || firstRx.osSph) : (rx ? rx.os_sph : null)),
-        os_cyl: o.os_cyl || (firstRx ? (firstRx.os_cyl || firstRx.osCyl) : (rx ? rx.os_cyl : null)),
-        os_axis: (o.os_axis !== undefined && o.os_axis !== null) ? o.os_axis : (firstRx ? (firstRx.os_axis ?? firstRx.osAxis) : (rx ? rx.os_axis : null)),
-        addition: o.addition || (firstRx ? (firstRx.addition || firstRx.add) : (rx ? rx.addition : null)),
-        ipd_distance: o.ipd_distance || (firstRx ? (firstRx.ipd_distance || firstRx.pd) : (rx ? rx.ipd_distance : null)),
-        ipd_near: o.ipd_near || (firstRx ? firstRx.ipd_near : (rx ? rx.ipd_near : null)),
-        rx_checked_by: o.rx_checked_by || (firstRx ? (firstRx.checked_by || firstRx.checkedBy) : (rx ? rx.checked_by : null)),
-        rx_notes: o.rx_notes || (firstRx ? firstRx.notes : (rx ? rx.notes : null)),
-        prescriptions: parsedRxList,
-        prescription: firstRx,
+        prescription_id: isZeroPower ? null : (o.prescription_id || (firstRx ? firstRx.id : (rx ? rx.id : null))),
+        prescription_number: isZeroPower ? null : (o.prescription_number || (firstRx ? (firstRx.prescription_number || firstRx.prescriptionNumber) : (rx ? rx.prescription_number : null))),
+        od_sph: isZeroPower ? null : (o.od_sph || (firstRx ? (firstRx.od_sph || firstRx.odSph) : (rx ? rx.od_sph : null))),
+        od_cyl: isZeroPower ? null : (o.od_cyl || (firstRx ? (firstRx.od_cyl || firstRx.odCyl) : (rx ? rx.od_cyl : null))),
+        od_axis: isZeroPower ? null : ((o.od_axis !== undefined && o.od_axis !== null) ? o.od_axis : (firstRx ? (firstRx.od_axis ?? firstRx.odAxis) : (rx ? rx.od_axis : null))),
+        os_sph: isZeroPower ? null : (o.os_sph || (firstRx ? (firstRx.os_sph || firstRx.osSph) : (rx ? rx.os_sph : null))),
+        os_cyl: isZeroPower ? null : (o.os_cyl || (firstRx ? (firstRx.os_cyl || firstRx.osCyl) : (rx ? rx.os_cyl : null))),
+        os_axis: isZeroPower ? null : ((o.os_axis !== undefined && o.os_axis !== null) ? o.os_axis : (firstRx ? (firstRx.os_axis ?? firstRx.osAxis) : (rx ? rx.os_axis : null))),
+        addition: isZeroPower ? null : (o.addition || (firstRx ? (firstRx.addition || firstRx.add) : (rx ? rx.addition : null))),
+        ipd_distance: isZeroPower ? null : (o.ipd_distance || (firstRx ? (firstRx.ipd_distance || firstRx.pd) : (rx ? rx.ipd_distance : null))),
+        ipd_near: isZeroPower ? null : (o.ipd_near || (firstRx ? firstRx.ipd_near : (rx ? rx.ipd_near : null))),
+        rx_checked_by: isZeroPower ? null : (o.rx_checked_by || (firstRx ? (firstRx.checked_by || firstRx.checkedBy) : (rx ? rx.checked_by : null))),
+        rx_notes: isZeroPower ? null : (o.rx_notes || (firstRx ? firstRx.notes : (rx ? rx.notes : null))),
+        prescriptions: isZeroPower ? [] : parsedRxList,
+        prescription: isZeroPower ? null : firstRx,
         subtotal_inr: o.subtotal_paise / 100,
         discount_inr: o.discount_paise / 100,
         total_payable_inr: o.total_payable_paise / 100,
@@ -3231,19 +3251,24 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), a
 
   let order = db.prepare(getOrderSql).get(baseOrder.id, baseOrder.order_number, baseOrder.id, baseOrder.order_number) || baseOrder;
 
-  // Fallback to customer's latest prescription if order has none linked
+  const rxPrefNorm = String(order.prescription_pref || '').trim().toLowerCase();
+  const isZeroPower = rxPrefNorm.includes('zero') || rxPrefNorm.includes('plano') || rxPrefNorm === 'none' || rxPrefNorm === 'fashion';
+
+  // Fallback to customer's latest prescription ONLY if order is not zero-power and has none linked
   let rx = null;
-  if (!order.prescription_number && order.customer_id) {
-    rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(order.customer_id);
-  } else if (!order.prescription_number && order.customer_phone) {
-    const cust = db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0 LIMIT 1').get(order.customer_phone.trim());
-    if (cust) {
-      rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(cust.id);
+  if (!isZeroPower) {
+    if (!order.prescription_number && order.customer_id) {
+      rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(order.customer_id);
+    } else if (!order.prescription_number && order.customer_phone) {
+      const cust = db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0 LIMIT 1').get(order.customer_phone.trim());
+      if (cust) {
+        rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(cust.id);
+      }
     }
   }
 
   let orderRxList = [];
-  if (order.prescriptions_json) {
+  if (!isZeroPower && order.prescriptions_json) {
     try {
       const parsedRx = JSON.parse(order.prescriptions_json);
       if (Array.isArray(parsedRx) && parsedRx.length > 0) orderRxList = parsedRx;
@@ -3252,27 +3277,20 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), a
 
   const resolvedOrder = {
     ...order,
-    prescription_id: order.prescription_id || (rx ? rx.id : null),
-    prescription_number: order.prescription_number || (rx ? rx.prescription_number : null),
-    od_sph: order.od_sph || (rx ? rx.od_sph : null),
-    od_cyl: order.od_cyl || (rx ? rx.od_cyl : null),
-    od_axis: order.od_axis !== undefined && order.od_axis !== null ? order.od_axis : (rx ? rx.od_axis : null),
-    os_sph: order.os_sph || (rx ? rx.os_sph : null),
-    os_cyl: order.os_cyl || (rx ? rx.os_cyl : null),
-    os_axis: order.os_axis !== undefined && order.os_axis !== null ? order.os_axis : (rx ? rx.os_axis : null),
-    addition: order.addition || (rx ? rx.addition : null),
-    ipd_distance: order.ipd_distance || (rx ? rx.ipd_distance : null),
-    ipd_near: order.ipd_near || (rx ? rx.ipd_near : null),
-    rx_checked_by: order.rx_checked_by || (rx ? rx.checked_by : null),
-    rx_notes: order.rx_notes || (rx ? rx.notes : null),
-    total_payable_inr: order.total_payable_paise / 100,
-    amount_paid_inr: order.amount_paid_paise / 100,
-    advance_paid_inr: (order.advance_paid_paise || 0) / 100,
-    second_payment_inr: (order.second_payment_paise || 0) / 100,
-    third_payment_inr: (order.third_payment_paise || 0) / 100,
-    outstanding_inr: (order.outstanding_paise || 0) / 100,
-    payment_status: ((order.outstanding_paise || 0) === 0 && order.amount_paid_paise >= order.total_payable_paise) ? 'VERIFIED' : order.payment_status,
-    prescriptions: (orderRxList && orderRxList.length > 0) ? orderRxList : (() => {
+    prescription_id: isZeroPower ? null : (order.prescription_id || (rx ? rx.id : null)),
+    prescription_number: isZeroPower ? null : (order.prescription_number || (rx ? rx.prescription_number : null)),
+    od_sph: isZeroPower ? null : (order.od_sph || (rx ? rx.od_sph : null)),
+    od_cyl: isZeroPower ? null : (order.od_cyl || (rx ? rx.od_cyl : null)),
+    od_axis: isZeroPower ? null : ((order.od_axis !== undefined && order.od_axis !== null) ? order.od_axis : (rx ? rx.od_axis : null)),
+    os_sph: isZeroPower ? null : (order.os_sph || (rx ? rx.os_sph : null)),
+    os_cyl: isZeroPower ? null : (order.os_cyl || (rx ? rx.os_cyl : null)),
+    os_axis: isZeroPower ? null : ((order.os_axis !== undefined && order.os_axis !== null) ? order.os_axis : (rx ? rx.os_axis : null)),
+    addition: isZeroPower ? null : (order.addition || (rx ? rx.addition : null)),
+    ipd_distance: isZeroPower ? null : (order.ipd_distance || (rx ? rx.ipd_distance : null)),
+    ipd_near: isZeroPower ? null : (order.ipd_near || (rx ? rx.ipd_near : null)),
+    rx_checked_by: isZeroPower ? null : (order.rx_checked_by || (rx ? rx.checked_by : null)),
+    rx_notes: isZeroPower ? null : (order.rx_notes || (rx ? rx.notes : null)),
+    prescriptions: isZeroPower ? [] : ((orderRxList && orderRxList.length > 0) ? orderRxList : (() => {
       const s = {
         id: order.prescription_id || (rx ? rx.id : null),
         prescription_number: order.prescription_number || (rx ? rx.prescription_number : null),
@@ -3289,7 +3307,15 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), a
         notes: order.rx_notes || (rx ? rx.notes : null)
       };
       return (s.od_sph != null || s.os_sph != null || s.prescription_number) ? [s] : [];
-    })()
+    })()),
+    prescription: isZeroPower ? null : (orderRxList[0] || rx || null),
+    total_payable_inr: order.total_payable_paise / 100,
+    amount_paid_inr: order.amount_paid_paise / 100,
+    advance_paid_inr: (order.advance_paid_paise || 0) / 100,
+    second_payment_inr: (order.second_payment_paise || 0) / 100,
+    third_payment_inr: (order.third_payment_paise || 0) / 100,
+    outstanding_inr: (order.outstanding_paise || 0) / 100,
+    payment_status: ((order.outstanding_paise || 0) === 0 && order.amount_paid_paise >= order.total_payable_paise) ? 'VERIFIED' : order.payment_status
   };
 
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
@@ -4001,7 +4027,7 @@ function ensureInvoiceForOrder(orderIdOrNumber) {
         order.delivery_address || '',
         order.subtotal_paise || order.total_payable_paise || 0,
         order.discount_paise || 0,
-        order.tax_paise || Math.round((order.total_payable_paise || 0) * 0.18 / 1.18),
+        order.tax_paise || 0,
         order.total_payable_paise || 0,
         order.amount_paid_paise || (order.payment_status === 'PAID' ? order.total_payable_paise : 0),
         order.payment_status || 'PAID',
@@ -4021,7 +4047,7 @@ function ensureInvoiceForOrder(orderIdOrNumber) {
         customer_address: order.delivery_address || '',
         subtotal_paise: order.subtotal_paise || order.total_payable_paise || 0,
         discount_paise: order.discount_paise || 0,
-        tax_paise: order.tax_paise || Math.round((order.total_payable_paise || 0) * 0.18 / 1.18),
+        tax_paise: order.tax_paise || 0,
         grand_total_paise: order.total_payable_paise || 0,
         amount_paid_paise: order.amount_paid_paise || (order.payment_status === 'PAID' ? order.total_payable_paise : 0),
         payment_status: order.payment_status || 'PAID',
@@ -4039,7 +4065,7 @@ function ensureInvoiceForOrder(orderIdOrNumber) {
             db.prepare(`
               INSERT OR IGNORE INTO invoice_items (id, invoice_id, product_name, sku, quantity, unit_price_paise, tax_rate, subtotal_paise)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `).run('inv-it-' + it.id, invoice.id, it.product_name + (it.variant_name && it.variant_name !== 'Default' ? ' (' + it.variant_name + ')' : ''), it.sku || 'FRAME', it.quantity || 1, it.unit_price_paise || 0, 18.0, it.subtotal_paise || (it.unit_price_paise * it.quantity));
+            `).run('inv-it-' + it.id, invoice.id, it.product_name + (it.variant_name && it.variant_name !== 'Default' ? ' (' + it.variant_name + ')' : ''), it.sku || 'FRAME', it.quantity || 1, it.unit_price_paise || 0, 0.0, it.subtotal_paise || (it.unit_price_paise * it.quantity));
           } catch (_) {}
         }
       }
@@ -4058,7 +4084,7 @@ function ensureInvoiceForOrder(orderIdOrNumber) {
       quantity: it.quantity || 1,
       unit_price_paise: it.unit_price_paise || 0,
       subtotal_paise: it.subtotal_paise || ((it.unit_price_paise || 0) * (it.quantity || 1)),
-      tax_rate: 18.0
+      tax_rate: 0.0
     })) : [{
       id: 'inv-item-1',
       invoice_id: invoice ? invoice.id : 'inv-' + order.id,
@@ -4067,7 +4093,7 @@ function ensureInvoiceForOrder(orderIdOrNumber) {
       quantity: 1,
       unit_price_paise: order.subtotal_paise || order.total_payable_paise || 0,
       subtotal_paise: order.subtotal_paise || order.total_payable_paise || 0,
-      tax_rate: 18.0
+      tax_rate: 0.0
     }];
   }
 
@@ -4148,6 +4174,80 @@ router.get('/invoices/:id/pdf', async (req, res) => {
     console.error('Invoice PDF generation error:', err);
     res.status(500).send('Error generating PDF invoice: ' + err.message);
   }
+});
+
+// ── Digital Bill Card & Receipt Image API ─────────────────────────────────────
+router.get('/orders/:id/card-image', async (req, res) => {
+  const orderId = req.params.id;
+  const { invoice, items, prescription, order } = ensureInvoiceForOrder(orderId);
+  const targetOrder = order || invoice;
+  if (!targetOrder) {
+    return res.status(404).send('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="100"><text x="20" y="50" fill="red">Order not found</text></svg>');
+  }
+  try {
+    const storeSettings = getStoreSettings();
+    const svg = generateBillCardSVG(targetOrder, items, prescription, storeSettings);
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.send(svg);
+  } catch (err) {
+    console.error('Card image generation error:', err);
+    res.status(500).send('Error generating card image: ' + err.message);
+  }
+});
+
+router.get('/orders/:id/card-data', async (req, res) => {
+  const orderId = req.params.id;
+  const { invoice, items, prescription, order } = ensureInvoiceForOrder(orderId);
+  const targetOrder = order || invoice;
+  if (!targetOrder) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
+  const storeSettings = getStoreSettings();
+  res.json({
+    order: targetOrder,
+    items: items || [],
+    prescription: prescription || null,
+    storeSettings
+  });
+});
+
+router.post('/orders/:id/send-whatsapp', async (req, res) => {
+  const orderId = req.params.id;
+  const { invoice, items, prescription, order } = ensureInvoiceForOrder(orderId);
+  const targetOrder = order || invoice;
+  if (!targetOrder) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
+  const storeSettings = getStoreSettings();
+  const storeName = storeSettings.store_name || 'NOOR OPTIC';
+  const orderNum = targetOrder.order_number || targetOrder.invoice_number || orderId;
+  const totalPaise = targetOrder.total_payable_paise || (Number(targetOrder.total_payable_inr || 0) * 100);
+  const totalInr = '₹' + Math.round(totalPaise / 100).toLocaleString('en-IN');
+  const advancePaise = targetOrder.advance_paid_paise || (Number(targetOrder.advance_paid_inr || 0) * 100);
+  const advanceInr = '₹' + Math.round(advancePaise / 100).toLocaleString('en-IN');
+  const duePaise = targetOrder.outstanding_paise !== undefined ? targetOrder.outstanding_paise : Math.max(0, totalPaise - advancePaise);
+  const dueInr = '₹' + Math.round(duePaise / 100).toLocaleString('en-IN');
+  const isDue = duePaise > 0;
+
+  const dueText = isDue ? `*Remaining Due:* ${dueInr}` : `*Status:* Paid in Full ✓`;
+  const shareText = `Hello ${targetOrder.customer_name || 'Valued Client'},\nThank you for choosing *${storeName}*!\n\nHere is your official digital receipt for Order *#${orderNum}*:\n*Total Amount:* ${totalInr}\n*Advance Paid:* ${advanceInr}\n${dueText}\n\nYou can view and download your official receipt card anytime here:\n${req.protocol}://${req.get('host')}/bill-card?id=${encodeURIComponent(targetOrder.id || orderId)}`;
+
+  const cleanPhone = String(targetOrder.customer_phone || '').replace(/[^0-9]/g, '');
+  const intlPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+  const waUrl = intlPhone
+    ? `https://wa.me/${intlPhone}?text=${encodeURIComponent(shareText)}`
+    : `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+
+  res.json({
+    success: true,
+    phone: intlPhone,
+    customerName: targetOrder.customer_name,
+    orderNumber: orderNum,
+    whatsappUrl: waUrl,
+    shareText,
+    imageUrl: `${req.protocol}://${req.get('host')}/api/orders/${encodeURIComponent(targetOrder.id || orderId)}/card-image`
+  });
 });
 
 // ==============================================================================

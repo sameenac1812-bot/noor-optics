@@ -1,0 +1,166 @@
+{
+  "enabled": true,
+  "version": "1.0.0",
+  "comment": "Master configuration for Noor Optics 'Find Your Fit' face scanning & frame recommendation engine. All thresholds are editable.",
+
+  "sizeBands": {
+    "smallUpperMm": 126,
+    "largeLowerMm": 136,
+    "boundaryToleranceMm": 4,
+    "labels": {
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large",
+      "boundarySmallMedium": "Small / Medium",
+      "boundaryMediumLarge": "Medium / Large"
+    },
+    "catalogFitMapping": {
+      "Small": ["Narrow"],
+      "Medium": ["Regular", "M"],
+      "Large": ["Wide"],
+      "Small / Medium": ["Narrow", "Regular", "M"],
+      "Medium / Large": ["Regular", "M", "Wide"]
+    }
+  },
+
+  "calibration": {
+    "irisDiameterMm": 11.7,
+    "comment": "Horizontal Visible Iris Diameter (HVID) average in mm. Used as the optical reference ruler."
+  },
+
+  "quality": {
+    "minFramesRequired": 40,
+    "maxFramesBuffer": 80,
+    "maxPoseYawDeg": 7.0,
+    "maxPosePitchDeg": 7.0,
+    "maxPoseRollDeg": 5.0,
+    "minFaceToFrameRatio": 0.20,
+    "maxFaceToFrameRatio": 0.78,
+    "minBrightness": 40,
+    "maxBrightness": 235,
+    "maxJitterPixels": 12.0,
+    "hairForeheadThreshold": 0.35,
+    "glassesBridgeThreshold": 0.28,
+    "varianceNotes": {
+      "lengthVarianceMm": 4.0,
+      "widthVarianceMm": 1.5,
+      "jawVarianceMm": 1.8,
+      "disclaimer": "Face width & jawline have highest optical precision (±1.5 mm). Face length has an estimated ±4 mm variance due to individual hairline variation."
+    }
+  },
+
+  "borderline": {
+    "scoreDeltaThreshold": 0.10,
+    "comment": "When top two shape scores are within 0.10 (10%), display both as primary and secondary matches."
+  },
+
+  "shapes": {
+    "Oval": {
+      "displayName": "Oval",
+      "description": "Balanced proportions with gently curved jawline and slightly wider cheekbones.",
+      "targets": {
+        "lengthToWidth": { "mean": 1.45, "sigma": 0.12, "weight": 0.30 },
+        "jawToCheekbone": { "mean": 0.74, "sigma": 0.08, "weight": 0.25 },
+        "foreheadToCheekbone": { "mean": 0.82, "sigma": 0.08, "weight": 0.20 },
+        "foreheadToJaw": { "mean": 1.10, "sigma": 0.10, "weight": 0.15 },
+        "jawAngleDeg": { "mean": 136.0, "sigma": 10.0, "weight": 0.10 }
+      }
+    },
+    "Round": {
+      "displayName": "Round",
+      "description": "Soft contours with equal face width and length, gentle curves at cheekbones and jaw.",
+      "targets": {
+        "lengthToWidth": { "mean": 1.16, "sigma": 0.10, "weight": 0.35 },
+        "jawToCheekbone": { "mean": 0.78, "sigma": 0.08, "weight": 0.20 },
+        "foreheadToCheekbone": { "mean": 0.82, "sigma": 0.08, "weight": 0.15 },
+        "foreheadToJaw": { "mean": 1.05, "sigma": 0.10, "weight": 0.15 },
+        "jawAngleDeg": { "mean": 142.0, "sigma": 10.0, "weight": 0.15 }
+      }
+    },
+    "Square": {
+      "displayName": "Square",
+      "description": "Strong, defined angular jawline with proportional forehead, cheekbones, and jaw width.",
+      "targets": {
+        "lengthToWidth": { "mean": 1.18, "sigma": 0.10, "weight": 0.30 },
+        "jawToCheekbone": { "mean": 0.88, "sigma": 0.08, "weight": 0.30 },
+        "foreheadToCheekbone": { "mean": 0.88, "sigma": 0.08, "weight": 0.15 },
+        "foreheadToJaw": { "mean": 1.00, "sigma": 0.08, "weight": 0.10 },
+        "jawAngleDeg": { "mean": 120.0, "sigma": 10.0, "weight": 0.15 }
+      }
+    },
+    "Heart": {
+      "displayName": "Heart",
+      "description": "Broader forehead and cheekbones tapering down to a refined, pointed chin.",
+      "targets": {
+        "lengthToWidth": { "mean": 1.35, "sigma": 0.12, "weight": 0.20 },
+        "jawToCheekbone": { "mean": 0.65, "sigma": 0.08, "weight": 0.25 },
+        "foreheadToCheekbone": { "mean": 0.88, "sigma": 0.08, "weight": 0.20 },
+        "foreheadToJaw": { "mean": 1.35, "sigma": 0.12, "weight": 0.25 },
+        "jawAngleDeg": { "mean": 126.0, "sigma": 10.0, "weight": 0.10 }
+      }
+    },
+    "Diamond": {
+      "displayName": "Diamond",
+      "description": "Striking, prominent cheekbones with narrower forehead and delicate jawline.",
+      "targets": {
+        "lengthToWidth": { "mean": 1.40, "sigma": 0.12, "weight": 0.20 },
+        "jawToCheekbone": { "mean": 0.64, "sigma": 0.08, "weight": 0.30 },
+        "foreheadToCheekbone": { "mean": 0.72, "sigma": 0.08, "weight": 0.30 },
+        "foreheadToJaw": { "mean": 1.12, "sigma": 0.12, "weight": 0.10 },
+        "jawAngleDeg": { "mean": 132.0, "sigma": 10.0, "weight": 0.10 }
+      }
+    },
+    "Oblong": {
+      "displayName": "Oblong / Rectangle",
+      "description": "Elongated face profile with balanced cheekbone, forehead, and jaw width.",
+      "targets": {
+        "lengthToWidth": { "mean": 1.72, "sigma": 0.15, "weight": 0.40 },
+        "jawToCheekbone": { "mean": 0.80, "sigma": 0.08, "weight": 0.20 },
+        "foreheadToCheekbone": { "mean": 0.84, "sigma": 0.08, "weight": 0.15 },
+        "foreheadToJaw": { "mean": 1.05, "sigma": 0.10, "weight": 0.15 },
+        "jawAngleDeg": { "mean": 128.0, "sigma": 10.0, "weight": 0.10 }
+      }
+    }
+  },
+
+  "recommendations": {
+    "Oval": {
+      "stylingTip": "Most frame shapes suit an oval face. Angular shapes add contrast while classic wayfarers emphasize balanced symmetry.",
+      "primaryShapes": ["Oval", "Wayfarer"],
+      "complementaryShapes": ["Rectangular", "Hex / Geometric"]
+    },
+    "Round": {
+      "stylingTip": "Angular and geometric frames contrast soft curves and add structure to the face profile.",
+      "primaryShapes": ["Rectangular", "Square"],
+      "complementaryShapes": ["Hex / Geometric", "Geometric"]
+    },
+    "Square": {
+      "stylingTip": "Curved and round frames soften sharp jawline angles and bring subtle visual harmony.",
+      "primaryShapes": ["Round", "Oval"],
+      "complementaryShapes": ["Aviator", "Wayfarer", "Cat-Eye"]
+    },
+    "Heart": {
+      "stylingTip": "Bottom-heavy or curved aviator and oval frames draw visual focus downward, balancing a wider forehead.",
+      "primaryShapes": ["Aviator", "Oval", "Round"],
+      "complementaryShapes": ["Cat-Eye", "Wayfarer", "Geometric"]
+    },
+    "Diamond": {
+      "stylingTip": "Upswept frames like cat-eyes or delicate ovals highlight distinct cheekbones while softening angles.",
+      "primaryShapes": ["Cat-Eye", "Oval"],
+      "complementaryShapes": ["Hex / Geometric", "Geometric", "Round", "Aviator"]
+    },
+    "Oblong": {
+      "stylingTip": "Taller, broader frames like squares and deep wayfarers visually break up face length.",
+      "primaryShapes": ["Square", "Rectangular"],
+      "complementaryShapes": ["Wayfarer"]
+    }
+  },
+
+  "catalogFallback": {
+    "minRecommendedFrames": 6,
+    "expandToAdjacentSize": true,
+    "expandToComplementaryShape": true,
+    "comment": "Guarantees at least 6 recommendations by expanding to complementary styles or adjacent size bands if inventory is limited."
+  }
+}
+

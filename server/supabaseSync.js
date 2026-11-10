@@ -929,8 +929,11 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
       }
 
       // 3. Extract & Sync Prescription record if present in items, order payload, or Supabase prescriptions table
+      const rxPrefNorm = String(co.prescription_pref || '').trim().toLowerCase();
+      const isZeroPower = rxPrefNorm.includes('zero') || rxPrefNorm.includes('plano') || rxPrefNorm === 'none' || rxPrefNorm === 'fashion';
+
       let attachedRx = null;
-      if (Array.isArray(items)) {
+      if (!isZeroPower && Array.isArray(items)) {
         for (const it of items) {
           if (it && (it.prescription || it.rx)) {
             attachedRx = it.prescription || it.rx;
@@ -938,13 +941,13 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
           }
         }
       }
-      if (!attachedRx && (co.prescription || co.prescriptions)) {
+      if (!isZeroPower && !attachedRx && (co.prescription || co.prescriptions)) {
         attachedRx = co.prescription || (Array.isArray(co.prescriptions) ? co.prescriptions[0] : null);
         if (typeof attachedRx === 'string') {
           try { attachedRx = JSON.parse(attachedRx); } catch (_) {}
         }
       }
-      if (!attachedRx && (co.od_sph != null || co.os_sph != null || co.odSph != null || co.osSph != null)) {
+      if (!isZeroPower && !attachedRx && (co.od_sph != null || co.os_sph != null || co.odSph != null || co.osSph != null)) {
         attachedRx = {
           prescription_number: co.prescription_number || ('RX-' + co.order_ref),
           od_sph: co.od_sph || co.odSph,
@@ -957,7 +960,7 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
           ipd_distance: co.ipd_distance || co.pd
         };
       }
-      if (!attachedRx && phone) {
+      if (!isZeroPower && !attachedRx && phone) {
         try {
           const rxRes = await fetch(`${SUPABASE_URL}/rest/v1/prescriptions?client_phone=eq.${encodeURIComponent(phone)}&order=created_at.desc&limit=1`, {
             headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
@@ -969,6 +972,10 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
             }
           }
         } catch (_) {}
+      }
+
+      if (isZeroPower) {
+        attachedRx = null;
       }
 
       const hasRxDiopters = Boolean(attachedRx && (
@@ -1039,7 +1046,9 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
         if (!existing.customer_id && customerId) {
           db.prepare('UPDATE orders SET customer_id = ? WHERE id = ?').run(customerId, existing.id);
         }
-        if (syncedRxId && (!existing.prescription_id || !existing.prescriptions_json)) {
+        if (isZeroPower) {
+          db.prepare('UPDATE orders SET prescription_id = NULL, prescriptions_json = NULL WHERE id = ?').run(existing.id);
+        } else if (syncedRxId && (!existing.prescription_id || !existing.prescriptions_json)) {
           try {
             db.prepare('UPDATE orders SET prescription_id = ?, prescriptions_json = ? WHERE id = ?').run(syncedRxId, JSON.stringify([attachedRx]), existing.id);
           } catch (_) {}
@@ -1500,7 +1509,9 @@ async function pushOrderToSupabase(orderPayload) {
 
   try {
     let itemsToPush = Array.isArray(orderPayload.items) ? [...orderPayload.items] : [];
-    const rxPayload = orderPayload.prescription || (orderPayload.od_sph ? {
+    const rxPrefRaw = String(orderPayload.prescriptionPref || orderPayload.prescription_pref || '').trim().toLowerCase();
+    const isZeroPowerPayload = rxPrefRaw.includes('zero') || rxPrefRaw.includes('plano') || rxPrefRaw === 'none' || rxPrefRaw === 'fashion';
+    const rxPayload = (!isZeroPowerPayload && (orderPayload.prescription || (orderPayload.od_sph ? {
       od_sph: orderPayload.od_sph,
       od_cyl: orderPayload.od_cyl,
       od_axis: orderPayload.od_axis,
@@ -1509,7 +1520,7 @@ async function pushOrderToSupabase(orderPayload) {
       os_axis: orderPayload.os_axis,
       addition: orderPayload.addition,
       ipd_distance: orderPayload.ipd_distance
-    } : null);
+    } : null))) || null;
 
     if (rxPayload && itemsToPush.length > 0 && !itemsToPush[0].prescription) {
       itemsToPush[0] = { ...itemsToPush[0], prescription: rxPayload, rx: rxPayload };
@@ -1569,7 +1580,7 @@ async function pushOrderToSupabase(orderPayload) {
       channel: resolvedChannel,
       channel_code: resolvedChannelCode,
       source: resolvedSource,
-      prescriptions: orderPayload.prescriptions || (orderPayload.prescription ? [orderPayload.prescription] : []),
+      prescriptions: isZeroPowerPayload ? [] : (orderPayload.prescriptions || (rxPayload ? [rxPayload] : [])),
       customer_name: custName,
       customer_email: custEmail,
       customer_phone: cleanPhone,
@@ -1580,7 +1591,7 @@ async function pushOrderToSupabase(orderPayload) {
       payment_method: payMethod,
       payment_status: payStatus,
       customer_age: orderPayload.customerAge || orderPayload.age || null,
-      prescription_id: orderPayload.prescriptionId || null,
+      prescription_id: isZeroPowerPayload ? null : (orderPayload.prescriptionId || null),
       idempotency_key: orderPayload.idempotency_key || `idem-${orderRef}-${Date.now()}`,
       subtotal: subtotal,
       shipping_fee: 0,
@@ -1701,7 +1712,7 @@ async function pushOrderToSupabase(orderPayload) {
                 customer_name: custName,
                 customer_phone: cleanPhone,
                 items: itemsToPush,
-                prescriptions: orderPayload.prescriptions || (orderPayload.prescription ? [orderPayload.prescription] : []),
+                prescriptions: isZeroPowerPayload ? [] : (orderPayload.prescriptions || (rxPayload ? [rxPayload] : [])),
                 prescription: orderPayload.prescription || null,
                 od_sph: orderPayload.od_sph != null ? orderPayload.od_sph : (orderPayload.prescription?.od_sph != null ? orderPayload.prescription.od_sph : null),
                 od_cyl: orderPayload.od_cyl != null ? orderPayload.od_cyl : (orderPayload.prescription?.od_cyl != null ? orderPayload.prescription.od_cyl : null),
@@ -2180,6 +2191,8 @@ async function pushProductToCloud(product) {
       shape: product.shape || 'Rectangular',
       material: product.material || 'Japanese Titanium',
       fit: product.fit || 'Regular',
+      frame_size: product.frame_size || product.size || (product.fit === 'Narrow' ? 'Small' : (product.fit === 'Wide' ? 'Large' : 'Medium')),
+      size: product.size || product.frame_size || (product.fit === 'Narrow' ? 'Small' : (product.fit === 'Wide' ? 'Large' : 'Medium')),
       category: product.category || 'Optical',
       rating: 5.0,
       reviews_count: 1,

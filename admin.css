@@ -6099,3 +6099,378 @@ body.modal-open {
   transform: translateY(-1px);
 }
 
+/* ── DIGITAL BILL CARD & IMAGE SENDER MODAL ──────────────────────────────── */
+.bc-modal-wrap {
+  max-width: 540px !important;
+  width: 95% !important;
+  padding: 0 !important;
+  border-radius: 20px !important;
+  overflow: hidden !important;
+}
+
+.bc-modal-header {
+  padding: 16px 20px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E2E8F0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bc-modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #0F172A;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bc-modal-sub {
+  margin: 2px 0 0 0;
+  font-size: 0.78rem;
+  color: #64748B;
+}
+
+.bc-modal-body {
+  padding: 20px;
+  background: #F8FAFC;
+  max-height: 72vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.bc-actions-toolbar {
+  padding: 16px 20px;
+  background: #FFFFFF;
+  border-top: 1px solid #E2E8F0;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.bc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.bc-btn-wa {
+  background: #25D366;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(37, 211, 102, 0.3);
+}
+
+.bc-btn-wa:hover {
+  background: #1EBE5B;
+  transform: translateY(-1px);
+}
+
+.bc-btn-copy {
+  background: #0F2C59;
+  color: #FFFFFF;
+}
+
+.bc-btn-copy:hover {
+  background: #0A1E3F;
+  transform: translateY(-1px);
+}
+
+.bc-btn-download {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+
+.bc-btn-download:hover {
+  background: #DBEAFE;
+}
+
+.bc-btn-close {
+  background: #F1F5F9;
+  color: #475569;
+}
+
+.bc-btn-close:hover {
+  background: #E2E8F0;
+}
+
+/* Digital Card Visual Styles */
+.bc-container {
+  width: 100%;
+  max-width: 440px;
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  text-align: center;
+}
+
+.bc-store-header {
+  margin-bottom: 12px;
+}
+
+.bc-logo {
+  height: 48px;
+  max-width: 90px;
+  object-fit: contain;
+  margin: 0 auto 4px auto;
+  display: block;
+}
+
+.bc-store-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #0C2B4E;
+  letter-spacing: 1.5px;
+}
+
+.bc-card {
+  background: #FFFFFF;
+  border: 1.5px solid #DCE6F1;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(15, 44, 89, 0.08);
+  text-align: left;
+}
+
+.bc-header-pill {
+  background: #0C2B4E;
+  color: #FFFFFF;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.bc-inv-num {
+  font-family: monospace;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.bc-inv-date {
+  font-size: 0.8rem;
+  color: #E2E8F0;
+}
+
+.bc-client-box {
+  margin: 14px;
+  padding: 10px 14px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  font-size: 0.82rem;
+}
+
+.bc-client-row {
+  padding: 5px 0;
+  color: #1E293B;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.bc-client-split {
+  padding-top: 5px;
+  display: flex;
+  justify-content: space-between;
+  color: #475569;
+}
+
+.bc-rx-card {
+  margin: 0 14px 14px 14px;
+  padding: 10px 12px;
+  background: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  border-radius: 10px;
+}
+
+.bc-rx-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #0C2B4E;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.bc-rx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.bc-rx-table th {
+  background: #EBF3FB;
+  color: #0C2B4E;
+  padding: 4px;
+  font-weight: 700;
+  border-radius: 4px;
+}
+
+.bc-rx-table td {
+  padding: 5px 4px;
+  color: #1E293B;
+  font-weight: 600;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.bc-zero-power {
+  margin: 0 14px 14px 14px;
+  padding: 8px 12px;
+  background: #F1F5F9;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.bc-items-table {
+  width: calc(100% - 28px);
+  margin: 0 14px 12px 14px;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.bc-items-table th {
+  background: #EBF3FB;
+  color: #0C2B4E;
+  font-weight: 800;
+  font-size: 0.72rem;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.bc-items-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #F1F5F9;
+  color: #1E293B;
+}
+
+.bc-item-name {
+  font-weight: 600;
+}
+
+.bc-item-total {
+  font-weight: 800;
+  color: #0C2B4E;
+}
+
+.bc-text-center {
+  text-align: center;
+}
+
+.bc-text-right {
+  text-align: right;
+}
+
+.bc-summary-wrap {
+  margin: 0 14px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.bc-summary-box {
+  width: 210px;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.bc-sum-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+  color: #0C2B4E;
+}
+
+.bc-sum-sub {
+  font-size: 0.78rem;
+  color: #64748B;
+  margin-bottom: 8px;
+}
+
+.bc-sum-bar {
+  padding: 6px 10px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #FFFFFF;
+}
+
+.bc-bar-due {
+  background: #EF4444 !important;
+}
+
+.bc-bar-paid {
+  background: #10B981 !important;
+}
+
+.bc-pickup-box {
+  width: 210px;
+  background: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.bc-pickup-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #0C2B4E;
+}
+
+.bc-pickup-date {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #1E293B;
+  margin-top: 2px;
+}
+
+.bc-footer {
+  padding: 14px;
+  background: #FAFCFE;
+  border-top: 1px solid #F1F5F9;
+  text-align: center;
+}
+
+.bc-thankyou {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #0C2B4E;
+  margin-bottom: 2px;
+}
+
+.bc-store-sub {
+  font-size: 0.72rem;
+  color: #64748B;
+  font-weight: 600;
+}
+
+.bc-store-addr {
+  font-size: 0.68rem;
+  color: #94A3B8;
+  margin-top: 2px;
+}
+
+

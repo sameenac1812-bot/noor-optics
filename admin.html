@@ -2454,7 +2454,7 @@
           </svg>
           <span>Call</span>
         </button>
-        <button type="button" class="action-chip chip-wa" id="action-sheet-wa">
+        <button type="button" class="action-chip chip-wa" id="action-sheet-wa" title="Send Digital Bill Card Image via WhatsApp">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path
               d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
@@ -3327,11 +3327,16 @@
           <span>🖨️</span> Instant Bill Printout Sent Directly to Printer
         </div>
       </div>
-      <div style="display:flex; gap:10px; justify-content:center; padding-top:4px;">
+      <div style="display:flex; gap:10px; justify-content:center; padding-top:4px; flex-wrap:wrap;">
         <button type="button" class="btn-card-addbag"
-          style="background:#0F172A; color:#FFF; padding:12px 28px; border-radius:8px; font-weight:800; font-size:0.95rem; box-shadow:0 4px 12px rgba(15,23,42,0.3);"
+          style="background:#0F172A; color:#FFF; padding:12px 24px; border-radius:8px; font-weight:800; font-size:0.95rem; box-shadow:0 4px 12px rgba(15,23,42,0.3);"
           onclick="document.getElementById('modal-order-success').classList.remove('open')">
           ✓ Next Sale
+        </button>
+        <button type="button" class="btn-header-action" id="btn-success-share-wa"
+          style="padding:10px 18px; font-size:0.9rem; background:#16A34A; color:#FFF; font-weight:700; border:none; display:inline-flex; align-items:center; gap:6px;"
+          title="Send Digital Bill Card Image via WhatsApp">
+          <span>💬</span> <span>WhatsApp Bill</span>
         </button>
         <button type="button" class="btn-header-action" id="btn-success-pdf"
           style="padding:10px 18px; font-size:0.9rem; background:#2563EB; color:#FFF; font-weight:700;"
@@ -3346,6 +3351,39 @@
           style="padding:10px 18px; font-size:0.9rem; background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; font-weight:700;"
           title="Print optical frame QR sticker for this sale">
           🏷️ Print Item QR
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 3.H-2 DIGITAL BILL CARD & IMAGE SENDER (WHATSAPP / DOWNLOAD) ── -->
+  <div class="modal-overlay" id="modal-bill-image-card" role="dialog" aria-modal="true" style="z-index:100003;">
+    <div class="admin-modal bc-modal-wrap">
+      <div class="bc-modal-header">
+        <div>
+          <h3>📸 Digital Bill Card & Image Sender</h3>
+          <p class="bc-modal-sub">Boutique digital receipt card with prescription diopters, products & due balance</p>
+        </div>
+        <button type="button" class="btn-header-action" data-close-modal style="padding:4px 10px; font-size:1rem; cursor:pointer;">✕</button>
+      </div>
+      <div class="bc-modal-body" id="bc-modal-preview-body">
+        <!-- Rendered Card Preview injected dynamically -->
+      </div>
+      <div class="bc-actions-toolbar">
+        <button type="button" class="bc-btn bc-btn-wa" id="bc-btn-share-wa" title="Copy card image and open WhatsApp chat">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          <span>💬 Send via WhatsApp</span>
+        </button>
+        <button type="button" class="bc-btn bc-btn-copy" id="bc-btn-copy-img" title="Copy high-res image to clipboard (Ctrl+V to paste)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span>📋 Copy Image</span>
+        </button>
+        <button type="button" class="bc-btn bc-btn-download" id="bc-btn-download-img" title="Download PNG image">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>💾 Download PNG</span>
+        </button>
+        <button type="button" class="bc-btn bc-btn-close" data-close-modal>
+          <span>Close</span>
         </button>
       </div>
     </div>
@@ -3649,6 +3687,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/supabase.js?v=11.1.0"></script>
   <script src="/data.js?v=11.1.0"></script>
+  <script src="/billCardGenerator.js?v=1.0.0"></script>
 
   <!-- ── 6. APPLICATION CONTROLLER ─────────────────────────────────────────── -->
   <script src="/admin.js?v=11.2.0"></script>

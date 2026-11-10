@@ -110,6 +110,7 @@ function initializeDatabase() {
       shape TEXT NOT NULL,
       material TEXT NOT NULL,
       fit TEXT NOT NULL DEFAULT 'Regular',
+      frame_size TEXT NOT NULL DEFAULT 'Medium',
       gender TEXT NOT NULL DEFAULT 'Unisex',
       category TEXT NOT NULL DEFAULT 'Optical',
       selling_price_paise INTEGER NOT NULL,
@@ -533,6 +534,17 @@ function initializeDatabase() {
 
     const prodCols = db.pragma('table_info(products)').map(c => c.name);
     if (!prodCols.includes('gender')) db.exec("ALTER TABLE products ADD COLUMN gender TEXT DEFAULT 'Unisex';");
+    if (!prodCols.includes('frame_size')) {
+      db.exec("ALTER TABLE products ADD COLUMN frame_size TEXT DEFAULT 'Medium';");
+      db.exec(`
+        UPDATE products SET frame_size = CASE
+          WHEN LOWER(fit) LIKE '%narrow%' OR LOWER(fit) = 'small' OR LOWER(fit) = 's' THEN 'Small'
+          WHEN LOWER(fit) LIKE '%wide%' OR LOWER(fit) = 'large' OR LOWER(fit) = 'l' THEN 'Large'
+          ELSE 'Medium'
+        END
+        WHERE frame_size IS NULL OR frame_size = '' OR frame_size = 'Medium';
+      `);
+    }
 
     const oiCols = db.pragma('table_info(order_items)').map(c => c.name);
     if (!oiCols.includes('brand')) db.exec('ALTER TABLE order_items ADD COLUMN brand TEXT;');

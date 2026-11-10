@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Noor Optics – Empirical Face Calibration Tool</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0F172A;
+      --card: #1E293B;
+      --border: #334155;
+      --text: #F8FAFC;
+      --muted: #94A3B8;
+      --teal: #11DAAC;
+      --gold: #F59E0B;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+    }
+    .title { font-size: 1.5rem; font-weight: 800; color: var(--text); margin: 0; }
+    .badge { background: rgba(17, 218, 172, 0.15); color: var(--teal); border: 1px solid var(--teal); padding: 4px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+    .main-grid { display: grid; grid-template-columns: 480px 1fr; gap: 24px; }
+    .camera-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; align-items: center; }
+    .video-wrap { position: relative; width: 440px; height: 330px; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+    video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; transform: scaleX(-1); }
+    .hud { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: #00FFCC; width: 100%; background: #0A0F1D; border: 1px solid #1E3A5F; border-radius: 8px; padding: 12px; line-height: 1.5; margin-bottom: 16px; }
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; }
+    input, select { width: 100%; padding: 10px 12px; background: #0F172A; border: 1px solid var(--border); border-radius: 8px; color: #FFF; font-size: 0.9rem; font-family: inherit; }
+    .btn { padding: 12px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; border: none; font-size: 0.95rem; width: 100%; transition: background 0.15s; }
+    .btn-primary { background: var(--teal); color: #000; }
+    .btn-primary:hover { background: #0fc299; }
+    .btn-export { background: #3B82F6; color: #FFF; margin-top: 10px; }
+    .btn-danger { background: #EF4444; color: #FFF; margin-top: 10px; }
+    .data-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; }
+    .table-wrap { overflow-x: auto; flex: 1; max-height: 600px; margin-top: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: left; }
+    th { background: #0A0F1D; padding: 10px; border-bottom: 2px solid var(--border); color: var(--muted); position: sticky; top: 0; }
+    td { padding: 10px; border-bottom: 1px solid var(--border); }
+    tr:hover td { background: rgba(255, 255, 255, 0.03); }
+    .match-tag { font-weight: 700; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; }
+    .match-yes { background: rgba(16, 185, 129, 0.2); color: #10B981; }
+    .match-no { background: rgba(239, 68, 68, 0.2); color: #EF4444; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1 class="title">Noor Optics – Empirical Face Calibration Laboratory</h1>
+      <div style="font-size:0.85rem;color:var(--muted);margin-top:4px;">Diagnostic data logger to tune geometric thresholds on 30–50 human test subjects.</div>
+    </div>
+    <span class="badge">HIDDEN STYLIST BENCH</span>
+  </div>
+
+  <div class="main-grid">
+    <!-- Left Column: Camera, HUD & Input -->
+    <div class="camera-card">
+      <div class="video-wrap">
+        <video id="video" playsinline webkit-playsinline autoplay muted></video>
+        <canvas id="canvas"></canvas>
+      </div>
+
+      <div class="hud" id="hud">
+        Status: Requesting camera...
+      </div>
+
+      <div style="width:100%;">
+        <div class="form-group">
+          <label>Subject ID / Name</label>
+          <input type="text" id="subject-id" placeholder="e.g. Subject-01 (Rahul)" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="form-group">
+            <label>Stylist Assigned Shape</label>
+            <select id="stylist-shape">
+              <option value="Oval">Oval</option>
+              <option value="Round">Round</option>
+              <option value="Square">Square</option>
+              <option value="Heart">Heart</option>
+              <option value="Diamond">Diamond</option>
+              <option value="Oblong">Oblong / Rectangle</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Stylist Best Fit Size</label>
+            <select id="stylist-size">
+              <option value="Small">Small (<126mm)</option>
+              <option value="Medium" selected>Medium (126-136mm)</option>
+              <option value="Large">Large (>136mm)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Stylist Observations / Notes</label>
+          <input type="text" id="stylist-notes" placeholder="e.g. Sharp jawline, slight fringe" />
+        </div>
+
+        <button type="button" class="btn btn-primary" id="btn-record">💾 Record Test Subject Measurement</button>
+        <button type="button" class="btn btn-export" id="btn-export-csv">📥 Export Dataset to CSV</button>
+        <button type="button" class="btn btn-danger" id="btn-clear">🗑️ Clear Recorded Data</button>
+      </div>
+    </div>
+
+    <!-- Right Column: Live Data Table -->
+    <div class="data-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;font-size:1.1rem;">Recorded Test Subjects (<span id="record-count">0</span>)</h3>
+        <span style="font-size:0.8rem;color:var(--muted);">Saved in local storage</span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Width (mm)</th>
+              <th>Length (mm)</th>
+              <th>Jaw (mm)</th>
+              <th>L/W Ratio</th>
+              <th>Jaw Angle</th>
+              <th>Auto Shape</th>
+              <th>Stylist Shape</th>
+              <th>Shape Match</th>
+              <th>Auto Size</th>
+              <th>Stylist Size</th>
+            </tr>
+          </thead>
+          <tbody id="data-tbody">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/find-your-fit/mesh-math.js"></script>
+  <script src="/find-your-fit/models/vision_bundle.js"></script>
+
+  <script>
+    (async function() {
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const hud = document.getElementById('hud');
+      const tbody = document.getElementById('data-tbody');
+      const countEl = document.getElementById('record-count');
+
+      let config = null;
+      try {
+        const res = await fetch('/find-your-fit/config.json');
+        config = await res.json();
+      } catch (e) {
+        hud.textContent = 'Failed to load config.json';
+        return;
+      }
+
+      // Load records from localStorage
+      let records = [];
+      try {
+        const stored = localStorage.getItem('noor_calibration_dataset');
+        if (stored) records = JSON.parse(stored);
+      } catch (_) {}
+
+      function updateTable() {
+        countEl.textContent = records.length;
+        tbody.innerHTML = records.map((r, i) => {
+          const shapeMatch = r.autoShape === r.stylistShape;
+          const sizeMatch = r.autoSize.includes(r.stylistSize);
+          return `
+            <tr>
+              <td><strong>${r.subjectId}</strong></td>
+              <td>${r.widthMm}</td>
+              <td>${r.lengthMm}</td>
+              <td>${r.jawMm}</td>
+              <td>${r.lwRatio}</td>
+              <td>${r.jawAngle}°</td>
+              <td>${r.autoShape} (${Math.round(r.autoScore * 100)}%)</td>
+              <td><strong>${r.stylistShape}</strong></td>
+              <td><span class="match-tag ${shapeMatch ? 'match-yes' : 'match-no'}">${shapeMatch ? 'YES' : 'DIFF'}</span></td>
+              <td>${r.autoSize}</td>
+              <td>${r.stylistSize}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+      updateTable();
+
+      // Camera & Landmarker
+      let landmarker = null;
+      let latestMetrics = null;
+      let latestPose = null;
+      let latestClassification = null;
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+        video.srcObject = stream;
+        await video.play();
+
+        const visionApi = window.Vision || window;
+        const FilesetResolver = visionApi.FilesetResolver || window.FilesetResolver;
+        const FaceLandmarker = visionApi.FaceLandmarker || window.FaceLandmarker;
+
+        const vision = await FilesetResolver.forVisionTasks('/find-your-fit/models');
+        landmarker = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath: '/find-your-fit/models/face_landmarker.task', delegate: 'GPU' },
+          runningMode: 'VIDEO',
+          numFaces: 1
+        }).catch(async () => {
+          return await FaceLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetPath: '/find-your-fit/models/face_landmarker.task', delegate: 'CPU' },
+            runningMode: 'VIDEO',
+            numFaces: 1
+          });
+        });
+      } catch (err) {
+        hud.textContent = 'Camera/Landmarker Error: ' + err.message;
+        return;
+      }
+
+      let lastTime = -1;
+      function loop() {
+        if (video.readyState >= 2 && landmarker) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const now = performance.now();
+
+          if (now !== lastTime) {
+            lastTime = now;
+            let results = null;
+            try { results = landmarker.detectForVideo(video, now); } catch (_) {}
+
+            if (results && results.faceLandmarks && results.faceLandmarks[0]) {
+              const lm = results.faceLandmarks[0];
+              const q = FFitMeshMath.evaluateFrameQuality(lm, config, canvas.width, canvas.height);
+              latestMetrics = q.metrics;
+              latestPose = q.pose;
+
+              const shapeCls = FFitMeshMath.classifyFaceShape(latestMetrics.ratios, config);
+              const sizeCls = FFitMeshMath.classifyFaceSize(latestMetrics.mm.cheekWidth, config);
+              latestClassification = { shape: shapeCls, size: sizeCls };
+
+              // Update HUD
+              hud.innerHTML = `
+                Pose: Yaw ${q.pose.yaw}° | Pitch ${q.pose.pitch}° | Roll ${q.pose.roll}° [${q.isValid ? 'VALID' : 'ALIGNING'}]<br/>
+                Face Width: ${Math.round(latestMetrics.mm.cheekWidth * 10) / 10} mm | Length: ${Math.round(latestMetrics.mm.faceLength * 10) / 10} mm<br/>
+                Jaw: ${Math.round(latestMetrics.mm.jawWidth * 10) / 10} mm | Forehead: ${Math.round(latestMetrics.mm.foreheadWidth * 10) / 10} mm<br/>
+                Ratios: L/W ${Math.round(latestMetrics.ratios.lengthToWidth * 100) / 100} | Jaw/Cheek ${Math.round(latestMetrics.ratios.jawToCheekbone * 100) / 100} | Jaw Angle ${Math.round(latestMetrics.ratios.jawAngleDeg)}°<br/>
+                Auto Prediction: <strong>${shapeCls.primaryShape} (${Math.round(shapeCls.primaryScore * 100)}%)</strong> | Size: <strong>${sizeCls.label}</strong>
+              `;
+
+              // Draw mesh on canvas
+              const ctx = canvas.getContext('2d');
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.fillStyle = '#11DAAC';
+              [10, 152, 234, 454, 172, 397, 71, 301].forEach(idx => {
+                const pt = lm[idx];
+                if (pt) {
+                  ctx.beginPath();
+                  ctx.arc(pt.x * canvas.width, pt.y * canvas.height, 4, 0, 2 * Math.PI);
+                  ctx.fill();
+                }
+              });
+            }
+          }
+        }
+        requestAnimationFrame(loop);
+      }
+      loop();
+
+      // Record button
+      document.getElementById('btn-record').addEventListener('click', () => {
+        if (!latestMetrics || !latestClassification) {
+          alert('No stable face measurement detected. Please face the camera.');
+          return;
+        }
+
+        const subjectId = (document.getElementById('subject-id').value || '').trim() || ('Subject-' + (records.length + 1));
+        const stylistShape = document.getElementById('stylist-shape').value;
+        const stylistSize = document.getElementById('stylist-size').value;
+        const notes = document.getElementById('stylist-notes').value || '';
+
+        const record = {
+          timestamp: new Date().toISOString(),
+          subjectId,
+          widthMm: Math.round(latestMetrics.mm.cheekWidth * 10) / 10,
+          lengthMm: Math.round(latestMetrics.mm.faceLength * 10) / 10,
+          jawMm: Math.round(latestMetrics.mm.jawWidth * 10) / 10,
+          foreheadMm: Math.round(latestMetrics.mm.foreheadWidth * 10) / 10,
+          lwRatio: Math.round(latestMetrics.ratios.lengthToWidth * 1000) / 1000,
+          jcRatio: Math.round(latestMetrics.ratios.jawToCheekbone * 1000) / 1000,
+          fcRatio: Math.round(latestMetrics.ratios.foreheadToCheekbone * 1000) / 1000,
+          jawAngle: Math.round(latestMetrics.ratios.jawAngleDeg * 10) / 10,
+          autoShape: latestClassification.shape.primaryShape,
+          autoScore: latestClassification.shape.primaryScore,
+          secondaryShape: latestClassification.shape.secondaryShape,
+          autoSize: latestClassification.size.label,
+          stylistShape,
+          stylistSize,
+          notes
+        };
+
+        records.unshift(record);
+        localStorage.setItem('noor_calibration_dataset', JSON.stringify(records));
+        updateTable();
+        document.getElementById('subject-id').value = '';
+        document.getElementById('stylist-notes').value = '';
+      });
+
+      // Export CSV
+      document.getElementById('btn-export-csv').addEventListener('click', () => {
+        if (records.length === 0) {
+          alert('No records to export.');
+          return;
+        }
+        const headers = ['Timestamp', 'SubjectID', 'WidthMm', 'LengthMm', 'JawMm', 'ForeheadMm', 'LWRatio', 'JCRatio', 'FCRatio', 'JawAngle', 'AutoShape', 'Confidence', 'SecondaryShape', 'AutoSize', 'StylistShape', 'StylistSize', 'Notes'];
+        const rows = records.map(r => [
+          r.timestamp,
+          `"${r.subjectId}"`,
+          r.widthMm,
+          r.lengthMm,
+          r.jawMm,
+          r.foreheadMm,
+          r.lwRatio,
+          r.jcRatio,
+          r.fcRatio,
+          r.jawAngle,
+          `"${r.autoShape}"`,
+          r.autoScore,
+          `"${r.secondaryShape}"`,
+          `"${r.autoSize}"`,
+          `"${r.stylistShape}"`,
+          `"${r.stylistSize}"`,
+          `"${(r.notes || '').replace(/"/g, '""')}"`
+        ]);
+
+        const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'noor_face_calibration_dataset_' + Date.now() + '.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+
+      // Clear button
+      document.getElementById('btn-clear').addEventListener('click', () => {
+        if (confirm('Clear all recorded subject data?')) {
+          records = [];
+          localStorage.removeItem('noor_calibration_dataset');
+          updateTable();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
+

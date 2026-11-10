@@ -131,7 +131,6 @@ app.get(['/qr/:code', '/q/:code'], async (req, res) => {
           <div class="price-row">
             <div>
               <div class="price-label">Current Boutique Retail Price</div>
-              <div style="font-size:0.75rem;color:#059669;font-weight:600;">Inclusive of 18% GST</div>
             </div>
             <div class="price-value">${priceINR}</div>
           </div>
@@ -157,6 +156,144 @@ app.get(['/qr/:code', '/q/:code'], async (req, res) => {
 // Serve Admin Portal at /admin
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// Standalone Mobile Digital Bill Card View
+app.get(['/bill-card', '/bill-card/:id', '/bill/:id'], (req, res) => {
+  const orderId = req.params.id || req.query.id || req.query.orderId || '';
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Official Digital Receipt – Noor Optics</title>
+      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+      <link rel="stylesheet" href="/admin.css">
+      <style>
+        body {
+          background: #F4F7FB;
+          margin: 0;
+          padding: 24px 12px;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: flex-start;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .standalone-card-wrap {
+          max-width: 440px;
+          width: 100%;
+          margin: 0 auto;
+        }
+        .standalone-toolbar {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: center;
+          margin-top: 16px;
+          margin-bottom: 30px;
+        }
+        .btn-action {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 10px 16px;
+          border-radius: 10px;
+          font-size: 0.85rem;
+          font-weight: 700;
+          cursor: pointer;
+          border: none;
+          text-decoration: none;
+          transition: all 0.15s ease;
+        }
+        .btn-wa { background: #25D366; color: #FFF; box-shadow: 0 2px 8px rgba(37,211,102,0.3); }
+        .btn-copy { background: #0F2C59; color: #FFF; }
+        .btn-download { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+        .loading-box { text-align: center; padding: 60px 20px; color: #64748B; font-weight: 600; }
+        #toast {
+          position: fixed;
+          bottom: 24px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #0F172A;
+          color: #FFF;
+          padding: 10px 20px;
+          border-radius: 30px;
+          font-size: 0.85rem;
+          font-weight: 600;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+          display: none;
+          z-index: 9999;
+        }
+      </style>
+    </head>
+    <body>
+      <div id="toast"></div>
+      <div class="standalone-card-wrap">
+        <div id="card-mount" class="loading-box">
+          Loading digital bill receipt...
+        </div>
+        <div class="standalone-toolbar" id="toolbar" style="display:none;">
+          <button type="button" class="btn-action btn-wa" id="btn-wa">
+            <span>💬 Send via WhatsApp</span>
+          </button>
+          <button type="button" class="btn-action btn-copy" id="btn-copy">
+            <span>📋 Copy Image</span>
+          </button>
+          <button type="button" class="btn-action btn-download" id="btn-download">
+            <span>💾 Download PNG</span>
+          </button>
+        </div>
+      </div>
+
+      <script src="/billCardGenerator.js"></script>
+      <script>
+        function showToast(msg) {
+          const t = document.getElementById('toast');
+          t.textContent = msg;
+          t.style.display = 'block';
+          setTimeout(() => { t.style.display = 'none'; }, 3000);
+        }
+
+        async function init() {
+          const params = new URLSearchParams(window.location.search);
+          const orderId = '${orderId}' || params.get('id') || params.get('orderId');
+          if (!orderId) {
+            document.getElementById('card-mount').innerHTML = '<div style="color:red; text-align:center;">No Order Reference provided.</div>';
+            return;
+          }
+
+          try {
+            const res = await fetch('/api/orders/' + encodeURIComponent(orderId) + '/card-data');
+            if (!res.ok) throw new Error('Order not found');
+            const data = await res.json();
+            
+            const mount = document.getElementById('card-mount');
+            mount.innerHTML = BillCardGenerator.renderBillCardHTML(data);
+            document.getElementById('toolbar').style.display = 'flex';
+
+            document.getElementById('btn-wa').onclick = () => BillCardGenerator.sendBillCardWhatsApp(data);
+            document.getElementById('btn-copy').onclick = () => {
+              BillCardGenerator.copyBillCardImageToClipboard(data);
+              showToast('✅ Bill Image copied to clipboard!');
+            };
+            document.getElementById('btn-download').onclick = () => {
+              BillCardGenerator.downloadBillCardPNG(data);
+              showToast('Downloading PNG receipt image...');
+            };
+          } catch (err) {
+            document.getElementById('card-mount').innerHTML = '<div style="color:red; text-align:center;">Unable to load bill card: ' + err.message + '</div>';
+          }
+        }
+        init();
+      </script>
+    </body>
+    </html>
+  `;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
 });
 
 
