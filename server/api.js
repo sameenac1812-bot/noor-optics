@@ -2547,7 +2547,8 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     thirdPaymentINR: (updatedOrder.third_payment_paise || 0) / 100,
     payments: allPayments,
     isCollectPayment: true,
-    source: 'collect_payment'
+    source: 'collect_payment',
+    skipPrintQueue: true
   }).catch(() => {});
 
   // Persist financial installment breakdown unconditionally to Supabase SYS-ORDER-PAYMENTS

@@ -4598,16 +4598,14 @@
 
       const ord = jobPayload.order || (jobPayload.items && jobPayload.items[0] && jobPayload.items[0].order) || null;
       const ref = String(ord?.order_number || ord?.order_ref || ord?.id || ('JOB_' + Date.now())).trim();
-      const isManualOrCollect = Boolean(
-        jobPayload.source === 'reprint' ||
-        jobPayload.manualReprint ||
-        jobPayload.source === 'collect_payment' ||
-        (ord && Array.isArray(ord.payments) && ord.payments.length > 3)
-      );
+      const isManualReprint = Boolean(jobPayload.source === 'reprint' || jobPayload.manualReprint);
+      const is4thOrBeyond = Boolean(ord && Array.isArray(ord.payments) && ord.payments.length > 3);
 
       let stageSuffix = 'init';
-      if (isManualOrCollect) {
-        stageSuffix = 'collect_' + Date.now();
+      if (isManualReprint) {
+        stageSuffix = 'reprint_' + Date.now();
+      } else if (is4thOrBeyond) {
+        stageSuffix = 'stage' + ord.payments.length + '_' + Date.now();
       } else if (ord) {
         if (ord.third_payment_inr > 0 || ord.third_payment_paise > 0) {
           stageSuffix = 'stage3';
@@ -4621,7 +4619,7 @@
         : ('rcp_' + ref + '_' + stageSuffix);
 
       // Remove ALL old-style job-receipt-{ref}-* entries for this order ref to prevent double printing
-      if (jobPayload.type === 'receipt' && ref && !ref.startsWith('JOB_') && !isManualOrCollect) {
+      if (jobPayload.type === 'receipt' && ref && !ref.startsWith('JOB_') && !isManualReprint && !is4thOrBeyond) {
         jobs = jobs.filter(j => {
           if (!j || !j.id) return true;
           const jid = String(j.id);
@@ -4636,8 +4634,8 @@
         order: jobPayload.order || null,
         items: jobPayload.items || (jobPayload.order ? jobPayload.order.items : [jobPayload]),
         approved: jobPayload.approved !== undefined ? Boolean(jobPayload.approved) : true,
-        manualReprint: isManualOrCollect,
-        source: isManualOrCollect ? 'reprint' : (jobPayload.source || (jobPayload.type === 'receipt' ? 'staff_approved' : 'cloud_queue')),
+        manualReprint: isManualReprint || is4thOrBeyond,
+        source: (isManualReprint || is4thOrBeyond) ? 'reprint' : (jobPayload.source || (jobPayload.type === 'receipt' ? 'staff_approved' : 'cloud_queue')),
         created_at: new Date().toISOString()
       };
 
@@ -8472,39 +8470,49 @@
     }
 
     const orderRef = order.order_number || order.order_ref || order.id || 'ORDER';
-    const isReprintOrCollect = Boolean(manualReprint || printSource === 'collect_payment' || printSource === 'reprint' || (order.payments && order.payments.length > 3));
-    const effectiveSource = isReprintOrCollect ? 'reprint' : (printSource || 'staff_approved');
-    const effectiveManualReprint = isReprintOrCollect;
+    const isReprintOr4th = Boolean(manualReprint || printSource === 'reprint' || (order.payments && order.payments.length > 3));
+    const effectiveSource = isReprintOr4th ? 'reprint' : (printSource || 'staff_approved');
+    const effectiveManualReprint = isReprintOr4th;
 
-    // ── DUAL DISPATCH (Zero-Lag Counter Output + Bulletproof Remote Cloud Spooling) ──
-    // PATH 1: Instant Cloud Queue Dispatch (Guarantees Laptop B / dedicated printer prints within 2.5s)
-    pushPrintJobToCloud({
-      type: 'receipt',
-      order: order,
-      approved: true,
-      manualReprint: effectiveManualReprint,
-      source: effectiveSource
-    }).then(res => {
-      if (res && res.success) {
-        console.log(`[InstantPrint] Bill #${orderRef} successfully placed in SYS-PRINT-QUEUE.`);
+    // ── SMART SINGLE-COPY DISPATCH (Direct Hardware Spool + Cloud Queue Fallback) ──
+    // Step 1: Attempt direct local hardware output on Port 5001 (50ms zero-lag counter output)
+    let printedLocally = false;
+    try {
+      const daemonResp = await fetch('http://127.0.0.1:5001/api/print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order: order,
+          manualReprint: effectiveManualReprint,
+          source: effectiveSource
+        }),
+        signal: AbortSignal.timeout(1200)
+      });
+      if (daemonResp.ok) {
+        printedLocally = true;
+        console.log(`[InstantPrint] Bill #${orderRef} successfully printed via local POS hardware daemon.`);
       }
-    }).catch(err => {
-      console.warn('[InstantPrint] Cloud queue dispatch note:', err?.message || err);
-    });
+    } catch (_) {
+      // Local daemon port not reachable (e.g. billing from remote laptop or phone) — handled by Cloud Queue below!
+    }
 
-    // PATH 2: Local Hardware Daemon (Immediate 50ms output if billing directly on the printer laptop)
-    fetch('http://127.0.0.1:5001/api/print', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    // Step 2: ONLY dispatch to Cloud Queue if NOT already printed directly by local daemon!
+    // This strictly prevents double-printing (2 copies) on counter machines running pos-daemon!
+    if (!printedLocally) {
+      pushPrintJobToCloud({
+        type: 'receipt',
         order: order,
+        approved: true,
         manualReprint: effectiveManualReprint,
         source: effectiveSource
-      }),
-      signal: AbortSignal.timeout(1200)
-    }).catch(() => {
-      // Local daemon port not reachable (e.g. billing from remote laptop or phone) — handled by Cloud Queue!
-    });
+      }).then(res => {
+        if (res && res.success) {
+          console.log(`[InstantPrint] Bill #${orderRef} successfully placed in SYS-PRINT-QUEUE.`);
+        }
+      }).catch(err => {
+        console.warn('[InstantPrint] Cloud queue dispatch note:', err?.message || err);
+      });
+    }
 
     showToast(`🖨️ Bill #${orderRef} dispatched to POS thermal printer!`, 'success');
   };
@@ -9702,7 +9710,8 @@
 
       // Print updated receipt to POS thermal printer (stage-aware settlement, prevents duplicate prints)
       if (shouldPrint && typeof instantPrintReceipt === 'function') {
-        instantPrintReceipt(orderId, true, res.order, 'reprint').catch(() => { });
+        const is4thOrBeyond = (res.order?.payments && res.order.payments.length > 3) || (res.order?.third_payment_paise > 0);
+        instantPrintReceipt(orderId, is4thOrBeyond, res.order, is4thOrBeyond ? 'reprint' : 'collect_payment').catch(() => { });
       }
 
       // Refresh datasets across the system silently in background

@@ -1621,101 +1621,100 @@ async function pushOrderToSupabase(orderPayload) {
       }
       
       // Auto-dispatch in-store POS bill to SYS-PRINT-QUEUE so the dedicated printer laptop prints it instantly!
-      try {
-        const qRes = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE&select=notes`, {
-          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-        });
-        if (qRes.ok) {
-          const qList = await qRes.json();
-          let currentJobs = [];
-          if (qList[0]?.notes) {
-            try { currentJobs = JSON.parse(qList[0].notes).jobs || []; } catch(_) {}
-          }
-          let stageSuffix = 'init';
-          const isInstallmentCollection = Boolean(
-            orderPayload.isCollectPayment ||
-            orderPayload.source === 'collect_payment' ||
-            orderPayload.source === 'reprint' ||
-            orderPayload.manualReprint ||
-            (Array.isArray(orderPayload.payments) && orderPayload.payments.length > 3)
-          );
-
-          if (isInstallmentCollection) {
-            stageSuffix = 'collect_' + Date.now();
-          } else if (orderPayload.thirdPaymentINR > 0 || orderPayload.third_payment_inr > 0 || orderPayload.third_payment_paise > 0) {
-            stageSuffix = 'stage3';
-          } else if (orderPayload.secondPaymentINR > 0 || orderPayload.second_payment_inr > 0 || orderPayload.second_payment_paise > 0) {
-            stageSuffix = 'stage2';
-          }
-          const jobId = 'rcp_' + orderRef + '_' + stageSuffix;
-
-          const newJobObj = {
-            id: jobId,
-            type: 'receipt',
-            approved: true,
-            manualReprint: isInstallmentCollection,
-            source: isInstallmentCollection ? 'reprint' : (stageSuffix === 'init' ? 'instore_checkout' : 'collect_payment'),
-            created_at: new Date().toISOString(),
-            order: {
-              ...baseOrderBody,
-              ...orderPayload,
-              payments: orderPayload.payments || [],
-              order_number: orderRef,
-              order_ref: orderRef,
-              id: orderPayload.id || orderRef,
-              customer_name: custName,
-              customer_phone: cleanPhone,
-              items: itemsToPush,
-              prescriptions: orderPayload.prescriptions || (orderPayload.prescription ? [orderPayload.prescription] : []),
-              prescription: orderPayload.prescription || null,
-              od_sph: orderPayload.od_sph != null ? orderPayload.od_sph : (orderPayload.prescription?.od_sph != null ? orderPayload.prescription.od_sph : null),
-              od_cyl: orderPayload.od_cyl != null ? orderPayload.od_cyl : (orderPayload.prescription?.od_cyl != null ? orderPayload.prescription.od_cyl : null),
-              od_axis: orderPayload.od_axis != null ? orderPayload.od_axis : (orderPayload.prescription?.od_axis != null ? orderPayload.prescription.od_axis : null),
-              os_sph: orderPayload.os_sph != null ? orderPayload.os_sph : (orderPayload.prescription?.os_sph != null ? orderPayload.prescription.os_sph : null),
-              os_cyl: orderPayload.os_cyl != null ? orderPayload.os_cyl : (orderPayload.prescription?.os_cyl != null ? orderPayload.prescription.os_cyl : null),
-              os_axis: orderPayload.os_axis != null ? orderPayload.os_axis : (orderPayload.prescription?.os_axis != null ? orderPayload.prescription.os_axis : null),
-              addition: orderPayload.addition != null ? orderPayload.addition : (orderPayload.prescription?.addition != null ? orderPayload.prescription.addition : null),
-              ipd_distance: orderPayload.ipd_distance != null ? orderPayload.ipd_distance : (orderPayload.prescription?.ipd_distance != null ? orderPayload.prescription.ipd_distance : null),
-              advance_paid_inr: orderPayload.advancePaidINR != null ? orderPayload.advancePaidINR : (orderPayload.advance_paid_inr || (orderPayload.paymentStatus === 'VERIFIED' ? grandTotal : 0)),
-              advance_paid_paise: Math.round((orderPayload.advancePaidINR != null ? orderPayload.advancePaidINR : (orderPayload.advance_paid_inr || (orderPayload.paymentStatus === 'VERIFIED' ? grandTotal : 0))) * 100),
-              second_payment_inr: orderPayload.secondPaymentINR != null ? orderPayload.secondPaymentINR : (orderPayload.second_payment_inr || 0),
-              second_payment_paise: Math.round((orderPayload.secondPaymentINR != null ? orderPayload.secondPaymentINR : (orderPayload.second_payment_inr || 0)) * 100),
-              third_payment_inr: orderPayload.thirdPaymentINR != null ? orderPayload.thirdPaymentINR : (orderPayload.third_payment_inr || 0),
-              third_payment_paise: Math.round((orderPayload.thirdPaymentINR != null ? orderPayload.thirdPaymentINR : (orderPayload.third_payment_inr || 0)) * 100),
-              outstanding_inr: orderPayload.outstandingINR != null ? orderPayload.outstandingINR : (orderPayload.outstanding_inr || (orderPayload.paymentStatus === 'VERIFIED' ? 0 : grandTotal)),
-              outstanding_paise: Math.round((orderPayload.outstandingINR != null ? orderPayload.outstandingINR : (orderPayload.outstanding_inr || (orderPayload.paymentStatus === 'VERIFIED' ? 0 : grandTotal))) * 100),
-              amount_paid_inr: (orderPayload.amountPaidINR != null ? orderPayload.amountPaidINR : (orderPayload.amount_paid_inr || (orderPayload.paymentStatus === 'VERIFIED' ? grandTotal : 0))),
-              amount_paid_paise: Math.round((orderPayload.amountPaidINR != null ? orderPayload.amountPaidINR : (orderPayload.amount_paid_inr || (orderPayload.paymentStatus === 'VERIFIED' ? grandTotal : 0))) * 100),
-              total_payable_inr: grandTotal,
-              total_payable_paise: Math.round(grandTotal * 100),
-              discount_inr: orderPayload.discountINR != null ? orderPayload.discountINR : (orderPayload.discount_inr || 0),
-              discount_paise: Math.round((orderPayload.discountINR != null ? orderPayload.discountINR : (orderPayload.discount_inr || 0)) * 100),
-              subtotal: subtotal,
-              grand_total: grandTotal
-            }
-          };
-
-          const existingIdx = currentJobs.findIndex(j => j.id === jobId);
-          if (existingIdx >= 0) {
-            currentJobs[existingIdx] = newJobObj;
-          } else {
-            currentJobs.push(newJobObj);
-          }
-          if (currentJobs.length > 30) currentJobs = currentJobs.slice(-30);
-          await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
-            method: 'PATCH',
-            headers: {
-              'apikey': SUPABASE_ANON_KEY,
-              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-              'Content-Type': 'application/json',
-              'Prefer': 'return=minimal'
-            },
-            body: JSON.stringify({ notes: JSON.stringify({ jobs: currentJobs }) })
+      if (!orderPayload.skipPrintQueue) {
+        try {
+          const qRes = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE&select=notes`, {
+            headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
           });
-          console.log(`[SupabaseSync] In-store bill #${orderRef} dispatched to SYS-PRINT-QUEUE for POS printer hardware.`);
+          if (qRes.ok) {
+            const qList = await qRes.json();
+            let currentJobs = [];
+            if (qList[0]?.notes) {
+              try { currentJobs = JSON.parse(qList[0].notes).jobs || []; } catch(_) {}
+            }
+            let stageSuffix = 'init';
+            const isManualReprint = Boolean(orderPayload.source === 'reprint' || orderPayload.manualReprint);
+            const is4thOrBeyond = (Array.isArray(orderPayload.payments) && orderPayload.payments.length > 3);
+
+            if (isManualReprint) {
+              stageSuffix = 'reprint_' + Date.now();
+            } else if (is4thOrBeyond) {
+              stageSuffix = 'stage' + orderPayload.payments.length + '_' + Date.now();
+            } else if (orderPayload.thirdPaymentINR > 0 || orderPayload.third_payment_inr > 0 || orderPayload.third_payment_paise > 0) {
+              stageSuffix = 'stage3';
+            } else if (orderPayload.secondPaymentINR > 0 || orderPayload.second_payment_inr > 0 || orderPayload.second_payment_paise > 0) {
+              stageSuffix = 'stage2';
+            }
+            const jobId = 'rcp_' + orderRef + '_' + stageSuffix;
+
+            const newJobObj = {
+              id: jobId,
+              type: 'receipt',
+              approved: true,
+              manualReprint: isManualReprint || is4thOrBeyond,
+              source: (isManualReprint || is4thOrBeyond) ? 'reprint' : (stageSuffix === 'init' ? 'instore_checkout' : 'collect_payment'),
+              created_at: new Date().toISOString(),
+              order: {
+                ...baseOrderBody,
+                ...orderPayload,
+                payments: orderPayload.payments || [],
+                order_number: orderRef,
+                order_ref: orderRef,
+                id: orderPayload.id || orderRef,
+                customer_name: custName,
+                customer_phone: cleanPhone,
+                items: itemsToPush,
+                prescriptions: orderPayload.prescriptions || (orderPayload.prescription ? [orderPayload.prescription] : []),
+                prescription: orderPayload.prescription || null,
+                od_sph: orderPayload.od_sph != null ? orderPayload.od_sph : (orderPayload.prescription?.od_sph != null ? orderPayload.prescription.od_sph : null),
+                od_cyl: orderPayload.od_cyl != null ? orderPayload.od_cyl : (orderPayload.prescription?.od_cyl != null ? orderPayload.prescription.od_cyl : null),
+                od_axis: orderPayload.od_axis != null ? orderPayload.od_axis : (orderPayload.prescription?.od_axis != null ? orderPayload.prescription.od_axis : null),
+                os_sph: orderPayload.os_sph != null ? orderPayload.os_sph : (orderPayload.prescription?.os_sph != null ? orderPayload.prescription.os_sph : null),
+                os_cyl: orderPayload.os_cyl != null ? orderPayload.os_cyl : (orderPayload.prescription?.os_cyl != null ? orderPayload.prescription.os_cyl : null),
+                os_axis: orderPayload.os_axis != null ? orderPayload.os_axis : (orderPayload.prescription?.os_axis != null ? orderPayload.prescription.os_axis : null),
+                addition: orderPayload.addition != null ? orderPayload.addition : (orderPayload.prescription?.addition != null ? orderPayload.prescription.addition : null),
+                ipd_distance: orderPayload.ipd_distance != null ? orderPayload.ipd_distance : (orderPayload.prescription?.ipd_distance != null ? orderPayload.prescription.ipd_distance : null),
+                advance_paid_inr: orderPayload.advancePaidINR != null ? orderPayload.advancePaidINR : (orderPayload.advance_paid_inr || (orderPayload.paymentStatus === 'VERIFIED' ? grandTotal : 0)),
+                advance_paid_paise: Math.round((orderPayload.advancePaidINR != null ? orderPayload.advancePaidINR : (orderPayload.advance_paid_inr || (orderPayload.paymentStatus === 'VERIFIED' ? grandTotal : 0))) * 100),
+                second_payment_inr: orderPayload.secondPaymentINR != null ? orderPayload.secondPaymentINR : (orderPayload.second_payment_inr || 0),
+                second_payment_paise: Math.round((orderPayload.secondPaymentINR != null ? orderPayload.secondPaymentINR : (orderPayload.second_payment_inr || 0)) * 100),
+                third_payment_inr: orderPayload.thirdPaymentINR != null ? orderPayload.thirdPaymentINR : (orderPayload.third_payment_inr || 0),
+                third_payment_paise: Math.round((orderPayload.thirdPaymentINR != null ? orderPayload.thirdPaymentINR : (orderPayload.third_payment_inr || 0)) * 100),
+                outstanding_inr: orderPayload.outstandingINR != null ? orderPayload.outstandingINR : (orderPayload.outstanding_inr || (orderPayload.paymentStatus === 'VERIFIED' ? 0 : grandTotal)),
+                outstanding_paise: Math.round((orderPayload.outstandingINR != null ? orderPayload.outstandingINR : (orderPayload.outstanding_inr || (orderPayload.paymentStatus === 'VERIFIED' ? 0 : grandTotal))) * 100),
+                amount_paid_inr: (orderPayload.amountPaidINR != null ? orderPayload.amountPaidINR : (orderPayload.amount_paid_inr || (orderPayload.paymentStatus === 'VERIFIED' ? grandTotal : 0))),
+                amount_paid_paise: Math.round((orderPayload.amountPaidINR != null ? orderPayload.amountPaidINR : (orderPayload.amount_paid_inr || (orderPayload.paymentStatus === 'VERIFIED' ? grandTotal : 0))) * 100),
+                total_payable_inr: grandTotal,
+                total_payable_paise: Math.round(grandTotal * 100),
+                discount_inr: orderPayload.discountINR != null ? orderPayload.discountINR : (orderPayload.discount_inr || 0),
+                discount_paise: Math.round((orderPayload.discountINR != null ? orderPayload.discountINR : (orderPayload.discount_inr || 0)) * 100),
+                subtotal: subtotal,
+                grand_total: grandTotal
+              }
+            };
+
+            const existingIdx = currentJobs.findIndex(j => j.id === jobId);
+            if (existingIdx >= 0) {
+              currentJobs[existingIdx] = newJobObj;
+            } else {
+              currentJobs.push(newJobObj);
+            }
+            if (currentJobs.length > 30) currentJobs = currentJobs.slice(-30);
+            await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-PRINT-QUEUE`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+              },
+              body: JSON.stringify({ notes: JSON.stringify({ jobs: currentJobs }) })
+            });
+            console.log(`[SupabaseSync] In-store bill #${orderRef} dispatched to SYS-PRINT-QUEUE for POS printer hardware.`);
+          }
+        } catch (qErr) {
+          console.warn('[SupabaseSync] In-store SYS-PRINT-QUEUE note:', qErr.message);
         }
-      } catch (qErr) {
-        console.warn('[SupabaseSync] In-store SYS-PRINT-QUEUE note:', qErr.message);
       }
       // If it is a website order, guarantee its print job is held until staff approves UPI payment
       if (!isPosOrder && payStatus !== 'VERIFIED') {
