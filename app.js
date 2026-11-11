@@ -2203,10 +2203,10 @@
   }
 
   // ── Lenskart-Style Visual Showcase Controllers ─────────────────────────────
-  function selectVisualCategory(category, gender) {
+  function selectVisualCategory(category, gender, isExplicitNavigation = false) {
     if (gender === 'sale') {
       // Toggle if already selected
-      if (state.filters.category === category && state.filters.priceRange === 'under-3500') {
+      if (!isExplicitNavigation && state.filters.category === category && state.filters.priceRange === 'under-3500') {
         state.filters.category = 'all';
         state.filters.priceRange = 'all';
         state.filters.gender = 'all';
@@ -2216,8 +2216,8 @@
         state.filters.gender = 'all';
       }
     } else {
-      // Toggle if already selected
-      if (state.filters.category === category && state.filters.gender === gender) {
+      // Toggle if already selected (unless explicit navigation from CTA)
+      if (!isExplicitNavigation && state.filters.category === category && state.filters.gender === gender) {
         state.filters.category = 'all';
         state.filters.gender = 'all';
       } else {
@@ -2277,8 +2277,8 @@
       state.filters.category = 'all';
       state.filters.gender = 'all';
       state.filters.shape = 'all';
-      state.filters.material = 'Crystal Acetate';
-      showToast('Browsing Crystal Clear Transparent Frames');
+      state.filters.material = 'Italian Bio-Acetate';
+      showToast('Browsing Crystal Clear Bio-Acetate Frames');
     } else if (key === 'masaba') {
       state.filters.category = 'Sunglasses';
       state.filters.gender = 'Women';
@@ -2308,7 +2308,7 @@
       state.filters.gender = 'all';
       state.filters.shape = 'Geometric';
       state.filters.material = 'Japanese Titanium';
-      showToast('Browsing Geometric Minimalist Wireframes');
+      showToast('Browsing Minimalist Precision Wireframes');
     }
 
     syncVisualShowcaseUI();
@@ -2463,7 +2463,12 @@
 
     // ── Mouse & Touch Drag-to-Swipe Engine (Pointer Events) ──────────────────
     slider.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('button') || e.target.closest('a')) return;
+      // If clicking directly on a button, link, or CTA pill, DO NOT initiate drag
+      if (e.target.closest('button, a, .lk-slide-cta-pill')) {
+        hasDraggedSignificantly = false;
+        isDragging = false;
+        return;
+      }
       isDragging = true;
       hasDraggedSignificantly = false;
       isUserInteracting = true;
@@ -2505,18 +2510,43 @@
         scrollToIndex(currentIndex);
       }
       resetAutoPlayTimeout();
+      // Keep hasDraggedSignificantly momentarily to suppress ghost click on pointer release, then reset
+      setTimeout(() => {
+        hasDraggedSignificantly = false;
+      }, 100);
     }
 
     slider.addEventListener('pointerup', endDrag);
-    slider.addEventListener('pointercancel', endDrag);
+    slider.addEventListener('pointercancel', (e) => {
+      isDragging = false;
+      slider.classList.remove('is-dragging');
+      setTimeout(() => { hasDraggedSignificantly = false; }, 100);
+    });
 
-    // Prevent accidental click triggers when dragging
+    // Prevent accidental slide clicks when swiping/dragging, but allow CTA buttons to click freely
     slider.addEventListener('click', (e) => {
+      const isCta = e.target.closest('button, a, .lk-slide-cta-pill');
+      if (isCta && !isDragging) {
+        hasDraggedSignificantly = false;
+        return; // Allow CTA button click event to fire unimpeded!
+      }
       if (hasDraggedSignificantly) {
         e.preventDefault();
         e.stopPropagation();
       }
     }, true);
+
+    // Direct click handler for all "Shop now" buttons inside the hero slider
+    slider.querySelectorAll('.lk-slide-cta-pill').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        hasDraggedSignificantly = false;
+        const target = document.getElementById('catalog-count') || document.getElementById('product-grid');
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
 
     // Pause on hover or focus
     slider.addEventListener('mouseenter', () => { isUserInteracting = true; });

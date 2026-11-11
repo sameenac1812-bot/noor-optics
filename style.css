@@ -564,7 +564,7 @@ select:focus-visible {
   color: var(--teal-dark);
 }
 
-/* Product card */
+/* Product card with Translucent Bio-Acetate Leaf Vein Designs */
 .pcard {
   width: 158px;
   background: var(--card);
@@ -573,6 +573,31 @@ select:focus-visible {
   overflow: hidden;
   position: relative;
   display: block;
+}
+
+/* Translucent botanical bio-acetate leaf vein watermark in card corner */
+.pcard::after,
+.product-card::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
+  width: 75px;
+  height: 75px;
+  background-image: url('/images/leaf-vein-card.svg');
+  background-repeat: no-repeat;
+  background-position: bottom right;
+  background-size: contain;
+  opacity: 0.055;
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.pcard:hover::after,
+.product-card:hover::after {
+  opacity: 0.13;
+  transform: scale(1.08) rotate(-4deg);
 }
 
 .pcard .pic {
@@ -585,12 +610,36 @@ select:focus-visible {
   overflow: hidden;
 }
 
+/* Translucent Bio-Acetate Botanical Leaf Vein Filigree Watermark behind glasses */
+.pcard .pic::before,
+.card-media::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('/images/leaf-vein-card.svg');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 78% 78%;
+  opacity: 0.18;
+  pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.4s ease;
+  z-index: 1;
+}
+
+.pcard:hover .pic::before,
+.product-card:hover .card-media::before {
+  opacity: 0.30;
+  transform: scale(1.08) rotate(3deg);
+}
+
 .pcard .pic svg {
   width: 96px;
   height: 44px;
   stroke: var(--navy);
   fill: none;
   stroke-width: 2.2;
+  position: relative;
+  z-index: 2;
 }
 
 .pcard .pic img {
@@ -598,6 +647,8 @@ select:focus-visible {
   height: 100%;
   object-fit: contain;
   padding: 6px;
+  position: relative;
+  z-index: 2;
 }
 
 .pcard .tag {
@@ -697,7 +748,7 @@ select:focus-visible {
   aspect-ratio: auto;
 }
 
-/* Membership / promo strip */
+/* Membership / promo strip with Translucent Botanical Leaf Vein Accents */
 .promo {
   margin: 24px var(--gutter) 0;
   padding: 20px;
@@ -707,6 +758,23 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.promo::after {
+  content: '';
+  position: absolute;
+  right: -20px;
+  bottom: -20px;
+  width: 150px;
+  height: 150px;
+  background-image: url('/images/leaf-vein-card.svg');
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.16;
+  filter: invert(1);
+  pointer-events: none;
 }
 
 .promo h3 {
@@ -1359,6 +1427,22 @@ select:focus-visible {
   flex-shrink: 0;
 }
 
+#catalog-count,
+#product-grid,
+.product-grid {
+  scroll-margin-top: 72px;
+}
+
+/* Translucent Botanical Leaf Vein Background on Catalog Area */
+.section:has(#product-grid),
+#popular-picks-section {
+  position: relative;
+  background-image: url('/images/leaf-vein-pattern.svg');
+  background-repeat: repeat-y;
+  background-position: top center;
+  background-size: 380px auto;
+}
+
 .catalog-counter {
   font-size: 0.78rem;
   color: var(--text-muted);
@@ -1547,6 +1631,8 @@ select:focus-visible {
   transform: translateZ(0);
   will-change: transform;
   backface-visibility: hidden;
+  position: relative;
+  z-index: 2;
 }
 
 .product-card:hover .card-img {
@@ -4882,6 +4968,22 @@ body.drawer-open .toast-pill {
   color: #FFFFFF;
 }
 
+/* Translucent Bio-Acetate Leaf Vein Corner Watermark on Hero Slide */
+.lk-slide-overlay::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 105px;
+  height: 105px;
+  background-image: url('/images/leaf-vein-card.svg');
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.14;
+  filter: brightness(2.2) drop-shadow(0 0 6px rgba(255, 255, 255, 0.25));
+  pointer-events: none;
+}
+
 .lk-slide-brand-lockup {
   display: inline-flex;
   align-items: center;
@@ -4917,6 +5019,8 @@ body.drawer-open .toast-pill {
 }
 
 .lk-slide-cta-pill {
+  position: relative;
+  z-index: 25;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4929,6 +5033,9 @@ body.drawer-open .toast-pill {
   font-weight: 700;
   border: none;
   cursor: pointer;
+  pointer-events: auto !important;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
@@ -5001,6 +5108,23 @@ body.drawer-open .toast-pill {
   display: block;
   outline: none;
   transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+/* Translucent Bio-Acetate Leaf Vein Watermark on For Him/Her cards */
+.him-her-card::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 65px;
+  height: 65px;
+  background-image: url('/images/leaf-vein-card.svg');
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.16;
+  filter: brightness(2.2);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .him-her-card:hover,
