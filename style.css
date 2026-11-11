@@ -888,9 +888,20 @@ select:focus-visible {
   justify-content: center;
   background: none;
   border: none;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent !important;
   cursor: pointer;
   padding: 0;
   position: relative;
+}
+
+.bottom-nav a:focus,
+.bottom-nav a:focus-visible,
+.bottom-nav button:focus,
+.bottom-nav button:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .bottom-nav a.active,
@@ -4552,10 +4563,21 @@ body.drawer-open .toast-pill {
   cursor: pointer;
   background: none;
   border: none;
+  outline: none !important;
+  box-shadow: none !important;
   padding: 0;
   transition: color 0.15s ease;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+.lk-nav-tab:focus,
+.lk-nav-tab:focus-visible,
+.lk-nav-tab:active {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 .lk-nav-tab svg {
@@ -5586,11 +5608,24 @@ body.drawer-open .toast-pill {
   min-height: 48px !important;
   background: none !important;
   border: none !important;
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent !important;
   cursor: pointer !important;
   padding: 4px 0 0 !important;
   position: relative !important;
   text-decoration: none !important;
   transition: color 0.18s ease !important;
+}
+
+.lk-nav-tab:focus,
+.lk-nav-tab:focus-visible,
+.lk-nav-tab:active {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 .lk-nav-tab svg {
