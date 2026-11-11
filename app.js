@@ -2271,16 +2271,162 @@
     showToast('Showing sale collection!');
   }
 
+  // ── Lenskart Curated Stories & Collections Filter ─────────────────────────
+  function selectCuratedCollection(key) {
+    if (key === 'crystal') {
+      state.filters.category = 'all';
+      state.filters.gender = 'all';
+      state.filters.shape = 'all';
+      state.filters.material = 'Crystal Acetate';
+      showToast('Browsing Crystal Clear Transparent Frames');
+    } else if (key === 'masaba') {
+      state.filters.category = 'Sunglasses';
+      state.filters.gender = 'Women';
+      state.filters.shape = 'all';
+      state.filters.material = 'all';
+      showToast('Browsing Designer Sunglasses');
+    } else if (key === 'feather') {
+      state.filters.category = 'all';
+      state.filters.gender = 'all';
+      state.filters.shape = 'all';
+      state.filters.material = 'Japanese Titanium';
+      showToast('Browsing Feather-Light Japanese Titanium');
+    } else if (key === 'bold') {
+      state.filters.category = 'Eyeglasses';
+      state.filters.gender = 'all';
+      state.filters.shape = 'all';
+      state.filters.material = 'Italian Bio-Acetate';
+      showToast('Browsing Bold Signature Acetate Frames');
+    } else if (key === 'cateye' || key === 'prada') {
+      state.filters.category = 'all';
+      state.filters.gender = 'Women';
+      state.filters.shape = 'Cat-Eye';
+      state.filters.material = 'all';
+      showToast('Browsing Cat-Eye Chic Collection');
+    } else if (key === 'owndays') {
+      state.filters.category = 'all';
+      state.filters.gender = 'all';
+      state.filters.shape = 'Geometric';
+      state.filters.material = 'Japanese Titanium';
+      showToast('Browsing Geometric Minimalist Wireframes');
+    }
+
+    syncVisualShowcaseUI();
+    syncShapePillNav();
+    syncFilterDrawerUI();
+    renderActiveFilterChips();
+    renderProductGrid();
+
+    const countEl = document.getElementById('catalog-count') || document.getElementById('product-grid');
+    if (countEl) {
+      countEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  // ── Modern Web Carousel: Hero Slider Auto-rotation & Progress Sync ──────────
+  function initHeroSlider() {
+    const slider = document.getElementById('lk-hero-slider');
+    const progressBar = document.getElementById('lk-slider-progress');
+    if (!slider) return;
+
+    const slides = slider.querySelectorAll('.lk-hero-slide');
+    if (slides.length <= 1) return;
+
+    let currentIndex = 0;
+    let autoInterval = null;
+    let isUserInteracting = false;
+    let resumeTimeout = null;
+
+    function updateProgress(index) {
+      if (!progressBar) return;
+      const barWidth = 100 / slides.length;
+      progressBar.style.width = barWidth + '%';
+      progressBar.style.transform = `translateX(${index * 100}%)`;
+    }
+
+    function scrollToIndex(idx) {
+      if (idx < 0) idx = slides.length - 1;
+      if (idx >= slides.length) idx = 0;
+      currentIndex = idx;
+      const targetSlide = slides[currentIndex];
+      if (targetSlide) {
+        slider.scrollTo({
+          left: targetSlide.offsetLeft,
+          behavior: 'smooth'
+        });
+      }
+      updateProgress(currentIndex);
+    }
+
+    function startAutoPlay() {
+      stopAutoPlay();
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        return;
+      }
+      autoInterval = setInterval(() => {
+        if (!isUserInteracting) {
+          currentIndex = (currentIndex + 1) % slides.length;
+          scrollToIndex(currentIndex);
+        }
+      }, 4500);
+    }
+
+    function stopAutoPlay() {
+      if (autoInterval) {
+        clearInterval(autoInterval);
+        autoInterval = null;
+      }
+    }
+
+    let ticking = false;
+    slider.addEventListener('scroll', () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const scrollPos = slider.scrollLeft;
+          const slideWidth = slider.clientWidth || 1;
+          const detectedIdx = Math.round(scrollPos / slideWidth);
+          if (detectedIdx >= 0 && detectedIdx < slides.length && detectedIdx !== currentIndex) {
+            currentIndex = detectedIdx;
+            updateProgress(currentIndex);
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }
+    }, { passive: true });
+
+    slider.addEventListener('mouseenter', () => { isUserInteracting = true; });
+    slider.addEventListener('mouseleave', () => { isUserInteracting = false; });
+    slider.addEventListener('focusin', () => { isUserInteracting = true; });
+    slider.addEventListener('focusout', () => { isUserInteracting = false; });
+
+    slider.addEventListener('touchstart', () => {
+      isUserInteracting = true;
+      if (resumeTimeout) clearTimeout(resumeTimeout);
+    }, { passive: true });
+
+    slider.addEventListener('touchend', () => {
+      resumeTimeout = setTimeout(() => {
+        isUserInteracting = false;
+      }, 4000);
+    }, { passive: true });
+
+    updateProgress(0);
+    startAutoPlay();
+  }
+
   // Expose to window for inline HTML onclick handlers
   window.selectVisualCategory = selectVisualCategory;
   window.selectBrand = selectBrand;
   window.filterByPromoSale = filterByPromoSale;
+  window.selectCuratedCollection = selectCuratedCollection;
 
   // ── Initialization ────────────────────────────────────────────────────────
   function init() {
     initDOMCache();
     initAnnouncementTicker();
     initSmoothScrollEngine();
+    initHeroSlider();
     updateBagBadge();
     updateWishlistBadge();
     state.isLoading = true;

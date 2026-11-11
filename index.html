@@ -114,27 +114,69 @@
   <div id="ffit-mount"></div>
   <script src="/find-your-fit/ffit-loader.js" async></script>
 
-  <!-- HERO BANNERS CAROUSEL -->
-  <section class="hero" aria-label="Offers">
-    <div class="hscroll">
-      <a class="banner b1" href="#product-grid" onclick="selectVisualCategory('Eyeglasses', 'all')">
-        <small>New Scandinavian Collection</small>
-        <h3>Bold frames, bolder you</h3>
-        <span class="btn btn-accent">Shop now</span>
-        <svg class="art" viewBox="0 0 70 30" fill="none" stroke="#fff" stroke-width="2"><use href="#i-glasses"/></svg>
-      </a>
-      <a class="banner b2" href="#product-grid" onclick="selectVisualCategory('Eyeglasses', 'sale')">
-        <small>Complimentary Delivery</small>
-        <h3>Free Blue-Cut Lenses Included</h3>
-        <span class="btn btn-light">Grab deal</span>
-        <svg class="art" viewBox="0 0 70 30" fill="none" stroke="#000042" stroke-width="2"><use href="#i-glasses"/></svg>
-      </a>
-      <a class="banner b3" href="#product-grid">
-        <small>Noor Gold</small>
-        <h3>Japanese Titanium &amp; Italian Bio-Acetate</h3>
-        <span class="btn btn-accent">Explore</span>
-        <svg class="art" viewBox="0 0 70 30" fill="none" stroke="#fff" stroke-width="2"><use href="#i-glasses"/></svg>
-      </a>
+  <!-- HERO CINEMATIC SLIDER (Ref Image 1) -->
+  <section class="lk-hero-slider-wrap" aria-label="Featured Eyewear Collections">
+    <div class="lk-hero-slider" id="lk-hero-slider" tabindex="0" role="region" aria-roledescription="carousel" aria-label="Luxury Collections Slider">
+      <!-- Slide 1 -->
+      <article class="lk-hero-slide" role="group" aria-label="Slide 1 of 4" data-slide-index="0">
+        <img class="lk-slide-bg" src="images/models/noor_optic_28_1788355744_3977332230108143300_30275909266.webp" alt="David Jack Studio Noir Bold Acetate Eyewear" loading="eager" />
+        <div class="lk-slide-overlay">
+          <div class="lk-slide-brand-lockup">
+            <span class="lk-brand-mark">NOOR OPTIC</span>
+            <span class="lk-brand-divider">|</span>
+            <span class="lk-brand-sub">STUDIO NOIR</span>
+          </div>
+          <h2 class="lk-slide-heading">Bold frames,<br>bolder you</h2>
+          <button type="button" class="lk-slide-cta-pill" onclick="selectVisualCategory('Eyeglasses', 'Women')">Shop now</button>
+        </div>
+      </article>
+
+      <!-- Slide 2 -->
+      <article class="lk-hero-slide" role="group" aria-label="Slide 2 of 4" data-slide-index="1">
+        <img class="lk-slide-bg" src="images/models/noor_optic_28_1788355744_3977332240702815082_30275909266.webp" alt="Crystal Clear Bio-Acetate Glasses" loading="lazy" />
+        <div class="lk-slide-overlay">
+          <div class="lk-slide-brand-lockup">
+            <span class="lk-brand-mark">NOOR OPTIC</span>
+            <span class="lk-brand-divider">|</span>
+            <span class="lk-brand-sub">CRYSTAL EDIT</span>
+          </div>
+          <h2 class="lk-slide-heading">Pure bio-acetate,<br>zero glare</h2>
+          <button type="button" class="lk-slide-cta-pill" onclick="selectCuratedCollection('crystal')">Shop now</button>
+        </div>
+      </article>
+
+      <!-- Slide 3 -->
+      <article class="lk-hero-slide" role="group" aria-label="Slide 3 of 4" data-slide-index="2">
+        <img class="lk-slide-bg" src="images/models/noor_optic_28_1788355744_3977332232070934780_30275909266.webp" alt="Pastel Cat-Eye Scandinavian Eyewear" loading="lazy" />
+        <div class="lk-slide-overlay">
+          <div class="lk-slide-brand-lockup">
+            <span class="lk-brand-mark">NOOR OPTIC</span>
+            <span class="lk-brand-divider">|</span>
+            <span class="lk-brand-sub">HAUTE SCANDI</span>
+          </div>
+          <h2 class="lk-slide-heading">Sculpted curves &<br>pastel accents</h2>
+          <button type="button" class="lk-slide-cta-pill" onclick="selectCuratedCollection('cateye')">Shop now</button>
+        </div>
+      </article>
+
+      <!-- Slide 4 -->
+      <article class="lk-hero-slide" role="group" aria-label="Slide 4 of 4" data-slide-index="3">
+        <img class="lk-slide-bg" src="images/models/noor_optic_28_1788355744_3977332245635465601_30275909266.webp" alt="Japanese Titanium Geometric Frames" loading="lazy" />
+        <div class="lk-slide-overlay">
+          <div class="lk-slide-brand-lockup">
+            <span class="lk-brand-mark">NOOR OPTIC</span>
+            <span class="lk-brand-divider">|</span>
+            <span class="lk-brand-sub">TOKYO TITANIUM</span>
+          </div>
+          <h2 class="lk-slide-heading">Feather-light<br>precision lenses</h2>
+          <button type="button" class="lk-slide-cta-pill" onclick="selectCuratedCollection('feather')">Shop now</button>
+        </div>
+      </article>
+    </div>
+
+    <!-- Active progress bar matching Reference Image 1 -->
+    <div class="lk-slider-indicator-track" aria-hidden="true">
+      <div class="lk-slider-indicator-bar" id="lk-slider-progress"></div>
     </div>
   </section>
 
@@ -144,6 +186,66 @@
     <div><svg><use href="#i-shield-lens"/></svg>Free Blue-Cut<br>Lenses</div>
     <div><svg><use href="#i-return"/></svg>14-day<br>returns</div>
   </div>
+
+  <!-- FOR HIM & FOR HER DUAL SPOTLIGHT (Ref Image 2) -->
+  <section class="for-him-her-section" aria-label="Shop Eyewear For Him and For Her">
+    <div class="him-her-grid">
+      <div class="him-her-card" role="button" tabindex="0" onclick="selectVisualCategory('all', 'Men')" onkeydown="if(event.key==='Enter'||event.key===' ')selectVisualCategory('all','Men')" aria-label="Explore Eyewear For Him">
+        <img class="him-her-img" src="images/for_him.jpg" alt="Eyewear for Him - Classic & Modern Frames" loading="lazy" />
+        <div class="him-her-overlay">
+          <span class="him-her-label">For Him</span>
+          <span class="him-her-arrow" aria-hidden="true">&rsaquo;</span>
+        </div>
+      </div>
+      <div class="him-her-card" role="button" tabindex="0" onclick="selectVisualCategory('all', 'Women')" onkeydown="if(event.key==='Enter'||event.key===' ')selectVisualCategory('all','Women')" aria-label="Explore Eyewear For Her">
+        <img class="him-her-img" src="images/for_her.jpg" alt="Eyewear for Her - Chic & Elegant Silhouettes" loading="lazy" />
+        <div class="him-her-overlay">
+          <span class="him-her-label">For Her</span>
+          <span class="him-her-arrow" aria-hidden="true">&rsaquo;</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CURATED STORIES & COLLECTIONS (Ref Images 3 & 4) -->
+  <section class="curated-stories-section" aria-label="Exclusive Curated Eyewear Collections">
+    <div class="curated-sec-head">
+      <h2 class="curated-sec-title">Exclusively at Noor Optic</h2>
+      <p class="curated-sec-sub">Curated collections for the perfect vision and style</p>
+    </div>
+    <div class="curated-stories-track">
+      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('crystal')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('crystal')" aria-label="Crystal Clear Transparent Frames">
+        <div class="curated-card-inner">
+          <img src="images/curated/crystal_clear.png" alt="Crystal Clear Transparent Frames" loading="lazy" />
+        </div>
+      </div>
+      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('masaba')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('masaba')" aria-label="Masaba Haute Couture Sunglasses">
+        <div class="curated-card-inner">
+          <img src="images/curated/masaba.png" alt="Masaba Haute Couture Sunglasses" loading="lazy" />
+        </div>
+      </div>
+      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('feather')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('feather')" aria-label="Feather-light Japanese Titanium Frames">
+        <div class="curated-card-inner">
+          <img src="images/curated/feather_light.png" alt="Feather-light Japanese Titanium Frames" loading="lazy" />
+        </div>
+      </div>
+      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('bold')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('bold')" aria-label="Bold Signature Sculpted Bio-Acetate">
+        <div class="curated-card-inner">
+          <img src="images/curated/bold_signature.png" alt="Bold Signature Sculpted Bio-Acetate" loading="lazy" />
+        </div>
+      </div>
+      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('cateye')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('cateye')" aria-label="The Devil Wears Prada Cat-Eye Chic">
+        <div class="curated-card-inner">
+          <img src="images/curated/devil_wears_prada.png" alt="The Devil Wears Prada Cat-Eye Chic" loading="lazy" />
+        </div>
+      </div>
+      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('owndays')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('owndays')" aria-label="OWNDAYS Japanese Minimalist Wireframes">
+        <div class="curated-card-inner">
+          <img src="images/curated/owndays.png" alt="OWNDAYS Japanese Minimalist Wireframes" loading="lazy" />
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- LENSKART-STYLE VISUAL CATEGORY & GENDER SHOWCASE -->
   <section class="lk-category-showcase" id="lk-category-showcase" aria-label="Eyewear Categories by Gender & Style">
@@ -331,26 +433,31 @@
     <p class="copy">&copy; 2024–2026 Noor Optic Boutique. Handcrafted Optical Excellence.</p>
   </footer>
 
-  <!-- BOTTOM NAVIGATION -->
+  <!-- BOTTOM NAVIGATION (Ref Image 4) -->
   <nav class="bottom-nav lk-mobile-bottom-nav" id="lk-mobile-bottom-nav" aria-label="Mobile Navigation">
-    <button type="button" class="active" id="tab-nav-home" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Home">
+    <button type="button" class="lk-nav-tab active" id="tab-nav-home" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Home">
       <svg><use href="#i-home"/></svg>
       <span>Home</span>
     </button>
-    <button type="button" id="tab-nav-eyeglasses" onclick="selectVisualCategory('Eyeglasses', 'all')" aria-label="Eyeglasses">
+    <button type="button" class="lk-nav-tab" id="tab-nav-eyeglasses" onclick="document.getElementById('lk-category-showcase')?.scrollIntoView({behavior:'smooth'})" aria-label="Categories">
       <svg><use href="#i-grid"/></svg>
-      <span>Eyeglasses</span>
+      <span>Categories</span>
     </button>
-    <button type="button" id="tab-nav-wishlist" onclick="document.getElementById('btn-wishlist-toggle')?.click()" aria-label="Wishlist">
-      <svg><use href="#i-heart"/></svg>
-      <span>Wishlist</span>
-      <span class="badge-dot empty" id="bottom-wishlist-badge">0</span>
+    <button type="button" class="lk-nav-tab" id="tab-nav-3dfit" onclick="document.getElementById('ffit-btn-trigger')?.click()" aria-label="3D Fit Face Scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="9" cy="12" r="2.5"/><circle cx="15" cy="12" r="2.5"/></svg>
+      <span>3D Fit</span>
     </button>
-    <button type="button" id="tab-nav-bag" onclick="document.getElementById('btn-bag-toggle')?.click()" aria-label="Bag">
+    <a href="https://wa.me/919391893128" target="_blank" rel="noopener" class="lk-nav-tab" id="tab-nav-whatsapp" aria-label="WhatsApp Optometrist Consultation">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+      <span>Doctor</span>
+    </a>
+    <button type="button" class="lk-nav-tab" id="tab-nav-bag" onclick="document.getElementById('btn-bag-toggle')?.click()" aria-label="View Shopping Bag">
       <svg><use href="#i-bag"/></svg>
       <span>Cart</span>
-      <span class="badge-dot empty" id="bottom-bag-badge">0</span>
+      <span class="lk-nav-badge empty" id="bottom-bag-badge">0</span>
     </button>
+    <!-- Hidden wishlist badge to ensure zero regression with app.js updates -->
+    <span class="badge-dot empty" id="bottom-wishlist-badge" style="display:none;" aria-hidden="true">0</span>
   </nav>
 
 </div> <!-- /.app -->

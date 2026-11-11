@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # pos-daemon.ps1 – Pure Native Windows POS Cloud Print Daemon
 # ZERO DEPENDENCIES & 100% SELF-CONTAINED
 # Works on ANY Windows 10/11 PC/Laptop without Node.js or external files!
