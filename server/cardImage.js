@@ -185,7 +185,7 @@ function generateBillCardSVG(order, items = [], prescription = null, storeSettin
   sumH += 8 + 30 + 10; // divider + remaining bar + bottom padding
 
   // Dynamic elements positioning
-  let dynamicHeight = 110 + 44 + 90; // Top + Navy pill + Client box
+  let dynamicHeight = 110 + 44 + (pickupStr ? 110 : 90); // Top + Navy pill + Client box
   if (isZeroPower) {
     dynamicHeight += 44;
   } else if (rx && (rx.od_sph != null || rx.os_sph != null || rx.prescription_number)) {
@@ -235,7 +235,7 @@ function generateBillCardSVG(order, items = [], prescription = null, storeSettin
   // Customer Details Box
   const clientBoxX = padding + 14;
   const clientBoxW = innerW - 28;
-  const clientBoxH = 78;
+  const clientBoxH = pickupStr ? 96 : 78;
   svgParts.push(`  <rect x="${clientBoxX}" y="${currentY}" width="${clientBoxW}" height="${clientBoxH}" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1" rx="10"/>`);
   svgParts.push(`  <text x="${clientBoxX + 12}" y="${currentY + 22}" font-size="13" font-weight="700" fill="#1E293B">👤 ${escapeXml(custName)}</text>`);
   svgParts.push(`  <line x1="${clientBoxX + 10}" y1="${currentY + 31}" x2="${clientBoxX + clientBoxW - 10}" y2="${currentY + 31}" stroke="#E2E8F0" stroke-width="1"/>`);
@@ -243,6 +243,10 @@ function generateBillCardSVG(order, items = [], prescription = null, storeSettin
   svgParts.push(`  <line x1="${clientBoxX + 10}" y1="${currentY + 56}" x2="${clientBoxX + clientBoxW - 10}" y2="${currentY + 56}" stroke="#E2E8F0" stroke-width="1"/>`);
   svgParts.push(`  <text x="${clientBoxX + 12}" y="${currentY + 71}" font-size="12" font-weight="500" fill="#475569">📍 ${escapeXml(custCity)}</text>`);
   svgParts.push(`  <text x="${clientBoxX + clientBoxW - 12}" y="${currentY + 71}" font-size="12" font-weight="500" fill="#475569" text-anchor="end">🪪 Age: ${escapeXml(String(custAge))}</text>`);
+  if (pickupStr) {
+    svgParts.push(`  <line x1="${clientBoxX + 10}" y1="${currentY + 77}" x2="${clientBoxX + clientBoxW - 10}" y2="${currentY + 77}" stroke="#E2E8F0" stroke-width="1"/>`);
+    svgParts.push(`  <text x="${clientBoxX + 12}" y="${currentY + 90}" font-size="11" font-weight="700" fill="#0284C7">📅 Delivery Date: ${escapeXml(pickupStr)}</text>`);
+  }
 
   currentY += clientBoxH + 14;
 

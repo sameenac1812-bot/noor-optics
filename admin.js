@@ -1118,6 +1118,7 @@
               ${o.client_code ? `<span style="font-size:0.68rem; font-weight:700; color:#1D4ED8; background:#EFF6FF; border:1px solid #BFDBFE; padding:1px 5px; border-radius:4px; margin-left:4px;">${escapeHtml(o.client_code)}</span>` : ''}
               ${o.customer_phone ? `<div style="font-size:0.72rem; color:#6B7280;">${escapeHtml(o.customer_phone)}</div>` : ''}
               ${o.city ? `<div style="font-size:0.7rem; color:#9CA3AF;">${escapeHtml(o.city)}</div>` : ''}
+              ${(o.pickup_time || o.delivery_date) ? `<div style="font-size:0.7rem; color:#0284C7; font-weight:700;">📅 Delivery: ${formatDateTime(o.pickup_time || o.delivery_date)}</div>` : ''}
               ${isZeroPower ? `
                 <div style="margin-top:4px;">
                   <span class="badge-status" style="background:#F1F5F9; color:#475569; border:1px solid #CBD5E1; font-size:0.68rem; font-weight:700;">
@@ -1695,6 +1696,7 @@
             ` : ''}
             ${order.customer_age ? `<div><strong>Age:</strong> ${escapeHtml(order.customer_age)} yrs</div>` : ''}
             ${order.city ? `<div><strong>City:</strong> ${escapeHtml(order.city)}</div>` : ''}
+            ${(order.pickup_time || order.delivery_date) ? `<div><strong>Delivery / Pick Up Date:</strong> <span style="color:#0284C7; font-weight:700;">📅 ${formatDateTime(order.pickup_time || order.delivery_date)}</span></div>` : ''}
             ${order.customer_email ? `<div><strong>Email:</strong> ${escapeHtml(order.customer_email)}</div>` : ''}
             ${order.delivery_address ? `<div style="font-size:0.8rem; color:#64748B;"><strong>Address:</strong> ${escapeHtml(order.delivery_address)}${order.city ? ', ' + escapeHtml(order.city) : ''} ${order.pin_code ? '- ' + escapeHtml(order.pin_code) : ''}</div>` : ''}
           </div>
@@ -6362,6 +6364,7 @@
       const pSec = document.getElementById('pos-second-amount'); if (pSec) pSec.value = 0;
       const pThr = document.getElementById('pos-third-amount'); if (pThr) pThr.value = 0;
       const pPk = document.getElementById('pos-pickup-time'); if (pPk) pPk.value = '';
+      if (typeof window._resetPosPickupWidget === 'function') window._resetPosPickupWidget();
       const mNm = document.getElementById('pos-manual-item-name'); if (mNm) mNm.value = '';
       const mPr = document.getElementById('pos-manual-item-price'); if (mPr) mPr.value = '';
       const dueAlert = document.getElementById('pos-customer-due-alert'); if (dueAlert) dueAlert.style.display = 'none';
@@ -6648,6 +6651,203 @@
       });
     });
 
+    // ── Setup Pick Up / Delivery Time (OpticTool Clone) ──────────────────────
+    function setupPosPickupTimeWidget() {
+      const pickupInput = document.getElementById('pos-pickup-time');
+      const btnOpenModal = document.getElementById('btn-open-pickup-modal');
+      const labelEl = document.getElementById('pos-pickup-label');
+      const clearBtn = document.getElementById('pos-pickup-clear');
+      const headerToggle = document.getElementById('pos-pickup-header-toggle');
+      const pickupBody = document.getElementById('pos-pickup-body');
+      const presetBtns = document.querySelectorAll('.btn-pickup-preset');
+
+      const modal = document.getElementById('modal-pos-pickup');
+      const hourInput = document.getElementById('pos-pk-hour');
+      const minInput = document.getElementById('pos-pk-minute');
+      const ampmBtn = document.getElementById('pos-pk-ampm');
+      const calTitle = document.getElementById('pos-pk-cal-title');
+      const daysGrid = document.getElementById('pos-pk-days-grid');
+      const btnPrevMonth = document.getElementById('btn-pk-cal-prev');
+      const btnNextMonth = document.getElementById('btn-pk-cal-next');
+      const btnCancel = document.getElementById('btn-pk-modal-cancel');
+      const btnSave = document.getElementById('btn-pk-modal-save');
+
+      let calViewDate = new Date();
+      let selectedDate = new Date();
+
+      function setPickupValue(dateObj) {
+        if (!dateObj) {
+          if (pickupInput) pickupInput.value = '';
+          if (labelEl) labelEl.textContent = '📅 Set Pick up Time';
+          if (btnOpenModal) btnOpenModal.classList.remove('active-time');
+          if (clearBtn) clearBtn.style.display = 'none';
+          presetBtns.forEach(b => b.classList.remove('active'));
+          return;
+        }
+        const iso = dateObj.toISOString();
+        if (pickupInput) pickupInput.value = iso;
+        if (labelEl) labelEl.textContent = '📅 ' + formatDateTime(dateObj);
+        if (btnOpenModal) btnOpenModal.classList.add('active-time');
+        if (clearBtn) clearBtn.style.display = 'inline-block';
+      }
+
+      window._resetPosPickupWidget = () => setPickupValue(null);
+
+      // Toggle Header
+      if (headerToggle && pickupBody) {
+        headerToggle.onclick = () => {
+          headerToggle.classList.toggle('collapsed');
+          pickupBody.style.display = headerToggle.classList.contains('collapsed') ? 'none' : 'block';
+        };
+      }
+
+      // Quick Presets
+      presetBtns.forEach(btn => {
+        btn.onclick = () => {
+          presetBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+
+          const now = new Date();
+          const hours = btn.getAttribute('data-preset-h');
+          const days = btn.getAttribute('data-preset-d');
+
+          if (hours) {
+            now.setHours(now.getHours() + parseInt(hours, 10));
+          } else if (days) {
+            now.setDate(now.getDate() + parseInt(days, 10));
+          }
+          selectedDate = new Date(now);
+          setPickupValue(now);
+        };
+      });
+
+      // Clear button
+      if (clearBtn) {
+        clearBtn.onclick = (e) => {
+          e.stopPropagation();
+          setPickupValue(null);
+        };
+      }
+
+      const MONTH_NAMES = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+
+      function renderCalendar() {
+        if (!calTitle || !daysGrid) return;
+        const year = calViewDate.getFullYear();
+        const month = calViewDate.getMonth();
+        calTitle.textContent = `${MONTH_NAMES[month]} ${year}`;
+
+        daysGrid.innerHTML = '';
+        const firstDay = new Date(year, month, 1).getDay();
+        const totalDays = new Date(year, month + 1, 0).getDate();
+
+        for (let i = 0; i < firstDay; i++) {
+          const cell = document.createElement('div');
+          cell.className = 'optic-cal-day-cell empty';
+          daysGrid.appendChild(cell);
+        }
+
+        for (let day = 1; day <= totalDays; day++) {
+          const cell = document.createElement('div');
+          cell.className = 'optic-cal-day-cell';
+          cell.textContent = day;
+
+          const isSelected = selectedDate &&
+            selectedDate.getFullYear() === year &&
+            selectedDate.getMonth() === month &&
+            selectedDate.getDate() === day;
+
+          if (isSelected) cell.classList.add('selected');
+
+          cell.onclick = () => {
+            selectedDate = new Date(year, month, day);
+            renderCalendar();
+          };
+          daysGrid.appendChild(cell);
+        }
+      }
+
+      if (btnPrevMonth) {
+        btnPrevMonth.onclick = () => {
+          calViewDate.setMonth(calViewDate.getMonth() - 1);
+          renderCalendar();
+        };
+      }
+
+      if (btnNextMonth) {
+        btnNextMonth.onclick = () => {
+          calViewDate.setMonth(calViewDate.getMonth() + 1);
+          renderCalendar();
+        };
+      }
+
+      if (ampmBtn) {
+        ampmBtn.onclick = () => {
+          ampmBtn.textContent = ampmBtn.textContent.trim() === 'AM' ? 'PM' : 'AM';
+        };
+      }
+
+      // Open Modal
+      if (btnOpenModal) {
+        btnOpenModal.onclick = (e) => {
+          if (e.target === clearBtn || (clearBtn && clearBtn.contains(e.target))) return;
+          if (modal) {
+            modal.classList.add('open');
+            document.body.classList.add('modal-open');
+
+            const base = pickupInput?.value ? new Date(pickupInput.value) : new Date();
+            selectedDate = new Date(base);
+            calViewDate = new Date(base);
+
+            let h = base.getHours();
+            const isPM = h >= 12;
+            if (h === 0) h = 12;
+            else if (h > 12) h -= 12;
+
+            if (hourInput) hourInput.value = String(h).padStart(2, '0');
+            if (minInput) minInput.value = String(base.getMinutes()).padStart(2, '0');
+            if (ampmBtn) ampmBtn.textContent = isPM ? 'PM' : 'AM';
+
+            renderCalendar();
+          }
+        };
+      }
+
+      // Close Modal
+      if (btnCancel) {
+        btnCancel.onclick = () => {
+          modal?.classList.remove('open');
+          document.body.classList.remove('modal-open');
+        };
+      }
+
+      // Save Modal
+      if (btnSave) {
+        btnSave.onclick = () => {
+          let h = parseInt(hourInput?.value || '12', 10);
+          const m = parseInt(minInput?.value || '0', 10);
+          const isPM = (ampmBtn?.textContent.trim() || 'PM') === 'PM';
+
+          if (h === 12 && !isPM) h = 0;
+          else if (h < 12 && isPM) h += 12;
+
+          const finalDate = new Date(selectedDate || new Date());
+          finalDate.setHours(h, m, 0, 0);
+
+          setPickupValue(finalDate);
+          presetBtns.forEach(b => b.classList.remove('active'));
+
+          modal?.classList.remove('open');
+          document.body.classList.remove('modal-open');
+        };
+      }
+    }
+
+    setupPosPickupTimeWidget();
+
     // Save Bill & Print Checkout Action
     if (btnCheckout) {
       btnCheckout.addEventListener('click', async () => {
@@ -6771,6 +6971,9 @@
               outstanding_inr: isInstallment ? Math.max(0, res.totalPayableINR - (advanceINR + secondAmountINR + thirdAmountINR)) : 0,
               outstanding_paise: isInstallment ? Math.round(Math.max(0, res.totalPayableINR - (advanceINR + secondAmountINR + thirdAmountINR)) * 100) : 0,
               pickup_time: pickupTime,
+              pickupTime: pickupTime,
+              delivery_date: pickupTime,
+              deliveryDate: pickupTime,
               items: cartSnapshot,
               prescriptions: rxListSnapshot,
               prescription: rxSnapshot,
@@ -6808,6 +7011,7 @@
           const pSec2 = document.getElementById('pos-second-amount'); if (pSec2) pSec2.value = 0;
           const pThr2 = document.getElementById('pos-third-amount'); if (pThr2) pThr2.value = 0;
           const pPk2 = document.getElementById('pos-pickup-time'); if (pPk2) pPk2.value = '';
+          if (typeof window._resetPosPickupWidget === 'function') window._resetPosPickupWidget();
 
           // Generate next token number
           const tokenDisplay = document.getElementById('pos-token-display');

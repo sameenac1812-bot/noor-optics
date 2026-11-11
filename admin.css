@@ -6039,38 +6039,237 @@ body.modal-open {
   font-size: 1.15rem;
 }
 
-/* Pick Up Time Selector */
-.optic-pickup-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 4px;
+/* Pick Up Time Selector (OpticTool Clone) */
+.optic-pickup-section {
+  margin-top: 8px;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 10px;
 }
 
-.pickup-header {
+.pickup-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 8px;
+}
+
+.pickup-header-row .pickup-header {
   font-size: 0.78rem;
   font-weight: 800;
   color: #0284C7;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
 
-.optic-pickup-input {
+.pickup-header-row .pickup-caret {
+  font-size: 0.7rem;
+  color: #0284C7;
+  transition: transform 0.2s ease;
+}
+
+.pickup-header-row.collapsed .pickup-caret {
+  transform: rotate(180deg);
+}
+
+.btn-set-pickup-time {
   width: 100%;
-  height: 34px;
+  height: 38px;
   border: 1.5px dashed #CBD5E1;
-  border-radius: 6px;
-  padding: 0 8px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #334155;
+  border-radius: 8px;
   background: #F8FAFC;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+  margin-bottom: 8px;
+}
+
+.btn-set-pickup-time:hover {
+  border-color: #0284C7;
+  background: #F0F9FF;
+  color: #0284C7;
+}
+
+.btn-set-pickup-time.active-time {
+  border: 1.5px solid #0284C7;
+  background: #F0F9FF;
+  color: #0C2B4E;
+}
+
+.pickup-clear-btn {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #DC2626;
+  margin-left: 6px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.pickup-clear-btn:hover {
+  transform: scale(1.2);
+}
+
+.pickup-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.btn-pickup-preset {
+  height: 28px;
+  border: 1px solid #E2E8F0;
+  border-radius: 6px;
+  background: #FFFFFF;
+  color: #0284C7;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-pickup-preset:hover {
+  background: #F0F9FF;
+  border-color: #0284C7;
+}
+
+.btn-pickup-preset.active {
+  background: #0284C7;
+  border-color: #0284C7;
+  color: #FFFFFF;
+}
+
+/* Modal Pick Up Styles (Image 2) */
+.optic-time-box {
+  width: 58px;
+  height: 44px;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0A2540;
+  background: #F1F5F9;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 10px;
   outline: none;
 }
 
-.optic-pickup-input:focus {
+.optic-time-box:focus {
   border-color: #0284C7;
-  border-style: solid;
   background: #FFFFFF;
+}
+
+.optic-ampm-btn {
+  height: 44px;
+  padding: 0 16px;
+  background: #0A2540;
+  color: #FFFFFF;
+  font-size: 1rem;
+  font-weight: 800;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.optic-cal-nav-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #F1F5F9;
+  border: none;
+  color: #0A2540;
+  font-weight: 800;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.optic-cal-nav-btn:hover {
+  background: #E2E8F0;
+}
+
+.optic-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #64748B;
+  margin-bottom: 6px;
+}
+
+.optic-cal-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  text-align: center;
+}
+
+.optic-cal-day-cell {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1E293B;
+  cursor: pointer;
+  margin: 0 auto;
+  transition: all 0.15s ease;
+}
+
+.optic-cal-day-cell:hover {
+  background: #E2E8F0;
+}
+
+.optic-cal-day-cell.selected {
+  background: #0A2540;
+  color: #FFFFFF;
+  font-weight: 800;
+}
+
+.optic-cal-day-cell.empty {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.btn-cal-action {
+  height: 42px;
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-cal-action.cancel {
+  background: #F1F5F9;
+  border: none;
+  color: #0A2540;
+}
+
+.btn-cal-action.cancel:hover {
+  background: #E2E8F0;
+}
+
+.btn-cal-action.save {
+  background: #0A2540;
+  border: none;
+  color: #FFFFFF;
+}
+
+.btn-cal-action.save:hover {
+  background: #0284C7;
 }
 
 /* ── Live Auto-Refresh & Continuous Sync Styles ────────────────────── */

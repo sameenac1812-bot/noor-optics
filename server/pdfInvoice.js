@@ -102,8 +102,8 @@ function generateInvoicePDF(invoice, items, prescription = null) {
       .fillColor('#444444')
       .text(invoice.customer_name || 'Walk-in Client', 45, 149)
       .text(invoice.customer_phone ? `Phone: ${invoice.customer_phone}` : '', 45, 162)
-      .text(invoice.customer_email ? `Email: ${invoice.customer_email}` : '', 45, 175)
-      .text(invoice.customer_address ? `Delivery: ${invoice.customer_address}` : '', 45, 188);
+      .text(invoice.city ? `City: ${invoice.city}` : (invoice.customer_email ? `Email: ${invoice.customer_email}` : ''), 45, 175)
+      .text(invoice.pickup_time ? `Est. Delivery: ${new Date(invoice.pickup_time).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : (invoice.customer_address ? `Delivery: ${invoice.customer_address}` : ''), 45, 188);
 
     // ── Items Table ─────────────────────────────────────────────────────────
     const tableTop = 215;

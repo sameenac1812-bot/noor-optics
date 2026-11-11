@@ -1695,6 +1695,7 @@ async function pushOrderToSupabase(orderPayload) {
             }
             const jobId = 'rcp_' + orderRef + '_' + stageSuffix;
 
+            const resolvedPickupTime = orderPayload.pickup_time || orderPayload.pickupTime || orderPayload.delivery_date || orderPayload.deliveryDate || null;
             const newJobObj = {
               id: jobId,
               type: 'receipt',
@@ -1705,6 +1706,10 @@ async function pushOrderToSupabase(orderPayload) {
               order: {
                 ...baseOrderBody,
                 ...orderPayload,
+                pickup_time: resolvedPickupTime,
+                pickupTime: resolvedPickupTime,
+                delivery_date: resolvedPickupTime,
+                deliveryDate: resolvedPickupTime,
                 payments: orderPayload.payments || [],
                 order_number: orderRef,
                 order_ref: orderRef,

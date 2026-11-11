@@ -1734,6 +1734,32 @@
                     <span class="rem-amount" id="pos-remaining-val">₹ 0</span>
                   </div>
 
+                  <!-- Pick Up / Delivery Time Section (OpticTool Style) -->
+                  <div class="optic-pickup-section" id="pos-pickup-section">
+                    <div class="pickup-header-row" id="pos-pickup-header-toggle">
+                      <span class="pickup-header">PICK UP TIME</span>
+                      <span class="pickup-caret" id="pos-pickup-caret">▲</span>
+                    </div>
+                    <div class="pickup-body" id="pos-pickup-body">
+                      <div class="pickup-btn-wrap">
+                        <button type="button" class="btn-set-pickup-time" id="btn-open-pickup-modal">
+                          <span id="pos-pickup-label">📅 Set Pick up Time</span>
+                          <span id="pos-pickup-clear" class="pickup-clear-btn" style="display:none;" title="Clear Delivery Time">&times;</span>
+                        </button>
+                        <input type="hidden" id="pos-pickup-time" value="" />
+                      </div>
+                      <div class="pickup-presets-grid">
+                        <button type="button" class="btn-pickup-preset" data-preset-h="1">1h</button>
+                        <button type="button" class="btn-pickup-preset" data-preset-h="2">2h</button>
+                        <button type="button" class="btn-pickup-preset" data-preset-h="3">3h</button>
+                        <button type="button" class="btn-pickup-preset" data-preset-h="6">6h</button>
+                        <button type="button" class="btn-pickup-preset" data-preset-h="12">12h</button>
+                        <button type="button" class="btn-pickup-preset" data-preset-d="1">1 Day</button>
+                        <button type="button" class="btn-pickup-preset" data-preset-d="3">3 Days</button>
+                      </div>
+                    </div>
+                  </div>
+
                   <input type="hidden" id="pos-grand-total-val" value="0.00" />
                   <input type="hidden" id="pos-tax-val" value="0.00" />
                   <input type="hidden" id="pos-discount-val" value="0.00" />
@@ -2472,6 +2498,47 @@
           </svg>
           <span>Close</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL: PICK UP DATE & TIME (Image 2 OpticTool Style) ─────────────── -->
+  <div class="modal-overlay" id="modal-pos-pickup">
+    <div class="admin-modal optic-pickup-modal" style="max-width:340px; padding:20px; border-radius:24px; background:#FFFFFF; box-shadow:0 20px 40px rgba(0,0,0,0.18);">
+      <div style="display:flex; align-items:center; justify-content:center; gap:6px; font-size:0.95rem; font-weight:800; color:#0A2540; margin-bottom:14px;">
+        <span>🕒</span>
+        <span>Set Time</span>
+      </div>
+
+      <!-- Time Inputs: [ 04 ] : [ 00 ] [ PM ] -->
+      <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:18px;">
+        <input type="number" id="pos-pk-hour" class="optic-time-box" min="1" max="12" value="04" />
+        <span style="font-weight:900; font-size:1.4rem; color:#0A2540;">:</span>
+        <input type="number" id="pos-pk-minute" class="optic-time-box" min="0" max="59" step="5" value="00" />
+        <button type="button" id="pos-pk-ampm" class="optic-ampm-btn">PM</button>
+      </div>
+
+      <!-- Calendar Header: < Month Year > -->
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; padding:0 6px;">
+        <button type="button" id="btn-pk-cal-prev" class="optic-cal-nav-btn">&lsaquo;</button>
+        <span id="pos-pk-cal-title" style="font-size:0.95rem; font-weight:800; color:#0A2540;">November 2026</span>
+        <button type="button" id="btn-pk-cal-next" class="optic-cal-nav-btn">&rsaquo;</button>
+      </div>
+
+      <!-- Weekdays -->
+      <div class="optic-cal-weekdays">
+        <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+      </div>
+
+      <!-- Days Grid -->
+      <div class="optic-cal-days-grid" id="pos-pk-days-grid">
+        <!-- Rendered dynamically via admin.js -->
+      </div>
+
+      <!-- Actions -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:20px;">
+        <button type="button" class="btn-cal-action cancel" id="btn-pk-modal-cancel">Cancel</button>
+        <button type="button" class="btn-cal-action save" id="btn-pk-modal-save">Save</button>
       </div>
     </div>
   </div>

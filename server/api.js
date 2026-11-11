@@ -1794,6 +1794,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
   const invoiceNumber = generateInvoiceNumber();
 
   let incomingRx = newPrescription || req.body.prescription || null;
+  const pickupTime = req.body.pickupTime || req.body.pickup_time || null;
   const preparedItems = [];
   const rolloverSyncs = [];
   let calculatedSubtotalPaise = 0;
@@ -2086,7 +2087,6 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     let advancePaise = req.body.advanceINR !== undefined ? Math.round(Number(req.body.advanceINR) * 100) : (req.body.advance_paise ? parseInt(req.body.advance_paise, 10) : 0);
     const secondPaymentPaise = req.body.secondAmountINR !== undefined ? Math.round(Number(req.body.secondAmountINR) * 100) : (req.body.second_payment_paise ? parseInt(req.body.second_payment_paise, 10) : 0);
     const thirdPaymentPaise = req.body.thirdAmountINR !== undefined ? Math.round(Number(req.body.thirdAmountINR) * 100) : (req.body.third_payment_paise ? parseInt(req.body.third_payment_paise, 10) : 0);
-    const pickupTime = req.body.pickupTime || req.body.pickup_time || null;
 
     const taxRate = 0; // GST removed
     const netBase = Math.max(0, subtotalPaise + previousDuePaise - discountPaise);
@@ -2330,6 +2330,10 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       deliveryAddress: 'In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad',
       city: 'Hyderabad',
       pinCode: '500028',
+      pickup_time: pickupTime,
+      pickupTime: pickupTime,
+      delivery_date: pickupTime,
+      deliveryDate: pickupTime,
       customerName: result.customerName,
       customerPhone: req.body.customerPhone || (req.body.clientDetails && req.body.clientDetails.phone),
       customerEmail: req.body.customerEmail || (req.body.clientDetails && req.body.clientDetails.email),

@@ -589,12 +589,21 @@ function format25InchEscPosReceipt(rawOrder) {
   }
   writeText(row(`City: ${city}`, `Age: ${age}`));
 
-  // ONLY print Delivery Date on website orders (never on in-store POS bills)
-  if (isWebsiteOrder(order)) {
-    const deliveryRaw = order.delivery_date || order.deliveryDate || order.pickup_time || order.pickupTime || order.pick_up_time;
-    const dDate = deliveryRaw ? formatDateOnly(deliveryRaw) : '--';
-    writeText(row('Delivery Date:', dDate));
+  // Delivery Date (always printed under City column as the website bill)
+  const deliveryRaw = order.delivery_date || order.deliveryDate || order.pickup_time || order.pickupTime || order.pick_up_time;
+  let dDate;
+  if (deliveryRaw) {
+    dDate = formatDateOnly(deliveryRaw);
+  } else {
+    try {
+      const defD = new Date(order.created_at || Date.now());
+      defD.setDate(defD.getDate() + 3);
+      dDate = formatDateOnly(defD);
+    } catch (_) {
+      dDate = '--';
+    }
   }
+  writeText(row('Delivery Date:', dDate));
 
   // 7. Dashed line
   writeText(divider);

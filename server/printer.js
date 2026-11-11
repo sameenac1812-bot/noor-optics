@@ -188,6 +188,14 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
   if (pickupRaw) {
     pDate = formatDateOnly(pickupRaw);
     pTime = formatTimeOnly(pickupRaw);
+  } else {
+    try {
+      const defD = new Date(order.created_at || Date.now());
+      defD.setDate(defD.getDate() + 3);
+      pDate = formatDateOnly(defD);
+    } catch (_) {
+      pDate = '--';
+    }
   }
 
   lines.push(`Name: ${custName}`);
@@ -196,12 +204,21 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
   }
   lines.push(row(`City: ${city}`, `Age: ${age}`));
 
-  // ONLY print Delivery Date on website orders (never on in-store POS bills)
-  if (isWebsiteOrder(order)) {
-    const deliveryRaw = order.delivery_date || order.deliveryDate || order.pickup_time || order.pickupTime || order.pick_up_time;
-    const dDate = deliveryRaw ? formatDateOnly(deliveryRaw) : '--';
-    lines.push(row('Delivery Date:', dDate));
+  // Delivery Date (always printed under City column as the website bill)
+  const deliveryRaw = order.delivery_date || order.deliveryDate || order.pickup_time || order.pickupTime || order.pick_up_time;
+  let dDate;
+  if (deliveryRaw) {
+    dDate = formatDateOnly(deliveryRaw);
+  } else {
+    try {
+      const defD = new Date(order.created_at || Date.now());
+      defD.setDate(defD.getDate() + 3);
+      dDate = formatDateOnly(defD);
+    } catch (_) {
+      dDate = '--';
+    }
   }
+  lines.push(row('Delivery Date:', dDate));
 
   // 7. Dashed line
   lines.push(divider);
@@ -441,6 +458,14 @@ function generate58mmHTML(order, items = [], settings = {}) {
   if (pickupRaw) {
     pDate = formatDateOnly(pickupRaw);
     pTime = formatTimeOnly(pickupRaw);
+  } else {
+    try {
+      const defD = new Date(order.created_at || Date.now());
+      defD.setDate(defD.getDate() + 3);
+      pDate = formatDateOnly(defD);
+    } catch (_) {
+      pDate = '--';
+    }
   }
 
   const itemList = Array.isArray(items) && items.length > 0 ? items : (Array.isArray(order.items) ? order.items : [{ product_name: 'Optical Frame', quantity: 1, unit_price_paise: order.total_payable_paise || 0 }]);
@@ -625,9 +650,7 @@ function generate58mmHTML(order, items = [], settings = {}) {
     <div>Name: ${custName}</div>
     ${custPhone && custPhone !== '-' ? `<div>Phone: ${custPhone}</div>` : ''}
     <div class="flex-row"><span>City: ${city}</span><span>Age: ${age}</span></div>
-    ${isWebsiteOrder(order) ? `
-      <div class="flex-row"><span>Delivery Date:</span><span>${(pickupRaw && pDate !== '--') ? pDate : '--'}</span></div>
-    ` : ''}
+    <div class="flex-row"><span>Delivery Date:</span><span>${pDate}</span></div>
   </div>
 
   <div class="dash">--------------------------------</div>

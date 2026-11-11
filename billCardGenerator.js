@@ -270,7 +270,7 @@
 
     let calculatedHeight = 110; // Top logo and title space
     calculatedHeight += 44;     // Navy header pill
-    calculatedHeight += 95;     // Client details box
+    calculatedHeight += (data.pickupFormatted ? 119 : 95);     // Client details box
 
     if (data.isZeroPower) {
       calculatedHeight += 48;   // Zero power banner
@@ -369,7 +369,7 @@
     // 5. Customer Info Box
     const clientBoxX = paddingX + 14;
     const clientBoxW = innerWidth - 28;
-    const clientBoxH = 80;
+    const clientBoxH = data.pickupFormatted ? 104 : 80;
     drawRoundedRect(ctx, clientBoxX, currentY, clientBoxW, clientBoxH, 10, true, true, '#E2E8F0', '#F8FAFC');
 
     // Row 1: Name
@@ -404,6 +404,19 @@
 
     ctx.textAlign = 'right';
     ctx.fillText('🪪  Age: ' + data.customerAge, clientBoxX + clientBoxW - 12, currentY + 72);
+
+    // Row 4: Delivery / Pick Up Date (under City column)
+    if (data.pickupFormatted) {
+      ctx.beginPath();
+      ctx.moveTo(clientBoxX + 10, currentY + 80);
+      ctx.lineTo(clientBoxX + clientBoxW - 10, currentY + 80);
+      ctx.stroke();
+
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
+      ctx.fillStyle = '#0284C7';
+      ctx.fillText('📅  Delivery Date: ' + data.pickupFormatted, clientBoxX + 12, currentY + 95);
+    }
 
     currentY += clientBoxH + 14;
 
@@ -767,6 +780,10 @@
               <span>📍 ${escapeHtml(data.customerCity)}</span>
               <span>🪪 Age: ${escapeHtml(String(data.customerAge))}</span>
             </div>
+            ${data.pickupFormatted ? `
+            <div class="bc-client-row bc-client-delivery" style="border-top:1px solid #E2E8F0; padding-top:4px; margin-top:3px; color:#0284C7; font-weight:700; font-size:0.75rem;">
+              <span>📅 <strong>Delivery Date:</strong> ${escapeHtml(data.pickupFormatted)}</span>
+            </div>` : ''}
           </div>
 
           ${rxHTML}

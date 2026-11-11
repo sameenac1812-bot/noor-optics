@@ -604,10 +604,15 @@ function Format-ReceiptBytes($order) {
         $rawRefUpper = [string]$(if ($order.order_number) { $order.order_number } elseif ($order.id) { $order.id } else { "" }).ToUpper()
         if ($rawRefUpper -match "-WEB-" -or $rawRefUpper -match "ONLINE") { $isWebOrder = $true }
     }
-    if ($isWebOrder) {
-        $delDate = if ($pickupRaw -and $pDate -ne "--") { $pDate } else { "--" }
-        $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Delivery Date:" $delDate)))
+    $delDate = if ($pickupRaw -and $pDate -ne "--") { 
+        $pDate 
+    } else { 
+        try {
+            $baseD = if ($order.created_at) { [DateTime]::Parse($order.created_at) } else { [DateTime]::Now }
+            $baseD.AddDays(3).ToString("dd MMM yyyy")
+        } catch { "--" }
     }
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Row-Text "Delivery Date:" $delDate)))
 
     # 7. Dashed line
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes($divider))
