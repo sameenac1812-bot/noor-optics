@@ -116,6 +116,10 @@
 
   <!-- HERO CINEMATIC SLIDER (Ref Image 1) -->
   <section class="lk-hero-slider-wrap" aria-label="Featured Eyewear Collections">
+    <!-- Prev / Next Floating Navigation Arrows for Easy Swiping / Clicking -->
+    <button type="button" class="lk-slider-arrow lk-slider-prev" id="lk-slider-prev" aria-label="Previous slide">&#8249;</button>
+    <button type="button" class="lk-slider-arrow lk-slider-next" id="lk-slider-next" aria-label="Next slide">&#8250;</button>
+
     <div class="lk-hero-slider" id="lk-hero-slider" tabindex="0" role="region" aria-roledescription="carousel" aria-label="Luxury Collections Slider">
       <!-- Slide 1 -->
       <article class="lk-hero-slide" role="group" aria-label="Slide 1 of 4" data-slide-index="0">
@@ -174,9 +178,15 @@
       </article>
     </div>
 
-    <!-- Active progress bar matching Reference Image 1 -->
+    <!-- Active progress bar and interactive dots matching Reference Image 1 -->
     <div class="lk-slider-indicator-track" aria-hidden="true">
       <div class="lk-slider-indicator-bar" id="lk-slider-progress"></div>
+    </div>
+    <div class="lk-slider-nav-dots" id="lk-slider-dots" role="tablist" aria-label="Hero slider slide selection">
+      <button type="button" class="lk-dot active" data-index="0" role="tab" aria-selected="true" aria-label="Slide 1: Studio Noir Series"></button>
+      <button type="button" class="lk-dot" data-index="1" role="tab" aria-selected="false" aria-label="Slide 2: Crystal Edit"></button>
+      <button type="button" class="lk-dot" data-index="2" role="tab" aria-selected="false" aria-label="Slide 3: Haute Scandi"></button>
+      <button type="button" class="lk-dot" data-index="3" role="tab" aria-selected="false" aria-label="Slide 4: Tokyo Titanium"></button>
     </div>
   </section>
 
@@ -214,34 +224,81 @@
       <p class="curated-sec-sub">Curated collections for the perfect vision and style</p>
     </div>
     <div class="curated-stories-track">
+      <!-- 1. Crystal Clear (Transparent Bio-Acetate) -->
       <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('crystal')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('crystal')" aria-label="Crystal Clear Transparent Frames">
         <div class="curated-card-inner">
-          <img src="images/curated/crystal_clear.png" alt="Crystal Clear Transparent Frames" loading="lazy" />
+          <img src="images/models/noor_optic_28_1788355744_3977332240702815082_30275909266.webp" alt="Crystal Clear Transparent Bio-Acetate Glasses" loading="lazy" />
+          <div class="curated-card-overlay">
+            <div class="curated-card-text">
+              <span class="curated-card-title">Crystal Clear</span>
+              <span class="curated-card-sub">Transparent Frames</span>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('masaba')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('masaba')" aria-label="Masaba Haute Couture Sunglasses">
-        <div class="curated-card-inner">
-          <img src="images/curated/masaba.png" alt="Masaba Haute Couture Sunglasses" loading="lazy" />
-        </div>
-      </div>
-      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('feather')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('feather')" aria-label="Feather-light Japanese Titanium Frames">
-        <div class="curated-card-inner">
-          <img src="images/curated/feather_light.png" alt="Feather-light Japanese Titanium Frames" loading="lazy" />
-        </div>
-      </div>
+
+      <!-- 2. Bold Signature (Sculpted Bio-Acetate) -->
       <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('bold')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('bold')" aria-label="Bold Signature Sculpted Bio-Acetate">
         <div class="curated-card-inner">
-          <img src="images/curated/bold_signature.png" alt="Bold Signature Sculpted Bio-Acetate" loading="lazy" />
+          <img src="images/models/noor_optic_28_1788355744_3977332230108143300_30275909266.webp" alt="Bold Signature Sculpted Bio-Acetate Frames" loading="lazy" />
+          <div class="curated-card-overlay">
+            <div class="curated-card-text">
+              <span class="curated-card-title">Bold Signature</span>
+              <span class="curated-card-sub">NOOR OPTIC</span>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('cateye')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('cateye')" aria-label="The Devil Wears Prada Cat-Eye Chic">
+
+      <!-- 3. Pastel Aurora (Blush Pink Bio-Acetate) -->
+      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('cateye')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('cateye')" aria-label="Pastel Aurora Blush Bio-Acetate">
         <div class="curated-card-inner">
-          <img src="images/curated/devil_wears_prada.png" alt="The Devil Wears Prada Cat-Eye Chic" loading="lazy" />
+          <img src="images/models/noor_optic_28_1788355744_3977332250677017079_30275909266.webp" alt="Pastel Aurora Soft Blush Bio-Acetate Frames" loading="lazy" />
+          <div class="curated-card-overlay">
+            <div class="curated-card-text">
+              <span class="curated-card-title">Pastel Aurora</span>
+              <span class="curated-card-sub">Blush Bio-Acetate</span>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('owndays')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('owndays')" aria-label="OWNDAYS Japanese Minimalist Wireframes">
+
+      <!-- 4. Architectural Hex (Geometric Couture) -->
+      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('owndays')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('owndays')" aria-label="Architectural Hex Geometric Couture">
         <div class="curated-card-inner">
-          <img src="images/curated/owndays.png" alt="OWNDAYS Japanese Minimalist Wireframes" loading="lazy" />
+          <img src="images/models/noor_optic_28_1788355744_3977332253168246550_30275909266.webp" alt="Architectural Hex Dual-Tone Geometric Frames" loading="lazy" />
+          <div class="curated-card-overlay">
+            <div class="curated-card-text">
+              <span class="curated-card-title">Architectural Hex</span>
+              <span class="curated-card-sub">Geometric Couture</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. The Devil Wears Prada (Neon Pink Accent) -->
+      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('prada')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('prada')" aria-label="The Devil Wears Prada Neon Pink Accent">
+        <div class="curated-card-inner">
+          <img src="images/models/noor_optic_28_1788355744_3977332237884295352_30275909266.webp" alt="The Devil Wears Prada Neon Pink Accent Frames" loading="lazy" />
+          <div class="curated-card-overlay">
+            <div class="curated-card-text">
+              <span class="curated-card-title">The Devil Wears Prada</span>
+              <span class="curated-card-sub">Neon Accent Studio</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Feather-light (Air Titanium Azure) -->
+      <div class="curated-story-card" role="button" tabindex="0" onclick="selectCuratedCollection('feather')" onkeydown="if(event.key==='Enter'||event.key===' ')selectCuratedCollection('feather')" aria-label="Feather-light Japanese Titanium Frames">
+        <div class="curated-card-inner">
+          <img src="images/models/noor_optic_28_1788355744_3977332268511088877_30275909266.webp" alt="Feather-light Japanese Titanium Eyewear" loading="lazy" />
+          <div class="curated-card-overlay">
+            <div class="curated-card-text">
+              <span class="curated-card-title">Feather-light</span>
+              <span class="curated-card-sub">Air Titanium</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
