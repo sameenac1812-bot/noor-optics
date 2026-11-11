@@ -83,7 +83,7 @@ let config = {
   columns: 32,
   storeName: 'NOOR OPTIC',
   storeAddress: 'Pillar No. 45, Rethibowli',
-  storePhone: '+91 98765 43210',
+  storePhone: '+91 93918 93128',
   upiId: '9182341567@mairtel',
   supabaseUrl: 'https://czajxtgwsxbrrymrhauz.supabase.co',
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN6YWp4dGd3c3hicnJ5bXJoYXV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMwODk2NzUsImV4cCI6MjEwODY2NTY3NX0.zfA4TBBOtxEH4kET9a8WjOOf6sS7dULOo9rh42Bpxdk'
@@ -561,7 +561,8 @@ function format25InchEscPosReceipt(rawOrder) {
   const storeAddress = config.storeAddress || 'Pillar No. 45, Rethibowli';
   const addrLines = wrapTextLines(storeAddress, COLS);
   addrLines.forEach(al => writeText(center(al)));
-  writeText(center(`Ph: ${config.storePhone || '+91 98765 43210'}`));
+  const activeStorePhone = order.store_phone || order.storePhone || config.storePhone || '+91 93918 93128';
+  writeText(center(`Ph: ${activeStorePhone}`));
 
   // 3. Dashed line
   writeBytes([0x1B, 0x61, 0x00]); // Left align

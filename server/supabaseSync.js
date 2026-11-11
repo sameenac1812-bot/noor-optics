@@ -1706,6 +1706,8 @@ async function pushOrderToSupabase(orderPayload) {
               order: {
                 ...baseOrderBody,
                 ...orderPayload,
+                store_phone: '+91 93918 93128',
+                storePhone: '+91 93918 93128',
                 pickup_time: resolvedPickupTime,
                 pickupTime: resolvedPickupTime,
                 delivery_date: resolvedPickupTime,

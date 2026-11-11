@@ -6950,6 +6950,8 @@
             const localBillOrder = {
               id: res.orderId,
               order_number: res.orderNumber || res.invoiceNumber,
+              store_phone: '+91 93918 93128',
+              storePhone: '+91 93918 93128',
               customer_name: clientPayload.name,
               customer_phone: clientPayload.phone || null,
               customer_city: clientPayload.city || null,
@@ -8784,6 +8786,9 @@
       console.warn('Order not found for instant receipt printing:', orderId);
       return;
     }
+
+    order.store_phone = order.store_phone || (state.storeSettings && state.storeSettings.store_phone) || '+91 93918 93128';
+    order.storePhone = order.storePhone || order.store_phone;
 
     // Ensure prescription is attached if linked
     if (!order.prescriptions && order.prescriptions_json) {

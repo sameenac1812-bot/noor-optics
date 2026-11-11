@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     pos-daemon/pos-daemon.ps1 – Native Windows PowerShell POS Print Engine
     Zero-dependency thermal print daemon for Windows 10/11.
@@ -113,7 +113,7 @@ $Config = @{
     storeName = "NOOR OPTIC"
     storeTagline = ""
     storeAddress = "Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028"
-    storePhone = "+91 98765 43210"
+    storePhone = "+91 93918 93128"
     storeGstin = "29AAAAA0000A1Z5"
     orderFreshnessMinutes = 120
     supabaseUrl = "https://czajxtgwsxbrrymrhauz.supabase.co"
@@ -549,7 +549,7 @@ function Format-ReceiptBytes($order) {
     foreach ($al in $addrLines) {
         $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Center-Text $al)))
     }
-    $storePhone = if ($Config.storePhone) { $Config.storePhone } else { "+91 98765 43210" }
+    $storePhone = if ($order.store_phone) { $order.store_phone } elseif ($order.storePhone) { $order.storePhone } elseif ($Config.storePhone) { $Config.storePhone } else { "+91 93918 93128" }
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes((Center-Text "Ph: $storePhone")))
 
     # 3. Dashed line
