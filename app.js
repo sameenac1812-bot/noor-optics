@@ -752,9 +752,15 @@
   }
 
   // ── Cart & Bag Management ─────────────────────────────────────────────────
-  function addToCart(productId, customColor, customLensId) {
-    const product = state.catalog.find(p => p.id === productId);
-    if (!product) return;
+  function addToCart(productId, customColor, customLensId, skipDrawer = false) {
+    let product = state.catalog.find(p => String(p.id) === String(productId));
+    if (!product && window.EYEWEAR_CATALOG) {
+      product = window.EYEWEAR_CATALOG.find(p => String(p.id) === String(productId));
+      if (product && !state.catalog.some(c => String(c.id) === String(product.id))) {
+        state.catalog.push(product);
+      }
+    }
+    if (!product) return null;
 
     const chosenColor = customColor || (product.colors && product.colors[0] ? product.colors[0].name : 'Standard');
     const lensPkg = (window.LENS_PACKAGES || []).find(l => l.id === (customLensId || 'lens-bluecut')) || {
@@ -778,10 +784,10 @@
         shape: product.shape || 'Optical',
         material: product.material || 'Acetate',
         fit: product.fit || 'Regular',
-        image: product.image,
-        basePrice: product.price,
+        image: product.image || product.imageUrl || product.image_url,
+        basePrice: product.price || 999,
         lensPrice: lensPkg.price,
-        unitPrice: product.price + lensPkg.price,
+        unitPrice: (product.price || 999) + lensPkg.price,
         color: chosenColor,
         lensName: lensPkg.name,
         quantity: 1
@@ -794,7 +800,39 @@
 
     updateBagBadge();
     renderCartDrawer();
-    openDrawer(DOM.cartDrawer);
+    if (!skipDrawer) {
+      openDrawer(DOM.cartDrawer);
+    }
+    return product;
+  }
+
+  function buyNowProduct(productId, customColor, customLensId, productData) {
+    let product = state.catalog.find(p => String(p.id) === String(productId));
+    if (!product && window.EYEWEAR_CATALOG) {
+      product = window.EYEWEAR_CATALOG.find(p => String(p.id) === String(productId));
+    }
+    if (!product && productData) {
+      product = {
+        id: productData.id || productId,
+        name: productData.name || 'Recommended Frame',
+        brand: productData.brand || 'Noor Optics',
+        model: productData.model || productData.name || 'Bespoke Frame',
+        shape: productData.shape || 'Optical',
+        material: productData.material || 'Acetate',
+        fit: productData.fit || 'Regular',
+        image: productData.imageUrl || productData.image_url || productData.image || '/images/frames/frame_34.jpg',
+        price: productData.price || 999,
+        colors: productData.colors || [{ name: 'Standard', hex: '#111111' }]
+      };
+    }
+
+    if (product && !state.catalog.some(c => String(c.id) === String(product.id))) {
+      state.catalog.push(product);
+    }
+
+    addToCart(product ? product.id : productId, customColor, customLensId, true);
+    openDemoCheckout();
+    showToast(product ? `Added "${product.name}" to bag – Checkout` : 'Item added to bag – Checkout');
   }
 
   function updateCartQuantity(cartKey, delta) {
@@ -2560,11 +2598,14 @@
     startAutoPlay();
   }
 
-  // Expose to window for inline HTML onclick handlers
+  // Expose to window for inline HTML onclick handlers & Find Your Fit bridges
   window.selectVisualCategory = selectVisualCategory;
   window.selectBrand = selectBrand;
   window.filterByPromoSale = filterByPromoSale;
   window.selectCuratedCollection = selectCuratedCollection;
+  window.addToCart = addToCart;
+  window.openDemoCheckout = openDemoCheckout;
+  window.buyNowProduct = buyNowProduct;
 
   // ── Initialization ────────────────────────────────────────────────────────
   function init() {
