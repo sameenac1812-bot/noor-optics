@@ -1252,10 +1252,12 @@
 
     // Wire Print (Silent dispatch to POS portable daemon, NO popup!)
     const btnPrint = document.getElementById('action-sheet-print');
-    if (btnPrint) btnPrint.onclick = () => {
+    if (btnPrint) btnPrint.onclick = async () => {
       modal?.classList.remove('open');
       document.body.classList.remove('modal-open');
-      instantPrintReceipt(orderId);
+      const orderRef = order.order_number || ('INV-NOOR-' + order.id.slice(-4));
+      showToast(`🖨️ Reprinting bill #${orderRef}...`, 'info');
+      await instantPrintReceipt(orderId, true, order, 'reprint');
     };
 
     // Wire Call
@@ -8190,9 +8192,9 @@
       }
     }
 
-    let order = directOrder;
-    let items = (directOrder && directOrder.items) || [];
-    let rx = (directOrder && directOrder.prescription) || null;
+    let order = directOrder || (state.ordersCache || []).find(o => o.id === targetId || o.order_number === targetId);
+    let items = (order && order.items) || [];
+    let rx = (order && order.prescription) || null;
 
     // Always fetch fresh authoritative order data (prescription, items, multi-payments)
     try {
@@ -8202,13 +8204,20 @@
       });
       if (res.ok) {
         const detail = await res.json();
-        if (detail.order) order = { ...detail.order, ...(order || {}) };
+        if (detail.order) order = { ...(order || {}), ...detail.order };
         if (detail.items && detail.items.length) items = detail.items;
         if (detail.payments && detail.payments.length) {
           order.payments = detail.payments;
         }
-        if (detail.prescription) rx = detail.prescription;
-        else if (order && order.prescription) rx = order.prescription;
+        if (detail.prescription) {
+          rx = detail.prescription;
+        } else if (detail.order && detail.order.prescription) {
+          rx = detail.order.prescription;
+        } else if (detail.order && Array.isArray(detail.order.prescriptions) && detail.order.prescriptions[0]) {
+          rx = detail.order.prescriptions[0];
+        } else if (order && order.prescription) {
+          rx = order.prescription;
+        }
       }
     } catch (err) {
       console.warn('Could not fetch full order details for WhatsApp bill:', err);
@@ -8228,7 +8237,22 @@
       }
       if (Array.isArray(order.prescriptions) && order.prescriptions.length > 0) {
         rx = order.prescriptions[0];
-      } else if (order.od_sph != null || order.os_sph != null || order.prescription_number || order.prescription_id) {
+      } else if (order.prescription_id) {
+        try {
+          const token = getToken();
+          const rxRes = await fetch(`/api/prescriptions/${order.prescription_id}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          });
+          if (rxRes.ok) {
+            const rxData = await rxRes.json();
+            if (rxData && (rxData.od_sph != null || rxData.os_sph != null || rxData.prescription_number)) {
+              rx = rxData;
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!rx && (order.od_sph != null || order.os_sph != null || order.prescription_number)) {
         rx = {
           id: order.prescription_id,
           prescription_number: order.prescription_number,
@@ -8242,9 +8266,33 @@
           ipd_distance: order.ipd_distance,
           checked_by: order.rx_checked_by || order.checked_by
         };
-      } else if (order.customer_id && state.clientsCache) {
-        const cl = state.clientsCache.find(c => c.id === order.customer_id);
-        if (cl && cl.latest_prescription) rx = cl.latest_prescription;
+      } else if (!rx && order.customer_id) {
+        const cl = (state.clientsCache || []).find(c => c.id === order.customer_id);
+        if (cl && cl.latest_prescription) {
+          rx = cl.latest_prescription;
+        } else {
+          try {
+            const token = getToken();
+            const clRes = await fetch(`/api/customers/${order.customer_id}`, {
+              headers: token ? { Authorization: `Bearer ${token}` } : {}
+            });
+            if (clRes.ok) {
+              const clData = await clRes.json();
+              if (clData.latest_prescription) rx = clData.latest_prescription;
+              else if (Array.isArray(clData.prescriptions) && clData.prescriptions[0]) rx = clData.prescriptions[0];
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    if (rx) {
+      order.prescription = rx;
+      if (!Array.isArray(order.prescriptions) || order.prescriptions.length === 0) {
+        order.prescriptions = [rx];
+      }
+      if (!order.prescription_pref || String(order.prescription_pref).toLowerCase().includes('zero')) {
+        order.prescription_pref = 'RX Attached';
       }
     }
 
@@ -8970,6 +9018,14 @@
     showToast(`🖨️ Bill #${orderRef} dispatched to POS thermal printer!`, 'success');
   };
 
+  // ── 1-Click Queue/Manual Reprint Helper ──
+  window.manualReprintToDaemon = async function (orderId) {
+    if (!orderId) return;
+    const order = (state.ordersCache || []).find(o => o.id === orderId || o.order_number === orderId);
+    const orderRef = order?.order_number || orderId;
+    showToast(`🖨️ Queuing reprint for bill #${orderRef}...`, 'info');
+    return instantPrintReceipt(orderId, true, order, 'reprint');
+  };
 
   // ── Authorized Manual Reprint Handler ──────────────────────────────────────
   window.requestManualReprint = async function (orderId, defaultReason = 'Staff requested reprint') {

@@ -277,7 +277,7 @@ function initializeDatabase() {
       delivery_address TEXT,
       city TEXT,
       pin_code TEXT,
-      prescription_pref TEXT DEFAULT 'zero-power',
+      prescription_pref TEXT DEFAULT 'Standard',
       prescription_id TEXT,
       status TEXT NOT NULL DEFAULT 'CONFIRMED', -- PENDING, CONFIRMED, PROCESSING, COMPLETED, CANCELLED
       payment_status TEXT NOT NULL DEFAULT 'UNPAID', -- UNPAID, AWAITING_VERIFICATION, VERIFIED, PARTIALLY_PAID, REFUNDED

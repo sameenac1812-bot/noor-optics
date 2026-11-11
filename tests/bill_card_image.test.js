@@ -132,6 +132,38 @@ async function runSuite() {
     assert.strictEqual(norm.rx.od_sph, '4.00');
   });
 
+  runTest('never marks order as zero power if prescription_id or directRx is present, even with legacy zero-power pref', () => {
+    const rawOrder = {
+      order_number: 'INV-TEST-004',
+      prescription_pref: 'zero-power',
+      prescription_id: 'rx-test-123',
+      od_sph: '+1.50',
+      os_sph: '+1.75'
+    };
+    const norm = BillCardGenerator.normalizeOrderData(rawOrder);
+    assert.strictEqual(norm.isZeroPower, false);
+    assert(norm.rx != null, 'Prescription should be resolved');
+    assert.strictEqual(norm.rx.od_sph, '+1.50');
+    assert.strictEqual(norm.rx.os_sph, '+1.75');
+  });
+
+  runTest('renders full optical prescription table in SVG when order has prescription_id', () => {
+    const rawOrder = {
+      order_number: 'INV-TEST-005',
+      prescription_pref: 'zero-power',
+      prescription_id: 'rx-test-456',
+      prescription_number: 'RX-2026-9999',
+      od_sph: '+1.25',
+      od_cyl: '-0.50',
+      os_sph: '+1.00',
+      os_cyl: '-0.75'
+    };
+    const svg = generateBillCardSVG(rawOrder, []);
+    assert(svg.includes('OPTICAL EYE PRESCRIPTION'), 'Should render optical prescription table');
+    assert(svg.includes('+1.25'), 'Should render OD SPH diopter');
+    assert(!svg.includes('Zero Power (Plano / Blue-Light Screen Filter only)'), 'Should not show zero power banner');
+  });
+
   console.log('\n--- 2. Standalone SVG Receipt Card Rendering ---');
 
   runTest('generates valid SVG with shop name, logo, client details and red due banner', () => {

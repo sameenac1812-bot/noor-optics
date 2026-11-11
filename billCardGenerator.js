@@ -194,12 +194,18 @@
 
     // Prescription evaluation
     const rxPref = String(order.prescription_pref || '').toLowerCase();
-    const isZeroPower = rxPref.includes('zero') || rxPref.includes('plano') || rxPref === 'none' || rxPref === 'fashion';
+    const hasExplicitZeroPref = rxPref.includes('zero') || rxPref.includes('plano') || rxPref === 'none' || rxPref === 'fashion';
 
-    let rx = null;
-    if (!isZeroPower) {
-      rx = directRx || order.prescription || (order.prescriptions && order.prescriptions[0]) || null;
-      if (!rx && (order.od_sph != null || order.os_sph != null || order.prescription_number || order.prescription_id)) {
+    let rx = directRx || order.prescription || (order.prescriptions && order.prescriptions[0]) || null;
+    const hasLinkedRx = Boolean(
+      rx ||
+      order.prescription_id ||
+      (order.prescriptions && order.prescriptions.length > 0) ||
+      order.prescriptions_json
+    );
+
+    if (!rx && (order.od_sph != null || order.os_sph != null || order.prescription_number || order.prescription_id)) {
+      if (hasLinkedRx || !hasExplicitZeroPref) {
         rx = {
           id: order.prescription_id,
           prescription_number: order.prescription_number,
@@ -214,6 +220,20 @@
           checked_by: order.rx_checked_by || order.checked_by
         };
       }
+    }
+
+    const hasRealRx = Boolean(
+      rx && (
+        rx.od_sph != null || rx.os_sph != null ||
+        rx.od_cyl != null || rx.os_cyl != null ||
+        rx.prescription_number || rx.prescriptionNumber ||
+        rx.addition || rx.ipd_distance
+      )
+    );
+
+    const isZeroPower = hasExplicitZeroPref && !hasLinkedRx && !hasRealRx;
+    if (isZeroPower) {
+      rx = null;
     }
 
     // Items list

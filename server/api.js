@@ -2112,19 +2112,20 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       paymentStatus = 'PENDING';
     }
 
-    // 2. Insert Order (With authoritative customer_id, prescription_id, prescriptions_json, and payment installments)
+    // 2. Insert Order (With authoritative customer_id, prescription_pref, prescription_id, prescriptions_json, and payment installments)
     const nowIso = new Date().toISOString();
+    const effectivePosRxPref = finalPrescriptionId ? 'RX Attached' : (savedPrescriptions.length > 0 ? 'RX Attached' : 'Standard');
     db.prepare(`
       INSERT INTO orders (
         id, order_number, token_number, channel, channel_code, source, customer_id, customer_name,
-        customer_phone, customer_email, prescription_id, prescriptions_json, status, payment_status, subtotal_paise,
+        customer_phone, customer_email, prescription_pref, prescription_id, prescriptions_json, status, payment_status, subtotal_paise,
         discount_paise, discount_reason, tax_paise, total_payable_paise,
         amount_paid_paise, outstanding_paise, staff_user_id, notes,
         advance_paid_paise, second_payment_paise, third_payment_paise, previous_due_paise, pickup_time,
         created_at, updated_at
       ) VALUES (
         ?, ?, ?, 'POS', 2, 'instore', ?, ?,
-        ?, ?, ?, ?, 'CONFIRMED', ?, ?,
+        ?, ?, ?, ?, ?, 'CONFIRMED', ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?, ?, ?,
@@ -2132,7 +2133,7 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
       )
     `).run(
       orderId, orderNumber, tokenNumber, finalCustomerId, finalCustomerName,
-      finalCustomerPhone, finalCustomerEmail, finalPrescriptionId, finalPrescriptionsJson, paymentStatus, subtotalPaise,
+      finalCustomerPhone, finalCustomerEmail, effectivePosRxPref, finalPrescriptionId, finalPrescriptionsJson, paymentStatus, subtotalPaise,
       discountPaise, discountReason || null, taxPaise, totalPayablePaise,
       amountPaidPaise, outstandingPaise, req.user.id, notes || null,
       advancePaise, secondPaymentPaise, thirdPaymentPaise, previousDuePaise, pickupTime,
@@ -3110,34 +3111,23 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
     const getCustByPhone = db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0 LIMIT 1');
 
     const formatted = orders.map(o => {
-      const rxPrefNorm = String(o.prescription_pref || '').trim().toLowerCase();
-      const isZeroPower = rxPrefNorm.includes('zero') || rxPrefNorm.includes('plano') || rxPrefNorm === 'none' || rxPrefNorm === 'fashion';
-
-      let rx = null;
-      if (!isZeroPower) {
-        if (!o.prescription_number && o.customer_id) {
-          rx = getLatestRxForCustomer.get(o.customer_id);
-        } else if (!o.prescription_number && o.customer_phone) {
-          const cust = getCustByPhone.get(o.customer_phone.trim());
-          if (cust) rx = getLatestRxForCustomer.get(cust.id);
-        }
-      }
-
-      let normCreatedAt = o.created_at;
-      if (normCreatedAt && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(normCreatedAt)) {
-        normCreatedAt = normCreatedAt.replace(' ', 'T') + 'Z';
-      } else if (normCreatedAt && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(normCreatedAt) && !normCreatedAt.includes('Z') && !normCreatedAt.includes('+')) {
-        normCreatedAt = normCreatedAt + 'Z';
-      }
-
       let parsedRxList = [];
-      if (!isZeroPower && o.prescriptions_json) {
+      if (o.prescriptions_json) {
         try {
           const p = JSON.parse(o.prescriptions_json);
           if (Array.isArray(p) && p.length > 0) parsedRxList = p;
         } catch (_) {}
       }
-      if (!isZeroPower && parsedRxList.length === 0) {
+
+      let rx = null;
+      if (!o.prescription_number && o.customer_id) {
+        rx = getLatestRxForCustomer.get(o.customer_id);
+      } else if (!o.prescription_number && o.customer_phone) {
+        const cust = getCustByPhone.get(o.customer_phone.trim());
+        if (cust) rx = getLatestRxForCustomer.get(cust.id);
+      }
+
+      if (parsedRxList.length === 0) {
         const s = {
           id: o.prescription_id || (rx ? rx.id : null),
           prescription_number: o.prescription_number || (rx ? rx.prescription_number : null),
@@ -3153,13 +3143,34 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
           checked_by: o.rx_checked_by || (rx ? rx.checked_by : null),
           notes: o.rx_notes || (rx ? rx.notes : null)
         };
-        if (s.od_sph != null || s.os_sph != null || s.prescription_number) parsedRxList = [s];
+        if (s.od_sph != null || s.os_sph != null || s.od_cyl != null || s.os_cyl != null || s.prescription_number) {
+          parsedRxList = [s];
+        }
       }
+
+      const hasLinkedRx = Boolean(
+        (parsedRxList && parsedRxList.length > 0) ||
+        o.prescription_id ||
+        (rx && (rx.od_sph != null || rx.os_sph != null || rx.prescription_number))
+      );
+      const rxPrefNorm = String(o.prescription_pref || '').trim().toLowerCase();
+      const isZeroPower = !hasLinkedRx && (rxPrefNorm.includes('zero') || rxPrefNorm.includes('plano') || rxPrefNorm === 'none' || rxPrefNorm === 'fashion');
       const firstRx = (!isZeroPower && parsedRxList[0]) ? parsedRxList[0] : null;
+      const effectiveRxPref = hasLinkedRx
+        ? (rxPrefNorm.includes('zero') ? 'RX Attached' : (o.prescription_pref || 'RX Attached'))
+        : (isZeroPower ? 'zero-power' : (o.prescription_pref || 'Standard'));
+
+      let normCreatedAt = o.created_at;
+      if (normCreatedAt && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(normCreatedAt)) {
+        normCreatedAt = normCreatedAt.replace(' ', 'T') + 'Z';
+      } else if (normCreatedAt && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(normCreatedAt) && !normCreatedAt.includes('Z') && !normCreatedAt.includes('+')) {
+        normCreatedAt = normCreatedAt + 'Z';
+      }
 
       return {
         ...o,
         created_at: normCreatedAt,
+        prescription_pref: effectiveRxPref,
         prescription_id: isZeroPower ? null : (o.prescription_id || (firstRx ? firstRx.id : (rx ? rx.id : null))),
         prescription_number: isZeroPower ? null : (o.prescription_number || (firstRx ? (firstRx.prescription_number || firstRx.prescriptionNumber) : (rx ? rx.prescription_number : null))),
         od_sph: isZeroPower ? null : (o.od_sph || (firstRx ? (firstRx.od_sph || firstRx.odSph) : (rx ? rx.od_sph : null))),
@@ -3255,32 +3266,42 @@ router.get('/orders/:id', authenticateToken, requirePermission('orders:view'), a
 
   let order = db.prepare(getOrderSql).get(baseOrder.id, baseOrder.order_number, baseOrder.id, baseOrder.order_number) || baseOrder;
 
-  const rxPrefNorm = String(order.prescription_pref || '').trim().toLowerCase();
-  const isZeroPower = rxPrefNorm.includes('zero') || rxPrefNorm.includes('plano') || rxPrefNorm === 'none' || rxPrefNorm === 'fashion';
-
-  // Fallback to customer's latest prescription ONLY if order is not zero-power and has none linked
-  let rx = null;
-  if (!isZeroPower) {
-    if (!order.prescription_number && order.customer_id) {
-      rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(order.customer_id);
-    } else if (!order.prescription_number && order.customer_phone) {
-      const cust = db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0 LIMIT 1').get(order.customer_phone.trim());
-      if (cust) {
-        rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(cust.id);
-      }
-    }
-  }
-
   let orderRxList = [];
-  if (!isZeroPower && order.prescriptions_json) {
+  if (order.prescriptions_json) {
     try {
       const parsedRx = JSON.parse(order.prescriptions_json);
       if (Array.isArray(parsedRx) && parsedRx.length > 0) orderRxList = parsedRx;
     } catch (_) {}
   }
 
+  // Fallback to customer's latest prescription if order has none linked
+  let rx = null;
+  if (!order.prescription_number && order.customer_id) {
+    rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(order.customer_id);
+  } else if (!order.prescription_number && order.customer_phone) {
+    const cust = db.prepare('SELECT id FROM customers WHERE phone = ? AND is_archived = 0 LIMIT 1').get(order.customer_phone.trim());
+    if (cust) {
+      rx = db.prepare('SELECT * FROM prescriptions WHERE client_id = ? AND is_archived = 0 ORDER BY created_at DESC LIMIT 1').get(cust.id);
+    }
+  }
+
+  const hasLinkedRx = Boolean(
+    (orderRxList && orderRxList.length > 0) ||
+    order.prescription_id ||
+    order.prescription_number ||
+    order.od_sph != null ||
+    order.os_sph != null ||
+    (rx && (rx.od_sph != null || rx.os_sph != null || rx.prescription_number))
+  );
+  const rxPrefNorm = String(order.prescription_pref || '').trim().toLowerCase();
+  const isZeroPower = !hasLinkedRx && (rxPrefNorm.includes('zero') || rxPrefNorm.includes('plano') || rxPrefNorm === 'none' || rxPrefNorm === 'fashion');
+  const effectiveRxPref = hasLinkedRx
+    ? (rxPrefNorm.includes('zero') ? 'RX Attached' : (order.prescription_pref || 'RX Attached'))
+    : (isZeroPower ? 'zero-power' : (order.prescription_pref || 'Standard'));
+
   const resolvedOrder = {
     ...order,
+    prescription_pref: effectiveRxPref,
     prescription_id: isZeroPower ? null : (order.prescription_id || (rx ? rx.id : null)),
     prescription_number: isZeroPower ? null : (order.prescription_number || (rx ? rx.prescription_number : null)),
     od_sph: isZeroPower ? null : (order.od_sph || (rx ? rx.od_sph : null)),
