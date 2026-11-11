@@ -1,4 +1,4 @@
-# ==============================================================================
+﻿# ==============================================================================
 # pos-daemon.ps1 – Pure Native Windows POS Cloud Print Daemon
 # ZERO DEPENDENCIES & 100% SELF-CONTAINED
 # Works on ANY Windows 10/11 PC/Laptop without Node.js or external files!
@@ -179,7 +179,7 @@ function Print-ReceiptDirect($order, [string]$TargetPrinter) {
     $bw.Write([byte[]]@(0x1D, 0x21, 0x00)) # Normal size
     $bw.Write([byte[]]@(0x1B, 0x45, 0x00)) # Bold off
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Pure Taste - Freshly Made Always`n"))
-    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Main Road Outlet | Ph: +91 98765 43210`n"))
+    $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Main Road Outlet | Ph: +91 93918 93128`n"))
     $bw.Write([System.Text.Encoding]::ASCII.GetBytes("------------------------------------------------`n"))
 
     # Order Details (NO Table column as requested)
