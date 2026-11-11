@@ -8126,6 +8126,48 @@
     }
   };
 
+  // ── Helper: Extract clean 10-digit mobile number for clipboard & search ──
+  function extractClientPhoneToCopy(rawPhone) {
+    if (!rawPhone) return '';
+    const str = String(rawPhone).trim();
+    const digits = str.replace(/\D/g, '');
+    if (digits.length === 10) return digits;
+    if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+    if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+    if (digits.length > 10) return digits.slice(-10);
+    return digits || str;
+  }
+
+  // ── Helper: Cross-browser text copy to system clipboard ────────────────────
+  async function copyTextToClipboard(text) {
+    if (!text) return false;
+    let copied = false;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch (_) {}
+    }
+    if (!copied && typeof document !== 'undefined') {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '-9999px';
+        ta.style.opacity = '0';
+        ta.setAttribute('readonly', '');
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, 99999);
+        copied = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch (_) {}
+    }
+    return copied;
+  }
+
   // ── 1-Click WhatsApp Digital Bill Sender ───────────────────────────────────
   window.sendWhatsAppBill = async function (orderId, directOrder = null) {
     if (!orderId && (!directOrder || !directOrder.id)) {
@@ -8134,6 +8176,20 @@
     }
 
     const targetId = orderId || (directOrder && (directOrder.id || directOrder.order_number));
+
+    // 0. Instantly copy client phone number to clipboard BEFORE opening send options
+    const initRawPhone = (directOrder && (directOrder.customer_phone || directOrder.customerPhone || directOrder.phone))
+      || (directOrder && directOrder.customer && directOrder.customer.phone)
+      || (state.ordersCache || []).find(o => o.id === targetId || o.order_number === targetId)?.customer_phone
+      || '';
+    if (initRawPhone) {
+      const p = extractClientPhoneToCopy(initRawPhone);
+      if (p) {
+        copyTextToClipboard(p);
+        showToast(`📋 Copied client phone (${p}) to clipboard!`, 'info');
+      }
+    }
+
     let order = directOrder;
     let items = (directOrder && directOrder.items) || [];
     let rx = (directOrder && directOrder.prescription) || null;
@@ -8197,6 +8253,12 @@
       return;
     }
 
+    // Ensure phone number is copied if not copied in step 0
+    const finalPhone = extractClientPhoneToCopy(order.customer_phone);
+    if (finalPhone) {
+      await copyTextToClipboard(finalPhone);
+    }
+
     const payload = {
       order,
       items,
@@ -8227,6 +8289,14 @@
       showToast('No phone number on file for WhatsApp.', 'warning');
       return;
     }
+
+    // Instantly copy client phone number before opening WhatsApp
+    const phoneToCopy = extractClientPhoneToCopy(rawPhone);
+    if (phoneToCopy) {
+      copyTextToClipboard(phoneToCopy);
+      showToast(`📋 Copied client phone (${phoneToCopy}) to clipboard!`, 'info');
+    }
+
     const intlPhone = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
     const storeName = state.storeSettings.store_name || 'Noor Optic';
     const text = encodeURIComponent(`Hello ${clientName || 'Valued Customer'}, this is ${storeName}. We are contacting you regarding your optical eyewear and prescription records. Please let us know if you need any assistance.`);
@@ -8467,6 +8537,15 @@
         };
         updateWaLink();
         waTemplate.oninput = updateWaLink;
+        waBtn.onclick = () => {
+          if (client.phone) {
+            const p = extractClientPhoneToCopy(client.phone);
+            if (p) {
+              copyTextToClipboard(p);
+              showToast(`📋 Copied client phone (${p}) to clipboard!`, 'info');
+            }
+          }
+        };
       }
 
       // Tab 5: Record History & Safety

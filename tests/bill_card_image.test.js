@@ -224,6 +224,23 @@ async function runSuite() {
     assert(html.includes('bc-bar-due'), 'Contains bc-bar-due class for red highlight');
   });
 
+  console.log('\n--- 4. WhatsApp Phone Auto-Copy Helpers ---');
+
+  runTest('extractClientPhoneToCopy cleans international and prefixed phone formats to 10 digits', () => {
+    assert.strictEqual(BillCardGenerator.extractClientPhoneToCopy('9391893128'), '9391893128');
+    assert.strictEqual(BillCardGenerator.extractClientPhoneToCopy('+91 93918 93128'), '9391893128');
+    assert.strictEqual(BillCardGenerator.extractClientPhoneToCopy('+919391893128'), '9391893128');
+    assert.strictEqual(BillCardGenerator.extractClientPhoneToCopy('09391893128'), '9391893128');
+    assert.strictEqual(BillCardGenerator.extractClientPhoneToCopy('919391893128'), '9391893128');
+    assert.strictEqual(BillCardGenerator.extractClientPhoneToCopy('  98765 43210  '), '9876543210');
+  });
+
+  await runAsyncTest('copyTextToClipboard is exported and safely handles headless environments', async () => {
+    assert.strictEqual(typeof BillCardGenerator.copyTextToClipboard, 'function');
+    const result = await BillCardGenerator.copyTextToClipboard('9391893128');
+    assert(result === false || result === true, 'Returns boolean outcome');
+  });
+
   console.log('\n======================================================');
   console.log(`🏁 BILL CARD & IMAGE SYSTEM SUITE: ${passedTests}/${totalTests} TESTS PASSED!`);
   console.log('======================================================\n');

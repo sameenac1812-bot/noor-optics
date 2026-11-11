@@ -854,11 +854,66 @@
       .replace(/"/g, '&quot;');
   }
 
+  // Helper: Extract clean 10-digit mobile number for clipboard & search
+  function extractClientPhoneToCopy(rawPhone) {
+    if (!rawPhone) return '';
+    const str = String(rawPhone).trim();
+    const digits = str.replace(/\D/g, '');
+    if (digits.length === 10) return digits;
+    if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+    if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+    if (digits.length > 10) return digits.slice(-10);
+    return digits || str;
+  }
+
+  // Helper: Cross-browser text copy to system clipboard
+  async function copyTextToClipboard(text) {
+    if (!text) return false;
+    let copied = false;
+    if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch (_) {}
+    }
+    if (!copied && typeof document !== 'undefined') {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '-9999px';
+        ta.style.opacity = '0';
+        ta.setAttribute('readonly', '');
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, 99999);
+        copied = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch (_) {}
+    }
+    return copied;
+  }
+
   // 1-Click WhatsApp Send / Copy Image workflow
   async function sendBillCardWhatsApp(orderData) {
     const data = normalizeOrderData(orderData.order, orderData.items, orderData.rx, orderData.storeSettings);
     const cleanPhone = String(data.customerPhone || '').replace(/[^0-9]/g, '');
     const intlPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+
+    // 0. Instantly copy client's phone number to clipboard BEFORE opening send options / share sheet
+    const phoneToCopy = extractClientPhoneToCopy(data.customerPhone || orderData?.order?.customer_phone || orderData?.order?.customerPhone || orderData?.order?.phone);
+    if (phoneToCopy) {
+      try {
+        await copyTextToClipboard(phoneToCopy);
+        if (typeof window !== 'undefined' && window.showToast) {
+          window.showToast(`📋 Copied client phone (${phoneToCopy}) to clipboard!`, 'success');
+        }
+      } catch (e) {
+        console.warn('Failed to copy client phone:', e);
+      }
+    }
 
     const { blob } = await generateBillCardBlob(orderData);
     const pngFile = new File([blob], `${data.orderNumber}_Bill.png`, { type: 'image/png' });
@@ -869,44 +924,33 @@
     const shareText = `Hello ${data.customerName},\nThank you for choosing *${data.storeName}*!\n\nHere is your official digital receipt for Order *#${data.orderNumber}*:\n*Total Amount:* ${data.totalInr}\n*Advance Paid:* ${data.advanceInr}\n${dueText}${rxText}\n*Estimated Ready:* ${data.pickupFormatted}\n\nWe have attached your official bill image below. Please let us know if you need any assistance!`;
 
     // 1. If mobile or device supports Web Share with files, share directly!
-    if (navigator.canShare && navigator.canShare({ files: [pngFile] })) {
+    // (Client phone is already copied to system clipboard before opening native send options)
+    if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [pngFile] })) {
       try {
         await navigator.share({
           files: [pngFile],
           title: `Bill #${data.orderNumber}`,
           text: shareText
         });
-        if (window.showToast) window.showToast('Bill image shared successfully!', 'success');
+        if (typeof window !== 'undefined' && window.showToast) {
+          window.showToast(`Bill image shared! (Phone ${phoneToCopy || ''} in clipboard)`, 'success');
+        }
         return;
       } catch (err) {
         if (err.name === 'AbortError') return;
       }
     }
 
-    // 2. Desktop WhatsApp Web workflow: Copy high-res image to clipboard
-    let clipboardSuccess = false;
-    if (navigator.clipboard && window.ClipboardItem) {
-      try {
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'image/png': blob })
-        ]);
-        clipboardSuccess = true;
-      } catch (clipErr) {
-        console.warn('Clipboard write warning:', clipErr);
-      }
-    }
-
-    // 3. Open WhatsApp Web / App
+    // 2. Open WhatsApp Web / App (phone number remains in clipboard for pasting)
     const waUrl = intlPhone
       ? `https://wa.me/${intlPhone}?text=${encodeURIComponent(shareText)}`
       : `https://wa.me/?text=${encodeURIComponent(shareText)}`;
 
-    window.open(waUrl, '_blank');
-
-    if (clipboardSuccess && window.showToast) {
-      window.showToast('📋 Bill Image copied to clipboard! In WhatsApp, just press Ctrl+V to send it.', 'success');
-    } else if (window.showToast) {
-      window.showToast('WhatsApp opened. You can also click "Download Image" to attach the bill image file.', 'info');
+    if (typeof window !== 'undefined') {
+      window.open(waUrl, '_blank');
+      if (window.showToast) {
+        window.showToast(`📋 Phone (${phoneToCopy || cleanPhone}) copied to clipboard & WhatsApp opened!`, 'success');
+      }
     }
   }
 
@@ -948,6 +992,8 @@
     sendBillCardWhatsApp,
     downloadBillCardPNG,
     copyBillCardImageToClipboard,
-    normalizeOrderData
+    normalizeOrderData,
+    extractClientPhoneToCopy,
+    copyTextToClipboard
   };
 }));
