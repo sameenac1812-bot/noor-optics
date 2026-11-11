@@ -65,7 +65,7 @@ $bw.Write([System.Text.Encoding]::ASCII.GetBytes("NOOR OPTIC`n"))
 $bw.Write([byte[]]@(0x1D, 0x21, 0x00))
 $bw.Write([byte[]]@(0x1B, 0x45, 0x00))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes("Pillar No. 45, Rethibowli, Hyderabad, Telangana 500028`n"))
-$bw.Write([System.Text.Encoding]::ASCII.GetBytes("Ph: +91 98765 43210`n"))
+$bw.Write([System.Text.Encoding]::ASCII.GetBytes("Ph: +91 93918 93128`n"))
 $bw.Write([System.Text.Encoding]::ASCII.GetBytes($doubleDivider))
 
 # 3. Info

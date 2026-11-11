@@ -64,7 +64,7 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
   const COLS = parseInt(settings.printer_columns, 10) || PAPER_WIDTH_COLS;
   const storeName = 'NOOR OPTIC';
   const storeAddress = settings.store_address || 'Pillar No. 45, Rethibowli';
-  const storePhone = settings.store_phone || '+91 98765 43210';
+  const storePhone = settings.store_phone || '+91 93918 93128';
   const activeUpiId = settings.store_upi_id || UPI_ID;
 
   const divider = '-'.repeat(COLS);
@@ -389,7 +389,7 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
 function generate58mmHTML(order, items = [], settings = {}) {
   const storeName = 'NOOR OPTIC';
   const storeAddress = settings.store_address || 'Pillar No. 45, Rethibowli';
-  const storePhone = settings.store_phone || '+91 98765 43210';
+  const storePhone = settings.store_phone || '+91 93918 93128';
   const widthMm = settings.printer_nominal_width_mm || PAPER_WIDTH_MM;
   const activeUpiId = settings.store_upi_id || UPI_ID;
 

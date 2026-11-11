@@ -12,7 +12,7 @@ const NOOR_BRAND = {
   "founded": "2024",
   "currency": "₹",
   "freeShippingThreshold": 1999,
-  "contactPhone": "+91 98765 43210",
+  "contactPhone": "+91 93918 93128",
   "contactEmail": "concierge@nooroptics.com",
   "storeAddress": "Noor Optics Flagship Boutique, Indiranagar, Bengaluru",
   "workingHours": "10:00 AM – 09:00 PM (Daily)",

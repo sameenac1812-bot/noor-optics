@@ -85,7 +85,7 @@
     storeSettings = storeSettings || (globalState && globalState.storeSettings) || {};
 
     const storeName = storeSettings.store_name || 'NOOR OPTIC';
-    const storePhone = storeSettings.store_phone || '+91 98765 43210';
+    const storePhone = storeSettings.store_phone || '+91 93918 93128';
     const storeAddress = storeSettings.store_address || 'Pillar No: 45, Rethibowli, Gudimalkapur, Hyderabad';
 
     const orderNumber = order.order_number || order.invoice_number || ('INV-NOOR-' + String(order.id || '0001').slice(-6).toUpperCase());

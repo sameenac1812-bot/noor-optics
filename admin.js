@@ -33,7 +33,7 @@
     activeNav: 'dashboard', // dashboard | orders | inventory | pos
     storeSettings: {
       store_name: 'Noor Optic',
-      store_phone: '+91 98765 43210',
+      store_phone: '+91 93918 93128',
       store_address: 'Pillar No: 45, Beside HP Petrol Pump, Opposite Subhan Bakery, Rethibowli, Gudimalkapur, Hyderabad, Telangana 500028',
       store_gstin: '29AAAAA0000A1Z5',
       store_upi_id: 'nooroptics@okhdfcbank'
