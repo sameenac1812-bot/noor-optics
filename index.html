@@ -145,81 +145,85 @@
     <div><svg><use href="#i-return"/></svg>14-day<br>returns</div>
   </div>
 
-  <!-- SHOP BY GENDER (MEN / WOMEN / KIDS / UNISEX) -->
-  <section class="section gender-showcase-section" aria-label="Shop Eyewear by Gender">
-    <div class="section-head">
-      <h2>Shop by Gender</h2>
-      <span class="section-subhead-pill">Curated</span>
-    </div>
-    <div class="gender-cards-grid">
-      <div class="gender-card" data-gender="Men" onclick="selectVisualCategory('all', 'Men')" role="button" tabindex="0" aria-label="Men's Eyewear">
-        <div class="gender-card-visual">
-          <div class="gender-icon-circle men-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="7" r="4"/>
-              <path d="M5.5 21v-2a6.5 6.5 0 0 1 13 0v2"/>
-            </svg>
+  <!-- LENSKART-STYLE VISUAL CATEGORY & GENDER SHOWCASE -->
+  <section class="lk-category-showcase" id="lk-category-showcase" aria-label="Eyewear Categories by Gender & Style">
+    <div class="lk-showcase-container">
+      <div class="lk-split-grid">
+        <!-- 1. Eyeglasses Section -->
+        <div class="lk-category-block">
+          <div class="lk-section-header">
+            <div class="lk-title-group">
+              <h2 class="lk-section-title">Eyeglasses</h2>
+              <span class="lk-title-badge">with Power</span>
+            </div>
+            <button type="button" class="lk-link-viewall" onclick="selectVisualCategory('Eyeglasses', 'all')" aria-label="View all eyeglasses">View All &rarr;</button>
           </div>
-          <span class="gender-badge">Men</span>
+          <div class="lk-cards-row">
+            <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Men" onclick="selectVisualCategory('Eyeglasses', 'Men')" role="button" tabindex="0" aria-label="Men's Eyeglasses">
+              <div class="lk-card-img-wrap">
+                <img src="images/categories/eyeglass_men.jpg?v=3" alt="Men's Eyeglasses" width="80" height="80" loading="lazy" />
+              </div>
+              <span class="lk-card-label">Men</span>
+            </div>
+            <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Women" onclick="selectVisualCategory('Eyeglasses', 'Women')" role="button" tabindex="0" aria-label="Women's Eyeglasses">
+              <div class="lk-card-img-wrap">
+                <img src="images/categories/eyeglass_women.jpg?v=3" alt="Women's Eyeglasses" width="80" height="80" loading="lazy" />
+              </div>
+              <span class="lk-card-label">Women</span>
+            </div>
+            <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="Kids" onclick="selectVisualCategory('Eyeglasses', 'Kids')" role="button" tabindex="0" aria-label="Kids Eyeglasses">
+              <div class="lk-card-img-wrap">
+                <img src="images/categories/eyeglass_kids.jpg?v=3" alt="Kids Eyeglasses" width="80" height="80" loading="lazy" />
+              </div>
+              <span class="lk-card-label">Kids</span>
+            </div>
+            <div class="lk-cat-card" data-cat="Eyeglasses" data-gender="sale" onclick="selectVisualCategory('Eyeglasses', 'sale')" role="button" tabindex="0" aria-label="Eyeglasses On Sale">
+              <div class="lk-card-img-wrap lk-sale-card">
+                <span class="lk-sale-pill">Starts @₹800</span>
+                <img src="images/categories/eyeglass_sale.jpg?v=3" alt="Eyeglasses On Sale" width="80" height="80" loading="lazy" />
+              </div>
+              <span class="lk-card-label">On Sale</span>
+            </div>
+          </div>
         </div>
-        <div class="gender-card-meta">
-          <h3 class="gender-card-title">Men's Frames</h3>
-          <p class="gender-card-desc">Architectural &amp; classic styles</p>
-        </div>
-        <span class="gender-card-link">Explore &rarr;</span>
-      </div>
 
-      <div class="gender-card" data-gender="Women" onclick="selectVisualCategory('all', 'Women')" role="button" tabindex="0" aria-label="Women's Eyewear">
-        <div class="gender-card-visual">
-          <div class="gender-icon-circle women-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="8" r="5"/>
-              <path d="M12 13v8M9 18h6"/>
-            </svg>
+        <!-- 2. Sunglasses Section -->
+        <div class="lk-category-block">
+          <div class="lk-section-header">
+            <div class="lk-title-group">
+              <h2 class="lk-section-title">Sunglasses</h2>
+              <span class="lk-title-badge lk-title-badge-sun">UV400 Polarized</span>
+            </div>
+            <button type="button" class="lk-link-viewall" onclick="selectVisualCategory('Sunglasses', 'all')" aria-label="View all sunglasses">View All &rarr;</button>
           </div>
-          <span class="gender-badge">Women</span>
-        </div>
-        <div class="gender-card-meta">
-          <h3 class="gender-card-title">Women's Frames</h3>
-          <p class="gender-card-desc">Chic, elegant &amp; cat-eye trends</p>
-        </div>
-        <span class="gender-card-link">Explore &rarr;</span>
-      </div>
-
-      <div class="gender-card" data-gender="Kids" onclick="selectVisualCategory('all', 'Kids')" role="button" tabindex="0" aria-label="Kids Eyewear">
-        <div class="gender-card-visual">
-          <div class="gender-icon-circle kids-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="9"/>
-              <circle cx="9" cy="10" r="1.2" fill="currentColor"/>
-              <circle cx="15" cy="10" r="1.2" fill="currentColor"/>
-              <path d="M8 15s1.5 2.5 4 2.5 4-2.5 4-2.5"/>
-            </svg>
+          <div class="lk-cards-row">
+            <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Men" onclick="selectVisualCategory('Sunglasses', 'Men')" role="button" tabindex="0" aria-label="Men's Sunglasses">
+              <div class="lk-card-img-wrap">
+                <img src="images/categories/sunglass_men.jpg?v=3" alt="Men's Sunglasses" width="80" height="80" loading="lazy" />
+              </div>
+              <span class="lk-card-label">Men</span>
+            </div>
+            <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Women" onclick="selectVisualCategory('Sunglasses', 'Women')" role="button" tabindex="0" aria-label="Women's Sunglasses">
+              <div class="lk-card-img-wrap">
+                <img src="images/categories/sunglass_women.jpg?v=3" alt="Women's Sunglasses" width="80" height="80" loading="lazy" />
+              </div>
+              <span class="lk-card-label">Women</span>
+            </div>
+            <div class="lk-cat-card" data-cat="Sunglasses" data-gender="Kids" onclick="selectVisualCategory('Sunglasses', 'Kids')" role="button" tabindex="0" aria-label="Kids Sunglasses">
+              <div class="lk-card-img-wrap">
+                <img src="images/categories/sunglass_kids.jpg?v=3" alt="Kids Sunglasses" width="80" height="80" loading="lazy" />
+              </div>
+              <span class="lk-card-label">Kids</span>
+            </div>
+            <div class="lk-cat-card" data-cat="Sunglasses" data-gender="sale" onclick="selectVisualCategory('Sunglasses', 'sale')" role="button" tabindex="0" aria-label="Sunglasses On Sale">
+              <div class="lk-card-img-wrap lk-sale-card">
+                <span class="lk-sale-pill">Starts @₹500</span>
+                <img src="images/categories/sunglass_sale.jpg?v=3" alt="Sunglasses On Sale" width="80" height="80" loading="lazy" />
+              </div>
+              <span class="lk-card-label">On Sale</span>
+            </div>
           </div>
-          <span class="gender-badge">Kids</span>
         </div>
-        <div class="gender-card-meta">
-          <h3 class="gender-card-title">Kids &amp; Teens</h3>
-          <p class="gender-card-desc">Flexible, sturdy &amp; lightweight</p>
-        </div>
-        <span class="gender-card-link">Explore &rarr;</span>
-      </div>
-
-      <div class="gender-card" data-gender="Unisex" onclick="selectVisualCategory('all', 'Unisex')" role="button" tabindex="0" aria-label="Unisex Eyewear">
-        <div class="gender-card-visual">
-          <div class="gender-icon-circle unisex-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="9"/>
-              <path d="M12 3a9 9 0 0 0 0 18v-18z" fill="currentColor" opacity="0.3"/>
-            </svg>
-          </div>
-          <span class="gender-badge">Unisex</span>
-        </div>
-        <div class="gender-card-meta">
-          <h3 class="gender-card-title">All / Unisex</h3>
-          <p class="gender-card-desc">Minimalist everyday styles</p>
-        </div>
-        <span class="gender-card-link">Explore &rarr;</span>
       </div>
     </div>
   </section>

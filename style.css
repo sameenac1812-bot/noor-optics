@@ -3870,16 +3870,16 @@ body.drawer-open .toast-pill {
    ═════════════════════════════════════════════════════════════════════════════ */
 .lk-category-showcase {
   background: #FFFFFF;
-  border-bottom: 1px solid #E2E8F0;
-  padding: 0.85rem 0 0.65rem 0;
+  border-bottom: 1px solid #F1F5F9;
+  padding: 1.1rem 0 0.9rem 0;
   width: 100%;
 }
 
 .lk-showcase-container {
-  max-width: var(--container-max);
+  max-width: var(--container-max, 1200px);
   width: 100%;
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 1.25rem;
 }
 
 /* Dual Column Split Grid on Desktop (Eyeglasses on Left, Sunglasses on Right) */
@@ -3888,13 +3888,13 @@ body.drawer-open .toast-pill {
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
   align-items: start;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 @media (max-width: 860px) {
   .lk-split-grid {
     grid-template-columns: 1fr;
-    gap: 0.85rem;
+    gap: 1.15rem;
   }
 }
 
@@ -3907,60 +3907,74 @@ body.drawer-open .toast-pill {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.65rem;
 }
 
 .lk-title-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .lk-section-title {
-  font-size: 0.92rem;
+  font-size: 1.15rem;
   font-weight: 800;
-  color: var(--lk-navy-900);
+  color: #0F172A;
   margin: 0;
-  letter-spacing: -0.01em;
-  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  text-transform: capitalize;
 }
 
 .lk-title-badge {
-  background: var(--lk-teal-50);
-  color: var(--lk-teal-600);
-  font-size: 0.62rem;
+  background: #EEF2FF;
+  color: #4338CA;
+  font-size: 0.68rem;
   font-weight: 700;
-  padding: 1px 7px;
-  border-radius: var(--radius-full);
-  border: 1px solid rgba(0, 186, 198, 0.25);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid #E0E7FF;
+  letter-spacing: 0.01em;
+}
+
+.lk-title-badge-sun {
+  background: #FEF3C7;
+  color: #B45309;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  border: 1px solid #FDE68A;
 }
 
 .lk-link-viewall,
 .lk-brand-viewall {
   background: none;
   border: none;
-  color: var(--lk-teal-600);
-  font-size: 0.74rem;
+  color: #0B8F74;
+  font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
-  padding: 2px 4px;
-  transition: color 0.15s ease;
+  padding: 2px 6px;
+  transition: color 0.15s ease, transform 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .lk-link-viewall:hover,
 .lk-brand-viewall:hover {
-  color: var(--lk-navy-900);
-  text-decoration: underline;
+  color: #0F172A;
+  transform: translateX(2px);
 }
 
 /* Compact Avatar Cards Row */
 .lk-cards-row {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: flex-start;
   justify-content: flex-start;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding: 4px 2px 8px 2px;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -3975,39 +3989,50 @@ body.drawer-open .toast-pill {
   align-items: center;
   cursor: pointer;
   user-select: none;
-  width: 66px;
+  width: 74px;
   flex: 0 0 auto;
-  transition: transform 0.15s ease;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .lk-cat-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
 }
 
 .lk-card-img-wrap {
   position: relative;
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
-  background: #F8F8FA;
-  border: 1.5px solid #E2E2E6;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: #F8FAFC;
+  border: 1.5px solid #E2E8F0;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 66, 0.04);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+@media (min-width: 640px) {
+  .lk-cat-card {
+    width: 80px;
+  }
+  .lk-card-img-wrap {
+    width: 78px;
+    height: 78px;
+    border-radius: 20px;
+  }
 }
 
 .lk-cat-card:hover .lk-card-img-wrap {
   border-color: #94A3B8;
-  box-shadow: 0 3px 8px rgba(0, 0, 66, 0.08);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
 }
 
 .lk-cat-card.active .lk-card-img-wrap {
-  border-color: var(--lk-navy-900);
-  border-width: 2px;
-  box-shadow: 0 0 0 3px rgba(0, 0, 66, 0.12);
+  border-color: #0B8F74;
+  border-width: 2.5px;
+  box-shadow: 0 0 0 3px rgba(11, 143, 116, 0.18), 0 4px 12px rgba(11, 143, 116, 0.15);
 }
 
 .lk-card-img-wrap img {
@@ -4018,36 +4043,40 @@ body.drawer-open .toast-pill {
 }
 
 .lk-cat-card:hover .lk-card-img-wrap img {
-  transform: scale(1.05);
+  transform: scale(1.06);
 }
 
 .lk-sale-pill {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  background: var(--lk-green-600);
+  top: 3px;
+  left: 3px;
+  background: #0F172A;
   color: #FFFFFF;
-  font-size: 0.5rem;
+  font-size: 0.52rem;
   font-weight: 800;
-  padding: 1px 4px;
-  border-radius: 3px;
+  padding: 2px 5px;
+  border-radius: 9999px;
   z-index: 2;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
 .lk-card-label {
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.78rem;
+  font-weight: 600;
   color: #475569;
-  margin-top: 4px;
+  margin-top: 6px;
   text-align: center;
   white-space: nowrap;
   transition: color 0.15s ease;
 }
 
+.lk-cat-card:hover .lk-card-label,
 .lk-cat-card.active .lk-card-label {
-  color: var(--lk-navy-900);
-  font-weight: 800;
+  color: #0F172A;
+  font-weight: 700;
+}
 }
 
 /* Shop by Brand Section */

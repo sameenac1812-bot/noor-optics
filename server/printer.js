@@ -112,7 +112,7 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
     try {
       const dt = new Date(d);
       if (isNaN(dt.getTime())) return String(d);
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const day = String(dt.getDate()).padStart(2, '0');
       const mon = months[dt.getMonth()];
       const year = dt.getFullYear();
@@ -131,7 +131,7 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
     try {
       const dt = new Date(d);
       if (isNaN(dt.getTime())) return String(d);
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return `${String(dt.getDate()).padStart(2, '0')} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
     } catch (_) {
       return String(d);
@@ -235,12 +235,12 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
     const qty = parseInt(item.quantity || 1, 10);
     const unitPrice = (item.unit_price_inr != null) ? Number(item.unit_price_inr)
       : (item.unit_price_paise != null) ? Number(item.unit_price_paise) / 100
-      : (item.priceINR != null) ? Number(item.priceINR)
-      : (item.unit_price != null) ? Number(item.unit_price) : 0;
+        : (item.priceINR != null) ? Number(item.priceINR)
+          : (item.unit_price != null) ? Number(item.unit_price) : 0;
     const lineTotal = (item.subtotal_inr != null) ? Number(item.subtotal_inr)
       : (item.subtotal_paise != null) ? Number(item.subtotal_paise) / 100
-      : (item.lineTotalINR != null) ? Number(item.lineTotalINR)
-      : (unitPrice * qty);
+        : (item.lineTotalINR != null) ? Number(item.lineTotalINR)
+          : (unitPrice * qty);
 
     const colsStr = ' ' + String(qty).padStart(3) + ' ' + formatNum(unitPrice).padStart(5) + ' ' + formatNum(lineTotal).padStart(6);
 
@@ -312,7 +312,7 @@ function format58mmTextReceipt(order, items = [], settings = {}) {
     try {
       const p = JSON.parse(order.prescriptions_json);
       if (Array.isArray(p) && p.length > 0) allRxList = p;
-    } catch (_) {}
+    } catch (_) { }
   }
   if (allRxList.length === 0) {
     const fallbackRx = order.prescription || order.client_prescription || order.newPrescription || order;
@@ -403,7 +403,7 @@ function generate58mmHTML(order, items = [], settings = {}) {
     try {
       const dt = new Date(d);
       if (isNaN(dt.getTime())) return String(d);
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const day = String(dt.getDate()).padStart(2, '0');
       const mon = months[dt.getMonth()];
       const year = dt.getFullYear();
@@ -422,7 +422,7 @@ function generate58mmHTML(order, items = [], settings = {}) {
     try {
       const dt = new Date(d);
       if (isNaN(dt.getTime())) return String(d);
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return `${String(dt.getDate()).padStart(2, '0')} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
     } catch (_) {
       return String(d);
@@ -474,12 +474,12 @@ function generate58mmHTML(order, items = [], settings = {}) {
     const qty = parseInt(item.quantity || 1, 10);
     const unitPrice = (item.unit_price_inr != null) ? Number(item.unit_price_inr)
       : (item.unit_price_paise != null) ? Number(item.unit_price_paise) / 100
-      : (item.priceINR != null) ? Number(item.priceINR)
-      : (item.unit_price != null) ? Number(item.unit_price) : 0;
+        : (item.priceINR != null) ? Number(item.priceINR)
+          : (item.unit_price != null) ? Number(item.unit_price) : 0;
     const lineTotal = (item.subtotal_inr != null) ? Number(item.subtotal_inr)
       : (item.subtotal_paise != null) ? Number(item.subtotal_paise) / 100
-      : (item.lineTotalINR != null) ? Number(item.lineTotalINR)
-      : (unitPrice * qty);
+        : (item.lineTotalINR != null) ? Number(item.lineTotalINR)
+          : (unitPrice * qty);
 
     return `
       <tr>
@@ -507,7 +507,7 @@ function generate58mmHTML(order, items = [], settings = {}) {
     try {
       const p = JSON.parse(order.prescriptions_json);
       if (Array.isArray(p) && p.length > 0) allRxList = p;
-    } catch (_) {}
+    } catch (_) { }
   }
   if (allRxList.length === 0) {
     const fallbackRx = order.prescription || order.client_prescription || order.newPrescription || order;
