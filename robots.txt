@@ -1,5 +1,11 @@
 # robots.txt for Noor Optic
 User-agent: *
+Disallow: /admin
+Disallow: /admin.html
+Disallow: /api/
+Disallow: /data/
+Disallow: /pos-daemon/
 Allow: /
 
 Sitemap: https://noor-optics-five.vercel.app/sitemap.xml
+
