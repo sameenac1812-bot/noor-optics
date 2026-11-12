@@ -4723,11 +4723,16 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
 
   const dateExpr = "COALESCE(date(datetime(created_at, '+05:30')), date(created_at), substr(created_at, 1, 10))";
 
-  // 1. In-Store Sales (Completed/Verified POS)
+  // 1. In-Store Sales (Completed/Verified POS + Advance & Partial Collections)
   const inStoreRow = db.prepare(`
     SELECT
       COUNT(id) as order_count,
-      COALESCE(SUM(CASE WHEN payment_status = 'VERIFIED' THEN total_payable_paise ELSE 0 END), 0) as total_sales_paise
+      COALESCE(SUM(
+        CASE
+          WHEN payment_status = 'VERIFIED' THEN total_payable_paise
+          ELSE COALESCE(amount_paid_paise, (total_payable_paise - COALESCE(outstanding_paise, 0)), advance_paid_paise, 0)
+        END
+      ), 0) as total_sales_paise
     FROM orders
     WHERE channel = 'POS'
       AND status != 'CANCELLED'
@@ -4736,11 +4741,16 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
       AND ${dateExpr} >= ? AND ${dateExpr} <= ?
   `).get(startDate, endDate);
 
-  // 2. Website Sales (Completed/Verified Online)
+  // 2. Website Sales (Completed/Verified Online + Advance & Partial Collections)
   const websiteRow = db.prepare(`
     SELECT
       COUNT(id) as order_count,
-      COALESCE(SUM(CASE WHEN payment_status = 'VERIFIED' THEN total_payable_paise ELSE 0 END), 0) as total_sales_paise
+      COALESCE(SUM(
+        CASE
+          WHEN payment_status = 'VERIFIED' THEN total_payable_paise
+          ELSE COALESCE(amount_paid_paise, (total_payable_paise - COALESCE(outstanding_paise, 0)), advance_paid_paise, 0)
+        END
+      ), 0) as total_sales_paise
     FROM orders
     WHERE channel IN ('ONLINE', 'WEBSITE')
       AND status != 'CANCELLED'
@@ -4803,10 +4813,15 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
   if (isHourly) {
     // Generate 24 hours (00 to 23)
     const ordersInRange = db.prepare(`
-      SELECT channel, total_payable_paise,
+      SELECT channel,
+             CASE
+               WHEN payment_status = 'VERIFIED' THEN total_payable_paise
+               ELSE COALESCE(amount_paid_paise, (total_payable_paise - COALESCE(outstanding_paise, 0)), advance_paid_paise, 0)
+             END as collected_paise,
              COALESCE(strftime('%H', datetime(created_at, '+05:30')), strftime('%H', created_at), '12') as hour_part
       FROM orders
-      WHERE status != 'CANCELLED' AND payment_status = 'VERIFIED'
+      WHERE status != 'CANCELLED'
+        AND (payment_status = 'VERIFIED' OR COALESCE(amount_paid_paise, advance_paid_paise, 0) > 0)
         AND order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
         AND id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
         AND ${dateExpr} >= ? AND ${dateExpr} <= ?
@@ -4822,7 +4837,7 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
     ordersInRange.forEach(o => {
       const h = String(parseInt(o.hour_part, 10) || 0).padStart(2, '0');
       if (hourlyMap[h]) {
-        const amt = (o.total_payable_paise || 0) / 100;
+        const amt = (o.collected_paise || 0) / 100;
         if (o.channel === 'POS') {
           hourlyMap[h].inStore += amt;
           hourlyMap[h].inStoreCount += 1;
@@ -4837,10 +4852,15 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
   } else {
     // Group by Day (YYYY-MM-DD)
     const dailyOrders = db.prepare(`
-      SELECT channel, total_payable_paise,
+      SELECT channel,
+             CASE
+               WHEN payment_status = 'VERIFIED' THEN total_payable_paise
+               ELSE COALESCE(amount_paid_paise, (total_payable_paise - COALESCE(outstanding_paise, 0)), advance_paid_paise, 0)
+             END as collected_paise,
              ${dateExpr} as day_date
       FROM orders
-      WHERE status != 'CANCELLED' AND payment_status = 'VERIFIED'
+      WHERE status != 'CANCELLED'
+        AND (payment_status = 'VERIFIED' OR COALESCE(amount_paid_paise, advance_paid_paise, 0) > 0)
         AND order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
         AND id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
         AND ${dateExpr} >= ? AND ${dateExpr} <= ?
@@ -4859,7 +4879,7 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
 
     dailyOrders.forEach(o => {
       if (dayMap[o.day_date]) {
-        const amt = (o.total_payable_paise || 0) / 100;
+        const amt = (o.collected_paise || 0) / 100;
         if (o.channel === 'POS') {
           dayMap[o.day_date].inStore += amt;
           dayMap[o.day_date].inStoreCount += 1;

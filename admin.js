@@ -415,7 +415,20 @@
       }
       orders.forEach(o => {
         if (o.status === 'CANCELLED') return;
-        if (o.payment_status !== 'VERIFIED' && o.payment_status !== 'PAID') return;
+        let amt = 0;
+        const totalINR = o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || o.totalINR || 0);
+        if (o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') {
+          amt = totalINR;
+        } else {
+          const collected = (o.amount_paid_paise != null)
+            ? (o.amount_paid_paise / 100)
+            : (o.amount_paid_inr != null)
+              ? o.amount_paid_inr
+              : (o.advance_paid_inr || 0) + (o.second_payment_inr || 0) + (o.third_payment_inr || 0);
+          amt = collected > 0 ? collected : Math.max(0, totalINR - (o.outstanding_inr || 0));
+        }
+        if (amt <= 0) return;
+
         let h = 12;
         try {
           const dt = new Date(o.created_at || o.createdAt);
@@ -427,7 +440,6 @@
           }
         } catch (_) { }
         const key = String(h).padStart(2, '0');
-        const amt = o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || o.totalINR || 0);
         const isPos = getOrderChannel(o) === 'POS';
         if (hourlyMap[key]) {
           if (isPos) {
@@ -444,7 +456,20 @@
       const dayMap = {};
       orders.forEach(o => {
         if (o.status === 'CANCELLED') return;
-        if (o.payment_status !== 'VERIFIED' && o.payment_status !== 'PAID') return;
+        let amt = 0;
+        const totalINR = o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || o.totalINR || 0);
+        if (o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') {
+          amt = totalINR;
+        } else {
+          const collected = (o.amount_paid_paise != null)
+            ? (o.amount_paid_paise / 100)
+            : (o.amount_paid_inr != null)
+              ? o.amount_paid_inr
+              : (o.advance_paid_inr || 0) + (o.second_payment_inr || 0) + (o.third_payment_inr || 0);
+          amt = collected > 0 ? collected : Math.max(0, totalINR - (o.outstanding_inr || 0));
+        }
+        if (amt <= 0) return;
+
         let dStr = '';
         try {
           const dt = new Date(o.created_at || o.createdAt);
@@ -455,7 +480,6 @@
         if (!dayMap[dStr]) {
           dayMap[dStr] = { label: dStr, inStore: 0, website: 0, inStoreCount: 0, websiteCount: 0 };
         }
-        const amt = o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || o.totalINR || 0);
         if (getOrderChannel(o) === 'POS') {
           dayMap[dStr].inStore += amt;
           dayMap[dStr].inStoreCount += 1;
@@ -507,11 +531,24 @@
           ? (o.total_payable_paise / 100)
           : (o.total_payable_inr != null ? o.total_payable_inr : (o.totalINR || 0));
 
+        let paidINR = 0;
         if (o.payment_status === 'VERIFIED' || o.payment_status === 'PAID') {
+          paidINR = totalINR;
+        } else {
+          const collected = (o.amount_paid_paise != null)
+            ? (o.amount_paid_paise / 100)
+            : (o.amount_paid_inr != null)
+              ? o.amount_paid_inr
+              : (o.advance_paid_inr || 0) + (o.second_payment_inr || 0) + (o.third_payment_inr || 0);
+
+          paidINR = collected > 0 ? collected : Math.max(0, totalINR - (o.outstanding_inr || 0));
+        }
+
+        if (paidINR > 0) {
           if (isPos) {
-            inStoreSalesINR += totalINR;
+            inStoreSalesINR += paidINR;
           } else {
-            websiteSalesINR += totalINR;
+            websiteSalesINR += paidINR;
           }
         }
 
@@ -1693,7 +1730,6 @@
               <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:2px;">
                 <span><strong>Phone:</strong> ${escapeHtml(order.customer_phone)}</span>
                 <a href="tel:${escapeHtml(order.customer_phone)}" class="btn-table-action" style="text-decoration:none; padding:2px 8px; font-size:0.75rem; background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE;">📞 Call</a>
-                <button type="button" class="btn-table-action" onclick="sendWhatsAppBill('${order.id}', order)" title="Send Bill Image via WhatsApp" style="padding:2px 8px; font-size:0.75rem; background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0;">💬 WhatsApp</button>
               </div>
             ` : ''}
             ${order.customer_age ? `<div><strong>Age:</strong> ${escapeHtml(order.customer_age)} yrs</div>` : ''}
@@ -1702,14 +1738,6 @@
             ${order.customer_email ? `<div><strong>Email:</strong> ${escapeHtml(order.customer_email)}</div>` : ''}
             ${order.delivery_address ? `<div style="font-size:0.8rem; color:#64748B;"><strong>Address:</strong> ${escapeHtml(order.delivery_address)}${order.city ? ', ' + escapeHtml(order.city) : ''} ${order.pin_code ? '- ' + escapeHtml(order.pin_code) : ''}</div>` : ''}
           </div>
-
-          ${order.customer_id ? `
-            <div style="margin-top:10px;">
-              <button type="button" class="btn-table-action" onclick="openClientProfile('${order.customer_id}')" style="background:#F1F5F9; color:#0F172A; border:1px solid #CBD5E1; font-weight:700; font-size:0.75rem; padding:4px 10px;">
-                👤 View Client Profile & Prescriptions
-              </button>
-            </div>
-          ` : ''}
         </div>
         <div>
           <h4 style="font-size:0.78rem; text-transform:uppercase; color:#6B7280; margin-bottom:6px;">Payment & Status</h4>
@@ -1814,7 +1842,6 @@
                     </div>
                     ${rxId ? `
                       <div style="display:flex; gap:4px;">
-                        <button type="button" class="btn-table-action" style="padding:2px 8px; font-size:0.75rem; background:#166534; color:#FFF; font-weight:700;" onclick="printPrescriptionRecord('${rxId}')">🖨️ Print RX</button>
                         <button type="button" class="btn-table-action" style="padding:2px 8px; font-size:0.75rem; background:#2563EB; color:#FFF; font-weight:700;" onclick="openEditPrescriptionModal('${rxId}')">✏️ Edit</button>
                       </div>
                     ` : ''}
