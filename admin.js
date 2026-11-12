@@ -2017,7 +2017,13 @@
       ` : ''}
     `;
 
+    const dueModal = document.getElementById('modal-due-clients');
+    if (dueModal && dueModal.classList.contains('open')) {
+      dueModal.classList.remove('open');
+    }
+    modal.style.zIndex = '200000';
     modal.classList.add('open');
+    document.body.classList.add('modal-open');
   };
 
   // ── Direct Cloud Supabase Deletion Helper ──────────────────────────────────
@@ -10148,6 +10154,13 @@
       }
     };
 
+    // If due clients modal is open, close it cleanly so Collect Payment is front and center
+    const dueModal = document.getElementById('modal-due-clients');
+    if (dueModal && dueModal.classList.contains('open')) {
+      dueModal.classList.remove('open');
+    }
+
+    modal.style.zIndex = '200000';
     // Open modal immediately without delay
     modal.classList.add('open');
     document.body.classList.add('modal-open');
