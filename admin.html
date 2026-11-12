@@ -1598,34 +1598,12 @@
                   <span class="optic-badge-count" id="pos-cart-count">0 items</span>
                 </div>
                 <div style="display:flex; gap:6px;">
-                  <button type="button" class="btn-optic-stock-toggle" id="btn-toggle-stock-catalog">
-                    <span>📦 View Stock</span>
-                  </button>
                   <button type="button" class="btn-table-action" id="btn-clear-cart"
                     title="Clear all items from bill">Clear</button>
                 </div>
               </div>
 
-              <!-- Quick Frame Stock Catalog (Collapsible or visible) -->
-              <div class="optic-stock-catalog-wrap" id="optic-stock-catalog-wrap">
-                <!-- Shape Filter Chips -->
-                <div class="pos-shape-chips" id="pos-shape-chips">
-                  <button class="pos-shape-chip active" data-pos-shape="all">All Frames</button>
-                  <button class="pos-shape-chip" data-pos-shape="Rectangular">Rectangular</button>
-                  <button class="pos-shape-chip" data-pos-shape="Round">Round</button>
-                  <button class="pos-shape-chip" data-pos-shape="Square">Square</button>
-                  <button class="pos-shape-chip" data-pos-shape="Geometric">Geometric</button>
-                  <button class="pos-shape-chip" data-pos-shape="Aviator">Aviator</button>
-                  <button class="pos-shape-chip" data-pos-shape="Cat-Eye">Cat-Eye</button>
-                </div>
-
-                <!-- 2-Column Catalog Grid (Touch-friendly, never out of frame!) -->
-                <div class="pos-catalog-grid" id="pos-catalog-grid">
-                  <!-- Populated dynamically via admin.js -->
-                </div>
-              </div>
-
-              <!-- Manual Frame Entry Bar (No need to select stock - Type name, qty, price, click Add) -->
+              <!-- Manual Item Entry Bar (Type item name, qty, price, click Add or press Enter) -->
               <div class="pos-manual-entry-bar" id="pos-manual-entry-bar">
                 <input type="text" id="pos-manual-item-name" class="pos-manual-name-input" placeholder="Item name *"
                   autocomplete="off" />
@@ -1650,7 +1628,7 @@
               <!-- Items Table Body / Cart List -->
               <div class="pos-cart-items-list" id="pos-cart-items-list">
                 <div class="pos-cart-empty">
-                  <p>Bill is currently empty.<br />Type frame name &amp; price above, scan QR sticker, or tap frames.
+                  <p>Bill is currently empty.<br />Type item name &amp; price above, then tap Add.
                   </p>
                 </div>
               </div>
