@@ -2302,7 +2302,7 @@
       countEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    showToast(state.filters.brand === 'all' ? 'Browsing all boutique brands' : `Brand: ${state.filters.brand}`);
+    showToast(state.filters.brand === 'all' ? 'Browsing all curated brands' : `Brand: ${state.filters.brand}`);
   }
 
   function filterByPromoSale() {
