@@ -5718,3 +5718,195 @@ body.drawer-open .toast-pill {
   max-height: 20px !important;
   display: block;
 }
+
+/* ==========================================================================
+   AESTHETIC STORE CALL BUTTONS (1-CLICK DIRECT STORE CALL)
+   ========================================================================== */
+
+/* 1. Header Call Pill */
+.header-call-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(0, 0, 66, 0.05);
+  border: 1px solid rgba(0, 0, 66, 0.12);
+  color: var(--navy);
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-decoration: none;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-right: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.header-call-pill:hover,
+.header-call-pill:focus-visible {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(0, 0, 66, 0.18);
+  transform: translateY(-1px);
+  outline: none;
+}
+.header-call-pill:hover .header-call-icon,
+.header-call-pill:focus-visible .header-call-icon {
+  stroke: var(--teal);
+}
+.header-call-pill:hover .header-call-label,
+.header-call-pill:focus-visible .header-call-label {
+  color: #FFFFFF;
+}
+.header-call-label {
+  color: var(--navy);
+  transition: color 0.2s ease;
+}
+.header-call-icon {
+  stroke: var(--navy);
+  transition: stroke 0.2s ease;
+  flex-shrink: 0;
+}
+
+/* Green Pulse Status Indicator */
+.call-pulse-dot {
+  width: 7px;
+  height: 7px;
+  background: #10B981;
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: callPulseGreen 2.2s infinite;
+}
+
+@keyframes callPulseGreen {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+@media (max-width: 580px) {
+  .header-call-label {
+    display: none;
+  }
+  .header-call-pill {
+    padding: 0;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    justify-content: center;
+    position: relative;
+  }
+  .header-call-pill .call-pulse-dot {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 6px;
+    height: 6px;
+  }
+}
+
+/* 2. Floating Direct Store Call Widget */
+.store-floating-call-wrap {
+  position: fixed;
+  bottom: 22px;
+  right: 20px;
+  z-index: 85;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+body.drawer-open .store-floating-call-wrap,
+body.modal-open .store-floating-call-wrap {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.94);
+}
+.store-floating-call {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(0, 0, 66, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #FFFFFF;
+  padding: 8px 18px 8px 10px;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 66, 0.28), 0 2px 6px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  text-decoration: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  max-width: calc(100vw - 40px);
+}
+.store-floating-call:hover,
+.store-floating-call:focus-visible {
+  background: #000042;
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 30px rgba(0, 0, 66, 0.38), 0 4px 10px rgba(0, 0, 0, 0.15);
+  border-color: rgba(17, 218, 172, 0.5);
+  outline: none;
+}
+.sfc-icon-wrap {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #11DAAC;
+  color: #000042;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(17, 218, 172, 0.4);
+}
+.sfc-icon-wrap svg {
+  stroke: #000042;
+}
+.sfc-pulse {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  background: #10B981;
+  border: 2px solid #000042;
+  border-radius: 50%;
+  animation: callPulseGreen 2.2s infinite;
+}
+.sfc-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .store-floating-call-wrap {
+    bottom: 16px;
+    right: 14px;
+  }
+  .store-floating-call {
+    padding: 7px 14px 7px 8px;
+    gap: 8px;
+  }
+  .sfc-icon-wrap {
+    width: 30px;
+    height: 30px;
+  }
+  .sfc-icon-wrap svg {
+    width: 14px;
+    height: 14px;
+  }
+  .sfc-label {
+    font-size: 12px;
+  }
+}

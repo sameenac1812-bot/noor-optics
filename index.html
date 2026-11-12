@@ -105,7 +105,7 @@
 
   <!-- PWA Manifest & App Styles -->
   <link rel="manifest" href="manifest.json" />
-  <link rel="stylesheet" href="style.css?v=20261028_no_tryon_v7" />
+  <link rel="stylesheet" href="style.css?v=20261112_direct_store_call" />
   <link rel="stylesheet" href="/find-your-fit/find-your-fit.css" />
   <!-- Favicon & Mobile Touch Icons for Google Search & Browsers -->
   <link rel="icon" href="/favicon.ico" sizes="48x48" />
@@ -159,6 +159,16 @@
           <span class="sr-only">Noor Optic – Scandinavian Luxury Eyewear & Precision Lenses</span>
         </a>
       </h1>
+
+      <!-- Direct Store Call Button (1-Click) -->
+      <a href="tel:+919391893128" class="header-call-pill" id="header-call-btn" aria-label="Direct Store Call" title="Direct Store Call">
+        <span class="call-pulse-dot" aria-hidden="true"></span>
+        <svg class="header-call-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+        </svg>
+        <span class="header-call-label">Direct Store Call</span>
+      </a>
+
       <button class="icon-btn" id="btn-wishlist-toggle" aria-label="View Saved Wishlist">
         <svg><use href="#i-heart"/></svg>
         <span class="badge-dot empty" id="wishlist-count-badge">0</span>
@@ -628,6 +638,7 @@
     <h4>Noor Optic Boutique</h4>
     <p style="margin-bottom:12px;font-size:12.5px;opacity:0.85;">Bespoke Scandinavian eyewear engineered with Japanese pure titanium and sculpted Italian bio-acetate.</p>
     <ul>
+      <li><a href="tel:+919391893128" style="font-weight:700; color:#FFFFFF;">Direct Store Call</a></li>
       <li><a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Returns &amp; Exchange (14 Days)</a></li>
       <li><a href="https://wa.me/919391893128" target="_blank" rel="noopener">WhatsApp Optometrist Consultation</a></li>
       <li><a href="/admin">Store POS &amp; Staff Portal</a></li>
@@ -639,6 +650,19 @@
   <!-- Hidden badges to ensure zero regression with app.js counter updates -->
   <span id="bottom-wishlist-badge" style="display:none;" aria-hidden="true">0</span>
   <span id="bottom-bag-badge" style="display:none;" aria-hidden="true">0</span>
+
+  <!-- Floating Aesthetic Quick Call Button (1-Click Call to Store) -->
+  <aside class="store-floating-call-wrap" aria-label="Direct Boutique Assistance">
+    <a href="tel:+919391893128" class="store-floating-call" id="store-floating-call" aria-label="Direct Store Call" title="Direct Store Call">
+      <div class="sfc-icon-wrap">
+        <span class="sfc-pulse" aria-hidden="true"></span>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+        </svg>
+      </div>
+      <span class="sfc-label">Direct Store Call</span>
+    </a>
+  </aside>
 
 </div> <!-- /.app -->
 
@@ -685,6 +709,10 @@
       <div class="mobile-drawer-section">
         <div class="mobile-drawer-sec-title">Optical Services & Boutique</div>
         <div class="mobile-drawer-nav-list">
+          <a href="tel:+919391893128" class="mobile-drawer-item phone-link" style="color:var(--navy); font-weight:700;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            Direct Store Call
+          </a>
           <a href="/admin" class="mobile-drawer-item store-link">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
             Store POS & Staff Portal
