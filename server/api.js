@@ -227,11 +227,13 @@ router.post('/auth/login', (req, res) => {
 
   logAudit(user.id, user.email, 'USER_LOGIN', 'USER', user.id, { role: user.role_name }, req);
 
+  const ownerDisplayName = (user.role_id === 'role-owner' || (user.name && user.name.toLowerCase().includes('sameena'))) ? 'Noor Optic' : user.name;
+
   res.json({
     token,
     user: {
       id: user.id,
-      name: user.name,
+      name: ownerDisplayName,
       email: user.email,
       roleId: user.role_id,
       roleName: user.role_name,
@@ -249,6 +251,9 @@ router.get('/auth/me', authenticateToken, (req, res) => {
   `).get(req.user.id);
 
   if (!user) return res.status(404).json({ error: 'User not found' });
+  if (user.role_id === 'role-owner' || (user.name && user.name.toLowerCase().includes('sameena'))) {
+    user.name = 'Noor Optic';
+  }
   res.json({ user: { ...user, permissions: req.user.permissions } });
 });
 

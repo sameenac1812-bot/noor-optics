@@ -220,7 +220,8 @@ function generateInvoicePDF(invoice, items, prescription = null) {
 
       const addText = (rx.addition || rx.add) ? `ADD: ${rx.addition || rx.add}` : '';
       const ipdText = (rx.ipd_distance || rx.ipdDistance || rx.pd) ? `IPD: ${rx.ipd_distance || rx.ipdDistance || rx.pd}mm` : '';
-      const checkedText = (rx.checked_by || rx.checkedBy) ? `By: ${rx.checked_by || rx.checkedBy}` : '';
+      const rawChecked = rx.checked_by || rx.checkedBy || '';
+      const checkedText = (rawChecked && !rawChecked.toLowerCase().includes('sameena')) ? `By: ${rawChecked}` : '';
       const extraRx = [addText, ipdText, checkedText].filter(Boolean).join('  |  ');
       if (extraRx) {
         doc.fontSize(6.5).font('Helvetica-Bold').fillColor('#64748B').text(extraRx, 55, rxBoxTop + 66);

@@ -34,7 +34,7 @@ const mockRx1 = {
   os_axis: 180,
   addition: '+1.50',
   ipd_distance: 63,
-  checked_by: 'Dr. Sameena'
+  checked_by: 'Noor Optic'
 };
 
 const mockRx2 = {
@@ -47,7 +47,7 @@ const mockRx2 = {
   os_axis: 135,
   addition: '+2.00',
   ipd_distance: 62,
-  checked_by: 'Dr. Sameena'
+  checked_by: 'Noor Optic'
 };
 
 const multiRxOrder = {

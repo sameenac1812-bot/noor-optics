@@ -1826,7 +1826,10 @@
           const osAxis = rx.os_axis != null ? (rx.os_axis + '°') : (rx.osAxis != null ? rx.osAxis + '°' : '-');
           const addVal = rx.addition || rx.add || '-';
           const ipd = rx.ipd_distance || rx.ipdDistance || rx.pd;
-          const doc = rx.checked_by || rx.checkedBy || rx.rx_checked_by;
+          let doc = rx.checked_by || rx.checkedBy || rx.rx_checked_by;
+          if (doc && (doc.toLowerCase().includes('sameena') || doc.toLowerCase().includes('owner'))) {
+            doc = null;
+          }
           const notes = rx.notes || rx.rx_notes;
 
           const titleLabel = rxList.length > 1
@@ -7390,7 +7393,7 @@
               <strong>🩺 Draft Prescription Ready:</strong><br/>
               Right (OD): SPH ${rxData.od_sph || '0.00'}, CYL ${rxData.od_cyl || '0.00'}, AXIS ${rxData.od_axis !== null ? rxData.od_axis + '°' : '-'}<br/>
               Left (OS): SPH ${rxData.os_sph || '0.00'}, CYL ${rxData.os_cyl || '0.00'}, AXIS ${rxData.os_axis !== null ? rxData.os_axis + '°' : '-'}<br/>
-              ${rxData.addition ? `Addition: ${rxData.addition} • ` : ''}Checked by: ${escapeHtml(rxData.checked_by || '-')}
+              ${rxData.addition ? `Addition: ${rxData.addition} • ` : ''}${(rxData.checked_by && !rxData.checked_by.toLowerCase().includes('sameena')) ? `Checked by: ${escapeHtml(rxData.checked_by)}` : ''}
             `;
           }
 
@@ -7447,7 +7450,7 @@
     if (osAxisInput) osAxisInput.value = osAxisVal !== null && osAxisVal !== undefined ? osAxisVal : '';
     if (ipdDInput) ipdDInput.value = ipdDVal !== null && ipdDVal !== undefined ? ipdDVal : '';
     if (ipdNInput) ipdNInput.value = ipdNVal !== null && ipdNVal !== undefined ? ipdNVal : '';
-    if (checkedByInput) checkedByInput.value = existingRx?.checked_by || existingRx?.checkedBy || (state.user?.name || 'Optometrist');
+    if (checkedByInput) checkedByInput.value = existingRx?.checked_by || existingRx?.checkedBy || '';
     if (prescriberInput) prescriberInput.value = existingRx?.prescriber_details || existingRx?.prescriberDetails || '';
     if (notesInput) notesInput.value = existingRx?.notes || '';
 
@@ -7608,7 +7611,7 @@
               <strong>🩺 Selected Saved Prescription (${found.prescription_number || 'RX'}):</strong><br/>
               Right (OD): SPH ${found.od_sph || '0.00'}, CYL ${found.od_cyl || '0.00'}, AXIS ${found.od_axis || '-'}<br/>
               Left (OS): SPH ${found.os_sph || '0.00'}, CYL ${found.os_cyl || '0.00'}, AXIS ${found.os_axis || '-'}<br/>
-              ${found.addition ? `Addition: ${found.addition} • ` : ''}Checked by: ${escapeHtml(found.checked_by || '-')}
+              ${found.addition ? `Addition: ${found.addition} • ` : ''}${(found.checked_by && !found.checked_by.toLowerCase().includes('sameena')) ? `Checked by: ${escapeHtml(found.checked_by)}` : ''}
             `;
           }
         }
@@ -7780,7 +7783,7 @@
         <strong>🩺 Attached Prescription:</strong><br/>
         Right (OD): SPH ${attachedRx.od_sph || '0.00'}, CYL ${attachedRx.od_cyl || '0.00'}, AXIS ${attachedRx.od_axis || '-'}<br/>
         Left (OS): SPH ${attachedRx.os_sph || '0.00'}, CYL ${attachedRx.os_cyl || '0.00'}, AXIS ${attachedRx.os_axis || '-'}<br/>
-        ${attachedRx.addition ? `Addition: ${attachedRx.addition} • ` : ''}Checked by: ${escapeHtml(attachedRx.checked_by || '-')}
+        ${attachedRx.addition ? `Addition: ${attachedRx.addition} • ` : ''}${(attachedRx.checked_by && !attachedRx.checked_by.toLowerCase().includes('sameena')) ? `Checked by: ${escapeHtml(attachedRx.checked_by)}` : ''}
       `;
     } else if (rxSummary) {
       rxSummary.style.display = 'none';
@@ -8585,7 +8588,7 @@
                 ${r.addition ? `<div><strong>Addition:</strong> ${r.addition}</div>` : ''}
                 ${r.ipd_distance ? `<div><strong>Distance IPD:</strong> ${r.ipd_distance} mm</div>` : ''}
                 ${r.ipd_near ? `<div><strong>Near IPD:</strong> ${r.ipd_near} mm</div>` : ''}
-                <div><strong>Checked by:</strong> ${escapeHtml(r.checked_by || 'Optometrist')}</div>
+                ${(r.checked_by && !r.checked_by.toLowerCase().includes('sameena')) ? `<div><strong>Checked by:</strong> ${escapeHtml(r.checked_by)}</div>` : ''}
               </div>
               ${r.notes ? `<div style="font-size:0.72rem; color:#6B7280; margin-top:4px; font-style:italic;">Notes: ${escapeHtml(r.notes)}</div>` : ''}
             </div>
@@ -8726,7 +8729,7 @@
             ${rx.ipd_near ? `<div><strong>Near IPD (N):</strong> ${rx.ipd_near} mm</div>` : ''}
           </div>
           <div style="text-align:right;">
-            <div><strong>Checked / Optometrist:</strong> ${escapeHtml(rx.checked_by || 'Optometrist')}</div>
+            ${(rx.checked_by && !rx.checked_by.toLowerCase().includes('sameena')) ? `<div><strong>Checked / Optometrist:</strong> ${escapeHtml(rx.checked_by)}</div>` : ''}
             ${rx.prescriber_details ? `<div><strong>Prescriber:</strong> ${escapeHtml(rx.prescriber_details)}</div>` : ''}
           </div>
         </div>
@@ -9407,12 +9410,16 @@
 
           state.token = data.token;
           state.user = data.user;
+          if (state.user) {
+            if (!state.user.name || state.user.name.toLowerCase().includes('sameena') || state.user.role_id === 'role-owner' || state.user.role === 'owner') {
+              state.user.name = 'Noor Optic';
+            }
+          }
           localStorage.setItem('noor_admin_token', data.token);
 
           updateUserPill();
           hideLoginOverlay();
           switchNav('dashboard');
-          showToast(`Welcome back, ${data.user.name}!`, 'success');
         } catch (err) {
           showToast(err.message, 'error');
         }
@@ -9437,10 +9444,15 @@
     const avatarEl = document.getElementById('sidebar-avatar');
     const cashierDisplay = document.getElementById('pos-cashier-display');
 
-    if (nameEl) nameEl.textContent = state.user.name || 'Staff';
-    if (roleEl) roleEl.textContent = state.user.roleName || 'Cashier';
-    if (avatarEl) avatarEl.textContent = (state.user.name || 'S').charAt(0).toUpperCase();
-    if (cashierDisplay) cashierDisplay.textContent = `Cashier: ${state.user.name || 'Staff'}`;
+    let displayName = state.user.name || 'Noor Optic';
+    if (!displayName || displayName.toLowerCase().includes('sameena') || state.user.role_id === 'role-owner' || state.user.role === 'owner') {
+      displayName = 'Noor Optic';
+    }
+
+    if (nameEl) nameEl.textContent = displayName;
+    if (roleEl) roleEl.textContent = state.user.roleName || (state.user.role_id === 'role-owner' ? 'Owner / Super Admin' : 'Staff');
+    if (avatarEl) avatarEl.textContent = displayName.charAt(0).toUpperCase();
+    if (cashierDisplay) cashierDisplay.textContent = `Terminal: ${displayName}`;
   }
 
   async function checkExistingAuth() {
@@ -9452,6 +9464,11 @@
     try {
       const res = await apiFetch('/api/auth/me');
       state.user = res.user;
+      if (state.user) {
+        if (!state.user.name || state.user.name.toLowerCase().includes('sameena') || state.user.role_id === 'role-owner' || state.user.role === 'owner') {
+          state.user.name = 'Noor Optic';
+        }
+      }
       updateUserPill();
       hideLoginOverlay();
 

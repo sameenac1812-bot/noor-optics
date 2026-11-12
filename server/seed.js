@@ -64,7 +64,7 @@ function seedDatabase(customDb) {
     const adminHash = bcrypt.hashSync('AdminPassword@123', 10);
     insertUser.run({
       id: 'usr-admin-1',
-      name: 'Sameena (Owner)',
+      name: 'Noor Optic',
       email: 'admin@nooroptics.com',
       password_hash: adminHash,
       role_id: 'role-owner',
