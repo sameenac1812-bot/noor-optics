@@ -7338,7 +7338,7 @@
         const addition = document.getElementById('rx-addition-input')?.value.trim() || document.getElementById('rx-addition-btn')?.dataset.val || '';
         const ipdD = document.getElementById('rx-ipd-d-input')?.value || null;
         const ipdN = document.getElementById('rx-ipd-n-input')?.value || null;
-        const checkedBy = document.getElementById('rx-checked-by-input')?.value.trim() || (state.user?.name || 'Optometrist');
+        const checkedBy = document.getElementById('rx-checked-by-input')?.value.trim() || null;
         const prescriber = document.getElementById('rx-prescriber-input')?.value.trim() || null;
         const notes = document.getElementById('rx-notes-input')?.value.trim() || null;
         const imageUrl = state.uploadedRxImageUrl || null;
