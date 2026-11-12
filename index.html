@@ -24,52 +24,44 @@
   <meta name="twitter:description" content="Handcrafted Japanese titanium & Italian bio-acetate frames with custom precision lenses." />
   <meta name="twitter:image" content="https://noor-optics-five.vercel.app/images/hero_slider_1.jpg" />
 
-  <!-- Schema.org JSON-LD for Google Knowledge Graph & Brand Ranking -->
+  <meta name="application-name" content="Noor Optic" />
+  <meta name="apple-mobile-web-app-title" content="Noor Optic" />
+
+  <!-- Google Official Site Name Structured Data (JSON-LD) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@graph": [
+    "@type": "WebSite",
+    "name": "Noor Optic",
+    "alternateName": ["Noor Optics", "Noor Optic Boutique", "Noor Optic India"],
+    "url": "https://noor-optics-five.vercel.app/"
+  }
+  </script>
+
+  <!-- Schema.org JSON-LD for Local Business & Google Maps -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Optician",
+    "@id": "https://noor-optics-five.vercel.app/#organization",
+    "name": "Noor Optic",
+    "alternateName": ["Noor Optics", "Noor Optic Boutique"],
+    "url": "https://noor-optics-five.vercel.app/",
+    "logo": "https://noor-optics-five.vercel.app/images/noor_logo_black.png",
+    "image": "https://noor-optics-five.vercel.app/images/hero_slider_1.jpg",
+    "description": "Noor Optic is a premier Scandinavian-inspired luxury eyewear boutique offering handcrafted Japanese titanium and Italian bio-acetate frames with custom precision lenses.",
+    "telephone": "+91-9391893128",
+    "priceRange": "₹₹",
+    "address": {
+      "@type": "PostalAddress",
+      "addressCountry": "IN"
+    },
+    "openingHoursSpecification": [
       {
-        "@type": "Optician",
-        "@id": "https://noor-optics-five.vercel.app/#organization",
-        "name": "Noor Optic",
-        "alternateName": ["Noor Optics", "Noor Optic Boutique"],
-        "url": "https://noor-optics-five.vercel.app/",
-        "logo": "https://noor-optics-five.vercel.app/images/noor_logo_black.png",
-        "image": "https://noor-optics-five.vercel.app/images/hero_slider_1.jpg",
-        "description": "Noor Optic is a premier Scandinavian-inspired luxury eyewear boutique offering handcrafted Japanese titanium and Italian bio-acetate frames with custom precision lenses.",
-        "telephone": "+91-9391893128",
-        "priceRange": "₹₹",
-        "address": {
-          "@type": "PostalAddress",
-          "addressCountry": "IN"
-        },
-        "openingHoursSpecification": [
-          {
-            "@type": "OpeningHoursSpecification",
-            "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-            "opens": "10:00",
-            "closes": "21:30"
-          }
-        ]
-      },
-      {
-        "@type": "WebSite",
-        "@id": "https://noor-optics-five.vercel.app/#website",
-        "url": "https://noor-optics-five.vercel.app/",
-        "name": "Noor Optic",
-        "alternateName": "Noor Optics",
-        "publisher": {
-          "@id": "https://noor-optics-five.vercel.app/#organization"
-        },
-        "potentialAction": {
-          "@type": "SearchAction",
-          "target": {
-            "@type": "EntryPoint",
-            "urlTemplate": "https://noor-optics-five.vercel.app/?search={search_term_string}"
-          },
-          "query-input": "required name=search_term_string"
-        }
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        "opens": "10:00",
+        "closes": "21:30"
       }
     ]
   }
