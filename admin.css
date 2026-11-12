@@ -1349,7 +1349,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 /* ── DASHBOARD BOTTOM GRID ───────────────────────────────────────────────── */
 .dash-bottom-grid {
   display: grid;
-  grid-template-columns: 1.65fr 1fr;
+  grid-template-columns: 1fr;
   gap: 1.5rem;
 }
 
@@ -1360,9 +1360,9 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 
 .shortcuts-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  padding: 1rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.85rem;
+  padding: 1.25rem;
 }
 
 .shortcut-btn {
