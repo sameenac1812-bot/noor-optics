@@ -10207,7 +10207,7 @@
   };
   window.openCollectPaymentModal = openCollectPaymentModal;
 
-  window.handleCollectPaymentSubmit = async function (e) {
+  window.handleCollectPaymentSubmit = async function (e, overrideSkipPrint = false) {
     if (e) e.preventDefault();
     const cpIdEl = document.getElementById('cp-order-id');
     const orderId = cpIdEl?.value;
@@ -10216,8 +10216,9 @@
     const stage = document.getElementById('cp-stage-select')?.value || 'installment';
     const paymentMethod = document.getElementById('cp-payment-method')?.value || 'CASH';
     const notes = document.getElementById('cp-notes')?.value.trim() || null;
-    const shouldPrint = document.getElementById('cp-print-receipt')?.checked ?? true;
+    const shouldPrint = overrideSkipPrint ? false : (document.getElementById('cp-print-receipt')?.checked ?? true);
     const btnSubmit = document.getElementById('btn-submit-collect-payment');
+    const btnNoPrint = document.getElementById('btn-submit-collect-payment-no-print');
 
     if (!orderId) {
       showToast('Invalid order reference.', 'error');
@@ -10228,8 +10229,12 @@
       return;
     }
 
-    if (btnSubmit) {
-      btnSubmit.disabled = true;
+    if (btnSubmit) btnSubmit.disabled = true;
+    if (btnNoPrint) btnNoPrint.disabled = true;
+
+    if (overrideSkipPrint && btnNoPrint) {
+      btnNoPrint.textContent = 'Saving...';
+    } else if (btnSubmit) {
       btnSubmit.textContent = 'Saving Payment...';
     }
 
@@ -10338,12 +10343,13 @@
       document.body.classList.remove('modal-open');
 
       const remINR = res.remaining_due_inr != null ? res.remaining_due_inr : 0;
+      const printNote = shouldPrint ? '' : ' (Saved without print)';
       const msg = remINR === 0
-        ? `✓ Payment of ₹${amountINR.toLocaleString('en-IN')} recorded! Order is now PAID IN FULL!`
-        : `✓ Payment of ₹${amountINR.toLocaleString('en-IN')} recorded! Remaining balance: ₹${remINR.toLocaleString('en-IN')}`;
+        ? `✓ Payment of ₹${amountINR.toLocaleString('en-IN')} recorded! Order is now PAID IN FULL!${printNote}`
+        : `✓ Payment of ₹${amountINR.toLocaleString('en-IN')} recorded! Remaining balance: ₹${remINR.toLocaleString('en-IN')}${printNote}`;
       showToast(msg, 'success');
 
-      // Print updated receipt to POS thermal printer (stage-aware settlement, prevents duplicate prints)
+      // Print updated receipt to POS thermal printer only if requested
       if (shouldPrint && typeof instantPrintReceipt === 'function') {
         const is4thOrBeyond = (res.order?.payments && res.order.payments.length > 3) || (res.order?.third_payment_paise > 0);
         instantPrintReceipt(orderId, is4thOrBeyond, res.order, is4thOrBeyond ? 'reprint' : 'collect_payment').catch(() => { });
@@ -10374,6 +10380,10 @@
       if (btnSubmit) {
         btnSubmit.disabled = false;
         btnSubmit.innerHTML = '✓ Save Payment &amp; Print Receipt';
+      }
+      if (btnNoPrint) {
+        btnNoPrint.disabled = false;
+        btnNoPrint.innerHTML = '<span>💾 Save Without Print</span>';
       }
     }
   };
