@@ -991,7 +991,13 @@
 
   // ── Quick View / Product Detail Modal ──────────────────────────────────────
   function openQuickView(productId) {
-    const product = state.catalog.find(p => p.id === productId);
+    let product = state.catalog.find(p => String(p.id) === String(productId));
+    if (!product && window.EYEWEAR_CATALOG) {
+      product = window.EYEWEAR_CATALOG.find(p => String(p.id) === String(productId));
+      if (product) {
+        state.catalog.push(product);
+      }
+    }
     if (!product) return;
 
     state.quickViewProductId = productId;
@@ -2606,6 +2612,7 @@
   window.addToCart = addToCart;
   window.openDemoCheckout = openDemoCheckout;
   window.buyNowProduct = buyNowProduct;
+  window.openQuickView = openQuickView;
 
   // ── Initialization ────────────────────────────────────────────────────────
   function init() {

@@ -395,17 +395,13 @@
         '<button type="button" class="ffit-btn-rescan" id="ffit-btn-manual">Explore Other Shapes</button>' +
       '</div>';
 
-    // View Details Click: Add recommended frame to cart and direct immediately to checkout
+    // View Details Click: Open the Quick View / Product Detail modal for this frame
     view.querySelectorAll('[data-view-product]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var productId = btn.getAttribute('data-view-product');
-        var matchedItem = recommended.find(function (r) { return String(r.id) === String(productId); });
         close();
-        if (window.buyNowProduct) {
-          window.buyNowProduct(productId, null, null, matchedItem);
-        } else if (window.addToCart && window.openDemoCheckout) {
-          window.addToCart(productId, null, null, true);
-          window.openDemoCheckout();
+        if (window.openQuickView) {
+          window.openQuickView(productId);
         } else {
           bridgeOpenQuickView(productId);
         }
@@ -469,13 +465,8 @@
   function bridgeOpenQuickView(productId) {
     if (!productId) return;
 
-    if (window.buyNowProduct) {
-      window.buyNowProduct(productId);
-      return;
-    }
-    if (window.addToCart && window.openDemoCheckout) {
-      window.addToCart(productId, null, null, true);
-      window.openDemoCheckout();
+    if (window.openQuickView) {
+      window.openQuickView(productId);
       return;
     }
 
