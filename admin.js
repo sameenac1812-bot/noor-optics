@@ -576,8 +576,42 @@
       document.getElementById('kpi-website-count').textContent = websiteOrderCount;
       document.getElementById('kpi-distinct-frames').textContent = cards.distinctFramesCount || (state.inventoryCache?.length || 0);
       document.getElementById('kpi-physical-units').textContent = cards.physicalUnitsInStock || 0;
-      document.getElementById('kpi-low-stock').textContent = cards.lowStockCount || 0;
+      if (document.getElementById('kpi-low-stock')) document.getElementById('kpi-low-stock').textContent = cards.lowStockCount || 0;
       document.getElementById('kpi-out-of-stock').textContent = cards.outOfStockCount || 0;
+
+      // 4b. Compute Total Due Amount across store accounts
+      let totalDueINR = 0;
+      let dueCount = 0;
+      if (Array.isArray(state.ordersCache) && state.ordersCache.length > 0) {
+        state.ordersCache.forEach(o => {
+          if (!o || o.status === 'CANCELLED') return;
+          if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return;
+          if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return;
+
+          const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
+          const rawPaid = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
+          const rawDue = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - rawPaid));
+          const isFullyPaid = (rawDue <= 0 || rawPaid >= totalPayable) || o.payment_status === 'VERIFIED' || o.payment_status === 'PAID';
+          const outstandingINR = isFullyPaid ? 0 : rawDue;
+
+          if (outstandingINR > 0) {
+            totalDueINR += outstandingINR;
+            dueCount++;
+          }
+        });
+      } else if (cards.totalDueINR != null) {
+        totalDueINR = cards.totalDueINR;
+        dueCount = cards.dueOrdersCount || 0;
+      }
+
+      const dueAmountEl = document.getElementById('kpi-due-amount');
+      const dueSubEl = document.getElementById('kpi-due-sub');
+      if (dueAmountEl) {
+        dueAmountEl.textContent = totalDueINR > 0 ? `${totalDueINR.toLocaleString('en-IN')}` : '0';
+      }
+      if (dueSubEl) {
+        dueSubEl.textContent = 'click to know who all has to pay';
+      }
 
       // 5. Render / Update Comparative Sales Chart from active orders
       const timeline = buildTimelineFromOrders(activeOrders, state.dashRange, state.dashCustomStart, state.dashCustomEnd);
@@ -950,11 +984,104 @@
     }
   }
 
+  function renderBillCardHtml(o) {
+    const invoiceNo = o.order_number || ('INV-NOOR-' + o.id.slice(-4));
+    const formattedDate = formatDateTime(o.created_at);
+    const orderChan = getOrderChannel(o);
+    const custName = o.customer_name || (orderChan === 'POS' ? 'Walk-in Client' : 'Online Client');
+    const custPhone = o.customer_phone || '-';
+    const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
+    const rawPaid = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
+    const rawDue = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - rawPaid));
+    const isFullyPaid = (rawDue <= 0 || rawPaid >= totalPayable) || o.payment_status === 'VERIFIED' || o.payment_status === 'PAID';
+    const outstandingINR = isFullyPaid ? 0 : rawDue;
+    const isDue = (outstandingINR > 0) && !isFullyPaid;
+    const isZeroPower = String(o.prescription_pref || '').toLowerCase().includes('zero') || String(o.prescription_pref || '').toLowerCase().includes('plano');
+    const hasRx = !isZeroPower && (!!o.prescription_id || !!o.prescription_number || (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) || (o.od_sph != null || o.os_sph != null) || (o.prescription_pref === 'enter-rx') || (o.items && o.items[0] && (o.items[0].prescription || o.items[0].rx)));
+    const rxCount = (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) ? o.prescriptions.length : (hasRx ? 1 : 0);
+    const utrCard = getOrderUtr(o);
+    const itemsSummary = (o.items && o.items.length)
+      ? o.items.map(i => {
+        let name = escapeHtml(i.product_name || 'Frame');
+        if (i.quantity > 1) name += ` ×${i.quantity}`;
+        const lName = i.lens_name || i.lensName || i.lens;
+        if (lName && !name.toLowerCase().includes('lens package') && lName !== 'Blue-Light Filter' && !lName.toLowerCase().includes('standard demo')) {
+          name += ` + [${escapeHtml(lName)}]`;
+        }
+        return name;
+      }).join(', ')
+      : 'Frame Order';
+    const channelBadge = orderChan === 'POS'
+      ? `<span class="badge-channel-pos" style="background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0; font-size:0.68rem; font-weight:800; padding:1px 6px; border-radius:4px;">🏪 In-Store [Code 2]</span>`
+      : `<span class="badge-channel-web" style="background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE; font-size:0.68rem; font-weight:800; padding:1px 6px; border-radius:4px;">🌐 Website [Code 1]</span>`;
+
+    return `
+      <div class="optic-saved-bill-card" onclick="viewOrderDetails('${o.id}')">
+        <div class="bill-card-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="bill-header-inv">${escapeHtml(invoiceNo)}</div>
+            ${channelBadge}
+          </div>
+          <div class="bill-header-time">${formattedDate}</div>
+        </div>
+        <div class="bill-card-body">
+          <div class="bill-card-left">
+            <div class="bill-client-row">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span>${escapeHtml(custName)}</span>
+            </div>
+            <div class="bill-phone-row">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <span>${escapeHtml(custPhone)}</span>
+            </div>
+            <div class="bill-items-summary" title="${escapeHtml(itemsSummary)}">${itemsSummary}</div>
+          </div>
+          <div class="bill-card-right">
+            <div class="bill-due-badge-wrap">
+              ${o.payment_status === 'AWAITING_VERIFICATION'
+        ? `<span class="bill-due-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span style="background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; font-weight:800; font-size:0.68rem; padding:2px 6px; border-radius:4px;">VERIFY UPI</span>`
+        : (isDue
+          ? `<span class="bill-due-amount">₹ ${outstandingINR.toLocaleString('en-IN')}</span> <span class="badge-due-red">DUE</span>`
+          : `<span class="bill-paid-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span class="badge-paid-green">PAID</span>`
+        )
+      }
+            </div>
+            ${(orderChan === 'POS' && isDue && outstandingINR > 0) ? `
+              <div style="margin-top:4px;">
+                <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800; padding:3px 8px; font-size:0.72rem; border-radius:5px;" onclick="event.stopPropagation(); openCollectPaymentModal('${o.id}')">💳 Collect</button>
+              </div>
+            ` : ''}
+            <div class="bill-sub-badges-row">
+              ${rxCount > 0 ? `<span class="badge-rx-pill">${rxCount} Rx</span>` : ''}
+              <span class="badge-status status-${(o.status || 'confirmed').toLowerCase()}" style="font-size:0.68rem; padding:2px 6px;">${escapeHtml(o.status || 'CONFIRMED')}</span>
+              <span class="bill-total-lbl">Total ₹ ${totalPayable.toLocaleString('en-IN')}</span>
+            </div>
+            <button type="button" class="optic-dots-btn" onclick="openBillActionSheet('${o.id}', event)" title="Manage bill options">•••</button>
+          </div>
+        </div>
+        ${(o.payment_status === 'AWAITING_VERIFICATION' || utrCard) ? `
+          <div style="background:#FEF3C7; border-top:1.5px solid #F59E0B; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; font-size:0.78rem; border-radius:0 0 8px 8px;">
+            <span style="color:#78350F; font-weight:800; display:flex; align-items:center; gap:6px;">
+              📱 Claimed UTR: <code style="font-family:monospace; font-weight:900; font-size:0.92rem; background:#FFFBEB; color:#92400E; padding:3px 8px; border-radius:4px; border:1px solid #FCD34D; user-select:all;">${escapeHtml(utrCard || 'Awaiting Customer Entry')}</code>
+              ${utrCard ? `<button type="button" class="btn-table-action" style="font-size:0.7rem; padding:2px 6px; background:#FFFFFF; border:1px solid #CBD5E1;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${escapeHtml(utrCard)}'); showToast('UTR copied!', 'success');">📋 Copy</button>` : ''}
+            </span>
+            <div style="display:flex; gap:6px;">
+              ${o.payment_status === 'AWAITING_VERIFICATION' ? `
+                <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800; padding:4px 10px; font-size:0.75rem; border-radius:5px;" onclick="event.stopPropagation(); confirmUpiPayment('${o.id}', '${o.payment_id || ''}')">✓ Approve</button>
+                <button type="button" class="btn-table-action" style="background:#DC2626; color:#FFF; font-weight:700; padding:4px 10px; font-size:0.75rem; border-radius:5px;" onclick="event.stopPropagation(); rejectUpiPayment('${o.id}', '${o.payment_id || ''}')">✗ Reject</button>
+              ` : '<span style="color:#16A34A; font-weight:800; font-size:0.75rem;">✓ Verified</span>'}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
   function renderOrdersTable() {
     const billsList = document.getElementById('orders-bills-list');
     const tbody = document.getElementById('orders-table-body');
 
-    const channel = state.ordersActiveChannel || 'ALL'; // 'ALL', 'POS', 'WEBSITE'
+    const channel = state.ordersActiveChannel || 'ALL'; // 'ALL', 'POS', 'WEBSITE', 'DUE'
     const query = (state.ordersSearchQuery || '').toLowerCase().trim();
     const statusFilter = state.ordersStatusFilter;
     const paymentFilter = state.ordersPaymentFilter;
@@ -980,14 +1107,35 @@
     const instoreCount = cleanOrders.filter(o => getOrderChannel(o) === 'POS').length;
     const websiteCount = cleanOrders.filter(o => getOrderChannel(o) === 'WEBSITE').length;
     const upiPendingCount = cleanOrders.filter(o => getOrderChannel(o) === 'WEBSITE' && o.payment_status === 'AWAITING_VERIFICATION').length;
+    let totalDueSum = 0;
+    const dueCount = cleanOrders.filter(o => {
+      if (o.status === 'CANCELLED') return false;
+      const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
+      const rawPaid = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
+      const rawDue = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - rawPaid));
+      const isFullyPaid = (rawDue <= 0 || rawPaid >= totalPayable) || o.payment_status === 'VERIFIED' || o.payment_status === 'PAID';
+      if (!isFullyPaid && rawDue > 0) {
+        totalDueSum += rawDue;
+        return true;
+      }
+      return false;
+    }).length;
+
     const badgeAll = document.getElementById('count-all-orders');
     const badgeInstore = document.getElementById('count-instore-orders');
     const badgeWebsite = document.getElementById('count-website-orders');
     const badgeUpiPending = document.getElementById('count-upi-pending');
+    const badgeDue = document.getElementById('count-due-orders');
     if (badgeAll) badgeAll.textContent = allCount;
     if (badgeInstore) badgeInstore.textContent = instoreCount;
     if (badgeWebsite) badgeWebsite.textContent = websiteCount;
     if (badgeUpiPending) badgeUpiPending.textContent = upiPendingCount;
+    if (badgeDue) badgeDue.textContent = dueCount;
+
+    const dueAmountEl = document.getElementById('kpi-due-amount');
+    if (dueAmountEl) {
+      dueAmountEl.textContent = totalDueSum > 0 ? totalDueSum.toLocaleString('en-IN') : '0';
+    }
 
     // Filter list
     const filtered = cleanOrders.filter(o => {
@@ -996,6 +1144,14 @@
       if (channel === 'POS' && orderChan !== 'POS') return false;
       if (channel === 'WEBSITE' && orderChan !== 'WEBSITE') return false;
       if (channel === 'UPI_PENDING' && (orderChan !== 'WEBSITE' || o.payment_status !== 'AWAITING_VERIFICATION')) return false;
+      if (channel === 'DUE') {
+        if (o.status === 'CANCELLED') return false;
+        const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
+        const rawPaid = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
+        const rawDue = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - rawPaid));
+        const isFullyPaid = (rawDue <= 0 || rawPaid >= totalPayable) || o.payment_status === 'VERIFIED' || o.payment_status === 'PAID';
+        if (isFullyPaid || rawDue <= 0) return false;
+      }
 
       // Status
       if (statusFilter && o.status !== statusFilter) return false;
@@ -1024,98 +1180,7 @@
       if (filtered.length === 0) {
         billsList.innerHTML = `<div style="text-align:center; padding:3rem 1rem; color:#94A3B8; font-weight:600;">No orders or saved bills found.</div>`;
       } else {
-        billsList.innerHTML = filtered.map(o => {
-          const invoiceNo = o.order_number || ('INV-NOOR-' + o.id.slice(-4));
-          const formattedDate = formatDateTime(o.created_at);
-          const orderChan = getOrderChannel(o);
-          const custName = o.customer_name || (orderChan === 'POS' ? 'Walk-in Client' : 'Online Client');
-          const custPhone = o.customer_phone || '-';
-          const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
-          const rawPaid = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
-          const rawDue = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - rawPaid));
-          const isFullyPaid = (rawDue <= 0 || rawPaid >= totalPayable) || o.payment_status === 'VERIFIED' || o.payment_status === 'PAID';
-          const outstandingINR = isFullyPaid ? 0 : rawDue;
-          const isDue = (outstandingINR > 0) && !isFullyPaid;
-          const isZeroPower = String(o.prescription_pref || '').toLowerCase().includes('zero') || String(o.prescription_pref || '').toLowerCase().includes('plano');
-          const hasRx = !isZeroPower && (!!o.prescription_id || !!o.prescription_number || (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) || (o.od_sph != null || o.os_sph != null) || (o.prescription_pref === 'enter-rx') || (o.items && o.items[0] && (o.items[0].prescription || o.items[0].rx)));
-          const rxCount = (Array.isArray(o.prescriptions) && o.prescriptions.length > 0) ? o.prescriptions.length : (hasRx ? 1 : 0);
-          const utrCard = getOrderUtr(o);
-          const itemsSummary = (o.items && o.items.length)
-            ? o.items.map(i => {
-              let name = escapeHtml(i.product_name || 'Frame');
-              if (i.quantity > 1) name += ` ×${i.quantity}`;
-              const lName = i.lens_name || i.lensName || i.lens;
-              if (lName && !name.toLowerCase().includes('lens package') && lName !== 'Blue-Light Filter' && !lName.toLowerCase().includes('standard demo')) {
-                name += ` + [${escapeHtml(lName)}]`;
-              }
-              return name;
-            }).join(', ')
-            : 'Frame Order';
-          const channelBadge = orderChan === 'POS'
-            ? `<span class="badge-channel-pos" style="background:#F0FDF4; color:#15803D; border:1px solid #BBF7D0; font-size:0.68rem; font-weight:800; padding:1px 6px; border-radius:4px;">🏪 In-Store [Code 2]</span>`
-            : `<span class="badge-channel-web" style="background:#EFF6FF; color:#1D4ED8; border:1px solid #BFDBFE; font-size:0.68rem; font-weight:800; padding:1px 6px; border-radius:4px;">🌐 Website [Code 1]</span>`;
-
-          return `
-            <div class="optic-saved-bill-card" onclick="viewOrderDetails('${o.id}')">
-              <div class="bill-card-header">
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <div class="bill-header-inv">${escapeHtml(invoiceNo)}</div>
-                  ${channelBadge}
-                </div>
-                <div class="bill-header-time">${formattedDate}</div>
-              </div>
-              <div class="bill-card-body">
-                <div class="bill-card-left">
-                  <div class="bill-client-row">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    <span>${escapeHtml(custName)}</span>
-                  </div>
-                  <div class="bill-phone-row">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                    <span>${escapeHtml(custPhone)}</span>
-                  </div>
-                  <div class="bill-items-summary" title="${escapeHtml(itemsSummary)}">${itemsSummary}</div>
-                </div>
-                <div class="bill-card-right">
-                  <div class="bill-due-badge-wrap">
-                    ${o.payment_status === 'AWAITING_VERIFICATION'
-              ? `<span class="bill-due-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span style="background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; font-weight:800; font-size:0.68rem; padding:2px 6px; border-radius:4px;">VERIFY UPI</span>`
-              : (isDue
-                ? `<span class="bill-due-amount">₹ ${outstandingINR.toLocaleString('en-IN')}</span> <span class="badge-due-red">DUE</span>`
-                : `<span class="bill-paid-amount">₹ ${totalPayable.toLocaleString('en-IN')}</span> <span class="badge-paid-green">PAID</span>`
-              )
-            }
-                  </div>
-                  ${(orderChan === 'POS' && isDue && outstandingINR > 0) ? `
-                    <div style="margin-top:4px;">
-                      <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800; padding:3px 8px; font-size:0.72rem; border-radius:5px;" onclick="event.stopPropagation(); openCollectPaymentModal('${o.id}')">💳 Collect</button>
-                    </div>
-                  ` : ''}
-                  <div class="bill-sub-badges-row">
-                    ${rxCount > 0 ? `<span class="badge-rx-pill">${rxCount} Rx</span>` : ''}
-                    <span class="badge-status status-${(o.status || 'confirmed').toLowerCase()}" style="font-size:0.68rem; padding:2px 6px;">${escapeHtml(o.status || 'CONFIRMED')}</span>
-                    <span class="bill-total-lbl">Total ₹ ${totalPayable.toLocaleString('en-IN')}</span>
-                  </div>
-                  <button type="button" class="optic-dots-btn" onclick="openBillActionSheet('${o.id}', event)" title="Manage bill options">•••</button>
-                </div>
-              </div>
-              ${(o.payment_status === 'AWAITING_VERIFICATION' || utrCard) ? `
-                <div style="background:#FEF3C7; border-top:1.5px solid #F59E0B; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; font-size:0.78rem; border-radius:0 0 8px 8px;">
-                  <span style="color:#78350F; font-weight:800; display:flex; align-items:center; gap:6px;">
-                    📱 Claimed UTR: <code style="font-family:monospace; font-weight:900; font-size:0.92rem; background:#FFFBEB; color:#92400E; padding:3px 8px; border-radius:4px; border:1px solid #FCD34D; user-select:all;">${escapeHtml(utrCard || 'Awaiting Customer Entry')}</code>
-                    ${utrCard ? `<button type="button" class="btn-table-action" style="font-size:0.7rem; padding:2px 6px; background:#FFFFFF; border:1px solid #CBD5E1;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${escapeHtml(utrCard)}'); showToast('UTR copied!', 'success');">📋 Copy</button>` : ''}
-                  </span>
-                  <div style="display:flex; gap:6px;">
-                    ${o.payment_status === 'AWAITING_VERIFICATION' ? `
-                      <button type="button" class="btn-table-action" style="background:#16A34A; color:#FFF; font-weight:800; padding:4px 10px; font-size:0.75rem; border-radius:5px;" onclick="event.stopPropagation(); confirmUpiPayment('${o.id}', '${o.payment_id || ''}')">✓ Approve</button>
-                      <button type="button" class="btn-table-action" style="background:#DC2626; color:#FFF; font-weight:700; padding:4px 10px; font-size:0.75rem; border-radius:5px;" onclick="event.stopPropagation(); rejectUpiPayment('${o.id}', '${o.payment_id || ''}')">✗ Reject</button>
-                    ` : '<span style="color:#16A34A; font-weight:800; font-size:0.75rem;">✓ Verified</span>'}
-                  </div>
-                </div>
-              ` : ''}
-            </div>
-          `;
-        }).join('');
+        billsList.innerHTML = filtered.map(renderBillCardHtml).join('');
       }
     }
 
@@ -9593,6 +9658,9 @@
     });
     document.getElementById('kpi-distinct-frames')?.closest('.kpi-card')?.addEventListener('click', () => switchNav('inventory'));
     document.getElementById('kpi-physical-units')?.closest('.kpi-card')?.addEventListener('click', () => switchNav('inventory'));
+    document.getElementById('card-due-amount')?.addEventListener('click', () => {
+      openDueClientsModal();
+    });
     document.getElementById('kpi-low-stock')?.closest('.kpi-card')?.addEventListener('click', () => switchNav('inventory'));
     document.getElementById('kpi-out-of-stock')?.closest('.kpi-card')?.addEventListener('click', () => switchNav('inventory'));
 
@@ -10308,6 +10376,75 @@
         btnSubmit.innerHTML = '✓ Save Payment &amp; Print Receipt';
       }
     }
+  };
+
+  window.openDueClientsModal = async function () {
+    const modal = document.getElementById('modal-due-clients');
+    const listEl = document.getElementById('due-clients-bills-list');
+    const totalBadge = document.getElementById('due-clients-total-badge');
+    const subEl = document.getElementById('due-clients-sub');
+    if (!modal) return;
+
+    if (!Array.isArray(state.ordersCache) || state.ordersCache.length === 0) {
+      if (typeof loadOrders === 'function') {
+        try {
+          await loadOrders(true);
+        } catch (_) {}
+      }
+    }
+
+    const localDeleted = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
+    const localDeletedSet = new Set(localDeleted.map(x => String(x).toLowerCase().trim()));
+
+    const dueOrders = (state.ordersCache || []).filter(o => {
+      if (!o || o.status === 'CANCELLED') return false;
+      if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
+      if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
+
+      const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
+      const rawPaid = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
+      const rawDue = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - rawPaid));
+      const isFullyPaid = (rawDue <= 0 || rawPaid >= totalPayable) || o.payment_status === 'VERIFIED' || o.payment_status === 'PAID';
+      return !isFullyPaid && rawDue > 0;
+    });
+
+    dueOrders.sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a));
+
+    let sumDue = 0;
+    dueOrders.forEach(o => {
+      const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
+      const rawPaid = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
+      const rawDue = (o.outstanding_inr != null) ? o.outstanding_inr : (o.outstanding_paise != null ? (o.outstanding_paise / 100) : Math.max(0, totalPayable - rawPaid));
+      sumDue += rawDue;
+    });
+
+    if (totalBadge) {
+      totalBadge.textContent = `₹${sumDue.toLocaleString('en-IN')} Total Due`;
+    }
+    if (subEl) {
+      subEl.textContent = `${dueOrders.length} client${dueOrders.length === 1 ? '' : 's'} with outstanding balance to collect`;
+    }
+
+    if (listEl) {
+      if (dueOrders.length === 0) {
+        listEl.innerHTML = `
+          <div style="text-align:center; padding:3rem 1rem; color:#16A34A; background:#F0FDF4; border:1.5px dashed #BBF7D0; border-radius:8px;">
+            <div style="font-size:2.2rem; margin-bottom:8px;">🎉</div>
+            <div style="font-weight:800; font-size:1.1rem; color:#166534;">All Clear! No Pending Dues</div>
+            <div style="font-size:0.85rem; color:#4B5563; margin-top:4px;">Every client bill and order has been fully paid and verified.</div>
+          </div>
+        `;
+      } else {
+        listEl.innerHTML = dueOrders.map(renderBillCardHtml).join('');
+      }
+    }
+
+    modal.classList.add('open');
+  };
+
+  window.closeModal = function (modalId) {
+    const el = document.getElementById(modalId);
+    if (el) el.classList.remove('open');
   };
 
   window.state = state;

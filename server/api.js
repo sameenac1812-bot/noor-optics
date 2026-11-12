@@ -4811,6 +4811,28 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
   `).get();
   const outOfStockCount = outOfStockRow ? outOfStockRow.out_count : 0;
 
+  // Outstanding Due Balance across active store orders
+  const dueRow = db.prepare(`
+    SELECT
+      COUNT(id) as due_orders_count,
+      COALESCE(SUM(
+        CASE
+          WHEN payment_status IN ('VERIFIED', 'PAID') THEN 0
+          WHEN outstanding_paise IS NOT NULL AND outstanding_paise > 0 THEN outstanding_paise
+          WHEN (total_payable_paise - COALESCE(amount_paid_paise, advance_paid_paise, 0)) > 0
+            THEN (total_payable_paise - COALESCE(amount_paid_paise, advance_paid_paise, 0))
+          ELSE 0
+        END
+      ), 0) as total_due_paise
+    FROM orders
+    WHERE status != 'CANCELLED'
+      AND payment_status NOT IN ('VERIFIED', 'PAID')
+      AND order_number NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
+      AND id NOT IN (SELECT order_number FROM deleted_orders WHERE order_number IS NOT NULL)
+  `).get();
+  const totalDueINR = (dueRow ? dueRow.total_due_paise : 0) / 100;
+  const dueOrdersCount = dueRow ? dueRow.due_orders_count : 0;
+
   // 5. Sales Timeline for Chart (Hourly for today/yesterday, Daily for week/month/custom)
   const isHourly = (range === 'today' || range === 'yesterday' || startDate === endDate);
   let timeline = [];
@@ -4946,7 +4968,9 @@ router.get('/dashboard/overview', authenticateToken, (req, res) => {
       distinctFramesCount,
       physicalUnitsInStock,
       lowStockCount,
-      outOfStockCount
+      outOfStockCount,
+      totalDueINR,
+      dueOrdersCount
     },
     timeline,
     recentOrders
