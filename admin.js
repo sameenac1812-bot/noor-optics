@@ -842,13 +842,42 @@
       const localDeleted = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
       const localDeletedSet = new Set(localDeleted.map(x => String(x).toLowerCase().trim()));
 
+      const HISTORICAL_GENUINE_18 = new Set([
+        'NOOR-POS-20261107-6088-2224',
+        'NOOR-POS-20261112-4987-3065',
+        'NOOR-POS-20261113-4674-8187',
+        'NOOR-POS-20261114-4377-4515',
+        'NOOR-POS-20261114-0190-1639',
+        'NOOR-POS-20261115-1150-8856',
+        'NOOR-POS-20261115-6796-5488',
+        'NOOR-POS-20261116-2446-3508',
+        'NOOR-POS-20261116-7932-3714',
+        'NOOR-POS-20261117-6190-2876',
+        'NOOR-POS-20261117-0992-5474',
+        'NOOR-POS-20261118-8089-8551',
+        'NOOR-POS-20261118-0884-5639',
+        'NOOR-POS-20261119-6764-4648',
+        'NOOR-POS-20261119-6840-1897',
+        'NOOR-POS-20261119-2437-2073',
+        'NOOR-POS-20261119-9130-2173',
+        'NOOR-POS-20261120-3335-3418',
+        'NOOR-POS-20261120-7914-6116'
+      ]);
+      const catalogCutoffMs = new Date('2026-11-20T12:00:00.000Z').getTime();
+
       incoming = incoming.filter(o => {
         if (!o) return false;
-        if (o.order_number && /TEST-REF|GHOST-TEST/i.test(o.order_number)) return false;
-        if (o.customer_name && /Concierge Test/i.test(o.customer_name)) return false;
+        const refUpper = String(o.order_number || o.order_ref || '').toUpperCase().trim();
+        if (/TEST-REF|GHOST-TEST|TEMP-PROBE/i.test(refUpper)) return false;
+        if (o.customer_name && /Concierge Test|Mohd Farhan Test|Temp Probe/i.test(o.customer_name)) return false;
         if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
         if (o.order_ref && localDeletedSet.has(String(o.order_ref).toLowerCase().trim())) return false;
         if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
+
+        const oDateMs = parseOrderTimestamp(o);
+        if (oDateMs > 0 && oDateMs < catalogCutoffMs && !HISTORICAL_GENUINE_18.has(refUpper)) {
+          return false;
+        }
         return true;
       });
 
@@ -1092,13 +1121,44 @@
     const localDeleted = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
     const localDeletedSet = new Set(localDeleted.map(x => String(x).toLowerCase().trim()));
 
+    const HISTORICAL_GENUINE_18 = new Set([
+      'NOOR-POS-20261107-6088-2224',
+      'NOOR-POS-20261112-4987-3065',
+      'NOOR-POS-20261113-4674-8187',
+      'NOOR-POS-20261114-4377-4515',
+      'NOOR-POS-20261114-0190-1639',
+      'NOOR-POS-20261115-1150-8856',
+      'NOOR-POS-20261115-6796-5488',
+      'NOOR-POS-20261116-2446-3508',
+      'NOOR-POS-20261116-7932-3714',
+      'NOOR-POS-20261117-6190-2876',
+      'NOOR-POS-20261117-0992-5474',
+      'NOOR-POS-20261118-8089-8551',
+      'NOOR-POS-20261118-0884-5639',
+      'NOOR-POS-20261119-6764-4648',
+      'NOOR-POS-20261119-6840-1897',
+      'NOOR-POS-20261119-2437-2073',
+      'NOOR-POS-20261119-9130-2173',
+      'NOOR-POS-20261120-3335-3418',
+      'NOOR-POS-20261120-7914-6116'
+    ]);
+    const catalogCutoffMs = new Date('2026-11-20T12:00:00.000Z').getTime();
+
     const cleanOrders = state.ordersCache.filter(o => {
       if (!o) return false;
-      if (o.order_number && /TEST-REF|GHOST-TEST/i.test(o.order_number)) return false;
-      if (o.customer_name && /Concierge Test/i.test(o.customer_name)) return false;
+      const refUpper = String(o.order_number || o.order_ref || '').toUpperCase().trim();
+      if (/TEST-REF|GHOST-TEST|TEMP-PROBE/i.test(refUpper)) return false;
+      if (o.customer_name && /Concierge Test|Mohd Farhan Test|Temp Probe/i.test(o.customer_name)) return false;
       if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
       if (o.order_ref && localDeletedSet.has(String(o.order_ref).toLowerCase().trim())) return false;
       if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
+
+      // Drop any historical order before today's launch that is not one of the 18 genuine in-store orders
+      const oDateMs = parseOrderTimestamp(o);
+      if (oDateMs > 0 && oDateMs < catalogCutoffMs && !HISTORICAL_GENUINE_18.has(refUpper)) {
+        return false;
+      }
+
       return true;
     });
 
@@ -2664,8 +2724,9 @@
       const detailsModal = document.getElementById('modal-order-details');
       if (detailsModal) detailsModal.classList.remove('open');
 
-      // Refresh data across orders, dashboard, and inventory
+      // Refresh data across orders, dashboard, clients and inventory
       await loadOrders(true, true);
+      if (typeof loadClients === 'function') loadClients(true);
       if (typeof loadDashboard === 'function') loadDashboard();
       if (typeof loadInventory === 'function') loadInventory();
     } catch (err) {
@@ -10492,6 +10553,7 @@
 
     const dueOrders = (state.ordersCache || []).filter(o => {
       if (!o || o.status === 'CANCELLED') return false;
+      if (getOrderChannel(o) !== 'POS') return false; // ONLY genuine in-store POS orders belong in Pending Dues
       if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
       if (o.order_ref && localDeletedSet.has(String(o.order_ref).toLowerCase().trim())) return false;
       if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;

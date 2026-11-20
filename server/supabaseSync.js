@@ -736,6 +736,40 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
         if (isTombstoned) return null;
       } catch (e) {}
 
+      // 18 Authoritative Genuine In-Store Orders (All other historical orders prior to live catalog 2026-11-20T12:00:00Z are legacy dummy mocks)
+      const HISTORICAL_GENUINE_18 = new Set([
+        'NOOR-POS-20261107-6088-2224',
+        'NOOR-POS-20261112-4987-3065',
+        'NOOR-POS-20261113-4674-8187',
+        'NOOR-POS-20261114-4377-4515',
+        'NOOR-POS-20261114-0190-1639',
+        'NOOR-POS-20261115-1150-8856',
+        'NOOR-POS-20261115-6796-5488',
+        'NOOR-POS-20261116-2446-3508',
+        'NOOR-POS-20261116-7932-3714',
+        'NOOR-POS-20261117-6190-2876',
+        'NOOR-POS-20261117-0992-5474',
+        'NOOR-POS-20261118-8089-8551',
+        'NOOR-POS-20261118-0884-5639',
+        'NOOR-POS-20261119-6764-4648',
+        'NOOR-POS-20261119-6840-1897',
+        'NOOR-POS-20261119-2437-2073',
+        'NOOR-POS-20261119-9130-2173',
+        'NOOR-POS-20261120-3335-3418',
+        'NOOR-POS-20261120-7914-6116'
+      ]);
+
+      const orderRefUpper = String(co.order_ref || co.order_number || '').toUpperCase().trim();
+      let testDateStr = co.created_at || '';
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(testDateStr)) testDateStr = testDateStr.replace(' ', 'T') + 'Z';
+      const orderDateMs = new Date(testDateStr).getTime();
+      const catalogCutoffMs = new Date('2026-11-20T12:00:00.000Z').getTime();
+
+      // If this is a historical order (created before today 12:00 UTC) and not one of the 18 genuine in-store orders, drop it!
+      if (!isNaN(orderDateMs) && orderDateMs < catalogCutoffMs && !HISTORICAL_GENUINE_18.has(orderRefUpper)) {
+        return null;
+      }
+
       const grandTotalPaise = Math.round((Number(co.grand_total) || 0) * 100);
       const subtotalPaise = Math.round((Number(co.subtotal) || 0) * 100);
       const taxPaise = Math.round(grandTotalPaise * 0.18 / 1.18);
