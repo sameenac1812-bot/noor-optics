@@ -1117,7 +1117,7 @@
     }
   }
 
-  // ── Fullscreen Image Lightbox ──────────────────────────────────────────────
+  // ── Pure Fullscreen Image Viewer ───────────────────────────────────────────
   let currentFullscreenProduct = null;
   let currentFullscreenSlideIdx = 0;
 
@@ -1129,43 +1129,21 @@
     const viewer = document.getElementById('fullscreen-image-viewer');
     if (!viewer) return;
 
-    const titleEl = document.getElementById('fullscreen-viewer-title');
-    const counterEl = document.getElementById('fullscreen-viewer-counter');
     const imgEl = document.getElementById('fullscreen-main-img');
-    const prevBtn = document.getElementById('fs-nav-prev');
-    const nextBtn = document.getElementById('fs-nav-next');
-    const dotsEl = document.getElementById('fullscreen-dots');
-
     const frontImg = (product.images && product.images[0]) ? formatProductImage(product.images[0]) : formatProductImage(product.image);
     const sideImg = (product.images && product.images[1]) ? formatProductImage(product.images[1]) : frontImg;
     const hasDual = Boolean(sideImg && sideImg !== frontImg);
 
-    if (titleEl) titleEl.textContent = product.name || 'Noor Optics Frame';
-
-    const renderSlide = (idx) => {
+    const updateImage = (idx) => {
       currentFullscreenSlideIdx = idx === 1 ? 1 : 0;
       const targetSrc = (currentFullscreenSlideIdx === 1 && hasDual) ? sideImg : frontImg;
       if (imgEl) {
         imgEl.src = targetSrc;
-        imgEl.alt = `${product.name} - ${currentFullscreenSlideIdx === 1 ? 'Side View' : 'Front View'}`;
-      }
-      if (counterEl) {
-        counterEl.textContent = hasDual
-          ? `${currentFullscreenSlideIdx === 1 ? 'Side View' : 'Front View'} (${currentFullscreenSlideIdx + 1} of 2)`
-          : 'Front View (1 of 1)';
-      }
-      if (dotsEl) {
-        dotsEl.querySelectorAll('.fs-dot').forEach((dot, i) => {
-          dot.classList.toggle('active', i === currentFullscreenSlideIdx);
-        });
+        imgEl.alt = `${product.name || 'Frame'} - ${currentFullscreenSlideIdx === 1 ? 'Side View' : 'Front View'}`;
       }
     };
 
-    if (dotsEl) dotsEl.style.display = hasDual ? 'flex' : 'none';
-    if (prevBtn) prevBtn.style.display = hasDual ? 'flex' : 'none';
-    if (nextBtn) nextBtn.style.display = hasDual ? 'flex' : 'none';
-
-    renderSlide(currentFullscreenSlideIdx);
+    updateImage(currentFullscreenSlideIdx);
 
     viewer.classList.add('open');
     document.body.classList.add('drawer-open');
@@ -1174,6 +1152,7 @@
       closeFullscreenViewer(true);
     });
   }
+  window.openFullscreenViewer = openFullscreenViewer;
 
   function closeFullscreenViewer(fromHistory = false) {
     const viewer = document.getElementById('fullscreen-image-viewer');
@@ -1191,19 +1170,12 @@
     if (!viewer) return;
 
     const closeBtn = document.getElementById('btn-close-fullscreen-viewer');
-    const prevBtn = document.getElementById('fs-nav-prev');
-    const nextBtn = document.getElementById('fs-nav-next');
-    const dots = viewer.querySelectorAll('.fs-dot');
-    const stage = document.getElementById('fullscreen-viewer-stage');
+    const imgEl = document.getElementById('fullscreen-main-img');
 
-    if (closeBtn) closeBtn.addEventListener('click', () => closeFullscreenViewer(false));
-
-    // Clicking the background stage outside the image closes the viewer
-    if (stage) {
-      stage.addEventListener('click', (e) => {
-        if (e.target === stage || e.target.id === 'fullscreen-img-wrap') {
-          closeFullscreenViewer(false);
-        }
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeFullscreenViewer(false);
       });
     }
 
@@ -1212,27 +1184,18 @@
       currentFullscreenSlideIdx = idx === 1 ? 1 : 0;
       const frontImg = (currentFullscreenProduct.images && currentFullscreenProduct.images[0]) ? formatProductImage(currentFullscreenProduct.images[0]) : formatProductImage(currentFullscreenProduct.image);
       const sideImg = (currentFullscreenProduct.images && currentFullscreenProduct.images[1]) ? formatProductImage(currentFullscreenProduct.images[1]) : frontImg;
-      const imgEl = document.getElementById('fullscreen-main-img');
-      const counterEl = document.getElementById('fullscreen-viewer-counter');
-      const dotsEl = document.getElementById('fullscreen-dots');
-
-      if (imgEl) imgEl.src = currentFullscreenSlideIdx === 1 ? sideImg : frontImg;
-      if (counterEl) counterEl.textContent = `${currentFullscreenSlideIdx === 1 ? 'Side View' : 'Front View'} (${currentFullscreenSlideIdx + 1} of 2)`;
-      if (dotsEl) {
-        dotsEl.querySelectorAll('.fs-dot').forEach((dot, i) => {
-          dot.classList.toggle('active', i === currentFullscreenSlideIdx);
-        });
+      if (imgEl) {
+        imgEl.src = currentFullscreenSlideIdx === 1 ? sideImg : frontImg;
       }
     };
 
-    if (prevBtn) prevBtn.addEventListener('click', (e) => { e.stopPropagation(); switchSlide(0); });
-    if (nextBtn) nextBtn.addEventListener('click', (e) => { e.stopPropagation(); switchSlide(1); });
-    dots.forEach((dot, i) => dot.addEventListener('click', (e) => { e.stopPropagation(); switchSlide(i); }));
-
-    // Touch swipe left / right in fullscreen
+    // Tap/Click anywhere to close, or swipe left/right to switch views
+    let wasSwipe = false;
     let fsStartX = 0;
     let fsStartY = 0;
+
     viewer.addEventListener('touchstart', (e) => {
+      wasSwipe = false;
       if (e.touches.length === 1) {
         fsStartX = e.touches[0].clientX;
         fsStartY = e.touches[0].clientY;
@@ -1243,11 +1206,21 @@
       if (e.changedTouches.length === 0) return;
       const dX = e.changedTouches[0].clientX - fsStartX;
       const dY = e.changedTouches[0].clientY - fsStartY;
-      if (Math.abs(dX) > Math.abs(dY) && Math.abs(dX) > 30) {
+      if (Math.abs(dX) > 35 && Math.abs(dX) > Math.abs(dY)) {
+        wasSwipe = true;
         if (dX < 0) switchSlide(1);
         else switchSlide(0);
       }
     }, { passive: true });
+
+    viewer.addEventListener('click', (e) => {
+      if (e.target.closest('#btn-close-fullscreen-viewer')) return;
+      if (wasSwipe) {
+        wasSwipe = false;
+        return;
+      }
+      closeFullscreenViewer(false);
+    });
 
     // Keyboard navigation
     window.addEventListener('keydown', (e) => {
