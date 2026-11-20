@@ -1,0 +1,10 @@
+noorframepics
+noorframepics/**
+data/*.db*
+scripts/
+verify_viewer.html
+swipe_preview.html
+pos-daemon/
+.agents/
+scratch/
+node_modules
