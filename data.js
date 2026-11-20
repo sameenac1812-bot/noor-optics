@@ -46,7 +46,7 @@ const LENS_PACKAGES = [
     "id": "lens-photochromic",
     "name": "Adaptive Photochromic Transition",
     "tag": "All-Day",
-    "price": 1199,
+    "price": 2199,
     "description": "Rapidly darkens into grey sunglasses outdoors in UV sunlight."
   }
 ];
