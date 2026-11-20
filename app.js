@@ -1005,15 +1005,17 @@
     } catch (_) {}
   }
 
-  function popOverlayState(overlayId) {
+  function popOverlayState(overlayId, skipHistoryBack = false) {
     const idx = activeOverlayStack.findIndex(item => item.id === overlayId);
     if (idx !== -1) {
       activeOverlayStack.splice(idx, 1);
-      try {
-        if (window.history.state && window.history.state.noorOverlay === overlayId) {
-          window.history.back();
-        }
-      } catch (_) {}
+      if (!skipHistoryBack) {
+        try {
+          if (window.history.state && window.history.state.noorOverlay === overlayId) {
+            window.history.back();
+          }
+        } catch (_) {}
+      }
     }
   }
 
@@ -1049,16 +1051,16 @@
     }
   }
 
-  function closeDrawer(drawerElem) {
+  function closeDrawer(drawerElem, skipHistory = false) {
     if (!drawerElem) return;
     const drawerId = drawerElem.id || '';
-    if (drawerId) popOverlayState(drawerId);
+    if (drawerId) popOverlayState(drawerId, skipHistory);
     closeDrawerInternal(drawerElem);
   }
 
-  function closeAllDrawers() {
+  function closeAllDrawers(skipHistory = false) {
     [DOM.cartDrawer, DOM.wishlistDrawer, DOM.filterDrawer, DOM.mobileMenuDrawer].forEach(drawer => {
-      if (drawer && drawer.id) popOverlayState(drawer.id);
+      if (drawer && drawer.id) popOverlayState(drawer.id, skipHistory);
     });
     closeAllDrawersInternal();
   }
@@ -1094,22 +1096,22 @@
     }
   }
 
-  function closeModal(modalElem) {
+  function closeModal(modalElem, skipHistory = false) {
     if (!modalElem) return;
     const modalId = modalElem.id || '';
-    if (modalId) popOverlayState(modalId);
+    if (modalId) popOverlayState(modalId, skipHistory);
     closeModalInternal(modalElem);
   }
 
-  function closeAllModals() {
+  function closeAllModals(skipHistory = false) {
     [DOM.quickViewModal, DOM.checkoutModal].forEach(modal => {
       if (modal) {
-        if (modal.id) popOverlayState(modal.id);
+        if (modal.id) popOverlayState(modal.id, skipHistory);
         modal.classList.remove('open');
       }
     });
     if (DOM.fullscreenViewer) {
-      popOverlayState('fullscreen-image-viewer');
+      popOverlayState('fullscreen-image-viewer', skipHistory);
       DOM.fullscreenViewer.classList.remove('open');
     }
     if (activeOverlayStack.length === 0) {
@@ -1456,7 +1458,7 @@
     if (btnSubmit) {
       btnSubmit.addEventListener('click', () => {
         addToCart(product.id, state.selectedColorName, state.selectedLensPackageId);
-        closeModal(DOM.quickViewModal);
+        closeModal(DOM.quickViewModal, true);
       });
     }
 
@@ -1478,7 +1480,8 @@
       return;
     }
 
-    closeAllDrawers();
+    // Close drawers cleanly without firing an async history back that would dismiss the checkout modal
+    closeAllDrawers(true);
 
     const subtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
     const threshold = (window.NOOR_BRAND && window.NOOR_BRAND.freeShippingThreshold) || 1999;
@@ -1514,6 +1517,7 @@
     }
     if (submitBtn) {
       submitBtn.textContent = 'Confirm Order & Pay via UPI';
+      submitBtn.disabled = false;
     }
 
     openModal(DOM.checkoutModal);
@@ -2247,7 +2251,7 @@
         if (addBagBtn) {
           e.stopPropagation();
           const id = addBagBtn.getAttribute('data-id');
-          openQuickView(id);
+          addToCart(id);
           return;
         }
 
