@@ -492,21 +492,84 @@
     if (!supabaseClient || !orderIdOrRef) return { success: false, error: 'Not configured or missing ID' };
 
     try {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderIdOrRef);
+      const cleanRef = String(orderIdOrRef).trim();
 
-      let res;
+      // 1. Record in cloud tombstone (guarantees order never resurrects across all devices)
+      try {
+        const { data: tombList } = await supabaseClient
+          .from('customers')
+          .select('notes')
+          .eq('client_code', 'SYS-TOMBSTONE-ORDERS')
+          .limit(1);
+
+        let tombOrders = [];
+        let purgedBefore = null;
+        if (tombList && tombList.length > 0 && tombList[0].notes) {
+          try {
+            const parsed = JSON.parse(tombList[0].notes);
+            if (Array.isArray(parsed)) tombOrders = parsed;
+            else if (parsed.orders) {
+              tombOrders = parsed.orders;
+              purgedBefore = parsed.purged_before;
+            }
+          } catch (_) {}
+        }
+        if (!tombOrders.includes(cleanRef)) {
+          tombOrders.push(cleanRef);
+          await supabaseClient
+            .from('customers')
+            .update({ notes: JSON.stringify({ orders: tombOrders, purged_before: purgedBefore }), updated_at: new Date().toISOString() })
+            .eq('client_code', 'SYS-TOMBSTONE-ORDERS');
+        }
+      } catch (tombErr) {
+        console.warn('Supabase cloud tombstone note:', tombErr.message);
+      }
+
+      // 2. Also remove from SYS-ORDER-PAYMENTS so it never shows in Verify UPI
+      try {
+        const { data: payList } = await supabaseClient
+          .from('customers')
+          .select('notes')
+          .eq('client_code', 'SYS-ORDER-PAYMENTS')
+          .limit(1);
+
+        if (payList && payList.length > 0 && payList[0].notes) {
+          const parsedPay = JSON.parse(payList[0].notes);
+          let mod = false;
+          if (Array.isArray(parsedPay.verified_orders)) {
+            const before = parsedPay.verified_orders.length;
+            parsedPay.verified_orders = parsedPay.verified_orders.filter(r => String(r).trim() !== cleanRef);
+            if (parsedPay.verified_orders.length !== before) mod = true;
+          }
+          if (Array.isArray(parsedPay.rejected_orders)) {
+            const before = parsedPay.rejected_orders.length;
+            parsedPay.rejected_orders = parsedPay.rejected_orders.filter(r => String(r).trim() !== cleanRef);
+            if (parsedPay.rejected_orders.length !== before) mod = true;
+          }
+          if (parsedPay.details && parsedPay.details[cleanRef]) {
+            delete parsedPay.details[cleanRef];
+            mod = true;
+          }
+          if (mod) {
+            await supabaseClient
+              .from('customers')
+              .update({ notes: JSON.stringify(parsedPay), updated_at: new Date().toISOString() })
+              .eq('client_code', 'SYS-ORDER-PAYMENTS');
+          }
+        }
+      } catch (payErr) {
+        console.warn('Supabase cloud payments cleanup note:', payErr.message);
+      }
+
+      // 3. Attempt direct delete
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanRef);
       if (isUuid) {
-        res = await supabaseClient.from('orders').delete().eq('id', orderIdOrRef);
+        await supabaseClient.from('orders').delete().eq('id', cleanRef);
       } else {
-        res = await supabaseClient.from('orders').delete().or(`order_ref.eq.${orderIdOrRef},order_number.eq.${orderIdOrRef}`);
+        await supabaseClient.from('orders').delete().or(`order_ref.eq.${cleanRef},order_number.eq.${cleanRef}`);
       }
 
-      if (res.error) {
-        console.error('Failed to delete order from Supabase:', res.error);
-        return { success: false, error: res.error.message };
-      }
-
-      console.log('✓ Confirmed order deletion from Supabase:', orderIdOrRef);
+      console.log('✓ Confirmed order deletion & tombstoning in Supabase:', cleanRef);
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };

@@ -516,6 +516,7 @@
       const activeOrders = getOrdersForDashRange((state.ordersCache || []).filter(o => {
         if (!o) return false;
         if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
+        if (o.order_ref && localDeletedSet.has(String(o.order_ref).toLowerCase().trim())) return false;
         if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
         return true;
       }), state.dashRange, state.dashCustomStart, state.dashCustomEnd);
@@ -846,6 +847,7 @@
         if (o.order_number && /TEST-REF|GHOST-TEST/i.test(o.order_number)) return false;
         if (o.customer_name && /Concierge Test/i.test(o.customer_name)) return false;
         if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
+        if (o.order_ref && localDeletedSet.has(String(o.order_ref).toLowerCase().trim())) return false;
         if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
         return true;
       });
@@ -1095,6 +1097,7 @@
       if (o.order_number && /TEST-REF|GHOST-TEST/i.test(o.order_number)) return false;
       if (o.customer_name && /Concierge Test/i.test(o.customer_name)) return false;
       if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
+      if (o.order_ref && localDeletedSet.has(String(o.order_ref).toLowerCase().trim())) return false;
       if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
       return true;
     });
@@ -1109,6 +1112,7 @@
     const upiPendingCount = cleanOrders.filter(o => getOrderChannel(o) === 'WEBSITE' && o.payment_status === 'AWAITING_VERIFICATION').length;
     let totalDueSum = 0;
     const dueCount = cleanOrders.filter(o => {
+      if (getOrderChannel(o) !== 'POS') return false; // ONLY in-store POS orders belong in Pending Due tab
       if (o.status === 'CANCELLED') return false;
       const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
       const rawPaid = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
@@ -1145,6 +1149,7 @@
       if (channel === 'WEBSITE' && orderChan !== 'WEBSITE') return false;
       if (channel === 'UPI_PENDING' && (orderChan !== 'WEBSITE' || o.payment_status !== 'AWAITING_VERIFICATION')) return false;
       if (channel === 'DUE') {
+        if (orderChan !== 'POS') return false; // ONLY in-store POS orders belong in Pending Due tab
         if (o.status === 'CANCELLED') return false;
         const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));
         const rawPaid = (o.amount_paid_inr != null) ? o.amount_paid_inr : ((o.amount_paid_paise || 0) / 100);
@@ -2060,6 +2065,39 @@
         },
         body: JSON.stringify({ notes: JSON.stringify(tombData), updated_at: new Date().toISOString() })
       });
+
+      // 2. Clear from SYS-ORDER-PAYMENTS
+      try {
+        const payRes = await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/customers?client_code=eq.SYS-ORDER-PAYMENTS`, {
+          headers: { 'apikey': CLOUD_SYNC_CFG.key, 'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}` }
+        });
+        if (payRes.ok) {
+          const payList = await payRes.json();
+          if (payList[0]?.notes) {
+            const p = JSON.parse(payList[0].notes);
+            let mod = false;
+            if (Array.isArray(p.verified_orders)) {
+              p.verified_orders = p.verified_orders.filter(r => String(r).trim() !== String(orderRef).trim());
+              mod = true;
+            }
+            if (Array.isArray(p.rejected_orders)) {
+              p.rejected_orders = p.rejected_orders.filter(r => String(r).trim() !== String(orderRef).trim());
+              mod = true;
+            }
+            if (p.details && p.details[orderRef]) {
+              delete p.details[orderRef];
+              mod = true;
+            }
+            if (mod) {
+              await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/customers?client_code=eq.SYS-ORDER-PAYMENTS`, {
+                method: 'PATCH',
+                headers: { 'apikey': CLOUD_SYNC_CFG.key, 'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notes: JSON.stringify(p), updated_at: new Date().toISOString() })
+              });
+            }
+          }
+        }
+      } catch (_) {}
     } catch (e) {
       console.warn('Cloud tombstone write note:', e);
     }
@@ -2105,6 +2143,39 @@
         },
         body: JSON.stringify({ notes: JSON.stringify(tombData), updated_at: new Date().toISOString() })
       });
+
+      // 2. Clear from SYS-ORDER-PAYMENTS
+      try {
+        const payRes = await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/customers?client_code=eq.SYS-ORDER-PAYMENTS`, {
+          headers: { 'apikey': CLOUD_SYNC_CFG.key, 'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}` }
+        });
+        if (payRes.ok) {
+          const payList = await payRes.json();
+          if (payList[0]?.notes) {
+            const p = JSON.parse(payList[0].notes);
+            let mod = false;
+            if (Array.isArray(p.verified_orders)) {
+              p.verified_orders = p.verified_orders.filter(r => String(r).trim() !== String(orderRef).trim());
+              mod = true;
+            }
+            if (Array.isArray(p.rejected_orders)) {
+              p.rejected_orders = p.rejected_orders.filter(r => String(r).trim() !== String(orderRef).trim());
+              mod = true;
+            }
+            if (p.details && p.details[orderRef]) {
+              delete p.details[orderRef];
+              mod = true;
+            }
+            if (mod) {
+              await fetch(`${CLOUD_SYNC_CFG.url}/rest/v1/customers?client_code=eq.SYS-ORDER-PAYMENTS`, {
+                method: 'PATCH',
+                headers: { 'apikey': CLOUD_SYNC_CFG.key, 'Authorization': `Bearer ${CLOUD_SYNC_CFG.key}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notes: JSON.stringify(p), updated_at: new Date().toISOString() })
+              });
+            }
+          }
+        }
+      } catch (_) {}
     } catch (e) {
       console.warn('Cloud tombstone write note:', e);
     }
@@ -10422,6 +10493,7 @@
     const dueOrders = (state.ordersCache || []).filter(o => {
       if (!o || o.status === 'CANCELLED') return false;
       if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
+      if (o.order_ref && localDeletedSet.has(String(o.order_ref).toLowerCase().trim())) return false;
       if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
 
       const totalPayable = (o.total_payable_paise ? (o.total_payable_paise / 100) : (o.total_payable_inr || 0));

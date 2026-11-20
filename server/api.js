@@ -1469,12 +1469,27 @@ router.delete('/customers/:id', authenticateToken, (req, res) => {
       console.warn('Tombstone insert note:', e.message);
     }
 
-    // 2. Delete from Supabase cloud
+    // 2. Cascade delete & tombstone any orders linked to this client so orders never resurrect the customer
+    const clientOrders = db.prepare('SELECT id, order_number FROM orders WHERE customer_id = ?').all(client.id);
+    for (const co of clientOrders) {
+      try {
+        db.prepare("INSERT OR IGNORE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(co.order_number);
+        if (co.id) db.prepare("INSERT OR IGNORE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(co.id);
+        deleteOrderFromSupabase(co.order_number, co.id).catch(() => {});
+        db.prepare('DELETE FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE order_id = ?)').run(co.id);
+        db.prepare('DELETE FROM invoices WHERE order_id = ?').run(co.id);
+        db.prepare('DELETE FROM payments WHERE order_id = ?').run(co.id);
+        db.prepare('DELETE FROM print_jobs WHERE order_id = ?').run(co.id);
+        db.prepare('DELETE FROM order_items WHERE order_id = ?').run(co.id);
+        db.prepare('DELETE FROM orders WHERE id = ?').run(co.id);
+      } catch (_) {}
+    }
+
+    // 3. Delete from Supabase cloud
     deleteCustomerFromSupabase(client.id, client.phone).catch(console.warn);
 
-    // 3. Remove linked prescriptions & disassociate orders
+    // 4. Remove linked prescriptions & delete customer
     db.prepare('DELETE FROM prescriptions WHERE client_id = ?').run(client.id);
-    db.prepare('UPDATE orders SET customer_id = NULL WHERE customer_id = ?').run(client.id);
     db.prepare('DELETE FROM customers WHERE id = ?').run(client.id);
 
     logAudit(req.user.id, req.user.email, 'CLIENT_DELETED_PERMANENTLY', 'CLIENT', client.id, {
@@ -3509,17 +3524,17 @@ router.delete('/orders/:id', authenticateToken, async (req, res) => {
   }
   if (!order) {
     try {
-      db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(orderId);
+      db.prepare("INSERT OR IGNORE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(orderId);
       if (orderNumParam) {
-        db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(orderNumParam);
+        db.prepare("INSERT OR IGNORE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(orderNumParam);
       }
     } catch (_) {}
-    await deleteOrderFromSupabase(orderNumParam || orderId).catch(() => {});
+    await deleteOrderFromSupabase(orderNumParam || orderId, orderId).catch(() => {});
     return res.json({ success: true, message: 'Order tombstoned and removed.' });
   }
 
   // Delete from Supabase cloud first so next sync won't resurrect it
-  await deleteOrderFromSupabase(order.order_number).catch(err => console.warn('Supabase delete warning:', err.message));
+  await deleteOrderFromSupabase(order.order_number, order.id).catch(err => console.warn('Supabase delete warning:', err.message));
 
   const actualOrderId = order.id;
 
@@ -3563,11 +3578,26 @@ router.delete('/orders/:id', authenticateToken, async (req, res) => {
 
     // 3. Record in tombstone register so it never re-syncs from cloud
     try {
-      db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(order.order_number);
+      db.prepare("INSERT OR IGNORE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(order.order_number);
       if (order.id) {
-        db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(order.id);
+        db.prepare("INSERT OR IGNORE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(order.id);
       }
     } catch (tErr) {}
+
+    // 4. If this order belonged to a customer, check if the customer has 0 remaining orders
+    if (order.customer_id) {
+      try {
+        const rem = db.prepare('SELECT count(*) as c FROM orders WHERE customer_id = ?').get(order.customer_id);
+        if (!rem || rem.c === 0) {
+          const cust = db.prepare('SELECT id, client_code, name, phone, notes FROM customers WHERE id = ?').get(order.customer_id);
+          if (cust && (cust.notes?.includes('Created via Supabase Order Sync') || order.channel !== 'POS')) {
+            db.prepare('DELETE FROM prescriptions WHERE client_id = ?').run(cust.id);
+            db.prepare('DELETE FROM customers WHERE id = ?').run(cust.id);
+            deleteCustomerFromSupabase(cust.id, cust.phone).catch(() => {});
+          }
+        }
+      } catch (_) {}
+    }
 
     logAudit(req.user.id, req.user.email, 'ORDER_DELETED', 'ORDER', actualOrderId, {
       orderNumber: order.order_number,

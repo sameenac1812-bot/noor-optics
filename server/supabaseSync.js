@@ -49,10 +49,10 @@ async function fetchCloudOrderTombstones() {
     let purgedBefore = null;
 
     if (Array.isArray(parsed)) {
-      parsed.forEach(ref => orderSet.add(String(ref)));
+      parsed.forEach(ref => { if (ref) orderSet.add(String(ref).toLowerCase().trim()); });
     } else if (parsed && typeof parsed === 'object') {
       if (Array.isArray(parsed.orders)) {
-        parsed.orders.forEach(ref => orderSet.add(String(ref)));
+        parsed.orders.forEach(ref => { if (ref) orderSet.add(String(ref).toLowerCase().trim()); });
       }
       if (parsed.purged_before) {
         purgedBefore = parsed.purged_before;
@@ -405,9 +405,10 @@ async function pushDeletedProductToCloudTombstone(productId, sku = null, name = 
 /**
  * Record a deleted order reference into the Supabase cloud tombstone
  */
-async function pushDeletedOrderToCloudTombstone(orderRef) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !orderRef) return;
+async function pushDeletedOrderToCloudTombstone(orderRef, orderId = null) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || (!orderRef && !orderId)) return;
   try {
+    const refsToAdd = [orderRef, orderId].filter(Boolean).map(x => String(x).trim());
     // 1. Fetch current
     const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-ORDERS`, {
       headers: {
@@ -434,9 +435,9 @@ async function pushDeletedOrderToCloudTombstone(orderRef) {
       }
     }
 
-    if (!existingOrders.includes(orderRef)) {
-      existingOrders.push(orderRef);
-    }
+    refsToAdd.forEach(r => {
+      if (!existingOrders.includes(r)) existingOrders.push(r);
+    });
 
     const payload = {
       notes: JSON.stringify({ orders: existingOrders, purged_before: purgedBefore }),
@@ -471,6 +472,49 @@ async function pushDeletedOrderToCloudTombstone(orderRef) {
         })
       });
     }
+
+    // 2. Also immediately remove from SYS-ORDER-PAYMENTS so it never shows in Verify UPI
+    try {
+      const payRes = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-ORDER-PAYMENTS`, {
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      if (payRes.ok) {
+        const payList = await payRes.json();
+        if (Array.isArray(payList) && payList.length > 0 && payList[0].notes) {
+          const parsedPay = JSON.parse(payList[0].notes);
+          let payModified = false;
+          if (Array.isArray(parsedPay.verified_orders)) {
+            const origLen = parsedPay.verified_orders.length;
+            parsedPay.verified_orders = parsedPay.verified_orders.filter(r => !refsToAdd.includes(String(r).trim()));
+            if (parsedPay.verified_orders.length !== origLen) payModified = true;
+          }
+          if (Array.isArray(parsedPay.rejected_orders)) {
+            const origLen = parsedPay.rejected_orders.length;
+            parsedPay.rejected_orders = parsedPay.rejected_orders.filter(r => !refsToAdd.includes(String(r).trim()));
+            if (parsedPay.rejected_orders.length !== origLen) payModified = true;
+          }
+          if (parsedPay.details) {
+            refsToAdd.forEach(r => {
+              if (parsedPay.details[r]) {
+                delete parsedPay.details[r];
+                payModified = true;
+              }
+            });
+          }
+          if (payModified) {
+            await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-ORDER-PAYMENTS`, {
+              method: 'PATCH',
+              headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ notes: JSON.stringify(parsedPay), updated_at: new Date().toISOString() })
+            });
+          }
+        }
+      }
+    } catch (_) {}
   } catch (err) {
     console.warn('[SupabaseSync] Error updating cloud order tombstone:', err.message);
   }
@@ -669,20 +713,26 @@ function syncOrderPaymentsInDb(db, orderId, isPos, paymentMethod, paymentStatus,
 /**
  * Process a single cloud order record and upsert into local SQLite database
  */
-async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), cloudRejectedOrders = new Set(), cloudDetails = {}, cloudTombstones = new Set()) {
+async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), cloudRejectedOrders = new Set(), cloudDetails = {}, cloudTombstones = new Set(), purgedBefore = null) {
       try {
         if (!co.order_ref) return null;
-      // Filter out dummy/test ghost orders
-      if (/TEST-REF|GHOST-TEST/i.test(co.order_ref)) return null;
 
-      // Filter out if explicitly in cloud tombstones
-      if (cloudTombstones.has(co.order_ref) || (co.id && cloudTombstones.has(co.id))) {
+      const refLower = String(co.order_ref || '').toLowerCase().trim();
+      const numLower = String(co.order_number || '').toLowerCase().trim();
+      const idLower = String(co.id || '').toLowerCase().trim();
+
+      // Filter out dummy/test ghost orders
+      if (/TEST-REF|GHOST-TEST|TEMP-PROBE/i.test(co.order_ref || '') || /TEST-REF|GHOST-TEST|TEMP-PROBE/i.test(co.order_number || '')) return null;
+      if (/Concierge Test|Mohd Farhan Test|Fraud User|testing 123/i.test(co.customer_name || '')) return null;
+
+      // Filter out if explicitly in cloud tombstones (case-insensitive)
+      if (cloudTombstones.has(refLower) || cloudTombstones.has(numLower) || cloudTombstones.has(idLower)) {
         return null;
       }
 
       // Check if this order was deleted / tombstoned in local SQLite
       try {
-        const isTombstoned = db.prepare('SELECT order_number FROM deleted_orders WHERE order_number = ?').get(co.order_ref);
+        const isTombstoned = db.prepare('SELECT order_number FROM deleted_orders WHERE order_number = ? OR order_number = ? OR order_number = ?').get(co.order_ref, co.order_number || '', co.id || '');
         if (isTombstoned) return null;
       } catch (e) {}
 
@@ -710,6 +760,15 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
         isPos = (co.items[0].channel === 'POS' || co.items[0].channel === 'IN-STORE');
       } else {
         isPos = false; // Default to website if ambiguous, NEVER auto-convert to in-store POS
+      }
+
+      // If website order was placed before cloud purge timestamp, drop it completely
+      if (purgedBefore && !isPos) {
+        const orderTime = new Date(orderDate).getTime();
+        const purgeTime = new Date(purgedBefore).getTime();
+        if (orderTime <= purgeTime) {
+          return null;
+        }
       }
       const channel = isPos ? 'POS' : 'WEBSITE';
       const channelCode = isPos ? 2 : 1;
@@ -903,8 +962,8 @@ async function processSingleCloudOrder(db, co, cloudVerifiedOrders = new Set(), 
         }
       } catch (e) {}
 
-      // Only create customer record if client is not tombstoned and not purged
-      if (!customerId && !isTombstoned && phone && name && name !== 'Walk-in Client' && name !== 'Walk-in Customer') {
+      // Only create customer record if order is In-Store POS, client is not tombstoned and not purged
+      if (isPos && !customerId && !isTombstoned && phone && name && name !== 'Walk-in Client' && name !== 'Walk-in Customer') {
         customerId = 'cust-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
         const clientCode = 'CLI-' + Math.floor(10000 + Math.random() * 90000);
         try {
@@ -1367,12 +1426,14 @@ async function syncSupabaseOrders(db, force = false) {
     const { orders: cloudTombstones, purgedBefore } = await fetchCloudOrderTombstones();
     for (const deadRef of cloudTombstones) {
       try {
-        db.prepare("INSERT OR REPLACE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(deadRef);
+        db.prepare("INSERT OR IGNORE INTO deleted_orders (order_number, deleted_at) VALUES (?, datetime('now'))").run(deadRef);
         // Cascade delete from local orders if still present
         const deadOrder = db.prepare('SELECT id FROM orders WHERE order_number = ? OR id = ?').get(deadRef, deadRef);
         if (deadOrder) {
           db.prepare('DELETE FROM invoice_items WHERE invoice_id IN (SELECT id FROM invoices WHERE order_id = ?)').run(deadOrder.id);
           db.prepare('DELETE FROM invoices WHERE order_id = ?').run(deadOrder.id);
+          db.prepare('DELETE FROM payments WHERE order_id = ?').run(deadOrder.id);
+          db.prepare('DELETE FROM print_jobs WHERE order_id = ?').run(deadOrder.id);
           db.prepare('DELETE FROM order_items WHERE order_id = ?').run(deadOrder.id);
           db.prepare('DELETE FROM orders WHERE id = ?').run(deadOrder.id);
         }
@@ -1397,7 +1458,7 @@ async function syncSupabaseOrders(db, force = false) {
     if (!Array.isArray(cloudOrders) || cloudOrders.length === 0) return;
 
     for (const co of cloudOrders) {
-      await processSingleCloudOrder(db, co, cloudVerifiedOrders, cloudRejectedOrders, cloudDetails, cloudTombstones);
+      await processSingleCloudOrder(db, co, cloudVerifiedOrders, cloudRejectedOrders, cloudDetails, cloudTombstones, purgedBefore);
     }
   } catch (err) {
     console.warn('[SupabaseSync] Error syncing orders from Supabase:', err.message);
@@ -1441,9 +1502,9 @@ async function syncSingleOrderFromCloud(db, orderRefOrId) {
     const co = list[0];
 
     const { verified: cloudVerifiedOrders, rejected: cloudRejectedOrders, details: cloudDetails } = await fetchCloudOrderPayments();
-    const { orders: cloudTombstones } = await fetchCloudOrderTombstones();
+    const { orders: cloudTombstones, purgedBefore } = await fetchCloudOrderTombstones();
 
-    await processSingleCloudOrder(db, co, cloudVerifiedOrders, cloudRejectedOrders, cloudDetails, cloudTombstones);
+    await processSingleCloudOrder(db, co, cloudVerifiedOrders, cloudRejectedOrders, cloudDetails, cloudTombstones, purgedBefore);
 
     const ref = co.order_ref || co.order_number || co.id;
     const cldId = "ord-cld-" + String(ref).toLowerCase().replace(/[^a-z0-9]/g, "-");
@@ -1455,23 +1516,29 @@ async function syncSingleOrderFromCloud(db, orderRefOrId) {
 }
 
 /**
- * Delete single order from Supabase cloud by order reference
+ * Delete single order from Supabase cloud by order reference or id
  */
-async function deleteOrderFromSupabase(orderRef) {
-  if (!orderRef) return;
+async function deleteOrderFromSupabase(orderRef, orderId = null) {
+  if (!orderRef && !orderId) return;
   // 1. Immediately record in cloud tombstone (guaranteed persistence across all lambdas & clients)
-  await pushDeletedOrderToCloudTombstone(orderRef).catch(() => {});
+  await pushDeletedOrderToCloudTombstone(orderRef, orderId).catch(() => {});
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?order_ref=eq.${encodeURIComponent(orderRef)}`, {
+    const target = orderRef || orderId;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target);
+    const query = isUuid
+      ? `id=eq.${encodeURIComponent(target)}`
+      : `or=(order_ref.eq.${encodeURIComponent(target)},order_number.eq.${encodeURIComponent(target)})`;
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/orders?${query}`, {
       method: 'DELETE',
       headers: {
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
       }
     });
-    console.log(`[SupabaseSync] Deleted order ${orderRef} from Supabase, status: ${res.status}`);
+    console.log(`[SupabaseSync] Deleted order ${target} from Supabase, status: ${res.status}`);
     return res.ok;
   } catch (err) {
     console.warn('[SupabaseSync] Error deleting order from Supabase:', err.message);
