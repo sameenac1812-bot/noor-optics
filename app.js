@@ -1858,7 +1858,7 @@
           if (successP) successP.textContent = `Thank you for your order! We have registered your 12-digit UPI Reference (${utrVal}). Our optical team is verifying the transaction credit with our bank account. Spectacle crafting will begin immediately once approved.`;
         } else {
           if (successH3) successH3.textContent = 'Order Placed Successfully';
-          if (successP) successP.textContent = 'Thank you for choosing Noor Optics. Your bespoke Scandinavian eyewear order has been confirmed. Our master optometrist will verify your prescription details before precision glazing.';
+          if (successP) successP.textContent = 'Thank you for choosing Noor Optic Store. Your bespoke eyewear order has been confirmed. Our master optometrist will verify your prescription details before precision glazing.';
         }
       }
 
