@@ -61,7 +61,7 @@
     },
     // Active product in Quick View
     quickViewProductId: null,
-    selectedLensPackageId: 'lens-bluecut',
+    selectedLensPackageId: 'lens-antiglare',
     selectedColorName: null
   };
 
@@ -808,9 +808,9 @@
     if (!product) return null;
 
     const chosenColor = customColor || (product.colors && product.colors[0] ? product.colors[0].name : 'Standard');
-    const lensPkg = (window.LENS_PACKAGES || []).find(l => l.id === (customLensId || 'lens-bluecut')) || {
-      id: 'lens-bluecut',
-      name: 'Blue-Light Filter',
+    const lensPkg = (window.LENS_PACKAGES || []).find(l => l.id === (customLensId || 'lens-antiglare')) || {
+      id: 'lens-antiglare',
+      name: '1.60 High-Index Anti-Reflective',
       price: 0
     };
 
@@ -1250,7 +1250,7 @@
 
     state.quickViewProductId = productId;
     state.selectedColorName = product.colors && product.colors[0] ? product.colors[0].name : '';
-    state.selectedLensPackageId = 'lens-bluecut';
+    state.selectedLensPackageId = 'lens-antiglare';
 
     const lensPackages = window.LENS_PACKAGES || [];
 

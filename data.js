@@ -22,18 +22,18 @@ const NOOR_BRAND = {
 
 const LENS_PACKAGES = [
   {
-    "id": "lens-bluecut",
-    "name": "Blue-Light Filter (Computer and Screen)",
-    "tag": "Standard",
-    "price": 0,
-    "description": "Blocks 99% harmful HEV blue light with zero color distortion."
-  },
-  {
     "id": "lens-antiglare",
     "name": "1.60 High-Index Anti-Reflective",
-    "tag": "Popular",
-    "price": 699,
+    "tag": "Standard",
+    "price": 0,
     "description": "Ultra-thin, hydrophobic, smudge and scratch resistant multi-coat."
+  },
+  {
+    "id": "lens-bluecut",
+    "name": "Blue-Light Filter (Computer and Screen)",
+    "tag": "Popular",
+    "price": 499,
+    "description": "Blocks 99% harmful HEV blue light with zero color distortion."
   },
   {
     "id": "lens-progressive",

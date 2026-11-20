@@ -2778,7 +2778,7 @@ router.post('/orders/online', (req, res) => {
         shape,
         color,
         size,
-        lens_name: item.lensName || item.lens || 'Blue-Light Filter',
+        lens_name: item.lensName || item.lens || '1.60 High-Index Anti-Reflective',
         unit_price_paise: unitPrice,
         purchase_cost_paise: variant ? variant.purchase_cost_paise : 145000,
         quantity: qty,
