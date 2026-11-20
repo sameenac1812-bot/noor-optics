@@ -1,0 +1,3277 @@
+{
+  "generatedAt": "2026-11-20T13:24:34.207Z",
+  "totalFrames": 133,
+  "metalCount": 41,
+  "fiberCount": 92,
+  "pricingRules": {
+    "Metal": 999,
+    "Fiber": 599
+  },
+  "sizeRule": "Medium (all frames)",
+  "products": [
+    {
+      "id": "1001",
+      "name": "1001 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120152241.jpg",
+      "sideFile": "IMG20261120152252.jpg",
+      "images": [
+        "images/frames/1001-front.jpg",
+        "images/frames/1001-side.jpg"
+      ],
+      "alt_front": "1001 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1001 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 0,
+        "side": 1,
+        "deltaSec": 11
+      }
+    },
+    {
+      "id": "1002",
+      "name": "1002 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120152319.jpg",
+      "sideFile": "IMG20261120152336.jpg",
+      "images": [
+        "images/frames/1002-front.jpg",
+        "images/frames/1002-side.jpg"
+      ],
+      "alt_front": "1002 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1002 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 2,
+        "side": 3,
+        "deltaSec": 17
+      }
+    },
+    {
+      "id": "1003",
+      "name": "1003 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120152407.jpg",
+      "sideFile": "IMG20261120152411.jpg",
+      "images": [
+        "images/frames/1003-front.jpg",
+        "images/frames/1003-side.jpg"
+      ],
+      "alt_front": "1003 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1003 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 4,
+        "side": 5,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1004",
+      "name": "1004 Tortoise / Brown Square Metal Frame",
+      "shape": "Square",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120152427.jpg",
+      "sideFile": "IMG20261120152437.jpg",
+      "images": [
+        "images/frames/1004-front.jpg",
+        "images/frames/1004-side.jpg"
+      ],
+      "alt_front": "1004 Tortoise / Brown Square Metal Frame - Front View",
+      "alt_side": "1004 Tortoise / Brown Square Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 6,
+        "side": 7,
+        "deltaSec": 10
+      }
+    },
+    {
+      "id": "1005",
+      "name": "1005 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120152548.jpg",
+      "sideFile": "IMG20261120152554.jpg",
+      "images": [
+        "images/frames/1005-front.jpg",
+        "images/frames/1005-side.jpg"
+      ],
+      "alt_front": "1005 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1005 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 8,
+        "side": 9,
+        "deltaSec": 6
+      }
+    },
+    {
+      "id": "1006",
+      "name": "1006 Tortoise / Brown Geometric/Hexagonal Metal Frame",
+      "shape": "Geometric/Hexagonal",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120152619.jpg",
+      "sideFile": "IMG20261120152634.jpg",
+      "images": [
+        "images/frames/1006-front.jpg",
+        "images/frames/1006-side.jpg"
+      ],
+      "alt_front": "1006 Tortoise / Brown Geometric/Hexagonal Metal Frame - Front View",
+      "alt_side": "1006 Tortoise / Brown Geometric/Hexagonal Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 10,
+        "side": 11,
+        "deltaSec": 15
+      }
+    },
+    {
+      "id": "1007",
+      "name": "1007 Tortoise / Brown Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120152706.jpg",
+      "sideFile": "IMG20261120152715.jpg",
+      "images": [
+        "images/frames/1007-front.jpg",
+        "images/frames/1007-side.jpg"
+      ],
+      "alt_front": "1007 Tortoise / Brown Round Metal Frame - Front View",
+      "alt_side": "1007 Tortoise / Brown Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 12,
+        "side": 13,
+        "deltaSec": 9
+      }
+    },
+    {
+      "id": "1008",
+      "name": "1008 Tortoise / Brown Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120152727.jpg",
+      "sideFile": "IMG20261120152735.jpg",
+      "images": [
+        "images/frames/1008-front.jpg",
+        "images/frames/1008-side.jpg"
+      ],
+      "alt_front": "1008 Tortoise / Brown Round Metal Frame - Front View",
+      "alt_side": "1008 Tortoise / Brown Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 14,
+        "side": 15,
+        "deltaSec": 8
+      }
+    },
+    {
+      "id": "1009",
+      "name": "1009 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120152746.jpg",
+      "sideFile": "IMG20261120152753.jpg",
+      "images": [
+        "images/frames/1009-front.jpg",
+        "images/frames/1009-side.jpg"
+      ],
+      "alt_front": "1009 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1009 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 16,
+        "side": 17,
+        "deltaSec": 7
+      }
+    },
+    {
+      "id": "1010",
+      "name": "1010 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120152941.jpg",
+      "sideFile": "IMG20261120152944.jpg",
+      "images": [
+        "images/frames/1010-front.jpg",
+        "images/frames/1010-side.jpg"
+      ],
+      "alt_front": "1010 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1010 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 18,
+        "side": 19,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1011",
+      "name": "1011 Tortoise / Brown Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120152959.jpg",
+      "sideFile": "IMG20261120153031.jpg",
+      "images": [
+        "images/frames/1011-front.jpg",
+        "images/frames/1011-side.jpg"
+      ],
+      "alt_front": "1011 Tortoise / Brown Round Metal Frame - Front View",
+      "alt_side": "1011 Tortoise / Brown Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 20,
+        "side": 21,
+        "deltaSec": 32
+      }
+    },
+    {
+      "id": "1012",
+      "name": "1012 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153114.jpg",
+      "sideFile": "IMG20261120153118.jpg",
+      "images": [
+        "images/frames/1012-front.jpg",
+        "images/frames/1012-side.jpg"
+      ],
+      "alt_front": "1012 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1012 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 22,
+        "side": 23,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1013",
+      "name": "1013 Tortoise / Brown Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153129.jpg",
+      "sideFile": "IMG20261120153132.jpg",
+      "images": [
+        "images/frames/1013-front.jpg",
+        "images/frames/1013-side.jpg"
+      ],
+      "alt_front": "1013 Tortoise / Brown Round Metal Frame - Front View",
+      "alt_side": "1013 Tortoise / Brown Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 24,
+        "side": 25,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1014",
+      "name": "1014 Gold Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Gold",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153157.jpg",
+      "sideFile": "IMG20261120153201.jpg",
+      "images": [
+        "images/frames/1014-front.jpg",
+        "images/frames/1014-side.jpg"
+      ],
+      "alt_front": "1014 Gold Round Metal Frame - Front View",
+      "alt_side": "1014 Gold Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 27,
+        "side": 28,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1015",
+      "name": "1015 Tortoise / Brown Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153212.jpg",
+      "sideFile": "IMG20261120153219.jpg",
+      "images": [
+        "images/frames/1015-front.jpg",
+        "images/frames/1015-side.jpg"
+      ],
+      "alt_front": "1015 Tortoise / Brown Round Metal Frame - Front View",
+      "alt_side": "1015 Tortoise / Brown Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 29,
+        "side": 30,
+        "deltaSec": 7
+      }
+    },
+    {
+      "id": "1016",
+      "name": "1016 Gold Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Gold",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153231.jpg",
+      "sideFile": "IMG20261120153235.jpg",
+      "images": [
+        "images/frames/1016-front.jpg",
+        "images/frames/1016-side.jpg"
+      ],
+      "alt_front": "1016 Gold Round Metal Frame - Front View",
+      "alt_side": "1016 Gold Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 31,
+        "side": 32,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1017",
+      "name": "1017 Tortoise / Brown Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153249.jpg",
+      "sideFile": "IMG20261120153254.jpg",
+      "images": [
+        "images/frames/1017-front.jpg",
+        "images/frames/1017-side.jpg"
+      ],
+      "alt_front": "1017 Tortoise / Brown Round Metal Frame - Front View",
+      "alt_side": "1017 Tortoise / Brown Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 33,
+        "side": 34,
+        "deltaSec": 5
+      }
+    },
+    {
+      "id": "1018",
+      "name": "1018 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153416.jpg",
+      "sideFile": "IMG20261120153426.jpg",
+      "images": [
+        "images/frames/1018-front.jpg",
+        "images/frames/1018-side.jpg"
+      ],
+      "alt_front": "1018 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1018 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 36,
+        "side": 37,
+        "deltaSec": 10
+      }
+    },
+    {
+      "id": "1019",
+      "name": "1019 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153444.jpg",
+      "sideFile": "IMG20261120153452.jpg",
+      "images": [
+        "images/frames/1019-front.jpg",
+        "images/frames/1019-side.jpg"
+      ],
+      "alt_front": "1019 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1019 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 38,
+        "side": 39,
+        "deltaSec": 8
+      }
+    },
+    {
+      "id": "1020",
+      "name": "1020 Tortoise / Brown Geometric/Hexagonal Metal Frame",
+      "shape": "Geometric/Hexagonal",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153509.jpg",
+      "sideFile": "IMG20261120153513.jpg",
+      "images": [
+        "images/frames/1020-front.jpg",
+        "images/frames/1020-side.jpg"
+      ],
+      "alt_front": "1020 Tortoise / Brown Geometric/Hexagonal Metal Frame - Front View",
+      "alt_side": "1020 Tortoise / Brown Geometric/Hexagonal Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 40,
+        "side": 41,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1021",
+      "name": "1021 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153526.jpg",
+      "sideFile": "IMG20261120153530.jpg",
+      "images": [
+        "images/frames/1021-front.jpg",
+        "images/frames/1021-side.jpg"
+      ],
+      "alt_front": "1021 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1021 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 42,
+        "side": 43,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1022",
+      "name": "1022 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153541.jpg",
+      "sideFile": "IMG20261120153549.jpg",
+      "images": [
+        "images/frames/1022-front.jpg",
+        "images/frames/1022-side.jpg"
+      ],
+      "alt_front": "1022 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1022 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 44,
+        "side": 45,
+        "deltaSec": 8
+      }
+    },
+    {
+      "id": "1023",
+      "name": "1023 Tortoise / Brown Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153619.jpg",
+      "sideFile": "IMG20261120153626.jpg",
+      "images": [
+        "images/frames/1023-front.jpg",
+        "images/frames/1023-side.jpg"
+      ],
+      "alt_front": "1023 Tortoise / Brown Round Metal Frame - Front View",
+      "alt_side": "1023 Tortoise / Brown Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 46,
+        "side": 47,
+        "deltaSec": 7
+      }
+    },
+    {
+      "id": "1024",
+      "name": "1024 Tortoise / Brown Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153642.jpg",
+      "sideFile": "IMG20261120153646.jpg",
+      "images": [
+        "images/frames/1024-front.jpg",
+        "images/frames/1024-side.jpg"
+      ],
+      "alt_front": "1024 Tortoise / Brown Round Metal Frame - Front View",
+      "alt_side": "1024 Tortoise / Brown Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 48,
+        "side": 49,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1025",
+      "name": "1025 Tortoise / Brown Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153658.jpg",
+      "sideFile": "IMG20261120153718.jpg",
+      "images": [
+        "images/frames/1025-front.jpg",
+        "images/frames/1025-side.jpg"
+      ],
+      "alt_front": "1025 Tortoise / Brown Round Metal Frame - Front View",
+      "alt_side": "1025 Tortoise / Brown Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 50,
+        "side": 51,
+        "deltaSec": 20
+      }
+    },
+    {
+      "id": "1026",
+      "name": "1026 Tortoise / Brown Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153728.jpg",
+      "sideFile": "IMG20261120153733.jpg",
+      "images": [
+        "images/frames/1026-front.jpg",
+        "images/frames/1026-side.jpg"
+      ],
+      "alt_front": "1026 Tortoise / Brown Round Metal Frame - Front View",
+      "alt_side": "1026 Tortoise / Brown Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 52,
+        "side": 53,
+        "deltaSec": 5
+      }
+    },
+    {
+      "id": "1027",
+      "name": "1027 Tortoise / Brown Round Metal Frame",
+      "shape": "Round",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153742.jpg",
+      "sideFile": "IMG20261120153812.jpg",
+      "images": [
+        "images/frames/1027-front.jpg",
+        "images/frames/1027-side.jpg"
+      ],
+      "alt_front": "1027 Tortoise / Brown Round Metal Frame - Front View",
+      "alt_side": "1027 Tortoise / Brown Round Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 54,
+        "side": 55,
+        "deltaSec": 30
+      }
+    },
+    {
+      "id": "1028",
+      "name": "1028 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153824.jpg",
+      "sideFile": "IMG20261120153829.jpg",
+      "images": [
+        "images/frames/1028-front.jpg",
+        "images/frames/1028-side.jpg"
+      ],
+      "alt_front": "1028 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1028 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 56,
+        "side": 57,
+        "deltaSec": 5
+      }
+    },
+    {
+      "id": "1029",
+      "name": "1029 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120153839.jpg",
+      "sideFile": "IMG20261120153843.jpg",
+      "images": [
+        "images/frames/1029-front.jpg",
+        "images/frames/1029-side.jpg"
+      ],
+      "alt_front": "1029 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1029 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 58,
+        "side": 59,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1030",
+      "name": "1030 Silver Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Silver",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120154042.jpg",
+      "sideFile": "IMG20261120154047.jpg",
+      "images": [
+        "images/frames/1030-front.jpg",
+        "images/frames/1030-side.jpg"
+      ],
+      "alt_front": "1030 Silver Rectangle Metal Frame - Front View",
+      "alt_side": "1030 Silver Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 60,
+        "side": 61,
+        "deltaSec": 5
+      }
+    },
+    {
+      "id": "1031",
+      "name": "1031 Gold Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Gold",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120154112.jpg",
+      "sideFile": "IMG20261120154116.jpg",
+      "images": [
+        "images/frames/1031-front.jpg",
+        "images/frames/1031-side.jpg"
+      ],
+      "alt_front": "1031 Gold Rectangle Metal Frame - Front View",
+      "alt_side": "1031 Gold Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 62,
+        "side": 63,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1032",
+      "name": "1032 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120154125.jpg",
+      "sideFile": "IMG20261120154130.jpg",
+      "images": [
+        "images/frames/1032-front.jpg",
+        "images/frames/1032-side.jpg"
+      ],
+      "alt_front": "1032 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1032 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 64,
+        "side": 65,
+        "deltaSec": 5
+      }
+    },
+    {
+      "id": "1033",
+      "name": "1033 Tortoise / Brown Square Metal Frame",
+      "shape": "Square",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120154154.jpg",
+      "sideFile": "IMG20261120154200.jpg",
+      "images": [
+        "images/frames/1033-front.jpg",
+        "images/frames/1033-side.jpg"
+      ],
+      "alt_front": "1033 Tortoise / Brown Square Metal Frame - Front View",
+      "alt_side": "1033 Tortoise / Brown Square Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 66,
+        "side": 67,
+        "deltaSec": 6
+      }
+    },
+    {
+      "id": "1034",
+      "name": "1034 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120154212.jpg",
+      "sideFile": "IMG20261120154216.jpg",
+      "images": [
+        "images/frames/1034-front.jpg",
+        "images/frames/1034-side.jpg"
+      ],
+      "alt_front": "1034 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1034 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 68,
+        "side": 69,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1035",
+      "name": "1035 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120154225.jpg",
+      "sideFile": "IMG20261120154229.jpg",
+      "images": [
+        "images/frames/1035-front.jpg",
+        "images/frames/1035-side.jpg"
+      ],
+      "alt_front": "1035 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1035 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 70,
+        "side": 71,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1036",
+      "name": "1036 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120154236.jpg",
+      "sideFile": "IMG20261120154240.jpg",
+      "images": [
+        "images/frames/1036-front.jpg",
+        "images/frames/1036-side.jpg"
+      ],
+      "alt_front": "1036 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1036 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 72,
+        "side": 73,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1037",
+      "name": "1037 Gold Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Gold",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120154303.jpg",
+      "sideFile": "IMG20261120154307.jpg",
+      "images": [
+        "images/frames/1037-front.jpg",
+        "images/frames/1037-side.jpg"
+      ],
+      "alt_front": "1037 Gold Rectangle Metal Frame - Front View",
+      "alt_side": "1037 Gold Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 74,
+        "side": 75,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1038",
+      "name": "1038 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120154319.jpg",
+      "sideFile": "IMG20261120154323.jpg",
+      "images": [
+        "images/frames/1038-front.jpg",
+        "images/frames/1038-side.jpg"
+      ],
+      "alt_front": "1038 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1038 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 76,
+        "side": 77,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1039",
+      "name": "1039 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120154646.jpg",
+      "sideFile": "IMG20261120154651.jpg",
+      "images": [
+        "images/frames/1039-front.jpg",
+        "images/frames/1039-side.jpg"
+      ],
+      "alt_front": "1039 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1039 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 78,
+        "side": 79,
+        "deltaSec": 5
+      }
+    },
+    {
+      "id": "1040",
+      "name": "1040 Tortoise / Brown Rectangle Metal Frame",
+      "shape": "Rectangle",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120154659.jpg",
+      "sideFile": "IMG20261120154703.jpg",
+      "images": [
+        "images/frames/1040-front.jpg",
+        "images/frames/1040-side.jpg"
+      ],
+      "alt_front": "1040 Tortoise / Brown Rectangle Metal Frame - Front View",
+      "alt_side": "1040 Tortoise / Brown Rectangle Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 80,
+        "side": 81,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1041",
+      "name": "1041 Tortoise / Brown Geometric/Hexagonal Metal Frame",
+      "shape": "Geometric/Hexagonal",
+      "material": "Metal",
+      "color": "Tortoise / Brown",
+      "price": 999,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120154718.jpg",
+      "sideFile": "IMG20261120154721.jpg",
+      "images": [
+        "images/frames/1041-front.jpg",
+        "images/frames/1041-side.jpg"
+      ],
+      "alt_front": "1041 Tortoise / Brown Geometric/Hexagonal Metal Frame - Front View",
+      "alt_side": "1041 Tortoise / Brown Geometric/Hexagonal Metal Frame - Side View",
+      "sourceIndex": {
+        "front": 82,
+        "side": 83,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1042",
+      "name": "1042 Classic Black Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120160701.jpg",
+      "sideFile": "IMG20261120160704.jpg",
+      "images": [
+        "images/frames/1042-front.jpg",
+        "images/frames/1042-side.jpg"
+      ],
+      "alt_front": "1042 Classic Black Round Fiber Frame - Front View",
+      "alt_side": "1042 Classic Black Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 0,
+        "side": 1,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1043",
+      "name": "1043 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120160714.jpg",
+      "sideFile": "IMG20261120160717.jpg",
+      "images": [
+        "images/frames/1043-front.jpg",
+        "images/frames/1043-side.jpg"
+      ],
+      "alt_front": "1043 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1043 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 2,
+        "side": 3,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1044",
+      "name": "1044 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120160730.jpg",
+      "sideFile": "IMG20261120160734.jpg",
+      "images": [
+        "images/frames/1044-front.jpg",
+        "images/frames/1044-side.jpg"
+      ],
+      "alt_front": "1044 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1044 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 4,
+        "side": 5,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1045",
+      "name": "1045 Classic Black Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120160742.jpg",
+      "sideFile": "IMG20261120160746.jpg",
+      "images": [
+        "images/frames/1045-front.jpg",
+        "images/frames/1045-side.jpg"
+      ],
+      "alt_front": "1045 Classic Black Round Fiber Frame - Front View",
+      "alt_side": "1045 Classic Black Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 6,
+        "side": 7,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1046",
+      "name": "1046 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120160806.jpg",
+      "sideFile": "IMG20261120160810.jpg",
+      "images": [
+        "images/frames/1046-front.jpg",
+        "images/frames/1046-side.jpg"
+      ],
+      "alt_front": "1046 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1046 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 9,
+        "side": 10,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1047",
+      "name": "1047 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120160819.jpg",
+      "sideFile": "IMG20261120160823.jpg",
+      "images": [
+        "images/frames/1047-front.jpg",
+        "images/frames/1047-side.jpg"
+      ],
+      "alt_front": "1047 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1047 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 11,
+        "side": 12,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1048",
+      "name": "1048 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120160833.jpg",
+      "sideFile": "IMG20261120160837.jpg",
+      "images": [
+        "images/frames/1048-front.jpg",
+        "images/frames/1048-side.jpg"
+      ],
+      "alt_front": "1048 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1048 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 13,
+        "side": 14,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1049",
+      "name": "1049 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120160848.jpg",
+      "sideFile": "IMG20261120160853.jpg",
+      "images": [
+        "images/frames/1049-front.jpg",
+        "images/frames/1049-side.jpg"
+      ],
+      "alt_front": "1049 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1049 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 15,
+        "side": 16,
+        "deltaSec": 5
+      }
+    },
+    {
+      "id": "1050",
+      "name": "1050 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120160902.jpg",
+      "sideFile": "IMG20261120160905.jpg",
+      "images": [
+        "images/frames/1050-front.jpg",
+        "images/frames/1050-side.jpg"
+      ],
+      "alt_front": "1050 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1050 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 17,
+        "side": 18,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1051",
+      "name": "1051 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120160914.jpg",
+      "sideFile": "IMG20261120160919.jpg",
+      "images": [
+        "images/frames/1051-front.jpg",
+        "images/frames/1051-side.jpg"
+      ],
+      "alt_front": "1051 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1051 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 19,
+        "side": 20,
+        "deltaSec": 5
+      }
+    },
+    {
+      "id": "1052",
+      "name": "1052 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120160942.jpg",
+      "sideFile": "IMG20261120160946.jpg",
+      "images": [
+        "images/frames/1052-front.jpg",
+        "images/frames/1052-side.jpg"
+      ],
+      "alt_front": "1052 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1052 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 22,
+        "side": 23,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1053",
+      "name": "1053 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120160955.jpg",
+      "sideFile": "IMG20261120160959.jpg",
+      "images": [
+        "images/frames/1053-front.jpg",
+        "images/frames/1053-side.jpg"
+      ],
+      "alt_front": "1053 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1053 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 24,
+        "side": 25,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1054",
+      "name": "1054 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120161033.jpg",
+      "sideFile": "IMG20261120161044.jpg",
+      "images": [
+        "images/frames/1054-front.jpg",
+        "images/frames/1054-side.jpg"
+      ],
+      "alt_front": "1054 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1054 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 26,
+        "side": 27,
+        "deltaSec": 11
+      }
+    },
+    {
+      "id": "1055",
+      "name": "1055 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120161055.jpg",
+      "sideFile": "IMG20261120161059.jpg",
+      "images": [
+        "images/frames/1055-front.jpg",
+        "images/frames/1055-side.jpg"
+      ],
+      "alt_front": "1055 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1055 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 28,
+        "side": 29,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1056",
+      "name": "1056 Classic Black Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120161129.jpg",
+      "sideFile": "IMG20261120161137.jpg",
+      "images": [
+        "images/frames/1056-front.jpg",
+        "images/frames/1056-side.jpg"
+      ],
+      "alt_front": "1056 Classic Black Round Fiber Frame - Front View",
+      "alt_side": "1056 Classic Black Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 30,
+        "side": 31,
+        "deltaSec": 8
+      }
+    },
+    {
+      "id": "1057",
+      "name": "1057 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120161205.jpg",
+      "sideFile": "IMG20261120161211.jpg",
+      "images": [
+        "images/frames/1057-front.jpg",
+        "images/frames/1057-side.jpg"
+      ],
+      "alt_front": "1057 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1057 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 33,
+        "side": 34,
+        "deltaSec": 6
+      }
+    },
+    {
+      "id": "1058",
+      "name": "1058 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120161224.jpg",
+      "sideFile": "IMG20261120161227.jpg",
+      "images": [
+        "images/frames/1058-front.jpg",
+        "images/frames/1058-side.jpg"
+      ],
+      "alt_front": "1058 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1058 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 35,
+        "side": 36,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1059",
+      "name": "1059 Tortoise / Brown Round Fiber Frame",
+      "shape": "Round",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120161246.jpg",
+      "sideFile": "IMG20261120161250.jpg",
+      "images": [
+        "images/frames/1059-front.jpg",
+        "images/frames/1059-side.jpg"
+      ],
+      "alt_front": "1059 Tortoise / Brown Round Fiber Frame - Front View",
+      "alt_side": "1059 Tortoise / Brown Round Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 37,
+        "side": 38,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1060",
+      "name": "1060 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162213.jpg",
+      "sideFile": "IMG20261120162216.jpg",
+      "images": [
+        "images/frames/1060-front.jpg",
+        "images/frames/1060-side.jpg"
+      ],
+      "alt_front": "1060 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1060 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 39,
+        "side": 40,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1061",
+      "name": "1061 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162317.jpg",
+      "sideFile": "IMG20261120162322.jpg",
+      "images": [
+        "images/frames/1061-front.jpg",
+        "images/frames/1061-side.jpg"
+      ],
+      "alt_front": "1061 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1061 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 41,
+        "side": 42,
+        "deltaSec": 5
+      }
+    },
+    {
+      "id": "1062",
+      "name": "1062 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162329.jpg",
+      "sideFile": "IMG20261120162332.jpg",
+      "images": [
+        "images/frames/1062-front.jpg",
+        "images/frames/1062-side.jpg"
+      ],
+      "alt_front": "1062 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1062 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 43,
+        "side": 44,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1063",
+      "name": "1063 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162343.jpg",
+      "sideFile": "IMG20261120162346.jpg",
+      "images": [
+        "images/frames/1063-front.jpg",
+        "images/frames/1063-side.jpg"
+      ],
+      "alt_front": "1063 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1063 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 45,
+        "side": 46,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1064",
+      "name": "1064 Tortoise / Brown Geometric/Hexagonal Fiber Frame",
+      "shape": "Geometric/Hexagonal",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162412.jpg",
+      "sideFile": "IMG20261120162417.jpg",
+      "images": [
+        "images/frames/1064-front.jpg",
+        "images/frames/1064-side.jpg"
+      ],
+      "alt_front": "1064 Tortoise / Brown Geometric/Hexagonal Fiber Frame - Front View",
+      "alt_side": "1064 Tortoise / Brown Geometric/Hexagonal Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 47,
+        "side": 48,
+        "deltaSec": 5
+      }
+    },
+    {
+      "id": "1065",
+      "name": "1065 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162427.jpg",
+      "sideFile": "IMG20261120162430.jpg",
+      "images": [
+        "images/frames/1065-front.jpg",
+        "images/frames/1065-side.jpg"
+      ],
+      "alt_front": "1065 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1065 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 49,
+        "side": 50,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1066",
+      "name": "1066 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162439.jpg",
+      "sideFile": "IMG20261120162442.jpg",
+      "images": [
+        "images/frames/1066-front.jpg",
+        "images/frames/1066-side.jpg"
+      ],
+      "alt_front": "1066 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1066 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 51,
+        "side": 52,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1067",
+      "name": "1067 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162454.jpg",
+      "sideFile": "IMG20261120162458.jpg",
+      "images": [
+        "images/frames/1067-front.jpg",
+        "images/frames/1067-side.jpg"
+      ],
+      "alt_front": "1067 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1067 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 53,
+        "side": 54,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1068",
+      "name": "1068 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162508.jpg",
+      "sideFile": "IMG20261120162511.jpg",
+      "images": [
+        "images/frames/1068-front.jpg",
+        "images/frames/1068-side.jpg"
+      ],
+      "alt_front": "1068 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1068 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 55,
+        "side": 56,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1069",
+      "name": "1069 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162517.jpg",
+      "sideFile": "IMG20261120162520.jpg",
+      "images": [
+        "images/frames/1069-front.jpg",
+        "images/frames/1069-side.jpg"
+      ],
+      "alt_front": "1069 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1069 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 57,
+        "side": 58,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1070",
+      "name": "1070 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162548.jpg",
+      "sideFile": "IMG20261120162550.jpg",
+      "images": [
+        "images/frames/1070-front.jpg",
+        "images/frames/1070-side.jpg"
+      ],
+      "alt_front": "1070 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1070 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 59,
+        "side": 60,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1071",
+      "name": "1071 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162603.jpg",
+      "sideFile": "IMG20261120162606.jpg",
+      "images": [
+        "images/frames/1071-front.jpg",
+        "images/frames/1071-side.jpg"
+      ],
+      "alt_front": "1071 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1071 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 61,
+        "side": 62,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1072",
+      "name": "1072 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162637.jpg",
+      "sideFile": "IMG20261120162640.jpg",
+      "images": [
+        "images/frames/1072-front.jpg",
+        "images/frames/1072-side.jpg"
+      ],
+      "alt_front": "1072 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1072 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 66,
+        "side": 67,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1073",
+      "name": "1073 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162645.jpg",
+      "sideFile": "IMG20261120162648.jpg",
+      "images": [
+        "images/frames/1073-front.jpg",
+        "images/frames/1073-side.jpg"
+      ],
+      "alt_front": "1073 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1073 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 68,
+        "side": 69,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1074",
+      "name": "1074 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120162657.jpg",
+      "sideFile": "IMG20261120162700.jpg",
+      "images": [
+        "images/frames/1074-front.jpg",
+        "images/frames/1074-side.jpg"
+      ],
+      "alt_front": "1074 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1074 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 70,
+        "side": 71,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1075",
+      "name": "1075 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164640.jpg",
+      "sideFile": "IMG20261120164643.jpg",
+      "images": [
+        "images/frames/1075-front.jpg",
+        "images/frames/1075-side.jpg"
+      ],
+      "alt_front": "1075 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1075 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 72,
+        "side": 73,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1076",
+      "name": "1076 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164659.jpg",
+      "sideFile": "IMG20261120164701.jpg",
+      "images": [
+        "images/frames/1076-front.jpg",
+        "images/frames/1076-side.jpg"
+      ],
+      "alt_front": "1076 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1076 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 74,
+        "side": 75,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1077",
+      "name": "1077 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164709.jpg",
+      "sideFile": "IMG20261120164712.jpg",
+      "images": [
+        "images/frames/1077-front.jpg",
+        "images/frames/1077-side.jpg"
+      ],
+      "alt_front": "1077 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1077 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 76,
+        "side": 77,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1078",
+      "name": "1078 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164720.jpg",
+      "sideFile": "IMG20261120164723.jpg",
+      "images": [
+        "images/frames/1078-front.jpg",
+        "images/frames/1078-side.jpg"
+      ],
+      "alt_front": "1078 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1078 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 78,
+        "side": 79,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1079",
+      "name": "1079 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164729.jpg",
+      "sideFile": "IMG20261120164731.jpg",
+      "images": [
+        "images/frames/1079-front.jpg",
+        "images/frames/1079-side.jpg"
+      ],
+      "alt_front": "1079 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1079 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 80,
+        "side": 81,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1080",
+      "name": "1080 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164738.jpg",
+      "sideFile": "IMG20261120164742.jpg",
+      "images": [
+        "images/frames/1080-front.jpg",
+        "images/frames/1080-side.jpg"
+      ],
+      "alt_front": "1080 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1080 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 82,
+        "side": 83,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1081",
+      "name": "1081 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164747.jpg",
+      "sideFile": "IMG20261120164749.jpg",
+      "images": [
+        "images/frames/1081-front.jpg",
+        "images/frames/1081-side.jpg"
+      ],
+      "alt_front": "1081 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1081 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 84,
+        "side": 85,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1082",
+      "name": "1082 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164756.jpg",
+      "sideFile": "IMG20261120164759.jpg",
+      "images": [
+        "images/frames/1082-front.jpg",
+        "images/frames/1082-side.jpg"
+      ],
+      "alt_front": "1082 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1082 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 86,
+        "side": 87,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1083",
+      "name": "1083 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164807.jpg",
+      "sideFile": "IMG20261120164810.jpg",
+      "images": [
+        "images/frames/1083-front.jpg",
+        "images/frames/1083-side.jpg"
+      ],
+      "alt_front": "1083 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1083 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 88,
+        "side": 89,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1084",
+      "name": "1084 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164824.jpg",
+      "sideFile": "IMG20261120164826.jpg",
+      "images": [
+        "images/frames/1084-front.jpg",
+        "images/frames/1084-side.jpg"
+      ],
+      "alt_front": "1084 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1084 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 90,
+        "side": 91,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1085",
+      "name": "1085 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164833.jpg",
+      "sideFile": "IMG20261120164835.jpg",
+      "images": [
+        "images/frames/1085-front.jpg",
+        "images/frames/1085-side.jpg"
+      ],
+      "alt_front": "1085 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1085 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 92,
+        "side": 93,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1086",
+      "name": "1086 Tortoise / Brown Geometric/Hexagonal Fiber Frame",
+      "shape": "Geometric/Hexagonal",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164841.jpg",
+      "sideFile": "IMG20261120164843.jpg",
+      "images": [
+        "images/frames/1086-front.jpg",
+        "images/frames/1086-side.jpg"
+      ],
+      "alt_front": "1086 Tortoise / Brown Geometric/Hexagonal Fiber Frame - Front View",
+      "alt_side": "1086 Tortoise / Brown Geometric/Hexagonal Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 94,
+        "side": 95,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1087",
+      "name": "1087 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164855.jpg",
+      "sideFile": "IMG20261120164859.jpg",
+      "images": [
+        "images/frames/1087-front.jpg",
+        "images/frames/1087-side.jpg"
+      ],
+      "alt_front": "1087 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1087 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 96,
+        "side": 97,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1088",
+      "name": "1088 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164906.jpg",
+      "sideFile": "IMG20261120164909.jpg",
+      "images": [
+        "images/frames/1088-front.jpg",
+        "images/frames/1088-side.jpg"
+      ],
+      "alt_front": "1088 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1088 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 98,
+        "side": 99,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1089",
+      "name": "1089 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164920.jpg",
+      "sideFile": "IMG20261120164923.jpg",
+      "images": [
+        "images/frames/1089-front.jpg",
+        "images/frames/1089-side.jpg"
+      ],
+      "alt_front": "1089 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1089 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 100,
+        "side": 101,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1090",
+      "name": "1090 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164932.jpg",
+      "sideFile": "IMG20261120164934.jpg",
+      "images": [
+        "images/frames/1090-front.jpg",
+        "images/frames/1090-side.jpg"
+      ],
+      "alt_front": "1090 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1090 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 102,
+        "side": 103,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1091",
+      "name": "1091 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164941.jpg",
+      "sideFile": "IMG20261120164943.jpg",
+      "images": [
+        "images/frames/1091-front.jpg",
+        "images/frames/1091-side.jpg"
+      ],
+      "alt_front": "1091 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1091 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 104,
+        "side": 105,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1092",
+      "name": "1092 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164947.jpg",
+      "sideFile": "IMG20261120164950.jpg",
+      "images": [
+        "images/frames/1092-front.jpg",
+        "images/frames/1092-side.jpg"
+      ],
+      "alt_front": "1092 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1092 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 106,
+        "side": 107,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1093",
+      "name": "1093 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120164956.jpg",
+      "sideFile": "IMG20261120164958.jpg",
+      "images": [
+        "images/frames/1093-front.jpg",
+        "images/frames/1093-side.jpg"
+      ],
+      "alt_front": "1093 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1093 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 108,
+        "side": 109,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1094",
+      "name": "1094 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165007.jpg",
+      "sideFile": "IMG20261120165009.jpg",
+      "images": [
+        "images/frames/1094-front.jpg",
+        "images/frames/1094-side.jpg"
+      ],
+      "alt_front": "1094 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1094 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 110,
+        "side": 111,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1095",
+      "name": "1095 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165017.jpg",
+      "sideFile": "IMG20261120165019.jpg",
+      "images": [
+        "images/frames/1095-front.jpg",
+        "images/frames/1095-side.jpg"
+      ],
+      "alt_front": "1095 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1095 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 112,
+        "side": 113,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1096",
+      "name": "1096 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165026.jpg",
+      "sideFile": "IMG20261120165029.jpg",
+      "images": [
+        "images/frames/1096-front.jpg",
+        "images/frames/1096-side.jpg"
+      ],
+      "alt_front": "1096 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1096 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 114,
+        "side": 115,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1097",
+      "name": "1097 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165036.jpg",
+      "sideFile": "IMG20261120165039.jpg",
+      "images": [
+        "images/frames/1097-front.jpg",
+        "images/frames/1097-side.jpg"
+      ],
+      "alt_front": "1097 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1097 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 116,
+        "side": 117,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1098",
+      "name": "1098 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165047.jpg",
+      "sideFile": "IMG20261120165049.jpg",
+      "images": [
+        "images/frames/1098-front.jpg",
+        "images/frames/1098-side.jpg"
+      ],
+      "alt_front": "1098 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1098 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 118,
+        "side": 119,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1099",
+      "name": "1099 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165057.jpg",
+      "sideFile": "IMG20261120165110.jpg",
+      "images": [
+        "images/frames/1099-front.jpg",
+        "images/frames/1099-side.jpg"
+      ],
+      "alt_front": "1099 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1099 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 120,
+        "side": 121,
+        "deltaSec": 13
+      }
+    },
+    {
+      "id": "1100",
+      "name": "1100 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165116.jpg",
+      "sideFile": "IMG20261120165120.jpg",
+      "images": [
+        "images/frames/1100-front.jpg",
+        "images/frames/1100-side.jpg"
+      ],
+      "alt_front": "1100 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1100 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 122,
+        "side": 123,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1101",
+      "name": "1101 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165126.jpg",
+      "sideFile": "IMG20261120165128.jpg",
+      "images": [
+        "images/frames/1101-front.jpg",
+        "images/frames/1101-side.jpg"
+      ],
+      "alt_front": "1101 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1101 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 124,
+        "side": 125,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1102",
+      "name": "1102 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165135.jpg",
+      "sideFile": "IMG20261120165143.jpg",
+      "images": [
+        "images/frames/1102-front.jpg",
+        "images/frames/1102-side.jpg"
+      ],
+      "alt_front": "1102 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1102 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 126,
+        "side": 127,
+        "deltaSec": 8
+      }
+    },
+    {
+      "id": "1103",
+      "name": "1103 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165149.jpg",
+      "sideFile": "IMG20261120165151.jpg",
+      "images": [
+        "images/frames/1103-front.jpg",
+        "images/frames/1103-side.jpg"
+      ],
+      "alt_front": "1103 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1103 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 128,
+        "side": 129,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1104",
+      "name": "1104 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165157.jpg",
+      "sideFile": "IMG20261120165200.jpg",
+      "images": [
+        "images/frames/1104-front.jpg",
+        "images/frames/1104-side.jpg"
+      ],
+      "alt_front": "1104 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1104 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 130,
+        "side": 131,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1105",
+      "name": "1105 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165215.jpg",
+      "sideFile": "IMG20261120165217.jpg",
+      "images": [
+        "images/frames/1105-front.jpg",
+        "images/frames/1105-side.jpg"
+      ],
+      "alt_front": "1105 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1105 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 132,
+        "side": 133,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1106",
+      "name": "1106 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165223.jpg",
+      "sideFile": "IMG20261120165225.jpg",
+      "images": [
+        "images/frames/1106-front.jpg",
+        "images/frames/1106-side.jpg"
+      ],
+      "alt_front": "1106 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1106 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 134,
+        "side": 135,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1107",
+      "name": "1107 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165231.jpg",
+      "sideFile": "IMG20261120165234.jpg",
+      "images": [
+        "images/frames/1107-front.jpg",
+        "images/frames/1107-side.jpg"
+      ],
+      "alt_front": "1107 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1107 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 136,
+        "side": 137,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1108",
+      "name": "1108 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165240.jpg",
+      "sideFile": "IMG20261120165242.jpg",
+      "images": [
+        "images/frames/1108-front.jpg",
+        "images/frames/1108-side.jpg"
+      ],
+      "alt_front": "1108 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1108 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 138,
+        "side": 139,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1109",
+      "name": "1109 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165249.jpg",
+      "sideFile": "IMG20261120165252.jpg",
+      "images": [
+        "images/frames/1109-front.jpg",
+        "images/frames/1109-side.jpg"
+      ],
+      "alt_front": "1109 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1109 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 140,
+        "side": 141,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1110",
+      "name": "1110 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165258.jpg",
+      "sideFile": "IMG20261120165300.jpg",
+      "images": [
+        "images/frames/1110-front.jpg",
+        "images/frames/1110-side.jpg"
+      ],
+      "alt_front": "1110 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1110 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 142,
+        "side": 143,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1111",
+      "name": "1111 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165306.jpg",
+      "sideFile": "IMG20261120165308.jpg",
+      "images": [
+        "images/frames/1111-front.jpg",
+        "images/frames/1111-side.jpg"
+      ],
+      "alt_front": "1111 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1111 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 144,
+        "side": 145,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1112",
+      "name": "1112 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165319.jpg",
+      "sideFile": "IMG20261120165322.jpg",
+      "images": [
+        "images/frames/1112-front.jpg",
+        "images/frames/1112-side.jpg"
+      ],
+      "alt_front": "1112 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1112 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 147,
+        "side": 148,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1113",
+      "name": "1113 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165328.jpg",
+      "sideFile": "IMG20261120165330.jpg",
+      "images": [
+        "images/frames/1113-front.jpg",
+        "images/frames/1113-side.jpg"
+      ],
+      "alt_front": "1113 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1113 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 149,
+        "side": 150,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1114",
+      "name": "1114 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165339.jpg",
+      "sideFile": "IMG20261120165342.jpg",
+      "images": [
+        "images/frames/1114-front.jpg",
+        "images/frames/1114-side.jpg"
+      ],
+      "alt_front": "1114 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1114 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 151,
+        "side": 152,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1115",
+      "name": "1115 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165348.jpg",
+      "sideFile": "IMG20261120165351.jpg",
+      "images": [
+        "images/frames/1115-front.jpg",
+        "images/frames/1115-side.jpg"
+      ],
+      "alt_front": "1115 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1115 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 153,
+        "side": 154,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1116",
+      "name": "1116 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165357.jpg",
+      "sideFile": "IMG20261120165400.jpg",
+      "images": [
+        "images/frames/1116-front.jpg",
+        "images/frames/1116-side.jpg"
+      ],
+      "alt_front": "1116 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1116 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 155,
+        "side": 156,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1117",
+      "name": "1117 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165404.jpg",
+      "sideFile": "IMG20261120165407.jpg",
+      "images": [
+        "images/frames/1117-front.jpg",
+        "images/frames/1117-side.jpg"
+      ],
+      "alt_front": "1117 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1117 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 157,
+        "side": 158,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1118",
+      "name": "1118 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120165412.jpg",
+      "sideFile": "IMG20261120165415.jpg",
+      "images": [
+        "images/frames/1118-front.jpg",
+        "images/frames/1118-side.jpg"
+      ],
+      "alt_front": "1118 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1118 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 159,
+        "side": 160,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1119",
+      "name": "1119 Tortoise / Brown Geometric/Hexagonal Fiber Frame",
+      "shape": "Geometric/Hexagonal",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170037.jpg",
+      "sideFile": "IMG20261120170040.jpg",
+      "images": [
+        "images/frames/1119-front.jpg",
+        "images/frames/1119-side.jpg"
+      ],
+      "alt_front": "1119 Tortoise / Brown Geometric/Hexagonal Fiber Frame - Front View",
+      "alt_side": "1119 Tortoise / Brown Geometric/Hexagonal Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 162,
+        "side": 163,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1120",
+      "name": "1120 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170045.jpg",
+      "sideFile": "IMG20261120170047.jpg",
+      "images": [
+        "images/frames/1120-front.jpg",
+        "images/frames/1120-side.jpg"
+      ],
+      "alt_front": "1120 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1120 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 164,
+        "side": 165,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1121",
+      "name": "1121 Tortoise / Brown Geometric/Hexagonal Fiber Frame",
+      "shape": "Geometric/Hexagonal",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170052.jpg",
+      "sideFile": "IMG20261120170054.jpg",
+      "images": [
+        "images/frames/1121-front.jpg",
+        "images/frames/1121-side.jpg"
+      ],
+      "alt_front": "1121 Tortoise / Brown Geometric/Hexagonal Fiber Frame - Front View",
+      "alt_side": "1121 Tortoise / Brown Geometric/Hexagonal Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 166,
+        "side": 167,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1122",
+      "name": "1122 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170059.jpg",
+      "sideFile": "IMG20261120170101.jpg",
+      "images": [
+        "images/frames/1122-front.jpg",
+        "images/frames/1122-side.jpg"
+      ],
+      "alt_front": "1122 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1122 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 168,
+        "side": 169,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1123",
+      "name": "1123 Tortoise / Brown Geometric/Hexagonal Fiber Frame",
+      "shape": "Geometric/Hexagonal",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170105.jpg",
+      "sideFile": "IMG20261120170107.jpg",
+      "images": [
+        "images/frames/1123-front.jpg",
+        "images/frames/1123-side.jpg"
+      ],
+      "alt_front": "1123 Tortoise / Brown Geometric/Hexagonal Fiber Frame - Front View",
+      "alt_side": "1123 Tortoise / Brown Geometric/Hexagonal Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 170,
+        "side": 171,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1124",
+      "name": "1124 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170111.jpg",
+      "sideFile": "IMG20261120170112.jpg",
+      "images": [
+        "images/frames/1124-front.jpg",
+        "images/frames/1124-side.jpg"
+      ],
+      "alt_front": "1124 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1124 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 172,
+        "side": 173,
+        "deltaSec": 1
+      }
+    },
+    {
+      "id": "1125",
+      "name": "1125 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170118.jpg",
+      "sideFile": "IMG20261120170121.jpg",
+      "images": [
+        "images/frames/1125-front.jpg",
+        "images/frames/1125-side.jpg"
+      ],
+      "alt_front": "1125 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1125 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 174,
+        "side": 175,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1126",
+      "name": "1126 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170125.jpg",
+      "sideFile": "IMG20261120170127.jpg",
+      "images": [
+        "images/frames/1126-front.jpg",
+        "images/frames/1126-side.jpg"
+      ],
+      "alt_front": "1126 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1126 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 176,
+        "side": 177,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1127",
+      "name": "1127 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170132.jpg",
+      "sideFile": "IMG20261120170134.jpg",
+      "images": [
+        "images/frames/1127-front.jpg",
+        "images/frames/1127-side.jpg"
+      ],
+      "alt_front": "1127 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1127 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 178,
+        "side": 179,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1128",
+      "name": "1128 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170139.jpg",
+      "sideFile": "IMG20261120170141.jpg",
+      "images": [
+        "images/frames/1128-front.jpg",
+        "images/frames/1128-side.jpg"
+      ],
+      "alt_front": "1128 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1128 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 180,
+        "side": 181,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1129",
+      "name": "1129 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170147.jpg",
+      "sideFile": "IMG20261120170149.jpg",
+      "images": [
+        "images/frames/1129-front.jpg",
+        "images/frames/1129-side.jpg"
+      ],
+      "alt_front": "1129 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1129 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 182,
+        "side": 183,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1130",
+      "name": "1130 Tortoise / Brown Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Tortoise / Brown",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170154.jpg",
+      "sideFile": "IMG20261120170157.jpg",
+      "images": [
+        "images/frames/1130-front.jpg",
+        "images/frames/1130-side.jpg"
+      ],
+      "alt_front": "1130 Tortoise / Brown Rectangle Fiber Frame - Front View",
+      "alt_side": "1130 Tortoise / Brown Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 184,
+        "side": 185,
+        "deltaSec": 3
+      }
+    },
+    {
+      "id": "1131",
+      "name": "1131 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170203.jpg",
+      "sideFile": "IMG20261120170207.jpg",
+      "images": [
+        "images/frames/1131-front.jpg",
+        "images/frames/1131-side.jpg"
+      ],
+      "alt_front": "1131 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1131 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 186,
+        "side": 187,
+        "deltaSec": 4
+      }
+    },
+    {
+      "id": "1132",
+      "name": "1132 Classic Black Rectangle Fiber Frame",
+      "shape": "Rectangle",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170212.jpg",
+      "sideFile": "IMG20261120170214.jpg",
+      "images": [
+        "images/frames/1132-front.jpg",
+        "images/frames/1132-side.jpg"
+      ],
+      "alt_front": "1132 Classic Black Rectangle Fiber Frame - Front View",
+      "alt_side": "1132 Classic Black Rectangle Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 188,
+        "side": 189,
+        "deltaSec": 2
+      }
+    },
+    {
+      "id": "1133",
+      "name": "1133 Classic Black Square Fiber Frame",
+      "shape": "Square",
+      "material": "Fiber",
+      "color": "Classic Black",
+      "price": 599,
+      "size": "Medium",
+      "rimStyle": "Full-rim",
+      "confidence": "high",
+      "frontFile": "IMG20261120170219.jpg",
+      "sideFile": "IMG20261120170221.jpg",
+      "images": [
+        "images/frames/1133-front.jpg",
+        "images/frames/1133-side.jpg"
+      ],
+      "alt_front": "1133 Classic Black Square Fiber Frame - Front View",
+      "alt_side": "1133 Classic Black Square Fiber Frame - Side View",
+      "sourceIndex": {
+        "front": 190,
+        "side": 191,
+        "deltaSec": 2
+      }
+    }
+  ],
+  "needsReview": [
+    {
+      "index": 26,
+      "file": "IMG20261120153143.jpg",
+      "material": "Metal",
+      "reason": "Orphan single front view of Titex gunmetal hexagonal frame without side view",
+      "confidence": "needs review"
+    },
+    {
+      "index": 35,
+      "file": "IMG20261120153310.jpg",
+      "material": "Metal",
+      "reason": "Orphan single front view of Titex frame with barcode tag without side view (66s gap to next)",
+      "confidence": "needs review"
+    },
+    {
+      "index": 8,
+      "file": "IMG20261120160757.jpg",
+      "material": "Fiber",
+      "reason": "Orphan single front view of Wonder Craft olive/clear frame without side view",
+      "confidence": "needs review"
+    },
+    {
+      "index": 21,
+      "file": "IMG20261120160931.jpg",
+      "material": "Fiber",
+      "reason": "Orphan single front view of Spice black geometric frame without side view",
+      "confidence": "needs review"
+    },
+    {
+      "index": 32,
+      "file": "IMG20261120161152.jpg",
+      "material": "Fiber",
+      "reason": "Orphan single front view of RPM transparent grey frame without side view",
+      "confidence": "needs review"
+    },
+    {
+      "index": 63,
+      "file": "IMG20261120162614.jpg",
+      "material": "Fiber",
+      "reason": "Orphan single front view of i-deal eye black rectangle frame without side view",
+      "confidence": "needs review"
+    },
+    {
+      "index": 64,
+      "file": "IMG20261120162624.jpg",
+      "material": "Fiber",
+      "reason": "Orphan single front view of Hope black rectangle frame without side view",
+      "confidence": "needs review"
+    },
+    {
+      "index": 65,
+      "file": "IMG20261120162630.jpg",
+      "material": "Fiber",
+      "reason": "Orphan single front view of Tom Hardy white frame without side view",
+      "confidence": "needs review"
+    },
+    {
+      "index": 146,
+      "file": "IMG20261120165314.jpg",
+      "material": "Fiber",
+      "reason": "Orphan single front view of i-deal eye transparent pink frame without side view",
+      "confidence": "needs review"
+    },
+    {
+      "index": 161,
+      "file": "IMG20261120165626.jpg",
+      "material": "Fiber",
+      "reason": "Blank accidental photo of empty table surface (no frame)",
+      "confidence": "needs review"
+    }
+  ]
+}

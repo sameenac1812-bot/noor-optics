@@ -5910,3 +5910,299 @@ body.modal-open .store-floating-call-wrap {
     font-size: 12px;
   }
 }
+
+/* ==========================================================================
+   FRAME LISTINGS & DUAL-VIEW SWIPE CAROUSEL (Front & Side Views)
+   ========================================================================== */
+.card-media.has-slider,
+.grid .pcard .pic.has-slider {
+  display: block !important;
+  position: relative !important;
+  width: 100% !important;
+  aspect-ratio: 4 / 3 !important;
+  height: auto !important;
+  overflow: hidden !important;
+  user-select: none;
+  touch-action: pan-y pinch-zoom;
+  background-color: var(--bg-surface-img);
+}
+
+.card-slides-track {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 200% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: row !important;
+  transition: transform 0.32s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+  z-index: 2;
+}
+
+.card-media[data-active-slide="0"] .card-slides-track {
+  transform: translateX(0%);
+}
+
+.card-media[data-active-slide="1"] .card-slides-track {
+  transform: translateX(-50%);
+}
+
+.card-slides-track .card-img {
+  width: 50% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  object-fit: cover !important;
+  padding: 0 !important;
+  flex-shrink: 0 !important;
+  display: block !important;
+  box-sizing: border-box !important;
+}
+
+/* Ensure Discount Badge & Wishlist Button sit cleanly above slider */
+.pcard .tag {
+  position: absolute !important;
+  left: 8px !important;
+  top: 8px !important;
+  background: var(--navy) !important;
+  color: #fff !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
+  z-index: 10 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+}
+
+.pcard .fav {
+  position: absolute !important;
+  right: 6px !important;
+  top: 6px !important;
+  width: 32px !important;
+  height: 32px !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(4px) !important;
+  border-radius: 50% !important;
+  display: grid !important;
+  place-items: center !important;
+  z-index: 10 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Two-line clean title on card */
+.pcard .name {
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  color: var(--navy) !important;
+  margin: 4px 0 4px !important;
+  line-height: 1.35 !important;
+  height: 36px !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: normal !important;
+}
+
+/* Unified Single-Line Spec Badge (Shape • Medium • Material) */
+.card-spec-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 4.5px;
+  font-size: 0.69rem;
+  font-weight: 600;
+  color: #475569;
+  background: #F1F5F9;
+  padding: 2.5px 7px;
+  border-radius: 5px;
+  border: 1px solid #E2E8F0;
+  margin: 3px 0 6px 0;
+  white-space: nowrap;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.card-spec-line .spec-sep {
+  color: #94A3B8;
+  font-size: 0.62rem;
+}
+
+.card-spec-line .spec-item {
+  white-space: nowrap;
+}
+
+/* Desktop Hover Arrow Buttons */
+.card-nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  color: #0F172A;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.15s ease, background 0.15s;
+}
+
+.pcard:hover .card-nav-arrow,
+.card-media:focus-within .card-nav-arrow {
+  opacity: 0.92;
+  pointer-events: auto;
+}
+
+.card-nav-arrow:hover {
+  opacity: 1;
+  background: #FFFFFF;
+  transform: translateY(-50%) scale(1.08);
+}
+
+.card-nav-prev { left: 6px; }
+.card-nav-next { right: 6px; }
+
+@media (max-width: 768px) {
+  .card-nav-arrow {
+    display: none !important;
+  }
+}
+
+/* High-Contrast Glass Pill 2-Dot Indicator */
+.card-dots-bar {
+  position: absolute !important;
+  bottom: 8px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  z-index: 10 !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
+  padding: 3px 7px !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+.card-dot {
+  width: 5px !important;
+  height: 5px !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.45) !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.card-dot.active {
+  width: 14px !important;
+  border-radius: 3px !important;
+  background: #FFFFFF !important;
+}
+
+/* QuickView Modal Dual-View Gallery */
+.quickview-gallery {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  user-select: none;
+}
+
+.qv-slider {
+  display: flex;
+  width: 200%;
+  height: 100%;
+  min-height: 280px;
+  transition: transform 0.32s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+.qv-slider[data-active-slide="0"] {
+  transform: translateX(0%);
+}
+
+.qv-slider[data-active-slide="1"] {
+  transform: translateX(-50%);
+}
+
+.qv-slide {
+  width: 50%;
+  object-fit: contain;
+  padding: 18px;
+  flex-shrink: 0;
+  max-height: 380px;
+  box-sizing: border-box;
+}
+
+.qv-slide-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  color: #0F172A;
+  border: 1px solid #CBD5E1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 5;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: all 0.15s ease;
+}
+
+.qv-slide-nav:hover {
+  background: #FFFFFF;
+  transform: translateY(-50%) scale(1.08);
+}
+
+.qv-slide-nav.prev { left: 10px; }
+.qv-slide-nav.next { right: 10px; }
+
+.qv-slide-dots {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(4px);
+  padding: 4px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.qv-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(15, 44, 89, 0.25);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.qv-dot.active {
+  width: 16px;
+  border-radius: 4px;
+  background: #0F2C59;
+}

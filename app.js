@@ -70,11 +70,24 @@
 
   // Helper: Normalize product image URL safely supporting local paths, remote CDN, and base64 Data URLs
   function formatProductImage(img) {
-    if (!img) return '/images/frames/frame_01.jpg';
+    if (!img) return '/images/frames/1001-front.jpg';
     if (img.startsWith('data:') || img.startsWith('http://') || img.startsWith('https://') || img.startsWith('/')) {
       return img;
     }
     return '/' + img;
+  }
+
+  // Dual-view Frame Image Slider Control (Front vs Side View)
+  function setCardSlide(cardMedia, slideIdx) {
+    if (!cardMedia) return;
+    const clamped = slideIdx === 1 ? 1 : 0;
+    cardMedia.setAttribute('data-active-slide', String(clamped));
+    const dots = cardMedia.querySelectorAll('.card-dot');
+    dots.forEach((dot, idx) => {
+      const isActive = idx === clamped;
+      dot.classList.toggle('active', isActive);
+      dot.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
   }
 
   function initDOMCache() {
@@ -412,9 +425,13 @@
         </span>
       `).join('');
 
+      const frontImg = (product.images && product.images[0]) ? formatProductImage(product.images[0]) : formatProductImage(product.image);
+      const sideImg = (product.images && product.images[1]) ? formatProductImage(product.images[1]) : frontImg;
+      const hasTwoImages = Boolean(sideImg && sideImg !== frontImg);
+
       html += `
         <article class="pcard product-card" data-product-id="${product.id}">
-          <div class="pic card-media" data-action="quickview" data-id="${product.id}">
+          <div class="pic card-media ${hasTwoImages ? 'has-slider' : ''}" data-action="quickview" data-id="${product.id}" data-active-slide="0" tabindex="0" role="region" aria-label="${escapeHtml(product.name)} view gallery">
             ${discountPercent ? `<span class="tag">${discountPercent}% off</span>` : (badgeHtml || '')}
             <button class="fav card-wishlist-btn ${isWishlisted ? 'active' : ''}"
                     data-action="wishlist"
@@ -422,15 +439,35 @@
                     aria-label="${isWishlisted ? 'Remove from Wishlist' : 'Add to Wishlist'}">
               <svg width="20" height="20" stroke="var(--navy)" fill="${isWishlisted ? 'var(--navy)' : 'none'}" stroke-width="1.9"><use href="#i-heart"/></svg>
             </button>
-            <img class="card-img"
-                 src="${formatProductImage(product.image)}"
-                 alt="${product.name} - ${product.shape} Eyeglasses"
-                 loading="lazy"
-                 width="158"
-                 height="118"
-                 decoding="async"
-                 onerror="this.onerror=null; this.src='/images/frames/frame_01.jpg';"
-                 id="img-${product.id}">
+            <div class="card-slides-track">
+              <img class="card-img slide-front"
+                   src="${frontImg}"
+                   alt="${escapeHtml(product.name)} - Front View"
+                   loading="lazy"
+                   width="280"
+                   height="210"
+                   decoding="async"
+                   onerror="this.onerror=null; this.src='/images/frames/1001-front.jpg';"
+                   id="img-${product.id}">
+              ${hasTwoImages ? `
+                <img class="card-img slide-side"
+                     src="${sideImg}"
+                     alt="${escapeHtml(product.name)} - Side View"
+                     loading="lazy"
+                     width="280"
+                     height="210"
+                     decoding="async"
+                     onerror="this.onerror=null; this.src='/images/frames/1001-side.jpg';">
+              ` : ''}
+            </div>
+            ${hasTwoImages ? `
+              <button class="card-nav-arrow card-nav-prev" data-slide-action="prev" data-card-id="${product.id}" aria-label="Previous view (Front)">‹</button>
+              <button class="card-nav-arrow card-nav-next" data-slide-action="next" data-card-id="${product.id}" aria-label="Next view (Side)">›</button>
+              <div class="card-dots-bar" role="tablist" aria-label="Front and side view indicators">
+                <span class="card-dot active" data-dot-idx="0" data-card-id="${product.id}" role="tab" aria-selected="true" title="Front View"></span>
+                <span class="card-dot" data-dot-idx="1" data-card-id="${product.id}" role="tab" aria-selected="false" title="Side View"></span>
+              </div>
+            ` : ''}
           </div>
           <div class="info card-content">
             <div class="brand card-brand-tag">
@@ -438,8 +475,15 @@
               <span class="card-gender-badge ${(product.gender || 'unisex').toLowerCase()}">${escapeHtml(product.gender || 'Unisex')}</span>
             </div>
             <div class="name card-name" data-action="quickview" data-id="${product.id}">${product.name}</div>
+            <div class="card-spec-line">
+              <span class="spec-item">${escapeHtml(product.shape || 'Frame')}</span>
+              <span class="spec-sep">•</span>
+              <span class="spec-item">${escapeHtml(product.size || 'Medium')}</span>
+              <span class="spec-sep">•</span>
+              <span class="spec-item">${escapeHtml(product.material || 'Fiber')}</span>
+            </div>
             <div class="price card-price-row">
-              <span class="card-price">${formatINR((product.price && product.price > 0) ? product.price : 1199)}</span>
+              <span class="card-price">${formatINR((product.price && product.price > 0) ? product.price : 599)}</span>
               ${product.originalPrice ? `<s class="card-price-strike">${formatINR(product.originalPrice)}</s>` : ''}
               ${discountPercent ? `<em class="card-discount-badge">${discountPercent}% off</em>` : ''}
             </div>
@@ -1036,24 +1080,43 @@
           <tr><td class="spec-name">Bridge Width</td><td class="spec-val">${dims.bridge || '18mm'}</td></tr>
           <tr><td class="spec-name">Temple Length</td><td class="spec-val">${dims.temple || '145mm'}</td></tr>
           <tr><td class="spec-name">Total Weight</td><td class="spec-val">${dims.weight || '15g'}</td></tr>
-          <tr><td class="spec-name">Frame Material</td><td class="spec-val">${product.material || 'Premium Acetate'}</td></tr>
+          <tr><td class="spec-name">Frame Material</td><td class="spec-val">${product.material || 'Fiber'}</td></tr>
+          <tr><td class="spec-name">Frame Size</td><td class="spec-val">${product.frame_size || product.size || 'Medium'}</td></tr>
+          <tr><td class="spec-name">Frame Shape</td><td class="spec-val">${product.shape || 'Frame'}</td></tr>
           <tr><td class="spec-name">Recommended Fit</td><td class="spec-val">${product.fit || 'Regular'}</td></tr>
         </tbody>
       </table>
     `;
 
+    const qvFront = (product.images && product.images[0]) ? formatProductImage(product.images[0]) : formatProductImage(product.image);
+    const qvSide = (product.images && product.images[1]) ? formatProductImage(product.images[1]) : qvFront;
+    const qvHasDual = Boolean(qvSide && qvSide !== qvFront);
+
     DOM.quickViewContainer.innerHTML = `
       <div class="quickview-grid">
-        <div class="quickview-gallery">
-          <img class="quickview-img" src="${formatProductImage(product.image)}" alt="${product.name}" id="qv-main-img" onerror="this.onerror=null; this.src='/images/frames/frame_01.jpg';">
+        <div class="quickview-gallery" id="qv-gallery-box" data-active-slide="0" tabindex="0" role="region" aria-label="Frame Gallery View">
+          <div class="qv-slider" id="qv-slider" data-active-slide="0">
+            <img class="quickview-img qv-slide" src="${qvFront}" alt="${escapeHtml(product.name)} - Front View" id="qv-main-img" onerror="this.onerror=null; this.src='/images/frames/1001-front.jpg';">
+            ${qvHasDual ? `
+              <img class="quickview-img qv-slide" src="${qvSide}" alt="${escapeHtml(product.name)} - Side View" id="qv-side-img" loading="lazy" onerror="this.onerror=null; this.src='/images/frames/1001-side.jpg';">
+            ` : ''}
+          </div>
+          ${qvHasDual ? `
+            <button class="qv-slide-nav prev" id="qv-nav-prev" aria-label="Previous view (Front)">‹</button>
+            <button class="qv-slide-nav next" id="qv-nav-next" aria-label="Next view (Side)">›</button>
+            <div class="qv-slide-dots" role="tablist">
+              <span class="qv-dot active" data-slide="0" role="tab" aria-selected="true" title="Front View"></span>
+              <span class="qv-dot" data-slide="1" role="tab" aria-selected="false" title="Side View"></span>
+            </div>
+          ` : ''}
         </div>
         <div class="quickview-info">
           <div>
-            <span class="quickview-collection">${product.collection} · ${product.shape}</span>
+            <span class="quickview-collection">${product.collection || 'Noor Collection'} · ${product.shape} · Medium</span>
             <h2 class="quickview-title">${product.name}</h2>
           </div>
           <div class="quickview-price-wrap">
-            <span class="quickview-price" id="qv-calculated-price">${formatINR((product.price && product.price > 0) ? product.price : 1199)}</span>
+            <span class="quickview-price" id="qv-calculated-price">${formatINR((product.price && product.price > 0) ? product.price : 599)}</span>
             ${product.originalPrice ? `<span class="card-price-strike">${formatINR(product.originalPrice)}</span>` : ''}
           </div>
           <p class="quickview-desc">${product.description}</p>
@@ -1090,6 +1153,52 @@
         </div>
       </div>
     `;
+
+    if (qvHasDual) {
+      const qvSlider = document.getElementById('qv-slider');
+      const prevBtn = document.getElementById('qv-nav-prev');
+      const nextBtn = document.getElementById('qv-nav-next');
+      const dots = DOM.quickViewContainer.querySelectorAll('.qv-dot');
+      const qvBox = document.getElementById('qv-gallery-box');
+
+      const setQvSlide = (idx) => {
+        if (!qvSlider) return;
+        const clamped = idx === 1 ? 1 : 0;
+        qvSlider.setAttribute('data-active-slide', String(clamped));
+        dots.forEach((dot, i) => {
+          dot.classList.toggle('active', i === clamped);
+          dot.setAttribute('aria-selected', i === clamped ? 'true' : 'false');
+        });
+      };
+
+      if (prevBtn) prevBtn.addEventListener('click', () => setQvSlide(0));
+      if (nextBtn) nextBtn.addEventListener('click', () => setQvSlide(1));
+      dots.forEach((dot, i) => dot.addEventListener('click', () => setQvSlide(i)));
+
+      let qvStartX = 0;
+      let qvStartY = 0;
+      if (qvBox) {
+        qvBox.addEventListener('touchstart', (e) => {
+          if (e.touches.length === 1) {
+            qvStartX = e.touches[0].clientX;
+            qvStartY = e.touches[0].clientY;
+          }
+        }, { passive: true });
+        qvBox.addEventListener('touchend', (e) => {
+          if (e.changedTouches.length === 0) return;
+          const dX = e.changedTouches[0].clientX - qvStartX;
+          const dY = e.changedTouches[0].clientY - qvStartY;
+          if (Math.abs(dX) > Math.abs(dY) && Math.abs(dX) > 25) {
+            if (dX < 0) setQvSlide(1);
+            else setQvSlide(0);
+          }
+        }, { passive: true });
+        qvBox.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowRight') { e.preventDefault(); setQvSlide(1); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); setQvSlide(0); }
+        });
+      }
+    }
 
     // Event listeners inside Quick View
     DOM.quickViewContainer.querySelectorAll('.lens-option-card').forEach(card => {
@@ -1863,9 +1972,37 @@
       btnCloseSuccess.addEventListener('click', closeAllModals);
     }
 
-    // Product Grid Click Delegation (Wishlist, Quickview, Add to bag, Swatches)
+    // Product Grid Click Delegation (Wishlist, Quickview, Add to bag, Swatches, Slide arrows & Dots)
     if (DOM.productGrid) {
       DOM.productGrid.addEventListener('click', (e) => {
+        // 1. Dual-view slide arrow navigation
+        const slideNavBtn = e.target.closest('[data-slide-action]');
+        if (slideNavBtn) {
+          e.stopPropagation();
+          e.preventDefault();
+          const cardMedia = slideNavBtn.closest('.card-media');
+          if (cardMedia) {
+            const curSlide = parseInt(cardMedia.getAttribute('data-active-slide') || '0', 10);
+            const action = slideNavBtn.getAttribute('data-slide-action');
+            const targetSlide = action === 'next' ? 1 : (action === 'prev' ? 0 : (curSlide === 0 ? 1 : 0));
+            setCardSlide(cardMedia, targetSlide);
+          }
+          return;
+        }
+
+        // 2. Dual-view dot navigation
+        const dotBtn = e.target.closest('.card-dot');
+        if (dotBtn) {
+          e.stopPropagation();
+          e.preventDefault();
+          const cardMedia = dotBtn.closest('.card-media');
+          if (cardMedia) {
+            const targetSlide = parseInt(dotBtn.getAttribute('data-dot-idx') || '0', 10);
+            setCardSlide(cardMedia, targetSlide);
+          }
+          return;
+        }
+
         const wishlistBtn = e.target.closest('[data-action="wishlist"]');
         if (wishlistBtn) {
           e.stopPropagation();
@@ -1902,6 +2039,54 @@
             showToast(`Selected ${colorName}`);
           }
           return;
+        }
+      });
+
+      // Touch swipe support for card front/side views
+      let cardTouchStartX = 0;
+      let cardTouchStartY = 0;
+      let activeCardMedia = null;
+
+      DOM.productGrid.addEventListener('touchstart', (e) => {
+        const media = e.target.closest('.card-media.has-slider');
+        if (media && e.touches.length === 1) {
+          cardTouchStartX = e.touches[0].clientX;
+          cardTouchStartY = e.touches[0].clientY;
+          activeCardMedia = media;
+        }
+      }, { passive: true });
+
+      DOM.productGrid.addEventListener('touchend', (e) => {
+        if (!activeCardMedia || e.changedTouches.length === 0) {
+          activeCardMedia = null;
+          return;
+        }
+        const deltaX = e.changedTouches[0].clientX - cardTouchStartX;
+        const deltaY = e.changedTouches[0].clientY - cardTouchStartY;
+
+        // Ensure horizontal intent (more horizontal than vertical, and at least 25px threshold)
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 25) {
+          if (deltaX < 0) {
+            // Swiped left -> show side view
+            setCardSlide(activeCardMedia, 1);
+          } else {
+            // Swiped right -> show front view
+            setCardSlide(activeCardMedia, 0);
+          }
+        }
+        activeCardMedia = null;
+      }, { passive: true });
+
+      // Keyboard accessibility (ArrowLeft and ArrowRight)
+      DOM.productGrid.addEventListener('keydown', (e) => {
+        const media = e.target.closest('.card-media.has-slider');
+        if (!media) return;
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          setCardSlide(media, 1);
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          setCardSlide(media, 0);
         }
       });
     }
@@ -2069,6 +2254,7 @@
         const id = String(p.id || '').toLowerCase().trim();
         const name = String(p.name || '').toLowerCase().trim();
         if (/^noor-(0[1-9]|1[0-8])$/.test(id)) return true;
+        if (/^prod-noor-(0[1-9]|[1-9][0-9])$/.test(id)) return true; // mock frames prod-noor-01..prod-noor-55
         if (/helsinki|berlin hex|zurich titanium|milan aureum|stockholm noir|copenhagen round|oslo crystal|kyoto havana|reykjavik|vienna silhouette|amber arch|tokyo steel|gothenburg|malm|arctic sun|nord fjord|bergen dual|bordeaux edge/i.test(name)) return true;
         return false;
       };
@@ -2213,6 +2399,13 @@
           if (stock <= 0) badge = 'Out of Stock';
           else if (!badge && !staticMatch) badge = 'New Arrival';
 
+          const images = (Array.isArray(p.images) && p.images.length > 0)
+            ? p.images
+            : (staticMatch && Array.isArray(staticMatch.images) && staticMatch.images.length > 0)
+              ? staticMatch.images
+              : [p.image_url || p.image || (staticMatch ? staticMatch.image : '')].filter(Boolean);
+          const frameSize = p.frame_size || p.size || (staticMatch ? (staticMatch.frame_size || staticMatch.size) : 'Medium') || 'Medium';
+
           return {
             id: p.id,
             sku: p.sku,
@@ -2220,19 +2413,23 @@
             brand: p.brand || (staticMatch ? staticMatch.brand : 'Noor Optics'),
             gender: p.gender || (staticMatch ? staticMatch.gender : 'Unisex'),
             category: p.category || (staticMatch ? staticMatch.category : 'Eyeglasses'),
-            collection: staticMatch ? staticMatch.collection : (p.brand || 'Nordic Collection'),
+            collection: staticMatch ? staticMatch.collection : (p.brand || 'Noor Collection'),
             price: price,
             originalPrice: originalPrice,
             badge: badge,
-            shape: p.shape || (staticMatch ? staticMatch.shape : 'Rectangular'),
-            material: p.material || (staticMatch ? staticMatch.material : 'Italian Bio-Acetate'),
+            shape: p.shape || (staticMatch ? staticMatch.shape : 'Rectangle'),
+            material: p.material || (staticMatch ? staticMatch.material : 'Fiber'),
             fit: p.fit || (staticMatch ? staticMatch.fit : 'Regular'),
+            frame_size: frameSize,
+            size: frameSize,
+            rimStyle: p.rimStyle || (staticMatch ? staticMatch.rimStyle : 'Full-rim'),
             rating: staticMatch ? staticMatch.rating : 4.9,
             reviewsCount: staticMatch ? staticMatch.reviewsCount : 24,
-            image: p.image_url || p.image || p.imageUrl || (staticMatch ? staticMatch.image : 'images/frames/frame_01.jpg'),
+            image: (images && images[0]) ? images[0] : (p.image_url || p.image || 'images/frames/1001-front.jpg'),
+            images: images,
             colors: colors,
             dimensions: dimensions,
-            description: p.description || (staticMatch ? staticMatch.description : 'Bespoke Scandinavian eyewear engineered with optical precision.')
+            description: p.description || (staticMatch ? staticMatch.description : 'Authentic eyewear crafted for optical clarity and all-day comfort.')
           };
         });
 

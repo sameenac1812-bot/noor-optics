@@ -22,3 +22,7 @@ pos-daemon/logs/
 pos-daemon/.printed_orders.json
 server/database.sqlite
 
+
+# Raw frame photo source
+noorframepics/
+verify_viewer.html

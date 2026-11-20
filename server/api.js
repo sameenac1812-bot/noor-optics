@@ -377,8 +377,18 @@ router.get('/products', async (req, res) => {
     WHERE pv.product_id = ?
   `);
 
+  const getImages = db.prepare(`
+    SELECT image_url, is_primary, alt_text
+    FROM product_images
+    WHERE product_id = ?
+    ORDER BY is_primary DESC, id ASC
+  `);
+
   const results = products.map(p => {
     const frameSize = p.frame_size || (p.fit === 'Narrow' ? 'Small' : (p.fit === 'Wide' ? 'Large' : (p.fit === 'Small' || p.fit === 'Large' ? p.fit : 'Medium')));
+    const dbImgs = getImages.all(p.id).map(img => img.image_url.startsWith('/') ? img.image_url : `/${img.image_url}`);
+    const finalImgs = dbImgs.length > 0 ? dbImgs : (p.image_url ? [p.image_url.startsWith('/') ? p.image_url : `/${p.image_url}`] : []);
+
     return {
       ...p,
       frame_size: frameSize,
@@ -387,6 +397,7 @@ router.get('/products', async (req, res) => {
       selling_price_inr: p.selling_price_paise / 100,
       original_price_inr: p.original_price_paise ? p.original_price_paise / 100 : null,
       purchase_cost_inr: p.purchase_cost_paise / 100,
+      images: finalImgs,
       variants: getVariants.all(p.id)
     };
   });

@@ -1,0 +1,74 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="http://localhost:3000/style.css">
+  <style>
+    body { background: #F8FAFC; padding: 40px; font-family: 'Plus Jakarta Sans', sans-serif; display: flex; gap: 30px; justify-content: center; }
+    .card-wrap { width: 320px; }
+    .state-title { font-weight: 700; margin-bottom: 12px; color: #0F172A; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card-wrap">
+    <div class="state-title">1. Front View (Initial State)</div>
+    <article class="pcard product-card">
+      <div class="pic card-media has-slider" data-active-slide="0">
+        <div class="card-slides-track">
+          <img class="card-img" src="http://localhost:3000/images/frames/1001-front.jpg">
+          <img class="card-img" src="http://localhost:3000/images/frames/1001-side.jpg">
+        </div>
+        <button class="card-nav-arrow card-nav-prev" style="opacity: 0.9;">‹</button>
+        <button class="card-nav-arrow card-nav-next" style="opacity: 0.9;">›</button>
+        <div class="card-dots-bar">
+          <span class="card-dot active"></span>
+          <span class="card-dot"></span>
+        </div>
+      </div>
+      <div class="info card-content">
+        <div class="brand card-brand-tag"><span>Noor Optics</span><span class="card-gender-badge unisex">Unisex</span></div>
+        <div class="name card-name">1001 Tortoise / Brown Rectangle Metal Frame</div>
+        <div class="card-spec-line">
+          <span class="spec-item">Rectangle</span>
+          <span class="spec-sep">•</span>
+          <span class="spec-item">Size: Medium</span>
+          <span class="spec-sep">•</span>
+          <span class="spec-item">Metal</span>
+        </div>
+        <div class="price card-price-row"><span class="card-price">₹999</span></div>
+      </div>
+    </article>
+  </div>
+
+  <div class="card-wrap">
+    <div class="state-title">2. Side View (Swiped / Next State)</div>
+    <article class="pcard product-card">
+      <div class="pic card-media has-slider" data-active-slide="1">
+        <div class="card-slides-track">
+          <img class="card-img" src="http://localhost:3000/images/frames/1001-front.jpg">
+          <img class="card-img" src="http://localhost:3000/images/frames/1001-side.jpg">
+        </div>
+        <button class="card-nav-arrow card-nav-prev" style="opacity: 0.9;">‹</button>
+        <button class="card-nav-arrow card-nav-next" style="opacity: 0.9;">›</button>
+        <div class="card-dots-bar">
+          <span class="card-dot"></span>
+          <span class="card-dot active"></span>
+        </div>
+      </div>
+      <div class="info card-content">
+        <div class="brand card-brand-tag"><span>Noor Optics</span><span class="card-gender-badge unisex">Unisex</span></div>
+        <div class="name card-name">1001 Tortoise / Brown Rectangle Metal Frame</div>
+        <div class="card-spec-line">
+          <span class="spec-item">Rectangle</span>
+          <span class="spec-sep">•</span>
+          <span class="spec-item">Size: Medium</span>
+          <span class="spec-sep">•</span>
+          <span class="spec-item">Metal</span>
+        </div>
+        <div class="price card-price-row"><span class="card-price">₹999</span></div>
+      </div>
+    </article>
+  </div>
+</body>
+</html>
