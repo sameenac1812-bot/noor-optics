@@ -2791,7 +2791,7 @@ router.post('/orders/online', (req, res) => {
       }
     }
 
-    const shippingPaise = subtotalPaise >= 199900 ? 0 : 19900;
+    const shippingPaise = subtotalPaise >= 199900 ? 0 : 10000;
     const totalPayablePaise = subtotalPaise + shippingPaise;
     const taxPaise = 0;
 

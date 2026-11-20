@@ -1485,7 +1485,7 @@
 
     const subtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
     const threshold = (window.NOOR_BRAND && window.NOOR_BRAND.freeShippingThreshold) || 1999;
-    const shipping = subtotal >= threshold ? 0 : 199;
+    const shipping = subtotal >= threshold ? 0 : 100;
     const grandTotal = subtotal + shipping;
 
     if (DOM.checkoutSubtotal) DOM.checkoutSubtotal.textContent = formatINR(subtotal);
@@ -1527,7 +1527,7 @@
   function renderCheckoutUpiPanel() {
     const subtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
     const threshold = (window.NOOR_BRAND && window.NOOR_BRAND.freeShippingThreshold) || 1999;
-    const shipping = subtotal >= threshold ? 0 : 199;
+    const shipping = subtotal >= threshold ? 0 : 100;
     const grandTotal = subtotal + shipping;
 
     const amountDisplay = document.getElementById('checkout-upi-amount-display');
@@ -1679,7 +1679,7 @@
 
       const subtotal = state.cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
       const threshold = (window.NOOR_BRAND && window.NOOR_BRAND.freeShippingThreshold) || 1999;
-      const shipping = subtotal >= threshold ? 0 : 199;
+      const shipping = subtotal >= threshold ? 0 : 100;
       const grandTotal = subtotal + shipping;
       const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       const timePart = Date.now().toString().slice(-4);
