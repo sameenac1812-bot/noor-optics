@@ -1246,6 +1246,31 @@
     </div>
   </div>
 
+  <!-- Fullscreen Image Viewer / Lightbox Modal -->
+  <div class="fullscreen-viewer-backdrop" id="fullscreen-image-viewer" role="dialog" aria-modal="true" aria-label="Fullscreen Frame View">
+    <div class="fullscreen-viewer-bar">
+      <div class="fullscreen-viewer-meta">
+        <div class="fullscreen-viewer-title" id="fullscreen-viewer-title">Noor Optics Frame</div>
+        <div class="fullscreen-viewer-counter" id="fullscreen-viewer-counter">Front View (1 of 2)</div>
+      </div>
+      <button class="fullscreen-viewer-close" id="btn-close-fullscreen-viewer" aria-label="Close Fullscreen View">&times;</button>
+    </div>
+    <div class="fullscreen-viewer-stage" id="fullscreen-viewer-stage">
+      <button class="fullscreen-nav prev" id="fs-nav-prev" aria-label="Previous view">‹</button>
+      <div class="fullscreen-img-wrap" id="fullscreen-img-wrap">
+        <img class="fullscreen-img" id="fullscreen-main-img" src="" alt="Fullscreen Frame View" />
+      </div>
+      <button class="fullscreen-nav next" id="fs-nav-next" aria-label="Next view">›</button>
+    </div>
+    <div class="fullscreen-viewer-footer">
+      <div class="fullscreen-dots" id="fullscreen-dots">
+        <span class="fs-dot active" data-slide="0"></span>
+        <span class="fs-dot" data-slide="1"></span>
+      </div>
+      <div class="fullscreen-hint">Swipe or tap arrows to switch views · Tap anywhere to close</div>
+    </div>
+  </div>
+
   <!-- Demo Checkout Modal -->
   <div class="modal-backdrop" id="checkout-modal" role="dialog" aria-modal="true" aria-label="Demo Checkout">
     <div class="modal-container checkout-modal-container">

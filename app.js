@@ -150,6 +150,7 @@
     // Quick View Modal
     DOM.quickViewModal = document.getElementById('quickview-modal');
     DOM.quickViewContainer = document.getElementById('quickview-container');
+    DOM.fullscreenViewer = document.getElementById('fullscreen-image-viewer');
 
     // Demo Checkout Modal
     DOM.checkoutModal = document.getElementById('checkout-modal');
@@ -994,23 +995,84 @@
     DOM.cartItemsList.innerHTML = html;
   }
 
+  // ── Mobile Back Button & Overlay Navigation Stack ──────────────────────────
+  const activeOverlayStack = [];
+
+  function pushOverlayState(overlayId, closeFn) {
+    activeOverlayStack.push({ id: overlayId, close: closeFn });
+    try {
+      window.history.pushState({ noorOverlay: overlayId, depth: activeOverlayStack.length }, '');
+    } catch (_) {}
+  }
+
+  function popOverlayState(overlayId) {
+    const idx = activeOverlayStack.findIndex(item => item.id === overlayId);
+    if (idx !== -1) {
+      activeOverlayStack.splice(idx, 1);
+      try {
+        if (window.history.state && window.history.state.noorOverlay === overlayId) {
+          window.history.back();
+        }
+      } catch (_) {}
+    }
+  }
+
+  window.addEventListener('popstate', (e) => {
+    if (activeOverlayStack.length > 0) {
+      const top = activeOverlayStack.pop();
+      if (top && typeof top.close === 'function') {
+        top.close(true); // Close top overlay without navigating away from website
+      }
+    }
+  });
+
   // ── Drawer Open/Close Mechanics ───────────────────────────────────────────
   function openDrawer(drawerElem) {
-    closeAllDrawers();
+    closeAllDrawersInternal();
     if (!drawerElem) return;
     drawerElem.classList.add('open');
     if (DOM.drawerBackdrop) DOM.drawerBackdrop.classList.add('open');
     document.body.classList.add('drawer-open');
+    const drawerId = drawerElem.id || 'drawer-' + Date.now();
+    pushOverlayState(drawerId, () => {
+      closeDrawerInternal(drawerElem);
+    });
+  }
+
+  function closeDrawerInternal(drawerElem) {
+    if (drawerElem) drawerElem.classList.remove('open');
+    if (DOM.sortBottomSheet) DOM.sortBottomSheet.classList.remove('open');
+    if (DOM.sortSheetBackdrop) DOM.sortSheetBackdrop.classList.remove('open');
+    if (DOM.drawerBackdrop) DOM.drawerBackdrop.classList.remove('open');
+    if (activeOverlayStack.length === 0) {
+      document.body.classList.remove('drawer-open');
+    }
+  }
+
+  function closeDrawer(drawerElem) {
+    if (!drawerElem) return;
+    const drawerId = drawerElem.id || '';
+    if (drawerId) popOverlayState(drawerId);
+    closeDrawerInternal(drawerElem);
   }
 
   function closeAllDrawers() {
+    [DOM.cartDrawer, DOM.wishlistDrawer, DOM.filterDrawer, DOM.mobileMenuDrawer].forEach(drawer => {
+      if (drawer && drawer.id) popOverlayState(drawer.id);
+    });
+    closeAllDrawersInternal();
+  }
+
+  function closeAllDrawersInternal() {
     [DOM.cartDrawer, DOM.wishlistDrawer, DOM.filterDrawer, DOM.mobileMenuDrawer].forEach(drawer => {
       if (drawer) drawer.classList.remove('open');
     });
     if (DOM.sortBottomSheet) DOM.sortBottomSheet.classList.remove('open');
     if (DOM.sortSheetBackdrop) DOM.sortSheetBackdrop.classList.remove('open');
     if (DOM.drawerBackdrop) DOM.drawerBackdrop.classList.remove('open');
-    document.body.classList.remove('drawer-open');
+    if (activeOverlayStack.length === 0) {
+      document.body.classList.remove('drawer-open');
+    }
   }
 
   // ── Modal Open/Close Mechanics ────────────────────────────────────────────
@@ -1018,19 +1080,186 @@
     if (!modalElem) return;
     modalElem.classList.add('open');
     document.body.classList.add('drawer-open');
+    const modalId = modalElem.id || 'modal-' + Date.now();
+    pushOverlayState(modalId, () => {
+      closeModalInternal(modalElem);
+    });
+  }
+
+  function closeModalInternal(modalElem) {
+    if (!modalElem) return;
+    modalElem.classList.remove('open');
+    if (activeOverlayStack.length === 0) {
+      document.body.classList.remove('drawer-open');
+    }
   }
 
   function closeModal(modalElem) {
     if (!modalElem) return;
-    modalElem.classList.remove('open');
-    document.body.classList.remove('drawer-open');
+    const modalId = modalElem.id || '';
+    if (modalId) popOverlayState(modalId);
+    closeModalInternal(modalElem);
   }
 
   function closeAllModals() {
     [DOM.quickViewModal, DOM.checkoutModal].forEach(modal => {
-      if (modal) modal.classList.remove('open');
+      if (modal) {
+        if (modal.id) popOverlayState(modal.id);
+        modal.classList.remove('open');
+      }
     });
-    document.body.classList.remove('drawer-open');
+    if (DOM.fullscreenViewer) {
+      popOverlayState('fullscreen-image-viewer');
+      DOM.fullscreenViewer.classList.remove('open');
+    }
+    if (activeOverlayStack.length === 0) {
+      document.body.classList.remove('drawer-open');
+    }
+  }
+
+  // ── Fullscreen Image Lightbox ──────────────────────────────────────────────
+  let currentFullscreenProduct = null;
+  let currentFullscreenSlideIdx = 0;
+
+  function openFullscreenViewer(product, initialSlideIdx = 0) {
+    if (!product) return;
+    currentFullscreenProduct = product;
+    currentFullscreenSlideIdx = initialSlideIdx === 1 ? 1 : 0;
+
+    const viewer = document.getElementById('fullscreen-image-viewer');
+    if (!viewer) return;
+
+    const titleEl = document.getElementById('fullscreen-viewer-title');
+    const counterEl = document.getElementById('fullscreen-viewer-counter');
+    const imgEl = document.getElementById('fullscreen-main-img');
+    const prevBtn = document.getElementById('fs-nav-prev');
+    const nextBtn = document.getElementById('fs-nav-next');
+    const dotsEl = document.getElementById('fullscreen-dots');
+
+    const frontImg = (product.images && product.images[0]) ? formatProductImage(product.images[0]) : formatProductImage(product.image);
+    const sideImg = (product.images && product.images[1]) ? formatProductImage(product.images[1]) : frontImg;
+    const hasDual = Boolean(sideImg && sideImg !== frontImg);
+
+    if (titleEl) titleEl.textContent = product.name || 'Noor Optics Frame';
+
+    const renderSlide = (idx) => {
+      currentFullscreenSlideIdx = idx === 1 ? 1 : 0;
+      const targetSrc = (currentFullscreenSlideIdx === 1 && hasDual) ? sideImg : frontImg;
+      if (imgEl) {
+        imgEl.src = targetSrc;
+        imgEl.alt = `${product.name} - ${currentFullscreenSlideIdx === 1 ? 'Side View' : 'Front View'}`;
+      }
+      if (counterEl) {
+        counterEl.textContent = hasDual
+          ? `${currentFullscreenSlideIdx === 1 ? 'Side View' : 'Front View'} (${currentFullscreenSlideIdx + 1} of 2)`
+          : 'Front View (1 of 1)';
+      }
+      if (dotsEl) {
+        dotsEl.querySelectorAll('.fs-dot').forEach((dot, i) => {
+          dot.classList.toggle('active', i === currentFullscreenSlideIdx);
+        });
+      }
+    };
+
+    if (dotsEl) dotsEl.style.display = hasDual ? 'flex' : 'none';
+    if (prevBtn) prevBtn.style.display = hasDual ? 'flex' : 'none';
+    if (nextBtn) nextBtn.style.display = hasDual ? 'flex' : 'none';
+
+    renderSlide(currentFullscreenSlideIdx);
+
+    viewer.classList.add('open');
+    document.body.classList.add('drawer-open');
+
+    pushOverlayState('fullscreen-image-viewer', () => {
+      closeFullscreenViewer(true);
+    });
+  }
+
+  function closeFullscreenViewer(fromHistory = false) {
+    const viewer = document.getElementById('fullscreen-image-viewer');
+    if (viewer) viewer.classList.remove('open');
+    if (!fromHistory) {
+      popOverlayState('fullscreen-image-viewer');
+    }
+    if (activeOverlayStack.length === 0) {
+      document.body.classList.remove('drawer-open');
+    }
+  }
+
+  function setupFullscreenViewerEvents() {
+    const viewer = document.getElementById('fullscreen-image-viewer');
+    if (!viewer) return;
+
+    const closeBtn = document.getElementById('btn-close-fullscreen-viewer');
+    const prevBtn = document.getElementById('fs-nav-prev');
+    const nextBtn = document.getElementById('fs-nav-next');
+    const dots = viewer.querySelectorAll('.fs-dot');
+    const stage = document.getElementById('fullscreen-viewer-stage');
+
+    if (closeBtn) closeBtn.addEventListener('click', () => closeFullscreenViewer(false));
+
+    // Clicking the background stage outside the image closes the viewer
+    if (stage) {
+      stage.addEventListener('click', (e) => {
+        if (e.target === stage || e.target.id === 'fullscreen-img-wrap') {
+          closeFullscreenViewer(false);
+        }
+      });
+    }
+
+    const switchSlide = (idx) => {
+      if (!currentFullscreenProduct) return;
+      currentFullscreenSlideIdx = idx === 1 ? 1 : 0;
+      const frontImg = (currentFullscreenProduct.images && currentFullscreenProduct.images[0]) ? formatProductImage(currentFullscreenProduct.images[0]) : formatProductImage(currentFullscreenProduct.image);
+      const sideImg = (currentFullscreenProduct.images && currentFullscreenProduct.images[1]) ? formatProductImage(currentFullscreenProduct.images[1]) : frontImg;
+      const imgEl = document.getElementById('fullscreen-main-img');
+      const counterEl = document.getElementById('fullscreen-viewer-counter');
+      const dotsEl = document.getElementById('fullscreen-dots');
+
+      if (imgEl) imgEl.src = currentFullscreenSlideIdx === 1 ? sideImg : frontImg;
+      if (counterEl) counterEl.textContent = `${currentFullscreenSlideIdx === 1 ? 'Side View' : 'Front View'} (${currentFullscreenSlideIdx + 1} of 2)`;
+      if (dotsEl) {
+        dotsEl.querySelectorAll('.fs-dot').forEach((dot, i) => {
+          dot.classList.toggle('active', i === currentFullscreenSlideIdx);
+        });
+      }
+    };
+
+    if (prevBtn) prevBtn.addEventListener('click', (e) => { e.stopPropagation(); switchSlide(0); });
+    if (nextBtn) nextBtn.addEventListener('click', (e) => { e.stopPropagation(); switchSlide(1); });
+    dots.forEach((dot, i) => dot.addEventListener('click', (e) => { e.stopPropagation(); switchSlide(i); }));
+
+    // Touch swipe left / right in fullscreen
+    let fsStartX = 0;
+    let fsStartY = 0;
+    viewer.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        fsStartX = e.touches[0].clientX;
+        fsStartY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+
+    viewer.addEventListener('touchend', (e) => {
+      if (e.changedTouches.length === 0) return;
+      const dX = e.changedTouches[0].clientX - fsStartX;
+      const dY = e.changedTouches[0].clientY - fsStartY;
+      if (Math.abs(dX) > Math.abs(dY) && Math.abs(dX) > 30) {
+        if (dX < 0) switchSlide(1);
+        else switchSlide(0);
+      }
+    }, { passive: true });
+
+    // Keyboard navigation
+    window.addEventListener('keydown', (e) => {
+      if (!viewer.classList.contains('open')) return;
+      if (e.key === 'Escape') {
+        closeFullscreenViewer(false);
+      } else if (e.key === 'ArrowRight') {
+        switchSlide(1);
+      } else if (e.key === 'ArrowLeft') {
+        switchSlide(0);
+      }
+    });
   }
 
   // ── Quick View / Product Detail Modal ──────────────────────────────────────
@@ -1095,10 +1324,19 @@
     DOM.quickViewContainer.innerHTML = `
       <div class="quickview-grid">
         <div class="quickview-gallery" id="qv-gallery-box" data-active-slide="0" tabindex="0" role="region" aria-label="Frame Gallery View">
+          <div class="qv-zoom-badge" id="qv-zoom-badge" style="cursor:pointer;" title="Tap to view full screen">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              <line x1="11" y1="8" x2="11" y2="14"/>
+              <line x1="8" y1="11" x2="14" y2="11"/>
+            </svg>
+            <span>Tap to expand</span>
+          </div>
           <div class="qv-slider" id="qv-slider" data-active-slide="0">
-            <img class="quickview-img qv-slide" src="${qvFront}" alt="${escapeHtml(product.name)} - Front View" id="qv-main-img" onerror="this.onerror=null; this.src='/images/frames/1001-front.jpg';">
+            <img class="quickview-img qv-slide" src="${qvFront}" alt="${escapeHtml(product.name)} - Front View" id="qv-main-img" data-slide-index="0" onerror="this.onerror=null; this.src='/images/frames/1001-front.jpg';">
             ${qvHasDual ? `
-              <img class="quickview-img qv-slide" src="${qvSide}" alt="${escapeHtml(product.name)} - Side View" id="qv-side-img" loading="lazy" onerror="this.onerror=null; this.src='/images/frames/1001-side.jpg';">
+              <img class="quickview-img qv-slide" src="${qvSide}" alt="${escapeHtml(product.name)} - Side View" id="qv-side-img" data-slide-index="1" loading="lazy" onerror="this.onerror=null; this.src='/images/frames/1001-side.jpg';">
             ` : ''}
           </div>
           ${qvHasDual ? `
@@ -1198,6 +1436,25 @@
           else if (e.key === 'ArrowLeft') { e.preventDefault(); setQvSlide(0); }
         });
       }
+    }
+
+    // Click any slide image or the expand badge to open Fullscreen Viewer
+    DOM.quickViewContainer.querySelectorAll('.qv-slide').forEach(slideImg => {
+      slideImg.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const slideIdx = parseInt(slideImg.getAttribute('data-slide-index') || '0', 10);
+        openFullscreenViewer(product, slideIdx);
+      });
+    });
+
+    const zoomBadge = document.getElementById('qv-zoom-badge');
+    if (zoomBadge) {
+      zoomBadge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const qvSlider = document.getElementById('qv-slider');
+        const activeIdx = qvSlider ? parseInt(qvSlider.getAttribute('data-active-slide') || '0', 10) : 0;
+        openFullscreenViewer(product, activeIdx);
+      });
     }
 
     // Event listeners inside Quick View
@@ -1650,6 +1907,8 @@
 
   // ── Global Event Delegation ────────────────────────────────────────────────
   function attachEventHandlers() {
+    setupFullscreenViewerEvents();
+
     // Top utility toggles
     if (DOM.btnSearchToggle) {
       DOM.btnSearchToggle.addEventListener('click', () => {
