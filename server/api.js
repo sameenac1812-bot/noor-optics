@@ -9,7 +9,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
-const { db } = require('./db');
+const { db, restoreAuthoritativeBackup } = require('./db');
 const {
   signToken,
   authenticateToken,
@@ -1113,6 +1113,15 @@ router.post('/purchase-orders/:id/receive', authenticateToken, requirePermission
 
 // ── GET /api/customers (Directory with Search, Stats & Archival Filters) ───────
 router.get('/customers', authenticateToken, async (req, res) => {
+  try {
+    const custCountCheck = db.prepare('SELECT count(*) as c FROM customers WHERE client_code NOT LIKE "SYS-%"').get();
+    if (!custCountCheck || custCountCheck.c === 0) {
+      if (typeof restoreAuthoritativeBackup === 'function') {
+        restoreAuthoritativeBackup(db);
+      }
+    }
+  } catch (_) {}
+
   const forceSync = req.query.force === '1' || req.query.force === 'true';
   if (forceSync) {
     await syncSupabaseOrders(db, true).catch(() => {});
@@ -3080,6 +3089,14 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
     res.setHeader('Expires', '0');
 
     const forceSync = req.query.force === '1' || req.query.force === 'true';
+    try {
+      const orderCountCheck = db.prepare('SELECT count(*) as c FROM orders').get();
+      if (!orderCountCheck || orderCountCheck.c === 0) {
+        if (typeof restoreAuthoritativeBackup === 'function') {
+          restoreAuthoritativeBackup(db);
+        }
+      }
+    } catch (_) {}
     await syncSupabaseOrders(db, forceSync).catch(err => console.warn('[SupabaseSync] GET /orders sync note:', err.message));
 
     const { channel, paymentStatus, status, limit = 300 } = req.query;

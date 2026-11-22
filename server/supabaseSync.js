@@ -14,7 +14,7 @@ let lastProductSyncTime = 0;
 const PRODUCT_SYNC_CACHE_MS = 15000;
 
 let lastOrderSyncTime = 0;
-const ORDER_SYNC_CACHE_MS = 3500;
+const ORDER_SYNC_CACHE_MS = 30000;
 
 function invalidateProductSyncCache() {
   lastProductSyncTime = 0;
@@ -37,6 +37,7 @@ async function fetchCloudOrderTombstones() {
       },
       signal: AbortSignal.timeout(5000)
     });
+    if (res.status === 402) return { orders: new Set(), purgedBefore: null };
     if (!res.ok) return { orders: new Set(), purgedBefore: null };
     const list = await res.json();
     if (!Array.isArray(list) || list.length === 0) return { orders: new Set(), purgedBefore: null };
@@ -77,6 +78,7 @@ async function fetchCloudOrderPayments() {
       },
       signal: AbortSignal.timeout(5000)
     });
+    if (res.status === 402) return { verified: new Set(), rejected: new Set(), details: {} };
     if (!res.ok) return { verified: new Set(), rejected: new Set(), details: {} };
     const list = await res.json();
     if (!Array.isArray(list) || list.length === 0 || !list[0].notes) return { verified: new Set(), rejected: new Set(), details: {} };
@@ -1483,6 +1485,12 @@ async function syncSupabaseOrders(db, force = false) {
       signal: AbortSignal.timeout(8000)
     });
 
+    if (res.status === 402) {
+      console.warn('[SupabaseSync] Supabase egress quota exceeded (HTTP 402). Relying on authoritative local storage.');
+      lastOrderSyncTime = now + 120000;
+      return;
+    }
+
     if (!res.ok) {
       console.warn(`[SupabaseSync] Fetch failed with status ${res.status}`);
       return;
@@ -2051,6 +2059,7 @@ async function syncSupabaseCustomers(db) {
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
       }
     });
+    if (res.status === 402) return;
     if (!res.ok) return;
     const cloudCusts = await res.json();
     if (!Array.isArray(cloudCusts)) return;
@@ -2147,6 +2156,7 @@ async function syncSupabaseProducts(db, force = false) {
       }
     });
 
+    if (res.status === 402) return;
     if (!res.ok) return;
     const list = await res.json();
     if (!Array.isArray(list) || list.length === 0 || !list[0].notes) return;
@@ -2426,6 +2436,7 @@ async function removeProductFromCloudTombstone(productId, sku = null, name = nul
     const res = await fetch(`${SUPABASE_URL}/rest/v1/customers?client_code=eq.SYS-TOMBSTONE-PRODUCTS`, {
       headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
     });
+    if (res.status === 402) return;
     if (!res.ok) return;
     const list = await res.json();
     if (!Array.isArray(list) || list.length === 0 || !list[0].notes) return;

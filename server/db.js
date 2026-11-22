@@ -587,6 +587,57 @@ function initializeDatabase() {
       console.warn('Auto-seed note:', seedErr.message);
     }
   }
+
+  // Restore authoritative orders & customers if database was freshly initialized
+  try {
+    const orderCountRow = db.prepare('SELECT count(*) as c FROM orders').get();
+    const custCountRow = db.prepare('SELECT count(*) as c FROM customers').get();
+    if (!orderCountRow || orderCountRow.c === 0 || !custCountRow || custCountRow.c === 0) {
+      restoreAuthoritativeBackup(db);
+    }
+  } catch (restoreErr) {
+    console.warn('Authoritative backup check note:', restoreErr.message);
+  }
+}
+
+/**
+ * Automatically restore genuine customer bills & orders from durable authoritative backup
+ */
+function restoreAuthoritativeBackup(dbInstance) {
+  try {
+    const backupFile = path.join(__dirname, '..', 'data', 'authoritative_backup.json');
+    if (!fs.existsSync(backupFile)) return;
+    const backupData = JSON.parse(fs.readFileSync(backupFile, 'utf8'));
+
+    const insertRows = (tableName, rows) => {
+      if (!Array.isArray(rows) || rows.length === 0) return;
+      const validCols = new Set(dbInstance.prepare(`PRAGMA table_info(${tableName})`).all().map(c => c.name));
+      const cols = Object.keys(rows[0]).filter(k => validCols.has(k));
+      if (cols.length === 0) return;
+      const placeholders = cols.map(() => '?').join(', ');
+      const sql = `INSERT OR IGNORE INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders})`;
+      const stmt = dbInstance.prepare(sql);
+      const tx = dbInstance.transaction(() => {
+        for (const row of rows) {
+          const values = cols.map(c => row[c] !== undefined ? row[c] : null);
+          stmt.run(...values);
+        }
+      });
+      tx();
+    };
+
+    dbInstance.pragma('foreign_keys = OFF');
+    if (backupData.customers) insertRows('customers', backupData.customers);
+    if (backupData.prescriptions) insertRows('prescriptions', backupData.prescriptions);
+    if (backupData.orders) insertRows('orders', backupData.orders);
+    if (backupData.order_items) insertRows('order_items', backupData.order_items);
+    if (backupData.invoices) insertRows('invoices', backupData.invoices);
+    if (backupData.payments) insertRows('payments', backupData.payments);
+    dbInstance.pragma('foreign_keys = ON');
+    console.log('[DB] Authoritative customer bills and orders restored successfully.');
+  } catch (err) {
+    console.warn('[DB] Could not restore authoritative backup:', err.message);
+  }
 }
 
 initializeDatabase();
@@ -594,5 +645,6 @@ initializeDatabase();
 module.exports = {
   db,
   initializeDatabase,
+  restoreAuthoritativeBackup,
   DB_PATH
 };

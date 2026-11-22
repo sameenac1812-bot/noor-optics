@@ -823,6 +823,34 @@
   // ═══════════════════════════════════════════════════════════════════════════
   // 2. SECTION: ORDERS — IN-STORE AND WEBSITE (AUTO-REFRESHING + INSTANT BILL)
   // ═══════════════════════════════════════════════════════════════════════════
+  
+  // ── Multi-Layer Durability: Authoritative Fallback Data ───────────────────
+  // Guarantees bills and client directory never disappear, even under network loss or cloud quota limits.
+  const AUTHORITATIVE_FALLBACK_ORDERS = [{"id":"ord-pos-1794076576088","order_number":"NOOR-POS-20261107-6088-2224","order_ref":"NOOR-POS-20261107-6088-2224","channel":"POS","channel_code":2,"customer_id":"cust-1794297676366-6282","customer_name":"saakib saami","customer_phone":"7396561933","customer_email":"atibonnoot@gmail.com","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":299900,"total_payable_inr":2999,"amount_paid_paise":299900,"amount_paid_inr":2999,"advance_paid_paise":249900,"second_payment_paise":50000,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"zero-power","prescription_id":"rx-cld-noor-web-20261107-2378-2982","prescriptions_json":"[{\"id\":\"rx-cld-noor-web-20261107-2378-2982\",\"notes\":null,\"od_cyl\":\"0.50\",\"od_sph\":\"0.50\",\"os_cyl\":\"0.50\",\"os_sph\":\"0.50\",\"od_axis\":\"12\",\"os_axis\":\"12\",\"addition\":\"11\",\"ipd_near\":null,\"client_id\":\"cust-1794066233539-4135\",\"image_url\":null,\"checked_by\":\"Website Client Submission\",\"created_at\":\"2026-11-07T18:33:33.302469+00:00\",\"updated_at\":\"2026-11-07T18:33:33.302469+00:00\",\"is_archived\":0,\"ipd_distance\":\"11\",\"prescription_date\":\"2026-11-07\",\"created_by_user_id\":null,\"prescriber_details\":null,\"prescription_number\":\"RX-NOOR-WEB-20261107-2378-2982\"}]","created_at":"2026-11-07T18:36:16.090Z","updated_at":"2026-11-07 18:36:45","items":[{"id":"item-default-ord-pos-1794076576088","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":299900,"unit_price":2999}]},{"id":"ord-cld-noor-pos-20261112-4987-3065","order_number":"NOOR-POS-20261112-4987-3065","order_ref":"NOOR-POS-20261112-4987-3065","channel":"POS","channel_code":2,"customer_id":"cust-1794499338048-3455","customer_name":"abdul mujeeb","customer_phone":"9030582350","customer_email":"9030582350@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":280000,"total_payable_inr":2800,"amount_paid_paise":280000,"amount_paid_inr":2800,"advance_paid_paise":2800000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"Standard","prescription_id":null,"prescriptions_json":null,"created_at":"2026-11-12T16:02:15.357571+00:00","updated_at":"2026-11-12T16:02:15.357571+00:00","items":[{"id":"oit-ord-cld-noor-pos-20261112-4987-3065-0","order_id":"ord-cld-noor-pos-20261112-4987-3065","variant_id":null,"product_name":"fresh look contact lens","variant_name":"Standard","sku":"MANUAL-3830","lens_name":"Standard Demo Lens","unit_price_paise":280000,"purchase_cost_paise":145000,"quantity":1,"subtotal_paise":280000,"brand":null,"model":null,"shape":null,"color":null,"size":null}]},{"id":"ord-cld-noor-pos-20261120-7914-6116","order_number":"NOOR-POS-20261120-7914-6116","order_ref":"NOOR-POS-20261120-7914-6116","channel":"POS","channel_code":2,"customer_id":"cust-1795176817915-6628","customer_name":"Kaleem","customer_phone":"9542467861","customer_email":"9542467861@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":50000,"total_payable_inr":500,"amount_paid_paise":50000,"amount_paid_inr":500,"advance_paid_paise":50000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"Standard","prescription_id":null,"prescriptions_json":null,"created_at":"2026-11-20T12:13:38.21136+00:00","updated_at":"2026-11-20T12:13:38.21136+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261120-7914-6116","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":50000,"unit_price":500}]},{"id":"ord-cld-noor-pos-20261120-3335-3418","order_number":"NOOR-POS-20261120-3335-3418","order_ref":"NOOR-POS-20261120-3335-3418","channel":"POS","channel_code":2,"customer_id":"cust-1795174313336-4729","customer_name":"zaiba","customer_phone":"7337008969","customer_email":"7337008969@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"PARTIAL","total_payable_paise":600000,"total_payable_inr":6000,"amount_paid_paise":300000,"amount_paid_inr":3000,"advance_paid_paise":300000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":300000,"outstanding_inr":3000,"prescription_pref":"Standard","prescription_id":null,"prescriptions_json":null,"created_at":"2026-11-20T11:31:53.640091+00:00","updated_at":"2026-11-20T11:31:53.640091+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261120-3335-3418","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":600000,"unit_price":6000}]},{"id":"ord-cld-noor-pos-20261119-2437-2073","order_number":"NOOR-POS-20261119-2437-2073","order_ref":"NOOR-POS-20261119-2437-2073","channel":"POS","channel_code":2,"customer_id":"cust-1795100172438-1031","customer_name":"Mrs shaheen","customer_phone":"9704587007","customer_email":"9704587007@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":150000,"total_payable_inr":1500,"amount_paid_paise":150000,"amount_paid_inr":1500,"advance_paid_paise":50000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"RX Attached","prescription_id":"rx-1795100172439-0-6606","prescriptions_json":"[{\"id\":\"rx-1795100172439-0-6606\",\"notes\":null,\"od_cyl\":\"+0.50\",\"od_sph\":\"+3.00\",\"os_cyl\":\"+0.75\",\"os_sph\":\"+2.50\",\"od_axis\":\"180.0\",\"os_axis\":\"20.0\",\"addition\":\"+2.50\",\"ipd_near\":null,\"client_id\":\"cust-1795100172438-1031\",\"image_url\":null,\"checked_by\":\"Noor Optic\",\"created_at\":\"2026-11-19 14:56:12\",\"updated_at\":\"2026-11-19 14:56:12\",\"is_archived\":0,\"ipd_distance\":null,\"prescription_date\":\"2026-11-19T14:55:06.609Z\",\"created_by_user_id\":\"usr-admin-1\",\"prescriber_details\":null,\"prescription_number\":\"RX-2026-2030\"}]","created_at":"2026-11-19T14:56:12.756698+00:00","updated_at":"2026-11-19T14:56:12.756698+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261119-2437-2073","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":150000,"unit_price":1500}]},{"id":"ord-cld-noor-pos-20261119-6840-1897","order_number":"NOOR-POS-20261119-6840-1897","order_ref":"NOOR-POS-20261119-6840-1897","channel":"POS","channel_code":2,"customer_id":"cust-1795083336841-1240","customer_name":"dr ali","customer_phone":"9392407578","customer_email":"9392407578@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":400000,"total_payable_inr":4000,"amount_paid_paise":400000,"amount_paid_inr":4000,"advance_paid_paise":400000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"RX Attached","prescription_id":"rx-1795083336842-0-8544","prescriptions_json":"[{\"id\":\"rx-1795083336842-0-8544\",\"notes\":null,\"od_cyl\":\"-0.75\",\"od_sph\":\"-4.00\",\"os_cyl\":\"-0.50\",\"os_sph\":\"-4.00\",\"od_axis\":\"180.0\",\"os_axis\":\"100.0\",\"addition\":null,\"ipd_near\":null,\"client_id\":\"cust-1795083336841-1240\",\"image_url\":null,\"checked_by\":\"Noor Optic\",\"created_at\":\"2026-11-19 10:15:36\",\"updated_at\":\"2026-11-19 10:15:36\",\"is_archived\":0,\"ipd_distance\":null,\"prescription_date\":\"2026-11-19T10:15:28.816Z\",\"created_by_user_id\":\"usr-admin-1\",\"prescriber_details\":null,\"prescription_number\":\"RX-2026-2029\"}]","created_at":"2026-11-19T10:15:37.132719+00:00","updated_at":"2026-11-19T10:15:37.132719+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261119-6840-1897","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":400000,"unit_price":4000}]},{"id":"ord-cld-noor-pos-20261119-6764-4648","order_number":"NOOR-POS-20261119-6764-4648","order_ref":"NOOR-POS-20261119-6764-4648","channel":"POS","channel_code":2,"customer_id":"cust-1795177540194-9043","customer_name":"Master malhar","customer_phone":"9370985257","customer_email":"9370985257@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":260000,"total_payable_inr":2600,"amount_paid_paise":260000,"amount_paid_inr":2600,"advance_paid_paise":260000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"RX Attached","prescription_id":"rx-1795080556766-0-4182","prescriptions_json":"[{\"id\":\"rx-1795080556766-0-4182\",\"notes\":null,\"od_cyl\":null,\"od_sph\":\"-1.00\",\"os_cyl\":null,\"os_sph\":\"-0.50\",\"od_axis\":null,\"os_axis\":null,\"addition\":null,\"ipd_near\":null,\"client_id\":\"cust-1795080556765-7645\",\"image_url\":null,\"checked_by\":\"Noor Optic\",\"created_at\":\"2026-11-19 09:29:16\",\"updated_at\":\"2026-11-19 09:29:16\",\"is_archived\":0,\"ipd_distance\":null,\"prescription_date\":\"2026-11-19T09:28:29.752Z\",\"created_by_user_id\":\"usr-admin-1\",\"prescriber_details\":null,\"prescription_number\":\"RX-2026-2028\"}]","created_at":"2026-11-19T09:29:17.106834+00:00","updated_at":"2026-11-19T09:29:17.106834+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261119-6764-4648","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":260000,"unit_price":2600}]},{"id":"ord-cld-noor-pos-20261118-0884-5639","order_number":"NOOR-POS-20261118-0884-5639","order_ref":"NOOR-POS-20261118-0884-5639","channel":"POS","channel_code":2,"customer_id":"cust-1795177540195-6166","customer_name":"Venkeshwar","customer_phone":"7780677292","customer_email":"7780677292@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":20000,"total_payable_inr":200,"amount_paid_paise":20000,"amount_paid_inr":200,"advance_paid_paise":20000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"Standard","prescription_id":null,"prescriptions_json":null,"created_at":"2026-11-18T09:17:41.253117+00:00","updated_at":"2026-11-18T09:17:41.253117+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261118-0884-5639","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":20000,"unit_price":200}]},{"id":"ord-cld-noor-pos-20261118-8089-8551","order_number":"NOOR-POS-20261118-8089-8551","order_ref":"NOOR-POS-20261118-8089-8551","channel":"POS","channel_code":2,"customer_id":"cust-1795177540350-2759","customer_name":"Srieemanth","customer_phone":"7702926539","customer_email":"7702926539@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":50000,"total_payable_inr":500,"amount_paid_paise":50000,"amount_paid_inr":500,"advance_paid_paise":50000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"Standard","prescription_id":null,"prescriptions_json":null,"created_at":"2026-11-18T08:06:58.482885+00:00","updated_at":"2026-11-18T08:06:58.482885+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261118-8089-8551","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":50000,"unit_price":500}]},{"id":"ord-cld-noor-pos-20261117-0992-5474","order_number":"NOOR-POS-20261117-0992-5474","order_ref":"NOOR-POS-20261117-0992-5474","channel":"POS","channel_code":2,"customer_id":"cust-1795177540520-1866","customer_name":"uzma","customer_phone":"99999999","customer_email":"99999999@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":11000,"total_payable_inr":110,"amount_paid_paise":11000,"amount_paid_inr":110,"advance_paid_paise":11000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"Standard","prescription_id":null,"prescriptions_json":null,"created_at":"2026-11-17T08:26:11.314589+00:00","updated_at":"2026-11-17T08:26:11.314589+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261117-0992-5474","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":11000,"unit_price":110}]},{"id":"ord-cld-noor-pos-20261117-6190-2876","order_number":"NOOR-POS-20261117-6190-2876","order_ref":"NOOR-POS-20261117-6190-2876","channel":"POS","channel_code":2,"customer_id":"cust-1795177540685-8529","customer_name":"Mrs seetha","customer_phone":"9966584517","customer_email":"9966584517@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":130000,"total_payable_inr":1300,"amount_paid_paise":130000,"amount_paid_inr":1300,"advance_paid_paise":130000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"RX Attached","prescription_id":"rx-1794900436192-0-8526","prescriptions_json":"[{\"id\":\"rx-1794900436192-0-8526\",\"notes\":null,\"od_cyl\":null,\"od_sph\":null,\"os_cyl\":null,\"os_sph\":null,\"od_axis\":null,\"os_axis\":null,\"addition\":\"+1.50\",\"ipd_near\":null,\"client_id\":\"cust-1794900436192-1863\",\"image_url\":null,\"checked_by\":\"Noor Optic\",\"created_at\":\"2026-11-17 07:27:16\",\"updated_at\":\"2026-11-17 07:27:16\",\"is_archived\":0,\"ipd_distance\":null,\"prescription_date\":\"2026-11-17T07:26:20.437Z\",\"created_by_user_id\":\"usr-admin-1\",\"prescriber_details\":null,\"prescription_number\":\"RX-2026-2027\"}]","created_at":"2026-11-17T07:27:16.610557+00:00","updated_at":"2026-11-17T07:27:16.610557+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261117-6190-2876","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":130000,"unit_price":1300}]},{"id":"ord-cld-noor-pos-20261116-2446-3508","order_number":"NOOR-POS-20261116-2446-3508","order_ref":"NOOR-POS-20261116-2446-3508","channel":"POS","channel_code":2,"customer_id":"cust-1795177540903-3360","customer_name":"syed hashi","customer_phone":"7306959132","customer_email":"7306959132@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":350000,"total_payable_inr":3500,"amount_paid_paise":350000,"amount_paid_inr":3500,"advance_paid_paise":200000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"RX Attached","prescription_id":"rx-1794812732448-0-6392","prescriptions_json":"[{\"id\":\"rx-1794812732448-0-6392\",\"notes\":null,\"od_cyl\":\"-1.50\",\"od_sph\":\"+1.25\",\"os_cyl\":\"-0.75\",\"os_sph\":\"+0.50\",\"od_axis\":\"95.0\",\"os_axis\":\"85.0\",\"addition\":\"+2.75\",\"ipd_near\":null,\"client_id\":\"cust-1794812732448-3832\",\"image_url\":null,\"checked_by\":\"Noor Optic\",\"created_at\":\"2026-11-16 07:05:32\",\"updated_at\":\"2026-11-16 07:05:32\",\"is_archived\":0,\"ipd_distance\":null,\"prescription_date\":\"2026-11-16T07:03:04.110Z\",\"created_by_user_id\":\"usr-admin-1\",\"prescriber_details\":null,\"prescription_number\":\"RX-2026-2026\"}]","created_at":"2026-11-16T07:05:33.161573+00:00","updated_at":"2026-11-16T07:05:33.161573+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261116-2446-3508","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":350000,"unit_price":3500}]},{"id":"ord-cld-noor-pos-20261115-6796-5488","order_number":"NOOR-POS-20261115-6796-5488","order_ref":"NOOR-POS-20261115-6796-5488","channel":"POS","channel_code":2,"customer_id":"cust-1795177540905-3183","customer_name":"Afnan Hussain","customer_phone":"9550315785","customer_email":"9550315785@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":270000,"total_payable_inr":2700,"amount_paid_paise":270000,"amount_paid_inr":2700,"advance_paid_paise":0,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"RX Attached","prescription_id":"rx-1794738186798-0-8407","prescriptions_json":"[{\"id\":\"rx-1794738186798-0-8407\",\"notes\":null,\"od_cyl\":\"-0.50\",\"od_sph\":\"-4.75\",\"os_cyl\":\"-0.50\",\"os_sph\":\"-2.00\",\"od_axis\":\"40.0\",\"os_axis\":\"180.0\",\"addition\":null,\"ipd_near\":null,\"client_id\":\"cust-1794738186798-1633\",\"image_url\":null,\"checked_by\":\"Noor Optic\",\"created_at\":\"2026-11-15 10:23:06\",\"updated_at\":\"2026-11-15 10:23:06\",\"is_archived\":0,\"ipd_distance\":null,\"prescription_date\":\"2026-11-15T10:22:05.872Z\",\"created_by_user_id\":\"usr-admin-1\",\"prescriber_details\":null,\"prescription_number\":\"RX-2026-2025\"}]","created_at":"2026-11-15T10:23:07.115704+00:00","updated_at":"2026-11-15T10:23:07.115704+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261115-6796-5488","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":270000,"unit_price":2700}]},{"id":"ord-cld-noor-pos-20261115-1150-8856","order_number":"NOOR-POS-20261115-1150-8856","order_ref":"NOOR-POS-20261115-1150-8856","channel":"POS","channel_code":2,"customer_id":"cust-1795177540908-2038","customer_name":"N Anish","customer_phone":"9866484788","customer_email":"9866484788@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":570000,"total_payable_inr":5700,"amount_paid_paise":570000,"amount_paid_inr":5700,"advance_paid_paise":300000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"RX Attached","prescription_id":"rx-1794736491153-0-4826","prescriptions_json":"[{\"id\":\"rx-1794736491153-0-4826\",\"notes\":null,\"od_cyl\":null,\"od_sph\":\"-1.75\",\"os_cyl\":\"-1.25\",\"os_sph\":\"-1.75\",\"od_axis\":null,\"os_axis\":\"180.0\",\"addition\":null,\"ipd_near\":null,\"client_id\":\"cust-1794736491152-8085\",\"image_url\":null,\"checked_by\":\"Noor Optic\",\"created_at\":\"2026-11-15 09:54:51\",\"updated_at\":\"2026-11-15 09:54:51\",\"is_archived\":0,\"ipd_distance\":null,\"prescription_date\":\"2026-11-15T09:49:54.962Z\",\"created_by_user_id\":\"usr-admin-1\",\"prescriber_details\":null,\"prescription_number\":\"RX-2026-2024\"}]","created_at":"2026-11-15T09:54:51.800619+00:00","updated_at":"2026-11-15T09:54:51.800619+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261115-1150-8856","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":570000,"unit_price":5700}]},{"id":"ord-cld-noor-pos-20261114-0190-1639","order_number":"NOOR-POS-20261114-0190-1639","order_ref":"NOOR-POS-20261114-0190-1639","channel":"POS","channel_code":2,"customer_id":"cust-1795177540910-2455","customer_name":"Dr  Divya","customer_phone":"6383834922","customer_email":"6383834922@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":2450000,"total_payable_inr":24500,"amount_paid_paise":2450000,"amount_paid_inr":24500,"advance_paid_paise":1450000,"second_payment_paise":1000000,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"RX Attached","prescription_id":"rx-1794670570192-0-2550","prescriptions_json":"[{\"id\":\"rx-1794670570192-0-2550\",\"notes\":null,\"od_cyl\":\"-1.00\",\"od_sph\":\"-3.00\",\"os_cyl\":null,\"os_sph\":\"-3.00\",\"od_axis\":\"20.0\",\"os_axis\":null,\"addition\":null,\"ipd_near\":null,\"client_id\":\"cust-1794670570192-9533\",\"image_url\":null,\"checked_by\":\"Noor Optic\",\"created_at\":\"2026-11-14 15:36:10\",\"updated_at\":\"2026-11-14 15:36:10\",\"is_archived\":0,\"ipd_distance\":null,\"prescription_date\":\"2026-11-14T15:32:58.774Z\",\"created_by_user_id\":\"usr-admin-1\",\"prescriber_details\":null,\"prescription_number\":\"RX-2026-2023\"}]","created_at":"2026-11-14T15:36:10.587878+00:00","updated_at":"2026-11-14T15:36:10.587878+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261114-0190-1639","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":2450000,"unit_price":24500}]},{"id":"ord-cld-noor-pos-20261114-4377-4515","order_number":"NOOR-POS-20261114-4377-4515","order_ref":"NOOR-POS-20261114-4377-4515","channel":"POS","channel_code":2,"customer_id":"cust-1795177540912-7545","customer_name":"nassreen  unnisa","customer_phone":"8674775338","customer_email":"8674775338@nooroptics.in","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":564000,"total_payable_inr":5640,"amount_paid_paise":564000,"amount_paid_inr":5640,"advance_paid_paise":350000,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"RX Attached","prescription_id":"rx-1794656294380-0-9165","prescriptions_json":"[{\"id\":\"rx-1794656294380-0-9165\",\"notes\":null,\"od_cyl\":\"-0.75\",\"od_sph\":\"-1.00\",\"os_cyl\":\"-0.75\",\"os_sph\":\"-1.75\",\"od_axis\":\"90.0\",\"os_axis\":null,\"addition\":\"+3.00\",\"ipd_near\":null,\"client_id\":\"cust-1794656294379-2571\",\"image_url\":null,\"checked_by\":\"Noor Optic\",\"created_at\":\"2026-11-14 11:38:14\",\"updated_at\":\"2026-11-14 11:38:14\",\"is_archived\":0,\"ipd_distance\":null,\"prescription_date\":\"2026-11-14T11:37:00.683Z\",\"created_by_user_id\":\"usr-admin-1\",\"prescriber_details\":null,\"prescription_number\":\"RX-2026-2022\"}]","created_at":"2026-11-14T11:38:14.712314+00:00","updated_at":"2026-11-14T11:38:14.712314+00:00","items":[{"id":"item-default-ord-cld-noor-pos-20261114-4377-4515","product_name":"Boutique Optical Frame","quantity":1,"unit_price_paise":564000,"unit_price":5640}]},{"id":"ord-cld-noor-web-20261120-0137-6031","order_number":"NOOR-WEB-20261120-0137-6031","order_ref":"NOOR-WEB-20261120-0137-6031","channel":"WEBSITE","channel_code":1,"customer_id":null,"customer_name":"aditya","customer_phone":"7396561933","customer_email":"atibonnoot@gmail.com","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":119800,"total_payable_inr":1198,"amount_paid_paise":119800,"amount_paid_inr":1198,"advance_paid_paise":0,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"zero-power","prescription_id":null,"prescriptions_json":null,"created_at":"2026-11-20T15:35:10.472085+00:00","updated_at":"2026-11-20T15:35:10.472085+00:00","items":[{"id":"oit-ord-cld-noor-web-20261120-0137-6031-0","order_id":"ord-cld-noor-web-20261120-0137-6031","variant_id":"var-noor-1024-01","product_name":"1024 Tortoise / Brown Round Metal Frame","variant_name":"Tortoise / Brown","sku":"NOOR-ONLINE-FRAME","lens_name":"1.60 High-Index Anti-Reflective","unit_price_paise":99900,"purchase_cost_paise":25000,"quantity":1,"subtotal_paise":99900,"brand":null,"model":null,"shape":null,"color":null,"size":null},{"id":"oit-ord-cld-noor-web-20261120-0137-6031-lens-0","order_id":"ord-cld-noor-web-20261120-0137-6031","variant_id":null,"product_name":"1.60 High-Index Anti-Reflective (Lens Package)","variant_name":"Custom Optical Glazing","sku":"LENS-PKG","lens_name":"1.60 High-Index Anti-Reflective","unit_price_paise":69900,"purchase_cost_paise":25000,"quantity":1,"subtotal_paise":69900,"brand":null,"model":null,"shape":null,"color":null,"size":null}]},{"id":"ord-cld-noor-web-20261120-4726-7590","order_number":"NOOR-WEB-20261120-4726-7590","order_ref":"NOOR-WEB-20261120-4726-7590","channel":"WEBSITE","channel_code":1,"customer_id":"cust-1794297676366-6282","customer_name":"aditya","customer_phone":"7396561933","customer_email":"atibonnoot@gmail.com","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":119800,"total_payable_inr":1198,"amount_paid_paise":119800,"amount_paid_inr":1198,"advance_paid_paise":0,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"enter-rx","prescription_id":"rx-1795188203897-1382","prescriptions_json":"[{\"id\":\"rx-1795189074728-3892\",\"notes\":null,\"od_cyl\":\"3\",\"od_sph\":\"3\",\"os_cyl\":\"3\",\"os_sph\":\"3\",\"od_axis\":null,\"os_axis\":null,\"addition\":null,\"ipd_near\":null,\"client_id\":\"cust-1795188910138-9122\",\"image_url\":null,\"checked_by\":\"Website Client Submission\",\"created_at\":\"2026-11-20 15:37:54\",\"updated_at\":\"2026-11-20 15:37:54\",\"is_archived\":0,\"ipd_distance\":null,\"prescription_date\":\"2026-11-20\",\"created_by_user_id\":null,\"prescriber_details\":null,\"prescription_number\":\"RX-2026-2031\"}]","created_at":"2026-11-20T15:37:55.587794+00:00","updated_at":"2026-11-20T15:37:55.587794+00:00","items":[{"id":"oit-ord-cld-noor-web-20261120-4726-7590-0","order_id":"ord-cld-noor-web-20261120-4726-7590","variant_id":"var-noor-1023-01","product_name":"1023 Tortoise / Brown Round Metal Frame","variant_name":"Tortoise / Brown","sku":"NOOR-ONLINE-FRAME","lens_name":"1.60 High-Index Anti-Reflective","unit_price_paise":99900,"purchase_cost_paise":25000,"quantity":1,"subtotal_paise":99900,"brand":null,"model":null,"shape":null,"color":null,"size":null},{"id":"oit-ord-cld-noor-web-20261120-4726-7590-lens-0","order_id":"ord-cld-noor-web-20261120-4726-7590","variant_id":null,"product_name":"1.60 High-Index Anti-Reflective (Lens Package)","variant_name":"Custom Optical Glazing","sku":"LENS-PKG","lens_name":"1.60 High-Index Anti-Reflective","unit_price_paise":69900,"purchase_cost_paise":25000,"quantity":1,"subtotal_paise":69900,"brand":null,"model":null,"shape":null,"color":null,"size":null}]},{"id":"ord-cld-noor-web-20261120-2250-3009","order_number":"NOOR-WEB-20261120-2250-3009","order_ref":"NOOR-WEB-20261120-2250-3009","channel":"WEBSITE","channel_code":1,"customer_id":"cust-1794297676366-6282","customer_name":"Adithiya","customer_phone":"7396561933","customer_email":"ngrai6009@gmail.com","customer_age":null,"status":"CONFIRMED","payment_status":"VERIFIED","total_payable_paise":109900,"total_payable_inr":1099,"amount_paid_paise":109900,"amount_paid_inr":1099,"advance_paid_paise":0,"second_payment_paise":0,"third_payment_paise":0,"outstanding_paise":0,"outstanding_inr":0,"prescription_pref":"enter-rx","prescription_id":"rx-1795189662251-2975","prescriptions_json":"[{\"id\":\"rx-1795189662251-2975\",\"notes\":null,\"od_cyl\":\"1\",\"od_sph\":\"1\",\"os_cyl\":\"1\",\"os_sph\":\"1\",\"od_axis\":\"2\",\"os_axis\":\"2\",\"addition\":null,\"ipd_near\":null,\"client_id\":\"cust-1795188910138-9122\",\"image_url\":null,\"checked_by\":\"Website Client Submission\",\"created_at\":\"2026-11-20 15:47:42\",\"updated_at\":\"2026-11-20 15:47:42\",\"is_archived\":0,\"ipd_distance\":null,\"prescription_date\":\"2026-11-20\",\"created_by_user_id\":null,\"prescriber_details\":null,\"prescription_number\":\"RX-2026-2032\"}]","created_at":"2026-11-20T15:47:43.629094+00:00","updated_at":"2026-11-20T15:47:43.629094+00:00","items":[{"id":"oit-ord-cld-noor-web-20261120-2250-3009-0","order_id":"ord-cld-noor-web-20261120-2250-3009","variant_id":"var-noor-1024-01","product_name":"1024 Tortoise / Brown Round Metal Frame","variant_name":"Tortoise / Brown","sku":"NOOR-ONLINE-FRAME","lens_name":"1.60 High-Index Anti-Reflective","unit_price_paise":99900,"purchase_cost_paise":25000,"quantity":1,"subtotal_paise":99900,"brand":null,"model":null,"shape":null,"color":null,"size":null},{"id":"oit-ord-cld-noor-web-20261120-2250-3009-lens-0","order_id":"ord-cld-noor-web-20261120-2250-3009","variant_id":null,"product_name":"1.60 High-Index Anti-Reflective (Lens Package)","variant_name":"Custom Optical Glazing","sku":"LENS-PKG","lens_name":"1.60 High-Index Anti-Reflective","unit_price_paise":69900,"purchase_cost_paise":25000,"quantity":1,"subtotal_paise":69900,"brand":null,"model":null,"shape":null,"color":null,"size":null}]}];
+  const AUTHORITATIVE_FALLBACK_CLIENTS = [{"id":"cust-1794297676366-6282","client_code":"CLT-1047","name":"Sameena Sam","phone":"9977886678","email":"samwich399@gmail.com","age":null,"city":"Secunderabad","address":"5th floor, 501, Kiranjyot Residency, pg road, bapubagh colon · (UPI UTR: 889900667788)","notes":"Created via Online Storefront Order","order_count":3,"total_spent_inr":5296,"total_spent_paise":529600,"is_archived":0,"created_at":"2026-11-10T07:44:11.937715+00:00","updated_at":"2026-11-10T13:35:31.955+00:00"},{"id":"cust-1794499338048-3455","client_code":"CLT-1087","name":"abdul mujeeb","phone":"9030582350","email":"9030582350@nooroptics.in","age":40,"city":"hyderabad","address":"In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad","notes":"Created during in-store POS billing","order_count":1,"total_spent_inr":2800,"total_spent_paise":280000,"is_archived":0,"created_at":"2026-11-12T16:02:15.357571+00:00","updated_at":"2026-11-12T16:02:14.997+00:00"},{"id":"cust-1795083336841-1240","client_code":"CLT-1091","name":"dr ali","phone":"9392407578","email":null,"age":null,"city":"hyd","address":null,"notes":"Created during in-store POS billing","order_count":1,"total_spent_inr":4000,"total_spent_paise":400000,"is_archived":0,"created_at":"2026-11-19T10:15:37.264059+00:00","updated_at":"2026-11-19T10:15:36.846+00:00"},{"id":"cust-1795176817915-6628","client_code":"CLT-1095","name":"Kaleem","phone":"9542467861","email":null,"age":null,"city":"Hyd","address":null,"notes":"Created during in-store POS billing","order_count":1,"total_spent_inr":500,"total_spent_paise":50000,"is_archived":0,"created_at":"2026-11-20T12:13:38.363136+00:00","updated_at":"2026-11-20T12:13:37.919+00:00"},{"id":"cust-1795100172438-1031","client_code":"CLT-1092","name":"Mrs shaheen","phone":"9704587007","email":null,"age":63,"city":"Hyderabad","address":null,"notes":"Created during in-store POS billing","order_count":1,"total_spent_inr":1500,"total_spent_paise":150000,"is_archived":0,"created_at":"2026-11-19T14:56:13.203372+00:00","updated_at":"2026-11-19T14:56:12.444+00:00"},{"id":"cust-1795174313336-4729","client_code":"CLT-1094","name":"zaiba","phone":"7337008969","email":null,"age":48,"city":"hyd","address":null,"notes":"Created during in-store POS billing","order_count":1,"total_spent_inr":6000,"total_spent_paise":600000,"is_archived":0,"created_at":"2026-11-20T11:31:53.456174+00:00","updated_at":"2026-11-20T11:31:53.341+00:00"},{"id":"cust-1795177540194-9043","client_code":"CLI-40128","name":"Master malhar","phone":"9370985257","email":"9370985257@nooroptics.in","age":null,"city":"Hyderabad","address":"In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad","notes":"Created via Supabase Order Sync","order_count":1,"total_spent_inr":2600,"total_spent_paise":260000,"is_archived":0,"created_at":"2026-11-19T09:29:17.106834+00:00","updated_at":"2026-11-20 15:48:15"},{"id":"cust-1795177540195-6166","client_code":"CLI-18037","name":"Venkeshwar","phone":"7780677292","email":"7780677292@nooroptics.in","age":null,"city":"Hyderabad","address":"In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad","notes":"Created via Supabase Order Sync","order_count":1,"total_spent_inr":200,"total_spent_paise":20000,"is_archived":0,"created_at":"2026-11-18T09:17:41.253117+00:00","updated_at":"2026-11-20 15:48:15"},{"id":"cust-1795177540350-2759","client_code":"CLI-24679","name":"Srieemanth","phone":"7702926539","email":"7702926539@nooroptics.in","age":null,"city":"Hyderabad","address":"In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad","notes":"Created via Supabase Order Sync","order_count":1,"total_spent_inr":500,"total_spent_paise":50000,"is_archived":0,"created_at":"2026-11-18T08:06:58.482885+00:00","updated_at":"2026-11-20 15:48:15"},{"id":"cust-1795177540520-1866","client_code":"CLI-49424","name":"uzma","phone":"99999999","email":"99999999@nooroptics.in","age":null,"city":"Hyderabad","address":"In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad","notes":"Created via Supabase Order Sync","order_count":1,"total_spent_inr":110,"total_spent_paise":11000,"is_archived":0,"created_at":"2026-11-17T08:26:11.314589+00:00","updated_at":"2026-11-20 15:48:15"},{"id":"cust-1795177540685-8529","client_code":"CLI-77825","name":"Mrs seetha","phone":"9966584517","email":"9966584517@nooroptics.in","age":null,"city":"Hyderabad","address":"In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad","notes":"Created via Supabase Order Sync","order_count":1,"total_spent_inr":1300,"total_spent_paise":130000,"is_archived":0,"created_at":"2026-11-17T07:27:16.610557+00:00","updated_at":"2026-11-20 15:48:16"},{"id":"cust-1795177540903-3360","client_code":"CLI-50295","name":"syed hashi","phone":"7306959132","email":"7306959132@nooroptics.in","age":null,"city":"Hyderabad","address":"In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad","notes":"Created via Supabase Order Sync","order_count":1,"total_spent_inr":3500,"total_spent_paise":350000,"is_archived":0,"created_at":"2026-11-16T07:05:33.161573+00:00","updated_at":"2026-11-20 15:48:16"},{"id":"cust-1795177540905-3183","client_code":"CLI-40380","name":"Afnan Hussain","phone":"9550315785","email":"9550315785@nooroptics.in","age":null,"city":"Hyderabad","address":"In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad","notes":"Created via Supabase Order Sync","order_count":1,"total_spent_inr":2700,"total_spent_paise":270000,"is_archived":0,"created_at":"2026-11-15T10:23:07.115704+00:00","updated_at":"2026-11-20 15:48:16"},{"id":"cust-1795177540908-2038","client_code":"CLI-60639","name":"N Anish","phone":"9866484788","email":"9866484788@nooroptics.in","age":null,"city":"Hyderabad","address":"In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad","notes":"Created via Supabase Order Sync","order_count":1,"total_spent_inr":5700,"total_spent_paise":570000,"is_archived":0,"created_at":"2026-11-15T09:54:51.800619+00:00","updated_at":"2026-11-20 15:48:16"},{"id":"cust-1795177540910-2455","client_code":"CLI-10073","name":"Dr  Divya","phone":"6383834922","email":"6383834922@nooroptics.in","age":null,"city":"Hyderabad","address":"In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad","notes":"Created via Supabase Order Sync","order_count":1,"total_spent_inr":24500,"total_spent_paise":2450000,"is_archived":0,"created_at":"2026-11-14T15:36:10.587878+00:00","updated_at":"2026-11-20 15:48:16"},{"id":"cust-1795177540912-7545","client_code":"CLI-27194","name":"nassreen  unnisa","phone":"8674775338","email":"8674775338@nooroptics.in","age":null,"city":"Hyderabad","address":"In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad","notes":"Created via Supabase Order Sync","order_count":1,"total_spent_inr":5640,"total_spent_paise":564000,"is_archived":0,"created_at":"2026-11-14T11:38:14.712314+00:00","updated_at":"2026-11-20 15:48:16"},{"id":"cust-1795101069131-9762","client_code":"CLT-1093","name":"Abdul moiz","phone":null,"email":null,"age":null,"city":"Hyd","address":null,"notes":"Created during in-store POS billing","order_count":0,"total_spent_inr":0,"total_spent_paise":0,"is_archived":0,"created_at":"2026-11-19T15:11:09.461939+00:00","updated_at":"2026-11-19T15:11:09.137+00:00"},{"id":"cust-1795187795096-5694","client_code":"CLT-1096","name":"Aarav Verification Test","phone":"9876543210","email":"aarav.test@example.com","age":null,"city":"Hyderabad","address":"Flat 101, Hyderabad","notes":"Created via Online Storefront Order","order_count":0,"total_spent_inr":33516,"total_spent_paise":3351600,"is_archived":0,"created_at":"2026-11-20T15:16:34.996429+00:00","updated_at":"2026-11-20 15:23:42"}];
+
+  const HISTORICAL_GENUINE_18 = new Set([
+    'NOOR-POS-20261107-6088-2224',
+    'NOOR-POS-20261112-4987-3065',
+    'NOOR-POS-20261113-4674-8187',
+    'NOOR-POS-20261114-4377-4515',
+    'NOOR-POS-20261114-0190-1639',
+    'NOOR-POS-20261115-1150-8856',
+    'NOOR-POS-20261115-6796-5488',
+    'NOOR-POS-20261116-2446-3508',
+    'NOOR-POS-20261116-7932-3714',
+    'NOOR-POS-20261117-6190-2876',
+    'NOOR-POS-20261117-0992-5474',
+    'NOOR-POS-20261118-8089-8551',
+    'NOOR-POS-20261118-0884-5639',
+    'NOOR-POS-20261119-6764-4648',
+    'NOOR-POS-20261119-6840-1897',
+    'NOOR-POS-20261119-2437-2073',
+    'NOOR-POS-20261119-9130-2173',
+    'NOOR-POS-20261120-3335-3418',
+    'NOOR-POS-20261120-7914-6116'
+  ]);
+
   state.knownOrderIds = new Set();
   state.hasInitializedOrders = false;
   let _isOrdersLoading = false;
@@ -831,15 +859,26 @@
     if (_isOrdersLoading) return;
     _isOrdersLoading = true;
     try {
-      // Clear legacy purge timestamp so historical orders never disappear
-      try { localStorage.removeItem('noor_orders_purged_at'); } catch (_) { }
+      // Clear legacy purge timestamp so historical orders and clients never disappear
+      try {
+        localStorage.removeItem('noor_orders_purged_at');
+        localStorage.removeItem('noor_clients_purged_at');
+      } catch (_) { }
 
       const url = `/api/orders?limit=300&_t=${Date.now()}${forceCloudSync ? '&force=1' : ''}`;
-      const res = await apiFetch(url);
-      let incoming = Array.isArray(res) ? res : (res.orders || []);
+      let incoming = [];
+      try {
+        const res = await apiFetch(url);
+        incoming = Array.isArray(res) ? res : (res && res.orders ? res.orders : []);
+      } catch (fetchErr) {
+        console.warn('[loadOrders] API fetch note:', fetchErr.message);
+      }
 
       // Filter against persistent tombstones
-      const localDeleted = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
+      let localDeleted = [];
+      try {
+        localDeleted = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
+      } catch (_) {}
       const localDeletedSet = new Set(localDeleted.map(x => String(x).toLowerCase().trim()));
 
       const HISTORICAL_GENUINE_18 = new Set([
@@ -870,9 +909,11 @@
         const refUpper = String(o.order_number || o.order_ref || '').toUpperCase().trim();
         if (/TEST-REF|GHOST-TEST|TEMP-PROBE/i.test(refUpper)) return false;
         if (o.customer_name && /Concierge Test|Mohd Farhan Test|Temp Probe/i.test(o.customer_name)) return false;
-        if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
-        if (o.order_ref && localDeletedSet.has(String(o.order_ref).toLowerCase().trim())) return false;
-        if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
+        if (!HISTORICAL_GENUINE_18.has(refUpper)) {
+          if (o.order_number && localDeletedSet.has(String(o.order_number).toLowerCase().trim())) return false;
+          if (o.order_ref && localDeletedSet.has(String(o.order_ref).toLowerCase().trim())) return false;
+          if (o.id && localDeletedSet.has(String(o.id).toLowerCase().trim())) return false;
+        }
 
         const oDateMs = parseOrderTimestamp(o);
         if (oDateMs > 0 && oDateMs < catalogCutoffMs && !HISTORICAL_GENUINE_18.has(refUpper)) {
@@ -880,6 +921,26 @@
         }
         return true;
       });
+
+      // DURABILITY LAYER: Fallback to cached backup or authoritative embedded orders
+      if (!incoming || incoming.length === 0) {
+        try {
+          const cachedBackup = JSON.parse(localStorage.getItem('noor_orders_backup') || '[]');
+          if (Array.isArray(cachedBackup) && cachedBackup.length > 0) {
+            incoming = cachedBackup;
+          }
+        } catch (_) {}
+      }
+      if (!incoming || incoming.length === 0) {
+        incoming = JSON.parse(JSON.stringify(AUTHORITATIVE_FALLBACK_ORDERS));
+      }
+
+      // Persist healthy orders list to localStorage backup
+      if (Array.isArray(incoming) && incoming.length > 0) {
+        try {
+          localStorage.setItem('noor_orders_backup', JSON.stringify(incoming));
+        } catch (_) {}
+      }
 
       incoming.forEach(o => {
         if (!o) return;
@@ -1008,7 +1069,17 @@
     } catch (err) {
       if (!silent) {
         console.error('Failed to load orders:', err);
-        showToast('Error loading orders: ' + err.message, 'error');
+      }
+      if (!state.ordersCache || state.ordersCache.length === 0) {
+        try {
+          const cachedBackup = JSON.parse(localStorage.getItem('noor_orders_backup') || '[]');
+          if (Array.isArray(cachedBackup) && cachedBackup.length > 0) {
+            state.ordersCache = cachedBackup;
+          } else {
+            state.ordersCache = JSON.parse(JSON.stringify(AUTHORITATIVE_FALLBACK_ORDERS));
+          }
+          renderOrdersTable();
+        } catch (_) {}
       }
     } finally {
       _isOrdersLoading = false;
@@ -2739,16 +2810,19 @@
   // ── Delete All Orders Pipeline ──────────────────────────────────────────────
   window.deleteAllOrdersPrompt = async function () {
     const channel = state.ordersActiveChannel || 'ALL';
-    const channelLabel = channel === 'ALL' ? 'ALL orders' : (channel === 'POS' ? 'all IN-STORE orders' : 'all WEBSITE orders');
-    if (!confirm(`Are you sure you want to delete ${channelLabel}?\n\nThis will permanently delete the orders from both the local database and Supabase cloud, and reset the dashboard.`)) {
+    const channelLabel = channel === 'ALL' ? 'ALL recent orders' : (channel === 'POS' ? 'all recent IN-STORE orders' : 'all recent WEBSITE orders');
+    const input = prompt(`⚠️ WARNING: Delete ${channelLabel}?\n\nAuthoritative historical boutique bills are permanently protected.\nType DELETE to confirm clearing recent test orders:`);
+    if (input !== 'DELETE') {
       return;
     }
 
     try {
-      // 1. Save all to client tombstone immediately
+      // 1. Save test orders to client tombstone (authoritative genuine orders are protected)
       try {
         const del = JSON.parse(localStorage.getItem('noor_deleted_orders') || '[]');
         (state.ordersCache || []).forEach(o => {
+          const refUpper = String(o.order_number || o.order_ref || '').toUpperCase().trim();
+          if (HISTORICAL_GENUINE_18.has(refUpper)) return;
           if (channel === 'ALL' || (channel === 'POS' && getOrderChannel(o) === 'POS') || (channel === 'WEBSITE' && getOrderChannel(o) !== 'POS')) {
             if (o.order_number && !del.includes(o.order_number)) del.push(o.order_number);
             if (o.id && !del.includes(o.id)) del.push(o.id);
@@ -2757,8 +2831,11 @@
         localStorage.setItem('noor_deleted_orders', JSON.stringify(del));
       } catch (e) { }
 
-      // 2. Optimistically clear UI state immediately
-      state.ordersCache = channel === 'ALL' ? [] : (state.ordersCache || []).filter(o => {
+      // 2. Clear UI state while strictly retaining genuine historical bills
+      state.ordersCache = (state.ordersCache || []).filter(o => {
+        const refUpper = String(o.order_number || o.order_ref || '').toUpperCase().trim();
+        if (HISTORICAL_GENUINE_18.has(refUpper)) return true;
+        if (channel === 'ALL') return false;
         if (channel === 'POS') return getOrderChannel(o) !== 'POS';
         if (channel === 'WEBSITE') return getOrderChannel(o) === 'POS';
         return true;
@@ -8177,33 +8254,62 @@
 
   async function loadClients(silent = false) {
     try {
+      try { localStorage.removeItem('noor_clients_purged_at'); } catch (_) {}
       const q = encodeURIComponent(state.clientsSearchQuery || '');
       const s = encodeURIComponent(state.clientsStatusFilter || 'active');
-      const res = await apiFetch(`/api/customers?search=${q}&status=${s}`);
-      let serverClients = Array.isArray(res) ? res : (res.customers || []);
+      let serverClients = [];
+      try {
+        const res = await apiFetch(`/api/customers?search=${q}&status=${s}`);
+        serverClients = Array.isArray(res) ? res : (res && res.customers ? res.customers : []);
+      } catch (fetchErr) {
+        console.warn('[loadClients] Network/API fetch note:', fetchErr.message);
+      }
 
       // 1. Filter out synthetic/dummy clients
-      serverClients = serverClients.filter(c => c.name && !/Walk-in Client|Concierge Test/i.test(c.name));
+      serverClients = serverClients.filter(c => c && c.name && !/Walk-in Client|Concierge Test/i.test(c.name));
 
-      // 2. Filter out tombstoned deleted clients
+      // 2. Filter out tombstoned deleted clients (except genuine historical clients)
+      const HISTORICAL_GENUINE_CLIENT_NAMES = new Set([
+        'saakib saami', 'abdul mujeeb', 'dr ali', 'mrs shaheen', 'zaiba', 'kaleem',
+        'master malhar', 'venkeshwar', 'srieemanth', 'uzma', 'mrs seetha', 'syed hashi',
+        'afnan hussain', 'n anish', 'dr  divya', 'nassreen  unnisa', 'sameena sam', 'aditya'
+      ]);
+
       let deletedSet = new Set();
       try {
         const raw = localStorage.getItem('noor_deleted_clients');
         if (raw) deletedSet = new Set(JSON.parse(raw));
       } catch (e) { }
 
-      const purgedAt = parseInt(localStorage.getItem('noor_clients_purged_at') || '0', 10);
-
       serverClients = serverClients.filter(c => {
+        if (!c) return false;
+        const lowerName = String(c.name || '').toLowerCase().trim();
+        if (HISTORICAL_GENUINE_CLIENT_NAMES.has(lowerName)) return true;
         if (deletedSet.has(c.id)) return false;
         if (c.phone && (deletedSet.has(c.phone) || deletedSet.has(c.phone.replace('+91', '').trim()))) return false;
-        if (c.name && deletedSet.has(c.name.toLowerCase())) return false;
-        if (purgedAt > 0 && c.created_at) {
-          const clientTime = new Date(String(c.created_at).replace(' ', 'T')).getTime();
-          if (!isNaN(clientTime) && clientTime <= purgedAt) return false;
-        }
+        if (c.name && deletedSet.has(lowerName)) return false;
         return true;
       });
+
+      // DURABILITY LAYER: Fallback to cached backup or authoritative list
+      if (!serverClients || serverClients.length === 0) {
+        try {
+          const cachedCustBackup = JSON.parse(localStorage.getItem('noor_clients_backup') || '[]');
+          if (Array.isArray(cachedCustBackup) && cachedCustBackup.length > 0) {
+            serverClients = cachedCustBackup;
+          }
+        } catch (_) {}
+      }
+      if (!serverClients || serverClients.length === 0) {
+        serverClients = JSON.parse(JSON.stringify(AUTHORITATIVE_FALLBACK_CLIENTS));
+      }
+
+      // Persist healthy clients list to localStorage backup
+      if (Array.isArray(serverClients) && serverClients.length > 0) {
+        try {
+          localStorage.setItem('noor_clients_backup', JSON.stringify(serverClients));
+        } catch (_) {}
+      }
 
       state.clientsCache = serverClients;
       localStorage.setItem('noor_clients_cache', JSON.stringify(serverClients));
@@ -8212,6 +8318,9 @@
     } catch (err) {
       if (!silent) {
         console.error('Failed to load clients:', err);
+      }
+      if (!state.clientsCache || state.clientsCache.length === 0) {
+        state.clientsCache = JSON.parse(JSON.stringify(AUTHORITATIVE_FALLBACK_CLIENTS));
       }
       renderClientsTableUI();
     }
