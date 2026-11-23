@@ -1,5 +1,22 @@
 [
   {
+    "id": "cust-1795435097898-8978",
+    "client_code": "CLT-1098",
+    "name": "Md Iqbal Ali",
+    "phone": "8978691293",
+    "email": null,
+    "age": null,
+    "city": "Hyderabad",
+    "address": null,
+    "notes": "Created during in-store POS billing",
+    "order_count": 1,
+    "total_spent_paise": 500000,
+    "total_spent_inr": 5000,
+    "is_archived": 0,
+    "created_at": "2026-11-23T11:58:16.000Z",
+    "updated_at": "2026-11-23T11:58:16.000Z"
+  },
+  {
     "id": "cust-1795435415669-2922",
     "client_code": "CLT-1100",
     "name": "Sk abdul osman",

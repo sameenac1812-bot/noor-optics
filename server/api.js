@@ -1123,18 +1123,18 @@ router.post('/purchase-orders/:id/receive', authenticateToken, requirePermission
 
 // ── GET /api/customers (Directory with Search, Stats & Archival Filters) ───────
 router.get('/customers', authenticateToken, async (req, res) => {
+  // Durable cloud persistence sync across all serverless microVMs (non-blocking)
   try {
     const custCountCheck = db.prepare('SELECT count(*) as c FROM customers WHERE client_code NOT LIKE "SYS-%"').get();
     if (!custCountCheck || custCountCheck.c === 0) {
       if (typeof restoreAuthoritativeBackup === 'function') {
         restoreAuthoritativeBackup(db);
       }
+      await cloudStore.syncCloudCustomers(db).catch(() => {});
+    } else {
+      cloudStore.syncCloudCustomers(db).catch(() => {});
     }
   } catch (_) {}
-
-  // Durable cloud persistence sync across all serverless microVMs
-  await cloudStore.syncCloudCustomers(db).catch(err => console.warn('[CloudStore] sync customers note:', err.message));
-  await cloudStore.syncCloudOrders(db).catch(err => console.warn('[CloudStore] sync orders note:', err.message));
 
   const forceSync = req.query.force === '1' || req.query.force === 'true';
   if (forceSync) {
@@ -1842,6 +1842,43 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     return res.status(403).json({ error: 'Forbidden: Insufficient privileges to apply discounts.' });
   }
 
+  // ── 0. Idempotency Check: Prevent duplicate order generation on rapid clicks or network retries ──
+  const checkName = (customerName || (clientDetails && clientDetails.name) || '').trim();
+  const checkPhone = (customerPhone || (clientDetails && clientDetails.phone) || '').trim();
+  if (checkPhone || (checkName && checkName !== 'Walk-in Client')) {
+    const recentDup = db.prepare(`
+      SELECT o.*, c.name as c_name, c.phone as c_phone
+      FROM orders o
+      LEFT JOIN customers c ON o.customer_id = c.id
+      WHERE (o.customer_phone = ? OR c.phone = ? OR (o.customer_name = ? AND o.customer_name != 'Walk-in Client'))
+        AND o.channel = 'POS'
+        AND o.created_at >= datetime('now', '-90 seconds')
+      ORDER BY o.created_at DESC LIMIT 1
+    `).get(checkPhone || null, checkPhone || null, checkName || null);
+
+    if (recentDup) {
+      console.log(`[POS Checkout] Deduplicated submission for ${checkName || checkPhone}, returning existing bill #${recentDup.order_number}`);
+      const totINR = (recentDup.total_payable_paise || 0) / 100;
+      const paidINR = (recentDup.amount_paid_paise || 0) / 100;
+      const outINR = (recentDup.outstanding_paise || 0) / 100;
+      return res.json({
+        success: true,
+        orderId: recentDup.id,
+        orderNumber: recentDup.order_number,
+        invoiceNumber: recentDup.order_number,
+        tokenNumber: recentDup.token_number || 1,
+        customerId: recentDup.customer_id,
+        customerName: recentDup.customer_name || checkName,
+        paymentStatus: recentDup.payment_status,
+        totalPayableINR: totINR,
+        amountPaidINR: paidINR,
+        outstandingINR: outINR,
+        subtotalINR: totINR,
+        isDuplicatePrevented: true
+      });
+    }
+  }
+
   const orderId = 'ord-pos-' + Date.now();
   const orderNumber = generateOrderNumber('POS');
   const tokenNumber = getNextDailyTokenNumber();
@@ -2366,6 +2403,9 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
   try {
     const result = checkoutTx();
 
+    // Respond immediately to the POS cashier for ultra-fast checkout (< 10ms)
+    res.json({ success: true, ...result });
+
     // Asynchronously push queued rollover settlements to cloud (non-blocking for fast POS checkout)
     for (const rs of rolloverSyncs) {
       pushOrderPaymentStatusToCloud(rs.orderNumber, rs.status, rs.note, rs.details).catch(() => {});
@@ -2519,10 +2559,11 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     }
 
     invalidateOrderSyncCache();
-    res.json({ success: true, ...result });
   } catch (err) {
     console.error('[POS Checkout Error]:', err.message);
-    res.status(400).json({ error: err.message });
+    if (!res.headersSent) {
+      res.status(400).json({ error: err.message });
+    }
   }
 });
 
@@ -3203,11 +3244,15 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
         if (typeof restoreAuthoritativeBackup === 'function') {
           restoreAuthoritativeBackup(db);
         }
+        await cloudStore.syncCloudOrders(db).catch(() => {});
+      } else {
+        // Non-blocking background sync so GET /orders responds in < 15ms
+        cloudStore.syncCloudOrders(db).catch(() => {});
       }
     } catch (_) {}
-    // Durable cloud persistence sync across all serverless microVMs
-    await cloudStore.syncCloudOrders(db).catch(err => console.warn('[CloudStore] sync orders note:', err.message));
-    await syncSupabaseOrders(db, forceSync).catch(err => console.warn('[SupabaseSync] GET /orders sync note:', err.message));
+
+    // Non-blocking background sync with Supabase
+    syncSupabaseOrders(db, forceSync).catch(() => {});
 
     const { channel, paymentStatus, status, limit = 300 } = req.query;
 

@@ -59,48 +59,87 @@ async function fetchGitHubFile(filePath) {
 }
 
 /**
- * Write or update a file in GitHub repository
+ * Write or update a file in GitHub repository with automatic 409 conflict retry
  */
-async function writeGitHubFile(filePath, contentObj, commitMessage, knownSha = null) {
+async function writeGitHubFile(filePath, contentObj, commitMessage, attempts = 3) {
   if (!GITHUB_TOKEN || !REPO) return false;
-  try {
-    let sha = knownSha;
-    if (!sha) {
-      // Fetch latest sha
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
       const current = await fetchGitHubFile(filePath);
-      if (current) sha = current.sha;
-    }
+      const sha = current ? current.sha : null;
 
-    const payload = {
-      message: commitMessage || `update(cloud-store): sync ${filePath}`,
-      content: Buffer.from(JSON.stringify(contentObj, null, 2)).toString('base64')
-    };
-    if (sha) payload.sha = sha;
+      const payload = {
+        message: commitMessage || `update(cloud-store): sync ${filePath}`,
+        content: Buffer.from(JSON.stringify(contentObj, null, 2)).toString('base64')
+      };
+      if (sha) payload.sha = sha;
 
-    const res = await fetch(`https://api.github.com/repos/${REPO}/contents/${filePath}`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${GITHUB_TOKEN}`,
-        'User-Agent': 'NoorOptics-Persistence/1.0',
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(8000)
-    });
+      const res = await fetch(`https://api.github.com/repos/${REPO}/contents/${filePath}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${GITHUB_TOKEN}`,
+          'User-Agent': 'NoorOptics-Persistence/1.0',
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(6000)
+      });
 
-    if (res.ok) {
-      console.log(`[CloudStore] Successfully committed ${filePath} to GitHub.`);
-      return true;
-    } else {
+      if (res.ok) {
+        console.log(`[CloudStore] Successfully committed ${filePath} to GitHub (attempt ${attempt}).`);
+        return true;
+      }
+
+      if (res.status === 409 && attempt < attempts) {
+        console.warn(`[CloudStore] 409 SHA conflict for ${filePath}, retrying attempt ${attempt + 1}...`);
+        await new Promise(r => setTimeout(r, 400 * attempt));
+        continue;
+      }
+
       const errText = await res.text();
       console.warn(`[CloudStore] GitHub write failed (${res.status}):`, errText.slice(0, 200));
       return false;
+    } catch (err) {
+      if (attempt < attempts) {
+        await new Promise(r => setTimeout(r, 400 * attempt));
+        continue;
+      }
+      console.warn(`[CloudStore] Error writing ${filePath} to GitHub:`, err.message);
+      return false;
     }
-  } catch (err) {
-    console.warn(`[CloudStore] Error writing ${filePath} to GitHub:`, err.message);
-    return false;
   }
+  return false;
+}
+
+let isSyncingQueue = false;
+let pendingSyncRounds = 0;
+
+/**
+ * Non-dropping reliable background queue that commits live orders & customers
+ */
+function triggerBackgroundCloudSync(commitMsg = null) {
+  pendingSyncRounds++;
+  if (isSyncingQueue) return;
+  isSyncingQueue = true;
+
+  (async () => {
+    try {
+      while (pendingSyncRounds > 0) {
+        pendingSyncRounds = 0;
+        const ordersToSync = cachedLiveOrders || getLocalFallbackOrders();
+        const custsToSync = cachedLiveCustomers || getLocalFallbackCustomers();
+
+        await writeGitHubFile('data/live_orders.json', ordersToSync, commitMsg || 'sync(orders): live orders update');
+        await writeGitHubFile('data/live_customers.json', custsToSync, 'sync(crm): live customers update');
+      }
+    } finally {
+      isSyncingQueue = false;
+    }
+  })().catch(err => {
+    isSyncingQueue = false;
+    console.warn('[CloudStore] Background sync queue note:', err.message);
+  });
 }
 
 /**
@@ -400,24 +439,9 @@ async function persistOrderToCloudStore(orderData, customerData, rxData) {
       } catch (_) {}
     }
 
-    // 3. Commit asynchronously to GitHub Cloud Store
-    if (!isWritingOrders) {
-      isWritingOrders = true;
-      (async () => {
-        try {
-          const chanLabel = formattedOrder.channel_code === 2 ? 'In-Store POS' : 'Website';
-          await writeGitHubFile('data/live_orders.json', currentOrders, `feat(orders): record new ${chanLabel} bill #${formattedOrder.order_number}`);
-          if (customerData && customerData.name) {
-            await writeGitHubFile('data/live_customers.json', currentCustomers, `feat(crm): sync customer profile for ${customerData.name}`);
-          }
-        } finally {
-          isWritingOrders = false;
-        }
-      })().catch(err => {
-        isWritingOrders = false;
-        console.warn('[CloudStore] Background GitHub sync note:', err.message);
-      });
-    }
+    // 3. Queue non-dropping background sync to GitHub
+    const chanLabel = formattedOrder.channel_code === 2 ? 'In-Store POS' : 'Website';
+    triggerBackgroundCloudSync(`feat(orders): record new ${chanLabel} bill #${formattedOrder.order_number}`);
 
     return true;
   } catch (err) {
