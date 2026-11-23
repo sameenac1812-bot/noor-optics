@@ -1,5 +1,22 @@
 [
   {
+    "id": "cust-1795434649357-7687",
+    "client_code": "CLT-1099",
+    "name": "Amina Begum",
+    "phone": "9848022338",
+    "email": null,
+    "age": 32,
+    "city": "Hyderabad",
+    "address": null,
+    "notes": "Created during in-store POS billing",
+    "order_count": 1,
+    "total_spent_paise": 299900,
+    "total_spent_inr": 2999,
+    "is_archived": 0,
+    "created_at": "2026-11-23T11:50:49.363Z",
+    "updated_at": "2026-11-23T11:50:49.363Z"
+  },
+  {
     "id": "cust-1794297676366-6282",
     "client_code": "CLT-1047",
     "name": "Sameena Sam",
