@@ -504,11 +504,16 @@ async function updatePaymentStatusInCloudStore(orderRefOrId, newPaymentStatus, f
   }
 }
 
+function getCachedLiveOrders() {
+  return cachedLiveOrders || getLocalFallbackOrders();
+}
+
 module.exports = {
   syncCloudOrders,
   syncCloudCustomers,
   persistOrderToCloudStore,
   updatePaymentStatusInCloudStore,
   fetchGitHubFile,
-  writeGitHubFile
+  writeGitHubFile,
+  getCachedLiveOrders
 };

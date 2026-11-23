@@ -629,7 +629,24 @@ function restoreAuthoritativeBackup(dbInstance) {
     dbInstance.pragma('foreign_keys = OFF');
     if (backupData.customers) insertRows('customers', backupData.customers);
     if (backupData.prescriptions) insertRows('prescriptions', backupData.prescriptions);
-    if (backupData.orders) insertRows('orders', backupData.orders);
+    if (backupData.orders) {
+      insertRows('orders', backupData.orders);
+      for (const o of backupData.orders) {
+        if (Array.isArray(o.items) && o.items.length > 0) {
+          insertRows('order_items', o.items.map(it => ({
+            id: it.id || ('oit-' + (o.id || o.order_number) + '-' + Math.floor(Math.random() * 1000)),
+            order_id: o.id || it.order_id,
+            product_name: it.product_name || it.name || 'Frame',
+            variant_name: it.variant_name || it.color || 'Standard',
+            sku: it.sku || 'FRAME',
+            lens_name: it.lens_name || it.lensName || 'Standard Demo Lens',
+            quantity: it.quantity || 1,
+            unit_price_paise: it.unit_price_paise ? it.unit_price_paise : (it.unit_price_inr ? it.unit_price_inr * 100 : 0),
+            subtotal_paise: it.subtotal_paise ? it.subtotal_paise : (it.subtotal_inr ? it.subtotal_inr * 100 : 0)
+          })));
+        }
+      }
+    }
     if (backupData.order_items) insertRows('order_items', backupData.order_items);
     if (backupData.invoices) insertRows('invoices', backupData.invoices);
     if (backupData.payments) insertRows('payments', backupData.payments);
