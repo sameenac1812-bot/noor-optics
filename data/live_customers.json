@@ -1,20 +1,20 @@
 [
   {
-    "id": "cust-1795437023450-4761",
+    "id": "cust-1795437168412-8946",
     "client_code": "CLT-1101",
-    "name": "Live Latency Check",
-    "phone": "9988776655",
+    "name": "Zainab Fathima",
+    "phone": "6302306637",
     "email": null,
-    "age": null,
-    "city": "Hyderabad",
+    "age": 7,
+    "city": "Hyd",
     "address": null,
     "notes": "Created during in-store POS billing",
     "order_count": 1,
-    "total_spent_paise": 100000,
-    "total_spent_inr": 1000,
+    "total_spent_paise": 299900,
+    "total_spent_inr": 2999,
     "is_archived": 0,
-    "created_at": "2026-11-23T12:30:23.460Z",
-    "updated_at": "2026-11-23T12:30:23.460Z"
+    "created_at": "2026-11-23T12:32:48.421Z",
+    "updated_at": "2026-11-23T12:32:48.421Z"
   },
   {
     "id": "cust-1795435097898-8978",
