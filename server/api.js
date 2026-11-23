@@ -4546,21 +4546,20 @@ router.post('/printer/orders/:orderId/daemon-dispatch', (req, res) => {
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
   const isReprint = Boolean(req.body && (req.body.isReprint || req.body.source === 'reprint'));
+  let jobResult = null;
   try {
-    const jobId = 'pj-daemon-' + Date.now();
-    const docType = isReprint ? 'REPRINT' : 'RECEIPT';
-    db.prepare(`
-      INSERT INTO print_jobs (id, order_id, printer_type, doc_type, status, attempts, created_at, updated_at)
-      VALUES (?, ?, 'THERMAL_58MM', ?, 'QUEUED_DAEMON', 1, datetime('now'), datetime('now'))
-    `).run(jobId, order.id, docType);
-  } catch (e) {}
+    jobResult = enqueuePrintJob(order.id, order.token_number || 1, isReprint ? 'REPRINT' : 'RECEIPT');
+  } catch (e) {
+    console.error('daemon-dispatch enqueue error:', e.message);
+  }
 
   res.json({
     success: true,
     message: 'Print signal dispatched to POS portable daemon',
     orderId: order.id,
     orderNumber: order.order_number,
-    isReprint
+    isReprint,
+    jobId: jobResult?.jobId
   });
 });
 
