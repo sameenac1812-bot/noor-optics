@@ -712,15 +712,10 @@ function enqueuePrintJob(orderId, tokenNumber, docType = 'TOKEN') {
     db.prepare(`
       INSERT INTO print_jobs (
         id, order_id, token_number, printer_name, paper_width_mm, doc_type, status, attempts
-      ) VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0)
+      ) VALUES (?, ?, ?, ?, ?, ?, 'QUEUED_DAEMON', 0)
     `).run(jobId, orderId, tokenNumber, printerName, paperWidth, docType);
 
-    // Trigger immediate background hardware spool if configured
-    processPrintJob(jobId).catch(err => {
-      console.warn('Background print job spool failed (can retry via UI):', err.message);
-    });
-
-    return { jobId, status: 'PENDING' };
+    return { jobId, status: 'QUEUED_DAEMON' };
   } catch (err) {
     console.error('Failed to enqueue print job:', err.message);
     return { error: err.message };
