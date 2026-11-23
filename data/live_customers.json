@@ -1,5 +1,22 @@
 [
   {
+    "id": "cust-1795444731784-5060",
+    "client_code": "CLT-1101",
+    "name": "nida fathima",
+    "phone": null,
+    "email": null,
+    "age": null,
+    "city": "Bengaluru",
+    "address": null,
+    "notes": "Created during in-store POS billing",
+    "order_count": 1,
+    "total_spent_paise": 100000,
+    "total_spent_inr": 1000,
+    "is_archived": 0,
+    "created_at": "2026-11-23T14:38:51.794Z",
+    "updated_at": "2026-11-23T14:38:51.794Z"
+  },
+  {
     "id": "cust-1795443202826-8066",
     "client_code": "CLT-1101",
     "name": "fathima",
