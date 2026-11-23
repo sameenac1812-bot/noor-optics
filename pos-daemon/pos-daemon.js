@@ -1087,6 +1087,21 @@ async function pollBackendPrintQueue() {
   isPollingBackendQueue = true;
 
   try {
+    // 1. Report Live Heartbeat to Backend (Enables Cloud Admin Status Badge)
+    try {
+      fetch(`${backend}/api/printer/heartbeat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printer: config.printerName || 'POS-80',
+          version: DAEMON_VERSION,
+          status: 'online'
+        }),
+        signal: AbortSignal.timeout(3000)
+      }).catch(() => {});
+    } catch (_) {}
+
+    // 2. Fetch Pending Print Jobs from Cloud Queue
     const res = await fetch(`${backend}/api/printer/queue`, {
       headers: { 'User-Agent': 'POS-Daemon/3.1' },
       signal: AbortSignal.timeout(3500)
@@ -1095,21 +1110,31 @@ async function pollBackendPrintQueue() {
       const data = await res.json();
       const jobs = Array.isArray(data.jobs) ? data.jobs : [];
       for (const job of jobs) {
-        if (!job || !job.order_id) continue;
+        if (!job || (!job.order_id && !job.order_number)) continue;
         const jobIdStr = String(job.id);
         if (processedJobIds.has(jobIdStr)) continue;
 
-        // Fetch complete order details
-        const orderRes = await fetch(`${backend}/api/orders/${job.order_id}`, {
-          signal: AbortSignal.timeout(4000)
-        });
-        if (orderRes.ok) {
-          const detail = await orderRes.json();
-          const order = detail.order || detail;
-          order.items = detail.items || order.items || [];
-          order.prescription = detail.prescription || order.prescription || null;
+        // Obtain complete order details: either pre-enriched in queue or via open print-data endpoint
+        let order = job.order;
+        if (!order) {
+          const targetRef = job.order_id || job.order_number;
+          const orderRes = await fetch(`${backend}/api/printer/orders/${encodeURIComponent(targetRef)}/print-data`, {
+            signal: AbortSignal.timeout(4000)
+          });
+          if (orderRes.ok) {
+            const detail = await orderRes.json();
+            order = detail.order || detail;
+            order.items = detail.items || order.items || [];
+            order.prescription = detail.prescription || order.prescription || null;
+          }
+        }
 
-          const printRes = await printLiveOrder(order, 'backend_queue');
+        if (order) {
+          const isReprint = Boolean(job.is_reprint || job.doc_type === 'REPRINT' || job.source === 'reprint');
+          const printSource = isReprint ? 'reprint' : 'backend_queue';
+
+          console.log(`[Daemon] 📥 Processing queued job ${jobIdStr} for #${order.order_number || job.order_number} (${printSource})...`);
+          const printRes = await printLiveOrder(order, printSource);
           if (printRes && printRes.success) {
             processedJobIds.add(jobIdStr);
             savePrintedState();
@@ -1119,11 +1144,15 @@ async function pollBackendPrintQueue() {
               body: JSON.stringify({ jobId: job.id, orderId: job.order_id }),
               signal: AbortSignal.timeout(3000)
             }).catch(() => {});
+            console.log(`[Daemon] ✅ Successfully printed job ${jobIdStr} to ${config.printerName}!`);
+          } else {
+            console.warn(`[Daemon] ⚠️ Spool returned note for job ${jobIdStr}:`, printRes?.error || 'Unknown status');
           }
         }
       }
     }
-  } catch (_) {
+  } catch (err) {
+    // Network or server blip – poller will retry in 2s
   } finally {
     isPollingBackendQueue = false;
   }

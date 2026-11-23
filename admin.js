@@ -9522,7 +9522,9 @@
     try {
       const actualOrderId = order.id || order.order_number || orderId;
       apiFetch(`/api/printer/orders/${encodeURIComponent(actualOrderId)}/daemon-dispatch`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isReprint: effectiveManualReprint, source: effectiveSource })
       }).catch(() => {});
     } catch (_) {}
 
@@ -9534,7 +9536,22 @@
       source: effectiveSource
     }).catch(() => {});
 
-    // Step 3: Immediate Browser Thermal Receipt Fallback (Guarantees bill always prints)
+    // Check if cloud daemon is active
+    let daemonActive = false;
+    try {
+      const chk = await fetch('/api/printer/status', { signal: AbortSignal.timeout(1500) });
+      if (chk.ok) {
+        const d = await chk.json();
+        if (d && d.online) daemonActive = true;
+      }
+    } catch (_) {}
+
+    if (daemonActive) {
+      showToast(`🖨️ Bill #${orderRef} sent to POS-80 printer!`, 'success');
+      return { success: true, queuedToDaemon: true };
+    }
+
+    // Step 3: Immediate Browser Thermal Receipt Fallback (if daemon is completely offline)
     showToast(`🖨️ Opening print window for bill #${orderRef}...`, 'info');
     if (typeof previewThermalReceipt === 'function') {
       previewThermalReceipt(order.id || orderId, true);
@@ -9770,20 +9787,21 @@
     }
   }
 
-  // ── POS Print Daemon Health Monitor (Port 5001) ───────────────────────────
+  // ── POS Print Daemon Health Monitor (Port 5001 + Cloud Queue Heartbeat) ────
   async function checkDaemonStatus() {
     const badge = document.getElementById('daemon-status-badge');
     const dot = document.getElementById('daemon-indicator-dot');
     const label = document.getElementById('daemon-indicator-label');
     if (!badge || !dot || !label) return;
 
+    // 1. Direct local probe (instant for localhost counter PC)
     try {
-      const res = await fetch('http://127.0.0.1:5001/api/status', { method: 'GET', signal: AbortSignal.timeout(1800) });
+      const res = await fetch('http://127.0.0.1:5001/api/status', { method: 'GET', signal: AbortSignal.timeout(1200) });
       if (res.ok) {
         const data = await res.json();
         dot.style.background = '#16A34A'; // Green
         label.textContent = `🖨️ ${data.printer || 'POS-80'} Online`;
-        badge.title = `Print Daemon Active (${data.engine}) • ${data.totalPrinted || 0} printed • 2.5" Thermal`;
+        badge.title = `Direct Local Hardware Spooler Active • ${data.printer || 'POS-80'}`;
         badge.style.borderColor = '#BBF7D0';
         badge.style.background = '#F0FDF4';
         badge.style.cursor = 'default';
@@ -9792,15 +9810,33 @@
       }
     } catch (e) { }
 
+    // 2. Cloud Heartbeat Probe (Zero Mixed-Content Blocks on HTTPS)
+    try {
+      const cloudRes = await fetch('/api/printer/status', { signal: AbortSignal.timeout(2000) });
+      if (cloudRes.ok) {
+        const data = await cloudRes.json();
+        if (data && data.online) {
+          dot.style.background = '#16A34A'; // Green
+          label.textContent = `🖨️ ${data.printer || 'POS-80'} Online`;
+          badge.title = `Cloud Print Queue Active • ${data.printer || 'POS-80'} Hardware Connected`;
+          badge.style.borderColor = '#BBF7D0';
+          badge.style.background = '#F0FDF4';
+          badge.style.cursor = 'default';
+          badge.onclick = null;
+          return;
+        }
+      }
+    } catch (e) { }
+
     // Offline State
     dot.style.background = '#F59E0B'; // Amber
     label.textContent = 'POS Daemon Offline';
-    badge.title = 'POS Print Daemon not running on port 5001. Click for quick setup.';
+    badge.title = 'POS Print Daemon not running on counter PC. Click for quick setup.';
     badge.style.borderColor = '#FDE68A';
     badge.style.background = '#FFFBEB';
     badge.style.cursor = 'pointer';
     badge.onclick = () => {
-      alert("POS Print Daemon is not running on port 5001.\n\nTo enable instant hardware receipt printing:\n1. Open your 'pos-daemon' folder.\n2. Double-click 'start-pos.bat'.\n3. The daemon will connect automatically and print all receipts on your 2.5-inch thermal printer.");
+      alert("POS Print Daemon is not connected.\n\nTo enable instant hardware receipt printing:\n1. On the store counter PC, open 'noor opticals'.\n2. Double-click 'start-printer.bat'.\n3. The daemon connects automatically and prints all receipts on your POS-80 thermal printer.");
     };
   }
 

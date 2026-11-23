@@ -4542,22 +4542,25 @@ router.post('/printer/orders/:orderId/reprint', authenticateToken, requirePermis
 });
 
 router.post('/printer/orders/:orderId/daemon-dispatch', (req, res) => {
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.orderId);
+  const order = getOrderForPrint(req.params.orderId);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
+  const isReprint = Boolean(req.body && (req.body.isReprint || req.body.source === 'reprint'));
   try {
     const jobId = 'pj-daemon-' + Date.now();
+    const docType = isReprint ? 'REPRINT' : 'RECEIPT';
     db.prepare(`
-      INSERT INTO print_jobs (id, order_id, printer_type, status, attempts, created_at, updated_at)
-      VALUES (?, ?, 'THERMAL_58MM', 'QUEUED_DAEMON', 1, datetime('now'), datetime('now'))
-    `).run(jobId, order.id);
+      INSERT INTO print_jobs (id, order_id, printer_type, doc_type, status, attempts, created_at, updated_at)
+      VALUES (?, ?, 'THERMAL_58MM', ?, 'QUEUED_DAEMON', 1, datetime('now'), datetime('now'))
+    `).run(jobId, order.id, docType);
   } catch (e) {}
 
   res.json({
     success: true,
     message: 'Print signal dispatched to POS portable daemon',
     orderId: order.id,
-    orderNumber: order.order_number
+    orderNumber: order.order_number,
+    isReprint
   });
 });
 
@@ -4659,6 +4662,37 @@ function getOrderItemsForPrint(order) {
   return items;
 }
 
+// ── POS Daemon Cloud Heartbeat & Live Health Tracker ─────────────────────────
+let _lastDaemonHeartbeat = {
+  timestamp: 0,
+  printer: 'POS-80',
+  version: '3.1.0'
+};
+
+router.post('/printer/heartbeat', (req, res) => {
+  const { printer, version, status } = req.body || {};
+  _lastDaemonHeartbeat = {
+    timestamp: Date.now(),
+    printer: printer || _lastDaemonHeartbeat.printer || 'POS-80',
+    version: version || _lastDaemonHeartbeat.version || '3.1.0',
+    status: status || 'online'
+  };
+  res.json({ success: true, timestamp: _lastDaemonHeartbeat.timestamp });
+});
+
+router.get('/printer/status', (req, res) => {
+  const now = Date.now();
+  const diffSec = Math.round((now - _lastDaemonHeartbeat.timestamp) / 1000);
+  const isOnline = _lastDaemonHeartbeat.timestamp > 0 && diffSec <= 25;
+  res.json({
+    success: true,
+    online: isOnline,
+    printer: _lastDaemonHeartbeat.printer,
+    version: _lastDaemonHeartbeat.version,
+    lastSeenSecondsAgo: _lastDaemonHeartbeat.timestamp === 0 ? null : diffSec
+  });
+});
+
 // ── Cloud Print Queue for POS Hardware Daemon (Zero Supabase Dependency) ──────
 router.get('/printer/queue', (req, res) => {
   try {
@@ -4670,10 +4704,37 @@ router.get('/printer/queue', (req, res) => {
       ORDER BY pj.created_at ASC
       LIMIT 20
     `).all();
-    res.json({ success: true, jobs });
+
+    const enrichedJobs = jobs.map(j => {
+      let order = getOrderForPrint(j.order_id);
+      if (!order && j.order_number) order = getOrderForPrint(j.order_number);
+      if (order) {
+        order.items = getOrderItemsForPrint(order);
+      }
+      return {
+        ...j,
+        order: order || null,
+        is_reprint: j.doc_type === 'REPRINT'
+      };
+    });
+
+    res.json({ success: true, jobs: enrichedJobs });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+router.get('/printer/orders/:orderId/print-data', (req, res) => {
+  const order = getOrderForPrint(req.params.orderId);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  const items = getOrderItemsForPrint(order);
+  res.json({
+    success: true,
+    order: {
+      ...order,
+      items
+    }
+  });
 });
 
 router.post('/printer/queue/ack', (req, res) => {
