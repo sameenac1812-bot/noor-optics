@@ -922,18 +922,58 @@
         return true;
       });
 
-      // DURABILITY LAYER: Fallback to cached backup or authoritative embedded orders
-      if (!incoming || incoming.length === 0) {
-        try {
-          const cachedBackup = JSON.parse(localStorage.getItem('noor_orders_backup') || '[]');
-          if (Array.isArray(cachedBackup) && cachedBackup.length > 0) {
-            incoming = cachedBackup;
+      // DURABILITY & PERMANENCE LAYER: Merge incoming server data with local cache & backups
+      const orderMap = new Map();
+
+      // 1. Authoritative Fallback Baseline (18 genuine orders)
+      if (Array.isArray(AUTHORITATIVE_FALLBACK_ORDERS)) {
+        for (const o of AUTHORITATIVE_FALLBACK_ORDERS) {
+          if (!o) continue;
+          const k = String(o.order_number || o.order_ref || o.id || '').toUpperCase().trim();
+          if (k) orderMap.set(k, { ...o });
+        }
+      }
+
+      // 2. Overlay localStorage backup
+      try {
+        const cachedBackup = JSON.parse(localStorage.getItem('noor_orders_backup') || '[]');
+        if (Array.isArray(cachedBackup)) {
+          for (const o of cachedBackup) {
+            if (!o) continue;
+            const k = String(o.order_number || o.order_ref || o.id || '').toUpperCase().trim();
+            if (k) {
+              const ex = orderMap.get(k);
+              orderMap.set(k, { ...(ex || {}), ...o });
+            }
           }
-        } catch (_) {}
+        }
+      } catch (_) {}
+
+      // 3. Overlay in-memory state.ordersCache (retaining freshly placed orders)
+      if (Array.isArray(state.ordersCache)) {
+        for (const o of state.ordersCache) {
+          if (!o) continue;
+          const k = String(o.order_number || o.order_ref || o.id || '').toUpperCase().trim();
+          if (k) {
+            const ex = orderMap.get(k);
+            orderMap.set(k, { ...(ex || {}), ...o });
+          }
+        }
       }
-      if (!incoming || incoming.length === 0) {
-        incoming = JSON.parse(JSON.stringify(AUTHORITATIVE_FALLBACK_ORDERS));
+
+      // 4. Merge incoming server orders
+      if (Array.isArray(incoming)) {
+        for (const o of incoming) {
+          if (!o) continue;
+          const k = String(o.order_number || o.order_ref || o.id || '').toUpperCase().trim();
+          if (k) {
+            const ex = orderMap.get(k);
+            orderMap.set(k, { ...(ex || {}), ...o });
+          }
+        }
       }
+
+      incoming = Array.from(orderMap.values());
 
       // Persist healthy orders list to localStorage backup
       if (Array.isArray(incoming) && incoming.length > 0) {
@@ -7303,6 +7343,72 @@
               prescriber_details: rxSnapshot?.prescriber_details ?? rxSnapshot?.prescriberDetails,
               notes: notes
             };
+            localBillOrder.channel = 'POS';
+            localBillOrder.channel_code = 2;
+            localBillOrder.source = 'instore';
+            localBillOrder.status = 'CONFIRMED';
+            localBillOrder.created_at = new Date().toISOString();
+
+            // 1. Immediately prepend into state.ordersCache so it appears instantly
+            state.ordersCache = [
+              localBillOrder,
+              ...(state.ordersCache || []).filter(o => {
+                const k1 = String(o.order_number || o.id || '').toUpperCase();
+                const k2 = String(localBillOrder.order_number || localBillOrder.id || '').toUpperCase();
+                return k1 !== k2;
+              })
+            ];
+            state.knownOrderIds.add(String(localBillOrder.id));
+            state.knownOrderIds.add(String(localBillOrder.order_number));
+
+            // 2. Persist to localStorage backup immediately
+            try {
+              localStorage.setItem('noor_orders_backup', JSON.stringify(state.ordersCache));
+            } catch (_) {}
+
+            // 3. Immediately update client in clientsCache
+            if (clientPayload && clientPayload.name) {
+              const cName = clientPayload.name.trim();
+              const cPhone = clientPayload.phone ? clientPayload.phone.trim() : null;
+              const existingIdx = (state.clientsCache || []).findIndex(c => {
+                if (cPhone && c.phone && (c.phone === cPhone || c.phone.replace('+91', '').trim() === cPhone.replace('+91', '').trim())) return true;
+                if (c.name && c.name.toLowerCase().trim() === cName.toLowerCase()) return true;
+                return false;
+              });
+
+              if (existingIdx >= 0) {
+                state.clientsCache[existingIdx].total_spent_inr = (state.clientsCache[existingIdx].total_spent_inr || 0) + res.totalPayableINR;
+                state.clientsCache[existingIdx].order_count = (state.clientsCache[existingIdx].order_count || 1) + 1;
+                if (clientPayload.age) state.clientsCache[existingIdx].age = clientPayload.age;
+                if (clientPayload.city) state.clientsCache[existingIdx].city = clientPayload.city;
+              } else {
+                state.clientsCache = [
+                  {
+                    id: res.customerId || ('cust-' + Date.now()),
+                    client_code: res.clientCode || ('CLT-' + Date.now().toString().slice(-4)),
+                    name: cName,
+                    phone: cPhone,
+                    email: clientPayload.email || null,
+                    age: clientPayload.age || null,
+                    city: clientPayload.city || 'Hyderabad',
+                    address: clientPayload.address || null,
+                    total_spent_inr: res.totalPayableINR,
+                    order_count: 1,
+                    is_archived: 0,
+                    created_at: new Date().toISOString()
+                  },
+                  ...(state.clientsCache || [])
+                ];
+              }
+              try {
+                localStorage.setItem('noor_clients_backup', JSON.stringify(state.clientsCache));
+                localStorage.setItem('noor_clients_cache', JSON.stringify(state.clientsCache));
+              } catch (_) {}
+              renderClientsTableUI();
+            }
+
+            renderOrdersTable();
+
             if (typeof instantPrintReceipt === 'function') {
               instantPrintReceipt(res.orderId, false, localBillOrder).catch(() => { });
             }
@@ -8291,18 +8397,52 @@
         return true;
       });
 
-      // DURABILITY LAYER: Fallback to cached backup or authoritative list
-      if (!serverClients || serverClients.length === 0) {
-        try {
-          const cachedCustBackup = JSON.parse(localStorage.getItem('noor_clients_backup') || '[]');
-          if (Array.isArray(cachedCustBackup) && cachedCustBackup.length > 0) {
-            serverClients = cachedCustBackup;
+      // DURABILITY & PERMANENCE LAYER: Merge server clients with local cache & backups
+      const clientMap = new Map();
+
+      // 1. Authoritative Fallback Baseline (18 genuine clients)
+      if (Array.isArray(AUTHORITATIVE_FALLBACK_CLIENTS)) {
+        for (const c of AUTHORITATIVE_FALLBACK_CLIENTS) {
+          if (!c || !c.name) continue;
+          const k = String(c.id || (c.phone ? c.phone.trim() : c.name.toLowerCase().trim())).toLowerCase();
+          clientMap.set(k, { ...c });
+        }
+      }
+
+      // 2. Overlay localStorage backup
+      try {
+        const cachedCustBackup = JSON.parse(localStorage.getItem('noor_clients_backup') || '[]');
+        if (Array.isArray(cachedCustBackup)) {
+          for (const c of cachedCustBackup) {
+            if (!c || !c.name) continue;
+            const k = String(c.id || (c.phone ? c.phone.trim() : c.name.toLowerCase().trim())).toLowerCase();
+            const ex = clientMap.get(k);
+            clientMap.set(k, { ...(ex || {}), ...c });
           }
-        } catch (_) {}
+        }
+      } catch (_) {}
+
+      // 3. Overlay in-memory state.clientsCache
+      if (Array.isArray(state.clientsCache)) {
+        for (const c of state.clientsCache) {
+          if (!c || !c.name) continue;
+          const k = String(c.id || (c.phone ? c.phone.trim() : c.name.toLowerCase().trim())).toLowerCase();
+          const ex = clientMap.get(k);
+          clientMap.set(k, { ...(ex || {}), ...c });
+        }
       }
-      if (!serverClients || serverClients.length === 0) {
-        serverClients = JSON.parse(JSON.stringify(AUTHORITATIVE_FALLBACK_CLIENTS));
+
+      // 4. Merge incoming server clients
+      if (Array.isArray(serverClients)) {
+        for (const c of serverClients) {
+          if (!c || !c.name) continue;
+          const k = String(c.id || (c.phone ? c.phone.trim() : c.name.toLowerCase().trim())).toLowerCase();
+          const ex = clientMap.get(k);
+          clientMap.set(k, { ...(ex || {}), ...c });
+        }
       }
+
+      serverClients = Array.from(clientMap.values());
 
       // Persist healthy clients list to localStorage backup
       if (Array.isArray(serverClients) && serverClients.length > 0) {

@@ -49,6 +49,7 @@ const {
   startBackgroundSync,
   syncSingleOrderFromCloud
 } = require('./supabaseSync');
+const cloudStore = require('./cloudStore');
 
 // Start recurring multi-device background sync with Supabase cloud
 startBackgroundSync(db, 8000);
@@ -92,6 +93,15 @@ async function getOrderByIdOrRef(db, orderId, orderNumberHint = null) {
 
   // 4. Fallback: full sync if still not found
   await syncSupabaseOrders(db, true).catch(() => {});
+  let finalLookup = db.prepare(`
+    SELECT * FROM orders 
+    WHERE id IN (${placeholders}) OR order_number IN (${placeholders})
+    LIMIT 1
+  `).get(...candidates, ...candidates);
+  if (finalLookup) return finalLookup;
+
+  // 5. Fallback: durable Cloud Store sync
+  await cloudStore.syncCloudOrders(db).catch(() => {});
   return db.prepare(`
     SELECT * FROM orders 
     WHERE id IN (${placeholders}) OR order_number IN (${placeholders})
@@ -1121,6 +1131,10 @@ router.get('/customers', authenticateToken, async (req, res) => {
       }
     }
   } catch (_) {}
+
+  // Durable cloud persistence sync across all serverless microVMs
+  await cloudStore.syncCloudCustomers(db).catch(err => console.warn('[CloudStore] sync customers note:', err.message));
+  await cloudStore.syncCloudOrders(db).catch(err => console.warn('[CloudStore] sync orders note:', err.message));
 
   const forceSync = req.query.force === '1' || req.query.force === 'true';
   if (forceSync) {
@@ -2441,12 +2455,57 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     }
 
     // Push customer to Supabase Cloud
-    if (result.customerId) {
-      const custRecord = db.prepare('SELECT * FROM customers WHERE id = ?').get(result.customerId);
-      if (custRecord) {
-        pushCustomerToSupabase(custRecord).catch(err => console.warn('[SupabaseSync] Push POS customer note:', err.message));
-      }
+    const custRecord = result.customerId ? db.prepare('SELECT * FROM customers WHERE id = ?').get(result.customerId) : null;
+    if (custRecord) {
+      pushCustomerToSupabase(custRecord).catch(err => console.warn('[SupabaseSync] Push POS customer note:', err.message));
     }
+
+    // Persist permanently to durable CloudStore (GitHub API + Local Storage)
+    cloudStore.persistOrderToCloudStore({
+      id: result.orderId,
+      order_number: orderNumber,
+      order_ref: orderNumber,
+      token_number: tokenNumber,
+      channel: 'POS',
+      channel_code: 2,
+      source: 'instore',
+      customer_id: result.customerId,
+      customer_name: result.customerName,
+      customer_phone: req.body.customerPhone || (req.body.clientDetails && req.body.clientDetails.phone) || (custRecord && custRecord.phone) || null,
+      customer_email: req.body.customerEmail || (req.body.clientDetails && req.body.clientDetails.email) || (custRecord && custRecord.email) || null,
+      customer_age: req.body.customerAge || req.body.age || (custRecord && custRecord.age) || null,
+      delivery_address: 'In-Store Purchase - Noor Optic Counter, Rethibowli, Hyderabad',
+      city: req.body.customerCity || (custRecord && custRecord.city) || 'Hyderabad',
+      pin_code: '500028',
+      status: 'CONFIRMED',
+      payment_status: result.paymentStatus,
+      payment_method: paymentMethod,
+      subtotal_paise: Math.round((result.subtotalINR || (calculatedSubtotalPaise / 100)) * 100),
+      total_payable_paise: Math.round(result.totalPayableINR * 100),
+      total_payable_inr: result.totalPayableINR,
+      amount_paid_paise: Math.round(result.amountPaidINR * 100),
+      amount_paid_inr: result.amountPaidINR,
+      advance_paid_paise: Math.round((result.advancePaidINR || 0) * 100),
+      second_payment_paise: Math.round((result.secondPaymentINR || 0) * 100),
+      third_payment_paise: Math.round((result.thirdPaymentINR || 0) * 100),
+      outstanding_paise: Math.round(result.outstandingINR * 100),
+      outstanding_inr: result.outstandingINR,
+      pickup_time: pickupTime,
+      notes: notes || null,
+      items: preparedItems,
+      prescriptions: result.prescriptions || savedPrescriptions,
+      prescriptions_json: JSON.stringify(result.prescriptions || savedPrescriptions),
+      prescription_id: result.prescriptionId,
+      created_at: new Date().toISOString()
+    }, custRecord || {
+      id: result.customerId,
+      name: result.customerName,
+      phone: req.body.customerPhone || (req.body.clientDetails && req.body.clientDetails.phone) || null,
+      email: req.body.customerEmail || (req.body.clientDetails && req.body.clientDetails.email) || null,
+      age: req.body.customerAge || req.body.age || null,
+      city: req.body.customerCity || 'Hyderabad',
+      notes: 'Created during in-store POS billing'
+    }, effectiveRx).catch(err => console.warn('[CloudStore] Persist POS order note:', err.message));
 
     // Push prescription to Supabase Cloud
     if (effectiveRx) {
@@ -2621,6 +2680,12 @@ router.post(['/pos/orders/:id/collect-payment', '/orders/:id/collect-payment', '
     payments: allPayments,
     aliases: [order.id, order.order_number, order.order_ref, updatedOrder.id, updatedOrder.order_number, updatedOrder.order_ref].filter(Boolean)
   }).catch(err => console.warn('[SupabaseSync] pushOrderPaymentStatusToCloud error:', err.message));
+
+  // Sync installment settlement directly to CloudStore
+  cloudStore.updatePaymentStatusInCloudStore(order.order_number || order.id, newPaymentStatus, {
+    amountPaidINR: newAmountPaid / 100,
+    outstandingINR: newOutstanding / 100
+  }).catch(() => {});
 
   const orderPayload = {
     ...updatedOrder,
@@ -3054,12 +3119,55 @@ router.post('/orders/online', (req, res) => {
     }).catch(err => console.warn('[SupabaseSync] Push online order note:', err.message));
 
     // 2. Push customer to Supabase Cloud
-    if (createdCustomerId) {
-      const custRecord = db.prepare('SELECT * FROM customers WHERE id = ?').get(createdCustomerId);
-      if (custRecord) {
-        pushCustomerToSupabase(custRecord).catch(err => console.warn('[SupabaseSync] Push customer note:', err.message));
-      }
+    const custRecord = createdCustomerId ? db.prepare('SELECT * FROM customers WHERE id = ?').get(createdCustomerId) : null;
+    if (custRecord) {
+      pushCustomerToSupabase(custRecord).catch(err => console.warn('[SupabaseSync] Push customer note:', err.message));
     }
+
+    // Persist permanently to durable CloudStore (GitHub API + Local Storage)
+    cloudStore.persistOrderToCloudStore({
+      id: result.orderId,
+      order_number: orderNumber,
+      order_ref: orderNumber,
+      token_number: tokenNumber,
+      channel: 'WEBSITE',
+      channel_code: 1,
+      source: 'website',
+      claimed_upi_ref: resolvedUpiRef,
+      customer_id: createdCustomerId,
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      customer_email: customerEmail,
+      customer_age: finalAge,
+      delivery_address: deliveryAddress,
+      city: city || 'Hyderabad',
+      pin_code: pinCode,
+      status: 'CONFIRMED',
+      payment_status: 'AWAITING_VERIFICATION',
+      payment_method: paymentMethod,
+      subtotal_paise: Math.round(result.subtotalINR * 100),
+      total_payable_paise: Math.round(result.grandTotalINR * 100),
+      total_payable_inr: result.grandTotalINR,
+      amount_paid_paise: 0,
+      amount_paid_inr: 0,
+      outstanding_paise: Math.round(result.grandTotalINR * 100),
+      outstanding_inr: result.grandTotalINR,
+      items: preparedItems,
+      prescription_pref: prescriptionPref || (createdPrescriptionId ? 'RX Attached' : 'Standard'),
+      prescription_id: createdPrescriptionId,
+      prescriptions: effectiveRx ? [effectiveRx] : [],
+      prescriptions_json: effectiveRx ? JSON.stringify([effectiveRx]) : null,
+      created_at: new Date().toISOString()
+    }, custRecord || {
+      id: createdCustomerId,
+      name: customerName,
+      phone: customerPhone,
+      email: customerEmail,
+      age: finalAge,
+      city: city || 'Hyderabad',
+      address: deliveryAddress,
+      notes: 'Created via Online Storefront'
+    }, effectiveRx).catch(err => console.warn('[CloudStore] Persist online order note:', err.message));
 
     // 3. Push prescription to Supabase Cloud
     if (rxRecord) {
@@ -3097,6 +3205,8 @@ router.get('/orders', authenticateToken, requirePermission('orders:view'), async
         }
       }
     } catch (_) {}
+    // Durable cloud persistence sync across all serverless microVMs
+    await cloudStore.syncCloudOrders(db).catch(err => console.warn('[CloudStore] sync orders note:', err.message));
     await syncSupabaseOrders(db, forceSync).catch(err => console.warn('[SupabaseSync] GET /orders sync note:', err.message));
 
     const { channel, paymentStatus, status, limit = 300 } = req.query;
@@ -3514,6 +3624,12 @@ router.patch('/orders/:id/status', authenticateToken, requirePermission('orders:
         });
       }
     } catch (_) {}
+
+    // Durable CloudStore payment sync
+    cloudStore.updatePaymentStatusInCloudStore(resolvedOrderNum || resolvedDbId, paymentStatus, {
+      amountPaidINR: paymentStatus === 'VERIFIED' ? ((targetOrder.total_payable_paise || 0) / 100) : undefined,
+      outstandingINR: paymentStatus === 'VERIFIED' ? 0 : ((targetOrder.outstanding_paise || 0) / 100)
+    }).catch(() => {});
     if (typeof invalidateOrderSyncCache === 'function') {
       invalidateOrderSyncCache();
     }
