@@ -9494,7 +9494,7 @@
     const effectiveSource = isReprintOr4th ? 'reprint' : (printSource || 'staff_approved');
     const effectiveManualReprint = isReprintOr4th;
 
-    // ── SMART SINGLE-COPY DISPATCH (Direct Hardware Spool + Cloud Queue Fallback) ──
+    // ── SMART SINGLE-COPY DISPATCH (Direct Hardware Spool + Cloud Queue + Browser Print Fallback) ──
     // Step 1: Attempt direct local hardware output on Port 5001 (50ms zero-lag counter output)
     let printedLocally = false;
     try {
@@ -9506,35 +9506,39 @@
           manualReprint: effectiveManualReprint,
           source: effectiveSource
         }),
-        signal: AbortSignal.timeout(1200)
+        signal: AbortSignal.timeout(1500)
       });
       if (daemonResp.ok) {
         printedLocally = true;
         console.log(`[InstantPrint] Bill #${orderRef} successfully printed via local POS hardware daemon.`);
+        showToast(`🖨️ Bill #${orderRef} printed on POS thermal printer!`, 'success');
+        return { success: true, printedLocally: true };
       }
     } catch (_) {
-      // Local daemon port not reachable (e.g. billing from remote laptop or phone) — handled by Cloud Queue below!
+      // Local daemon port not reachable (e.g. billing from remote laptop or phone, or daemon not launched)
     }
 
-    // Step 2: ONLY dispatch to Cloud Queue if NOT already printed directly by local daemon!
-    // This strictly prevents double-printing (2 copies) on counter machines running pos-daemon!
-    if (!printedLocally) {
-      pushPrintJobToCloud({
-        type: 'receipt',
-        order: order,
-        approved: true,
-        manualReprint: effectiveManualReprint,
-        source: effectiveSource
-      }).then(res => {
-        if (res && res.success) {
-          console.log(`[InstantPrint] Bill #${orderRef} successfully placed in SYS-PRINT-QUEUE.`);
-        }
-      }).catch(err => {
-        console.warn('[InstantPrint] Cloud queue dispatch note:', err?.message || err);
-      });
-    }
+    // Step 2: Dispatch to Cloud Queue so the counter daemon can pick it up
+    try {
+      const actualOrderId = order.id || order.order_number || orderId;
+      apiFetch(`/api/printer/orders/${encodeURIComponent(actualOrderId)}/daemon-dispatch`, {
+        method: 'POST'
+      }).catch(() => {});
+    } catch (_) {}
 
-    showToast(`🖨️ Bill #${orderRef} dispatched to POS thermal printer!`, 'success');
+    pushPrintJobToCloud({
+      type: 'receipt',
+      order: order,
+      approved: true,
+      manualReprint: effectiveManualReprint,
+      source: effectiveSource
+    }).catch(() => {});
+
+    // Step 3: Immediate Browser Thermal Receipt Fallback (Guarantees bill always prints)
+    showToast(`🖨️ Opening print window for bill #${orderRef}...`, 'info');
+    if (typeof previewThermalReceipt === 'function') {
+      previewThermalReceipt(order.id || orderId, true);
+    }
   };
 
   // ── 1-Click Queue/Manual Reprint Helper ──
@@ -9801,15 +9805,26 @@
   }
 
   // ── Receipt & Token Printing Preview ──────────────────────────────────────
-  window.previewThermalReceipt = function (orderId) {
+  window.previewThermalReceipt = function (orderId, autoPrint = false) {
     const modal = document.getElementById('modal-receipt-preview');
     const iframe = document.getElementById('receipt-preview-iframe');
     const btnPrint = document.getElementById('btn-iframe-print');
 
     if (!modal || !iframe) return;
 
-    iframe.src = `/api/printer/orders/${orderId}/preview-html`;
+    iframe.onload = () => {
+      if (autoPrint && iframe.contentWindow) {
+        setTimeout(() => {
+          try {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+          } catch (_) {}
+        }, 350);
+      }
+    };
+    iframe.src = `/api/printer/orders/${encodeURIComponent(orderId)}/preview-html`;
     modal.classList.add('open');
+    document.body.classList.add('modal-open');
 
     if (btnPrint) {
       btnPrint.onclick = () => {

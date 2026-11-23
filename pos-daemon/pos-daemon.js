@@ -979,6 +979,11 @@ async function pollCloudPrintQueue() {
       }
     });
 
+    if (res.status === 402) {
+      // Supabase quota exceeded; handled cleanly via Backend Cloud Queue below
+      return;
+    }
+
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data[0] && data[0].notes) {
@@ -1071,6 +1076,56 @@ async function pollCloudPrintQueue() {
   } catch (_) {
   } finally {
     isPollingQueue = false;
+  }
+}
+
+// ── Backend Cloud Queue Poller (Direct Vercel API / Zero Supabase Dependency) ──
+let isPollingBackendQueue = false;
+async function pollBackendPrintQueue() {
+  if (isPollingBackendQueue) return;
+  const backend = config.backendUrl || 'https://noor-optics-five.vercel.app';
+  isPollingBackendQueue = true;
+
+  try {
+    const res = await fetch(`${backend}/api/printer/queue`, {
+      headers: { 'User-Agent': 'POS-Daemon/3.1' },
+      signal: AbortSignal.timeout(3500)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+      for (const job of jobs) {
+        if (!job || !job.order_id) continue;
+        const jobIdStr = String(job.id);
+        if (processedJobIds.has(jobIdStr)) continue;
+
+        // Fetch complete order details
+        const orderRes = await fetch(`${backend}/api/orders/${job.order_id}`, {
+          signal: AbortSignal.timeout(4000)
+        });
+        if (orderRes.ok) {
+          const detail = await orderRes.json();
+          const order = detail.order || detail;
+          order.items = detail.items || order.items || [];
+          order.prescription = detail.prescription || order.prescription || null;
+
+          const printRes = await printLiveOrder(order, 'backend_queue');
+          if (printRes && printRes.success) {
+            processedJobIds.add(jobIdStr);
+            savePrintedState();
+            await fetch(`${backend}/api/printer/queue/ack`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ jobId: job.id, orderId: job.order_id }),
+              signal: AbortSignal.timeout(3000)
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+  } catch (_) {
+  } finally {
+    isPollingBackendQueue = false;
   }
 }
 
@@ -1398,6 +1453,10 @@ if (require.main === module) {
     // 2. Continuous cloud queue listener for remote cashier item QRs and bills (Fast 1s interval)
     pollCloudPrintQueue();
     setInterval(pollCloudPrintQueue, 1000);
+
+    // 2b. Autonomous Backend Cloud Queue listener (Zero Supabase dependency)
+    pollBackendPrintQueue();
+    setInterval(pollBackendPrintQueue, 2000);
 
     // 3. Periodic background auto-update check (every 30 minutes)
     setTimeout(checkDaemonUpdates, 15000);

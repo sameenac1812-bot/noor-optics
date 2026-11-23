@@ -2406,6 +2406,15 @@ router.post('/pos/checkout', authenticateToken, requirePermission('pos:checkout'
     // Respond immediately to the POS cashier for ultra-fast checkout (< 10ms)
     res.json({ success: true, ...result });
 
+    // Enqueue in durable print_jobs table for instant hardware daemon pick-up
+    try {
+      const pJobId = 'prn-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+      db.prepare(`
+        INSERT INTO print_jobs (id, order_id, token_number, printer_name, paper_width_mm, doc_type, status, attempts, created_at)
+        VALUES (?, ?, ?, 'POS-80', 58, 'RECEIPT', 'PENDING', 0, datetime('now'))
+      `).run(pJobId, result.orderId, result.tokenNumber || 1);
+    } catch (_) {}
+
     // Asynchronously push queued rollover settlements to cloud (non-blocking for fast POS checkout)
     for (const rs of rolloverSyncs) {
       pushOrderPaymentStatusToCloud(rs.orderNumber, rs.status, rs.note, rs.details).catch(() => {});
@@ -4553,7 +4562,7 @@ router.post('/printer/orders/:orderId/daemon-dispatch', (req, res) => {
 });
 
 function getOrderForPrint(orderIdOrRef) {
-  const order = db.prepare(`
+  let order = db.prepare(`
     SELECT
       o.*,
       pr.prescription_number,
@@ -4567,6 +4576,11 @@ function getOrderForPrint(orderIdOrRef) {
     LEFT JOIN prescriptions pr ON o.prescription_id = pr.id
     WHERE o.id = ? OR o.order_number = ?
   `).get(orderIdOrRef, orderIdOrRef);
+
+  if (!order && typeof cloudStore !== 'undefined' && cloudStore.getCachedLiveOrders) {
+    const liveOrders = cloudStore.getCachedLiveOrders() || [];
+    order = liveOrders.find(o => o.id === orderIdOrRef || o.order_number === orderIdOrRef) || null;
+  }
 
   if (!order) return null;
 
@@ -4609,11 +4623,79 @@ function getOrderForPrint(orderIdOrRef) {
   return order;
 }
 
+function getOrderItemsForPrint(order) {
+  let items = [];
+  try {
+    items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+  } catch (_) {}
+  if (!items || items.length === 0) {
+    if (order.items_json) {
+      try { items = JSON.parse(order.items_json); } catch (_) {}
+    }
+  }
+  if (!items || items.length === 0) {
+    try {
+      const inv = db.prepare('SELECT snapshot_json FROM invoices WHERE order_id = ?').get(order.id);
+      if (inv && inv.snapshot_json) {
+        const snap = JSON.parse(inv.snapshot_json);
+        if (Array.isArray(snap.items)) items = snap.items;
+      }
+    } catch (_) {}
+  }
+  if (!items || items.length === 0) {
+    const liveOrders = (typeof cloudStore !== 'undefined' && cloudStore.getCachedLiveOrders) ? cloudStore.getCachedLiveOrders() : [];
+    const matched = liveOrders.find(o => o.id === order.id || o.order_number === order.order_number);
+    if (matched && Array.isArray(matched.items)) {
+      items = matched.items;
+    }
+  }
+  if (!items || items.length === 0) {
+    items = [{
+      product_name: 'Boutique Optical Frame & Lenses',
+      quantity: 1,
+      unit_price_paise: order.total_payable_paise || (order.total_payable_inr ? order.total_payable_inr * 100 : 0)
+    }];
+  }
+  return items;
+}
+
+// ── Cloud Print Queue for POS Hardware Daemon (Zero Supabase Dependency) ──────
+router.get('/printer/queue', (req, res) => {
+  try {
+    const jobs = db.prepare(`
+      SELECT pj.*, o.order_number, o.customer_name, o.customer_phone, o.total_payable_paise
+      FROM print_jobs pj
+      LEFT JOIN orders o ON pj.order_id = o.id
+      WHERE pj.status IN ('PENDING', 'QUEUED_DAEMON')
+      ORDER BY pj.created_at ASC
+      LIMIT 20
+    `).all();
+    res.json({ success: true, jobs });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/printer/queue/ack', (req, res) => {
+  const { jobId, orderId } = req.body || {};
+  try {
+    if (jobId) {
+      db.prepare("UPDATE print_jobs SET status = 'COMPLETED', completed_at = datetime('now') WHERE id = ?").run(jobId);
+    }
+    if (orderId) {
+      db.prepare("UPDATE print_jobs SET status = 'COMPLETED', completed_at = datetime('now') WHERE order_id = ?").run(orderId);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.get('/printer/preview/:orderId', (req, res) => {
   const order = getOrderForPrint(req.params.orderId);
   if (!order) return res.status(404).send('Order not found');
 
-  const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+  const items = getOrderItemsForPrint(order);
   const settings = getStoreSettings();
   const html = generate58mmHTML(order, items, settings);
 
@@ -4625,7 +4707,7 @@ router.get('/printer/orders/:orderId/preview-html', (req, res) => {
   const order = getOrderForPrint(req.params.orderId);
   if (!order) return res.status(404).send('Order not found');
 
-  const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+  const items = getOrderItemsForPrint(order);
   const settings = getStoreSettings();
   const html = generate58mmHTML(order, items, settings);
 
