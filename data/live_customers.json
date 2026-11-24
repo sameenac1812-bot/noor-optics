@@ -1,5 +1,22 @@
 [
   {
+    "id": "cust-1795521143118-9110",
+    "client_code": "CLT-1103",
+    "name": "Mirza mahmood baig",
+    "phone": "9550258599",
+    "email": null,
+    "age": 80,
+    "city": "Hyderabad",
+    "address": null,
+    "notes": "Created during in-store POS billing",
+    "order_count": 1,
+    "total_spent_paise": 450000,
+    "total_spent_inr": 4500,
+    "is_archived": 0,
+    "created_at": "2026-11-24T11:52:23.121Z",
+    "updated_at": "2026-11-24T11:52:23.121Z"
+  },
+  {
     "id": "cust-1795520679290-7343",
     "client_code": "CLT-1102",
     "name": "Mr ahmed khaleel",
