@@ -1,20 +1,20 @@
 [
   {
-    "id": "cust-1795444731784-5060",
+    "id": "cust-1795520463240-8726",
     "client_code": "CLT-1101",
-    "name": "nida fathima",
-    "phone": null,
+    "name": "Mr asim",
+    "phone": "9989098611",
     "email": null,
-    "age": null,
-    "city": "Bengaluru",
+    "age": 54,
+    "city": "Hyderabad",
     "address": null,
     "notes": "Created during in-store POS billing",
     "order_count": 1,
-    "total_spent_paise": 100000,
-    "total_spent_inr": 1000,
+    "total_spent_paise": 330000,
+    "total_spent_inr": 3300,
     "is_archived": 0,
-    "created_at": "2026-11-23T14:38:51.794Z",
-    "updated_at": "2026-11-23T14:38:51.794Z"
+    "created_at": "2026-11-24T11:41:03.249Z",
+    "updated_at": "2026-11-24T11:41:03.249Z"
   },
   {
     "id": "cust-1795443202826-8066",
