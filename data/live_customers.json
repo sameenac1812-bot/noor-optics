@@ -1,5 +1,22 @@
 [
   {
+    "id": "cust-1795520679290-7343",
+    "client_code": "CLT-1102",
+    "name": "Mr ahmed khaleel",
+    "phone": "0061449785416",
+    "email": null,
+    "age": null,
+    "city": "Hyderabad",
+    "address": null,
+    "notes": "Created during in-store POS billing",
+    "order_count": 1,
+    "total_spent_paise": 360000,
+    "total_spent_inr": 3600,
+    "is_archived": 0,
+    "created_at": "2026-11-24T11:44:39.295Z",
+    "updated_at": "2026-11-24T11:44:39.295Z"
+  },
+  {
     "id": "cust-1795520463240-8726",
     "client_code": "CLT-1101",
     "name": "Mr asim",
